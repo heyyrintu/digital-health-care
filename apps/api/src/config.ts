@@ -15,6 +15,8 @@ const Env = z
     FIELD_ENCRYPTION_KEY: z.string().optional(),
     /** `log` prints sign-in codes to the server log; development only, until the SMS provider (O5). */
     OTP_DELIVERY: z.enum(['log', 'disabled']).default('disabled'),
+    /** Web app origin; staff invite links point here. */
+    WEB_BASE_URL: z.url().default('http://localhost:3000'),
   })
   .refine((env) => !(env.NODE_ENV === 'production' && env.OTP_DELIVERY === 'log'), {
     message: 'OTP_DELIVERY=log is not allowed in production',

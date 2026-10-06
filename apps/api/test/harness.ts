@@ -23,9 +23,13 @@ export function createHarness() {
   const clock = new Clock();
   const sentCodes: { phone: string; code: string }[] = [];
   const services: Services = createServices(
-    { DATABASE_URL: url, JWT_SECRET, FIELD_ENCRYPTION_KEY, OTP_DELIVERY: 'disabled' } as Parameters<
-      typeof createServices
-    >[0],
+    {
+      DATABASE_URL: url,
+      JWT_SECRET,
+      FIELD_ENCRYPTION_KEY,
+      OTP_DELIVERY: 'disabled',
+      WEB_BASE_URL: 'https://app.test',
+    } as Parameters<typeof createServices>[0],
     {
       otpSender: { send: async (phone, code) => void sentCodes.push({ phone, code }) },
       now: clock.now,
@@ -48,7 +52,7 @@ export type Harness = ReturnType<typeof createHarness>;
 
 export async function resetDatabase(owner: Db) {
   await owner.$executeRawUnsafe(
-    'TRUNCATE audit_logs, sessions, otp_challenges, memberships, patients, users, organisations CASCADE',
+    'TRUNCATE audit_logs, staff_invites, sessions, otp_challenges, memberships, patients, users, organisations CASCADE',
   );
 }
 

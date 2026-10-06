@@ -14,3 +14,4 @@ All notable changes are recorded here, newest first. Format: version, date, summ
   - Staff patient search and view (each view audited); clinic-admin audit log.
   - Integration suite for auth and tenant isolation, run against Postgres in CI.
   - Development seed with synthetic personas.
+- Staff invite links: clinic admins invite staff by email or mobile; the single-use link (72 h) is the only way to set a staff password and enrol an authenticator. Login no longer offers enrolment. Existing staff accounts confirm with their current password and authenticator. Seed now prints invite links.

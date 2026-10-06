@@ -6,7 +6,7 @@ import { randomInt, randomUUID, timingSafeEqual } from 'node:crypto';
 import { DUMMY_PASSWORD_HASH, verifyPassword } from '../../auth/password';
 import { normaliseIndianMobile } from '../../auth/phone';
 import { ACCESS_TOKEN_TTL_SECONDS, hashToken, newRefreshToken, type Role } from '../../auth/tokens';
-import { generateTotpSecret, matchTotpStep, otpauthUri } from '../../auth/totp';
+import { matchTotpStep } from '../../auth/totp';
 import { AppError } from '../../errors';
 import type { Services } from '../../services';
 import { writeAudit } from '../audit/write';
@@ -18,14 +18,16 @@ const OTP_WINDOW_MS = 10 * 60_000;
 const MAX_FAILED_LOGINS = 5;
 const LOCKOUT_MS = 15 * 60_000;
 const PATIENT_SESSION_MS = 30 * 24 * 3600_000;
-const STAFF_SESSION_MS = 12 * 3600_000;
-const TOTP_ISSUER = 'DHC Clinic';
+export const STAFF_SESSION_MS = 12 * 3600_000;
+export const TOTP_ISSUER = 'DHC Clinic';
 
 const INVALID_LOGIN = () => new AppError(401, 'UNAUTHENTICATED', 'Invalid sign-in details.');
-const INVALID_CODE = () =>
+export const INVALID_CODE = () =>
   new AppError(401, 'UNAUTHENTICATED', 'The code is invalid or has expired.');
-const LOCKED = () =>
+export const LOCKED = () =>
   new AppError(429, 'RATE_LIMITED', 'Too many attempts. Try again in 15 minutes.');
+const SETUP_INCOMPLETE = () =>
+  new AppError(401, 'UNAUTHENTICATED', 'Finish setting up your account using your invite link.');
 
 export class AuthService {
   constructor(private readonly s: Services) {}
@@ -238,23 +240,19 @@ export class AuthService {
         };
       }
 
+      // Authenticators are only ever enrolled through an admin-issued invite, so a password
+      // alone can never attach a new authenticator to an account.
+      if (!user.mfaSecret) {
+        await writeAudit(tx, request, {
+          action: 'auth.login.failed',
+          organisationId: org.id,
+          actorUserId: user.id,
+          metadata: { reason: 'setup_incomplete' },
+        });
+        return { error: SETUP_INCOMPLETE() };
+      }
       const mfaToken = await this.s.tokens.createMfaToken(user.id, org.id, role);
-      if (user.mfaSecret) return { response: { status: 'mfa_required' as const, mfaToken } };
-
-      // First sign-in: enrol an authenticator. The secret is confirmed by the first valid code.
-      const secret = generateTotpSecret();
-      await tx.user.update({
-        where: { id: user.id },
-        data: { mfaPendingSecret: this.s.cipher.encrypt(secret) },
-      });
-      const account = user.email ?? user.phone ?? user.id;
-      return {
-        response: {
-          status: 'mfa_enrolment_required' as const,
-          mfaToken,
-          otpauthUri: otpauthUri(TOTP_ISSUER, account, secret),
-        },
-      };
+      return { response: { status: 'mfa_required' as const, mfaToken } };
     });
     if ('error' in outcome) throw outcome.error;
     return outcome.response;
@@ -271,11 +269,9 @@ export class AuthService {
       if (!user || user.status !== 'active') return { error: INVALID_LOGIN() };
       if (user.lockedUntil && user.lockedUntil > now) return { error: LOCKED() };
 
-      const enrolling = !user.mfaSecret;
-      const encrypted = user.mfaSecret ?? user.mfaPendingSecret;
-      if (!encrypted) return { error: INVALID_LOGIN() };
+      if (!user.mfaSecret) return { error: SETUP_INCOMPLETE() };
 
-      const step = matchTotpStep(this.s.cipher.decrypt(encrypted), code, now.getTime());
+      const step = matchTotpStep(this.s.cipher.decrypt(user.mfaSecret), code, now.getTime());
       if (step === null || (user.mfaLastUsedStep !== null && step <= user.mfaLastUsedStep)) {
         await recordFailure(tx, user.id, user.failedLoginCount, now);
         await writeAudit(tx, request, {
@@ -302,16 +298,8 @@ export class AuthService {
           mfaLastUsedStep: step,
           failedLoginCount: 0,
           lastLoginAt: now,
-          ...(enrolling ? { mfaSecret: encrypted, mfaPendingSecret: null } : {}),
         },
       });
-      if (enrolling) {
-        await writeAudit(tx, request, {
-          action: 'auth.mfa.enrolled',
-          organisationId: claims.organisationId,
-          actorUserId: user.id,
-        });
-      }
       const tokens = await this.startSession(
         tx,
         request,
@@ -429,7 +417,8 @@ export class AuthService {
     });
   }
 
-  private async startSession(
+  /** Creates a session and its first token pair. Callers write their own audit event. */
+  async startSession(
     tx: Tx,
     request: FastifyRequest,
     userId: string,
@@ -470,17 +459,17 @@ export class AuthService {
   }
 }
 
-async function activeOrganisation(tx: Tx, slug: string) {
+export async function activeOrganisation(tx: Tx, slug: string) {
   const org = await tx.organisation.findUnique({ where: { slug } });
   return org?.status === 'active' ? org : null;
 }
 
-async function findByPhone(tx: Tx, raw: string) {
+export async function findByPhone(tx: Tx, raw: string) {
   const phone = normaliseIndianMobile(raw);
   return phone ? tx.user.findUnique({ where: { phone } }) : null;
 }
 
-async function recordFailure(tx: Tx, userId: string, previousFailures: number, now: Date) {
+export async function recordFailure(tx: Tx, userId: string, previousFailures: number, now: Date) {
   const failures = previousFailures + 1;
   await tx.user.update({
     where: { id: userId },

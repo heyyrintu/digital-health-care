@@ -16,6 +16,8 @@ export interface Services {
   otpSender: OtpSender;
   /** HMAC for OTP codes at rest, keyed separately from JWT signing. */
   hashOtp(challengeId: string, code: string): string;
+  /** Web app origin for links sent to people (staff invites). */
+  webBaseUrl: string;
   now(): Date;
 }
 
@@ -49,6 +51,7 @@ export function createServices(
     otpSender,
     hashOtp: (challengeId, code) =>
       createHmac('sha256', otpKey).update(`${challengeId}:${code}`).digest('base64url'),
+    webBaseUrl: config.WEB_BASE_URL.replace(/\/+$/, ''),
     now: overrides.now ?? (() => new Date()),
   };
 }

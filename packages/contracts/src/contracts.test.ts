@@ -5,6 +5,7 @@ import {
   ErrorResponse,
   HealthResponse,
   LoginResponse,
+  NewPassword,
   buildOpenApiDocument,
   page,
 } from './index';
@@ -73,6 +74,9 @@ describe('buildOpenApiDocument', () => {
     );
     expect(publicOps.sort()).toEqual([
       'GET /health',
+      'POST /auth/invites/accept',
+      'POST /auth/invites/complete',
+      'POST /auth/invites/inspect',
       'POST /auth/login',
       'POST /auth/mfa/verify',
       'POST /auth/otp/request',
@@ -90,12 +94,19 @@ describe('buildOpenApiDocument', () => {
 });
 
 describe('LoginResponse', () => {
-  it('distinguishes MFA from MFA enrolment', () => {
+  it('only ever leads to the authenticator step', () => {
     expect(LoginResponse.parse({ status: 'mfa_required', mfaToken: 't' }).status).toBe(
       'mfa_required',
     );
     expect(() =>
       LoginResponse.parse({ status: 'mfa_enrolment_required', mfaToken: 't' }),
     ).toThrow();
+  });
+});
+
+describe('NewPassword', () => {
+  it('requires at least 12 characters', () => {
+    expect(() => NewPassword.parse('short')).toThrow();
+    expect(NewPassword.parse('a long enough passphrase')).toBeTruthy();
   });
 });

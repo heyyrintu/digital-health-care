@@ -40,7 +40,9 @@ Implemented in Phase 0 (`apps/api/src/modules/auth`). Sign-in requests name the 
 | Flow | Endpoints |
 |---|---|
 | Patient OTP | `POST /auth/otp/request` `{organisation, phone}` → `POST /auth/otp/verify` `{challengeId, code}` → tokens. Creates the account and patient membership on first sign-in |
-| Staff login | `POST /auth/login` `{organisation, identifier, password, role?}` → `{status: mfa_required \| mfa_enrolment_required, mfaToken, otpauthUri?}` → `POST /auth/mfa/verify` `{mfaToken, code}` → tokens |
+| Staff invite (admin) | `POST /staff/invites` `{identifier, role, displayName?}` → `inviteUrl` (shown once), `GET /staff/invites`, `POST /staff/invites/{id}/revoke` — clinic admin only |
+| Staff invite (invitee) | `POST /auth/invites/inspect` `{token}` → `POST /auth/invites/accept` `{token, password}` → `{status: setup_required, otpauthUri}` or `{status: confirm_required}` → `POST /auth/invites/complete` `{token, code}` → tokens |
+| Staff login | `POST /auth/login` `{organisation, identifier, password, role?}` → `{status: mfa_required, mfaToken}` → `POST /auth/mfa/verify` `{mfaToken, code}` → tokens |
 | Refresh / logout | `POST /auth/refresh` `{refreshToken}` (rotates), `POST /auth/logout` (ends this session) |
 | Who am I | `GET /me` → user, organisation, role |
 | Biometric unlock | `POST /auth/device/unlock` with device-bound key signature *(not yet built)* |
@@ -51,7 +53,8 @@ Rules:
 - **Access tokens** are JWTs valid for 15 minutes, carrying user, organisation, role and session. Every request also checks the session is live, so logout or revocation takes effect immediately.
 - **Refresh tokens** are opaque, stored only as SHA-256 hashes, and single-use: each refresh returns a new one. Replaying an old one ends the whole session (`auth.refresh.reuse_detected` in the audit log). Sessions last 30 days for patients and 12 hours for staff.
 - **Patient codes:** 6 digits, valid 5 minutes, stored as an HMAC, 5 attempts per code, at most 3 codes per number per 10 minutes. Delivery goes through an `OtpSender`; in development `OTP_DELIVERY=log` prints the code (forbidden in production) until the SMS provider is chosen (decision O5).
-- **Staff:** passwords hashed with scrypt; 5 wrong passwords or codes lock the account for 15 minutes. An authenticator (TOTP) is mandatory — the first sign-in returns an `otpauthUri` to enrol, confirmed by the first valid code. Each code works once.
+- **Staff:** passwords hashed with scrypt (at least 12 characters); 5 wrong passwords or codes lock the account for 15 minutes. An authenticator (TOTP) is mandatory and each code works once.
+- **Staff accounts are set up only through invites.** Login never offers authenticator enrolment, so knowing someone's password is never enough to attach a new authenticator. A clinic admin's invite link is single-use, expires after 72 hours, is stored only as a hash, and carries its token in the URL fragment (`/invite#<token>`), which browsers do not send to servers or logs. A new invite for the same person and role replaces the previous one; admins can revoke. The invite is used up only when the first authenticator code is confirmed. A person who already has a staff account (another clinic) confirms with their existing password and authenticator instead.
 - Unknown user, wrong password and no access in that organisation all return the same `401` message.
 - Sign-in endpoints are rate-limited per IP (10 per minute by default).
 
@@ -59,7 +62,7 @@ Rules:
 
 | Module | Main resources and actions |
 |---|---|
-| identity | `/auth/*`, `/me` (built); `/me/devices` |
+| identity | `/auth/*`, `/me`, `/staff/invites` (built); `/me/devices` |
 | tenancy | `/organisations/current`, `/clinics`, `/settings`, `/branding`, `/tags`, `/uhid-settings` |
 | scheduling | `/availability/versions`, `/availability/exceptions`, `/slots?doctorId&mode&date`, `/appointments` (create, reschedule, cancel, check-in, no-show), `/queue?tab=&date=`, `/display/{clinicId}` |
 | patients | `/patients` (search by phone, name, UHID; built), `/patients/{id}` (built; each view audited), `/families`, `/patients/{id}/allergies|conditions|medications|tags|consents`, `/patients/merge-requests` |

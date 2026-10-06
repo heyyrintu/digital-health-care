@@ -12,6 +12,16 @@ import {
   TokenResponse,
 } from './auth';
 import { ErrorResponse } from './errors';
+import {
+  AcceptInviteBody,
+  AcceptInviteResponse,
+  CompleteInviteBody,
+  CreateStaffInviteBody,
+  CreatedStaffInvite,
+  InviteDetails,
+  InviteTokenBody,
+  StaffInviteList,
+} from './invites';
 import { HealthResponse } from './health';
 import { CursorQuery } from './pagination';
 import { PatientListQuery, PatientListResponse, PatientSummary } from './patients';
@@ -79,6 +89,33 @@ const operations: Operation[] = [
   },
   {
     method: 'post',
+    path: '/auth/invites/inspect',
+    operationId: 'inspectInvite',
+    summary: 'Show who an invite is for',
+    public: true,
+    body: InviteTokenBody,
+    response: InviteDetails,
+  },
+  {
+    method: 'post',
+    path: '/auth/invites/accept',
+    operationId: 'acceptInvite',
+    summary: 'Set or confirm the password for an invite',
+    public: true,
+    body: AcceptInviteBody,
+    response: AcceptInviteResponse,
+  },
+  {
+    method: 'post',
+    path: '/auth/invites/complete',
+    operationId: 'completeInvite',
+    summary: 'Confirm the authenticator code and sign in',
+    public: true,
+    body: CompleteInviteBody,
+    response: TokenResponse,
+  },
+  {
+    method: 'post',
     path: '/auth/refresh',
     operationId: 'refreshTokens',
     summary: 'Rotate the refresh token',
@@ -115,6 +152,30 @@ const operations: Operation[] = [
     summary: 'Patient summary (staff; view is audited)',
     pathParams: ['id'],
     response: PatientSummary,
+  },
+  {
+    method: 'post',
+    path: '/staff/invites',
+    operationId: 'createStaffInvite',
+    summary: 'Invite a staff member (clinic admin)',
+    body: CreateStaffInviteBody,
+    response: CreatedStaffInvite,
+    status: 201,
+  },
+  {
+    method: 'get',
+    path: '/staff/invites',
+    operationId: 'listStaffInvites',
+    summary: 'Recent staff invites (clinic admin)',
+    response: StaffInviteList,
+  },
+  {
+    method: 'post',
+    path: '/staff/invites/{id}/revoke',
+    operationId: 'revokeStaffInvite',
+    summary: 'Revoke a pending invite (clinic admin)',
+    pathParams: ['id'],
+    status: 204,
   },
   {
     method: 'get',
@@ -163,7 +224,7 @@ export function buildOpenApiDocument(options: { version: string; serverUrl?: str
           status === 204 || !op.response
             ? { description: 'No content' }
             : {
-                description: 'OK',
+                description: status === 201 ? 'Created' : 'OK',
                 content: { 'application/json': { schema: toSchema(op.response) } },
               },
         default: errorResponse,

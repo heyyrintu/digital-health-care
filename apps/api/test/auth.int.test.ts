@@ -1,6 +1,6 @@
-import { LoginResponse, MeResponse, OtpRequestResponse, TokenResponse } from '@dhc/contracts';
+import { MeResponse, OtpRequestResponse, TokenResponse } from '@dhc/contracts';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import { base32Decode, totpAt } from '../src/auth/totp';
+import { totpAt } from '../src/auth/totp';
 import { hashPassword } from '../src/auth/password';
 import {
   STAFF_PASSWORD,
@@ -124,7 +124,7 @@ describe('staff sign-in with password and authenticator', () => {
     expect(me).toMatchObject({ role: 'doctor', organisation: { slug: 'clinic-a' } });
   });
 
-  it('enrols an authenticator on first sign-in and requires it afterwards', async () => {
+  it('never offers authenticator enrolment at login, even with the right password', async () => {
     const user = await h.owner.user.create({
       data: { email: 'new.staff@clinic-a.test', passwordHash: await hashPassword(STAFF_PASSWORD) },
     });
@@ -132,38 +132,17 @@ describe('staff sign-in with password and authenticator', () => {
       data: { organisationId: clinics.a.org.id, userId: user.id, role: 'front_desk' },
     });
 
-    const first = LoginResponse.parse(
-      (
-        await post('/auth/login', {
-          organisation: 'clinic-a',
-          identifier: 'NEW.STAFF@clinic-a.test',
-          password: STAFF_PASSWORD,
-        })
-      ).json(),
-    );
-    expect(first.status).toBe('mfa_enrolment_required');
-    if (first.status !== 'mfa_enrolment_required') return;
-    const secret = new URL(first.otpauthUri).searchParams.get('secret')!;
-    expect(base32Decode(secret)).toHaveLength(20);
-
-    const ok = await post('/auth/mfa/verify', {
-      mfaToken: first.mfaToken,
-      code: totpAt(secret, h.clock.ms / 1000),
+    const res = await post('/auth/login', {
+      organisation: 'clinic-a',
+      identifier: 'NEW.STAFF@clinic-a.test',
+      password: STAFF_PASSWORD,
     });
-    expect(ok.statusCode).toBe(200);
+    expect(res.statusCode).toBe(401);
+    expect(res.json().error.message).toMatch(/invite link/);
+    expect(res.json()).not.toHaveProperty('otpauthUri');
     const stored = await h.owner.user.findUniqueOrThrow({ where: { id: user.id } });
-    expect(stored.mfaSecret).toBeTruthy();
-    expect(stored.mfaSecret).not.toContain(secret);
+    expect(stored.mfaSecret).toBeNull();
     expect(stored.mfaPendingSecret).toBeNull();
-
-    const second = (
-      await post('/auth/login', {
-        organisation: 'clinic-a',
-        identifier: 'new.staff@clinic-a.test',
-        password: STAFF_PASSWORD,
-      })
-    ).json();
-    expect(second.status).toBe('mfa_required');
   });
 
   it('rejects a TOTP code that was already used', async () => {

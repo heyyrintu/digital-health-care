@@ -29,6 +29,8 @@ enum Role {
 }
 
 enum MembershipStatus {
+  /// Created by a staff invite; becomes active when the invite is completed.
+  invited
   active
   revoked
 }
@@ -44,6 +46,7 @@ model Organisation {
   memberships Membership[]
   patients    Patient[]
   sessions    Session[]
+  invites     StaffInvite[]
 
   @@map("organisations")
 }
@@ -70,6 +73,7 @@ model User {
 
   memberships Membership[]
   sessions    Session[]
+  invites     StaffInvite[]
 
   @@map("users")
 }
@@ -113,6 +117,27 @@ model Session {
 
   @@index([userId])
   @@map("sessions")
+}
+
+/// Single-use link a clinic admin sends to a new staff member. The only way to set a staff
+/// password and enrol an authenticator. Only a hash of the token is stored.
+model StaffInvite {
+  id              String    @id @default(uuid()) @db.Uuid
+  organisationId  String    @map("organisation_id") @db.Uuid
+  userId          String    @map("user_id") @db.Uuid
+  role            Role
+  tokenHash       String    @unique @map("token_hash")
+  createdByUserId String    @map("created_by_user_id") @db.Uuid
+  expiresAt       DateTime  @map("expires_at") @db.Timestamptz(3)
+  acceptedAt      DateTime? @map("accepted_at") @db.Timestamptz(3)
+  revokedAt       DateTime? @map("revoked_at") @db.Timestamptz(3)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+  user         User         @relation(fields: [userId], references: [id])
+
+  @@index([organisationId, createdAt])
+  @@map("staff_invites")
 }
 
 /// Patient sign-in code. Only a hash of the code is stored.

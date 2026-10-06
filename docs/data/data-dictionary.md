@@ -4,7 +4,7 @@
 
 Conventions for every table: `id` (UUID), `organisationId` (except platform-level User/Device), `createdAt`, `updatedAt`, `deletedAt` where soft delete applies. Files are stored by S3 key, never by public URL. Fields marked *(encrypted)* use field-level encryption. Row-level security filters every query by `organisationId` (ADR 0014). Database columns are snake_case (`organisation_id`); this document uses the camelCase field names.
 
-**Implemented so far (Phase 0):** Organisation, User, Membership, Session, OtpChallenge, Patient (minimal fields) and AuditLog — see `packages/db/prisma/schema.prisma`. Everything else below is the target design.
+**Implemented so far (Phase 0):** Organisation, User, Membership, StaffInvite, Session, OtpChallenge, Patient (minimal fields) and AuditLog — see `packages/db/prisma/schema.prisma`. Everything else below is the target design.
 
 ## Platform and identity
 
@@ -13,8 +13,9 @@ Conventions for every table: `id` (UUID), `organisationId` (except platform-leve
 | Organisation | Practice or clinic group (tenant) | id, slug (unique, used in sign-in and clinic links), name, legalName, status, chartModel (shared|own_patients), brandingId, settings (JSON) |
 | Branding | Per-organisation look and senders | organisationId, displayName, logoKey, colours, customDomain, whatsappSender, smsSenderId, emailDomain, googleReviewUrl |
 | Clinic | Physical location | organisationId, name, address, geo, phone, gstin?, timezone, hfrId |
-| User | Platform-level login identity (no organisationId) | phone (unique), email (unique), displayName, status, passwordHash (staff, scrypt), mfaSecret (staff, encrypted), mfaPendingSecret (encrypted, until first code), mfaLastUsedStep (TOTP replay guard), failedLoginCount, lockedUntil, lastLoginAt |
-| Membership | A user's role in one organisation; the auth link to tenants | organisationId, userId, role (patient|doctor|front_desk|clinic_admin), status (active|revoked) |
+| User | Platform-level login identity (no organisationId) | phone (unique), email (unique), displayName, status, passwordHash (staff, scrypt), mfaSecret (staff, encrypted), mfaPendingSecret (encrypted, set during invite acceptance until the first code), mfaLastUsedStep (TOTP replay guard), failedLoginCount, lockedUntil, lastLoginAt |
+| Membership | A user's role in one organisation; the auth link to tenants | organisationId, userId, role (patient|doctor|front_desk|clinic_admin), status (invited|active|revoked) |
+| StaffInvite | Single-use link to set up a staff account | organisationId, userId, role, tokenHash, createdByUserId, expiresAt (72 h), acceptedAt, revokedAt |
 | Session | Refresh-token session on one device | userId, organisationId, role, refreshTokenHash, previousRefreshTokenHash (reuse detection), deviceId, userAgent, ip, expiresAt, lastUsedAt, revokedAt, revokedReason |
 | OtpChallenge | Patient sign-in code | phone, organisationId, codeHash (HMAC), attempts, expiresAt, consumedAt |
 | Device | Registered device | userId, platform, model, pushToken, biometricKeyId, lastSeenAt, revokedAt |

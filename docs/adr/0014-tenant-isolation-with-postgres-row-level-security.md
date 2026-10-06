@@ -19,7 +19,7 @@ One database serves every organisation. A missing `WHERE organisation_id = …` 
 Every tenant table carries `organisation_id` and has RLS enabled. The API connects as the schema owner but never queries as it in a request: it always opens a transaction and switches role.
 
 - **`withTenant(db, organisationId, fn)`** runs `SET LOCAL ROLE dhc_app` and `set_config('app.organisation_id', …, true)`. Policies on tenant tables match `organisation_id` against that setting, for reads (`USING`) and writes (`WITH CHECK`). With no organisation set, `dhc_app` sees nothing.
-- **`withAuth(db, fn)`** runs as `dhc_auth` for sign-in: users, sessions, OTP challenges, organisation lookup, membership checks and audit inserts. It has **no** grant on clinical tables, and may only insert `patient` memberships.
+- **`withAuth(db, fn)`** runs as `dhc_auth` for sign-in: users, sessions, OTP challenges, organisation lookup, membership checks and audit inserts. It has **no** grant on clinical tables, may only insert `patient` memberships, and may only change a membership from `invited` to `active` (completing a staff invite).
 - `audit_logs` is append-only: a trigger rejects `UPDATE` and `DELETE` for every role, including the owner.
 - Clinical tables are not deletable by `dhc_app` (no `DELETE` grant), matching the retention rules.
 

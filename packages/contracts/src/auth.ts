@@ -42,16 +42,18 @@ export const LoginBody = z.object({
 });
 export type LoginBody = z.infer<typeof LoginBody>;
 
-export const LoginResponse = z.discriminatedUnion('status', [
-  z.object({ status: z.literal('mfa_required'), mfaToken: z.string() }),
-  z.object({
-    status: z.literal('mfa_enrolment_required'),
-    mfaToken: z.string(),
-    /** Show as a QR code for the authenticator app; confirm with the first code. */
-    otpauthUri: z.string(),
-  }),
-]);
+/**
+ * Staff accounts are always set up through an invite (authenticator included), so the
+ * password step only ever leads to the authenticator-code step.
+ */
+export const LoginResponse = z.object({ status: z.literal('mfa_required'), mfaToken: z.string() });
 export type LoginResponse = z.infer<typeof LoginResponse>;
+
+/** New staff passwords: length over complexity rules (NIST SP 800-63B). */
+export const NewPassword = z
+  .string()
+  .min(12, 'Use at least 12 characters')
+  .max(256, 'Use at most 256 characters');
 
 export const MfaVerifyBody = z.object({
   mfaToken: z.string().min(1),

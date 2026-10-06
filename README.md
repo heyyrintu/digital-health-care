@@ -6,7 +6,7 @@ Production platform for Dr. Siddharth Gupta's clinic: a web app, a Patient app a
 - **How to build it:** [Build Plan — Web, iOS and Android](docs/product/build-plan.md)
 - **All project documentation:** [docs/README.md](docs/README.md) (ADRs, API, data dictionary, safety rules, security, QA, runbooks, store pack, user guides)
 
-**Status:** Phase 0 (Foundations) — monorepo, CI, auth (patient OTP; staff password + authenticator), tenancy with Postgres row-level security and the audit log are in place. The tenant-isolation suite runs in CI.
+**Status:** Phase 0 (Foundations) — monorepo, CI, auth (patient OTP; staff password + authenticator, set up through admin invite links), tenancy with Postgres row-level security and the audit log are in place. The tenant-isolation suite runs in CI.
 
 ## Repository layout
 
@@ -37,7 +37,7 @@ cp .env.example .env              # then fill JWT_SECRET and FIELD_ENCRYPTION_KE
 pnpm db:up                        # Postgres 16 + Redis 7 in Docker
 docker compose exec postgres createdb -U dhc dhc_test   # once, for integration tests
 pnpm db:migrate                   # apply migrations
-pnpm db:seed                      # demo clinic, 3 staff accounts, synthetic patients
+pnpm db:seed                      # demo clinic, 3 staff invite links, synthetic patients
 
 pnpm --filter @dhc/api dev        # http://localhost:4000/v1/health
 pnpm --filter @dhc/workers dev
@@ -45,7 +45,7 @@ pnpm --filter @dhc/web dev        # http://localhost:3000
 pnpm --filter @dhc/mobile start:patient   # or start:clinic
 ```
 
-The seed prints the staff password. Staff sign in at `POST /v1/auth/login` with organisation `demo-clinic` and enrol an authenticator app on first login; patients sign in with a mobile code (printed in the API console when `OTP_DELIVERY=log`).
+The seed prints an invite link for each demo staff account. Until the web invite page exists, accept one with `POST /v1/auth/invites/accept` (token = the part after `#`, plus a new password), add the returned `otpauthUri` to an authenticator app, then `POST /v1/auth/invites/complete` with its code. After that, staff sign in with `POST /v1/auth/login` (organisation `demo-clinic`) and their authenticator. Patients sign in with a mobile code (printed in the API console when `OTP_DELIVERY=log`).
 
 The mobile apps use native modules, so run them in an Expo development build (EAS profiles `development-patient` / `development-clinic`), not Expo Go.
 

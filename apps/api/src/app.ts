@@ -5,6 +5,7 @@ import type { Config } from './config';
 import { registerErrorHandling } from './errors';
 import { auditRoutes } from './modules/audit/routes';
 import { authRoutes } from './modules/auth/routes';
+import { inviteRoutes } from './modules/invites/routes';
 import { patientRoutes } from './modules/patients/routes';
 import { systemRoutes } from './routes/system';
 import type { Services } from './services';
@@ -35,6 +36,7 @@ export function buildApp({
       'code',
       'password',
       'refreshToken',
+      'token',
     ],
   };
 
@@ -56,6 +58,7 @@ export function buildApp({
   app.register(systemRoutes, { prefix: '/v1', version: config.APP_VERSION });
   if (services) {
     app.register(authRoutes, { prefix: '/v1', services, signInRateLimit });
+    app.register(inviteRoutes, { prefix: '/v1', services, signInRateLimit });
     app.register(patientRoutes, { prefix: '/v1', services });
     app.register(auditRoutes, { prefix: '/v1', services });
     app.addHook('onClose', async () => services.db.$disconnect());

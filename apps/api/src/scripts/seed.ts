@@ -2,11 +2,13 @@
  * Development seed: one demo clinic, three staff accounts and the synthetic personas
  * from docs/qa/test-plan.md. Never real patient data. Refuses to run in production.
  *
- * Staff sign in with the printed password and enrol an authenticator on first login.
+ * Staff accounts are created as invites: open each printed link to set a password and
+ * enrol an authenticator. Re-running issues fresh links for anyone not yet set up.
  */
 import { createDb } from '@dhc/db';
 import { randomBytes } from 'node:crypto';
-import { hashPassword } from '../auth/password';
+import { hashToken } from '../auth/tokens';
+import { INVITE_TTL_MS } from '../modules/invites/service';
 
 if (process.env.NODE_ENV === 'production') {
   console.error('Refusing to seed a production database.');
@@ -19,8 +21,7 @@ if (!url) {
 }
 
 const db = createDb(url);
-const password = process.env.SEED_STAFF_PASSWORD ?? randomBytes(9).toString('base64url');
-const passwordHash = await hashPassword(password);
+const webBaseUrl = (process.env.WEB_BASE_URL ?? 'http://localhost:3000').replace(/\/+$/, '');
 
 const org = await db.organisation.upsert({
   where: { slug: 'demo-clinic' },
@@ -34,19 +35,39 @@ const staff = [
   { email: 'admin@demo-clinic.test', displayName: 'Clinic Admin', role: 'clinic_admin' },
 ] as const;
 
+const links: string[] = [];
 for (const s of staff) {
   const user = await db.user.upsert({
     where: { email: s.email },
-    update: { passwordHash, failedLoginCount: 0, lockedUntil: null },
-    create: { email: s.email, displayName: s.displayName, passwordHash },
+    update: {},
+    create: { email: s.email, displayName: s.displayName },
   });
-  await db.membership.upsert({
-    where: {
-      organisationId_userId_role: { organisationId: org.id, userId: user.id, role: s.role },
+  const key = { organisationId: org.id, userId: user.id, role: s.role };
+  const membership = await db.membership.upsert({
+    where: { organisationId_userId_role: key },
+    update: {},
+    create: { ...key, status: 'invited' },
+  });
+  if (membership.status === 'active') {
+    links.push(`  ${s.email}: already set up`);
+    continue;
+  }
+  await db.membership.update({ where: { id: membership.id }, data: { status: 'invited' } });
+  await db.staffInvite.updateMany({
+    where: { ...key, acceptedAt: null, revokedAt: null },
+    data: { revokedAt: new Date() },
+  });
+  const token = randomBytes(32).toString('base64url');
+  await db.staffInvite.create({
+    data: {
+      ...key,
+      tokenHash: hashToken(token),
+      // Bootstrap: seeded invites are attributed to the invitee.
+      createdByUserId: user.id,
+      expiresAt: new Date(Date.now() + INVITE_TTL_MS),
     },
-    update: { status: 'active' },
-    create: { organisationId: org.id, userId: user.id, role: s.role },
   });
+  links.push(`  ${s.email} (${s.role}): ${webBaseUrl}/invite#${token}`);
 }
 
 // Synthetic personas (docs/qa/test-plan.md §3). Phone numbers are fictional.
@@ -78,8 +99,11 @@ await db.$disconnect();
 console.warn(
   `Seeded organisation "demo-clinic" with ${staff.length} staff and ${personas.length} synthetic patients.`,
 );
-console.warn(`Staff: ${staff.map((s) => s.email).join(', ')}`);
-console.warn(`Password: ${password}  (set SEED_STAFF_PASSWORD to choose one)`);
+console.warn('Staff invite links (valid 72 hours; the token is everything after #):');
+for (const line of links) console.warn(line);
 console.warn(
-  'Patients sign in with a mobile code; set OTP_DELIVERY=log to see codes in the API log.',
+  'Accept with POST /v1/auth/invites/accept then /v1/auth/invites/complete until the web page exists.',
+);
+console.warn(
+  'Patients sign in with a mobile code; set OTP_DELIVERY=log to see codes in the API console.',
 );

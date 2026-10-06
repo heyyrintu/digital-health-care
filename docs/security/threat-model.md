@@ -35,6 +35,8 @@ Patient identities and contact details; clinical records (notes, diagnoses, pres
 | T16 | Secrets leaked in code or logs | I | Secret store, scanning in CI, no PHI or secrets in logs |
 | T17 | Platform staff accessing clinical data | E | Platform console has no clinical endpoints; break-glass (if ever added) logged and time-limited |
 | T18 | Data loss | D | Multi-AZ database, point-in-time recovery, monthly restore test |
+| T19 | Attacker with a staff password enrols their own authenticator | S, E | Authenticators enrolled only via admin-issued invite links (single-use, 72 h, hashed, URL fragment, revocable); login never offers enrolment |
+| T20 | Invite link intercepted | S | Link alone is not enough for an existing account (password + current authenticator); for a new account the admin sees acceptance in the invite list and audit log and can revoke; short expiry |
 
 ## Open items
 - [ ] Pen-test scope agreed (web, both apps, API, tenant isolation, payment and webhook flows).
