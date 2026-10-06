@@ -46,3 +46,115 @@ body {
   font-weight: 700;
   color: var(--color-brand-100);
 }
+
+.narrow {
+  max-width: 480px;
+}
+
+.card {
+  background: var(--color-neutral-0);
+  border: 1px solid var(--color-neutral-300);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+}
+
+.card-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.card h1 {
+  font-size: var(--font-size-2xl);
+  margin: 0 0 var(--space-4);
+}
+
+.card h2 {
+  font-size: var(--font-size-lg);
+}
+
+.card form {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
+.card label {
+  font-weight: 600;
+  margin-top: var(--space-2);
+}
+
+.card input {
+  font: inherit;
+  min-height: 44px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-neutral-500);
+  border-radius: var(--radius-md);
+}
+
+.card button[type='submit'] {
+  font: inherit;
+  font-weight: 600;
+  min-height: 44px;
+  margin-top: var(--space-4);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--color-brand-600);
+  color: var(--color-neutral-0);
+  cursor: pointer;
+}
+
+.card button[type='submit']:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.link-button {
+  font: inherit;
+  background: none;
+  border: 0;
+  color: var(--color-brand-700);
+  text-decoration: underline;
+  cursor: pointer;
+  min-height: 44px;
+}
+
+.alert {
+  border-left: 4px solid var(--color-status-danger);
+  background: #fef2f2;
+  padding: var(--space-3);
+  border-radius: var(--radius-sm);
+}
+
+.summary {
+  background: var(--color-brand-50);
+  border-radius: var(--radius-md);
+  padding: var(--space-3) var(--space-4);
+}
+
+.summary p {
+  margin: var(--space-1) 0;
+}
+
+.hint {
+  color: var(--color-neutral-500);
+  font-size: var(--font-size-sm);
+}
+
+.qr {
+  display: block;
+  margin: var(--space-4) auto;
+  image-rendering: pixelated;
+}
+
+.key {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: var(--font-size-lg);
+  letter-spacing: 0.08em;
+  text-align: center;
+  background: var(--color-neutral-100);
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  user-select: all;
+}

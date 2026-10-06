@@ -3,7 +3,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { buildApp } from './app';
 import { AppError } from './errors';
-import { loadConfig } from './config';
+import { corsOrigins, loadConfig } from './config';
 
 const app = buildApp({ config: { LOG_LEVEL: 'silent', APP_VERSION: '1.2.3' } });
 
@@ -90,5 +90,40 @@ describe('loadConfig', () => {
       /OTP_DELIVERY/,
     );
     expect(loadConfig({ NODE_ENV: 'development', OTP_DELIVERY: 'log' }).OTP_DELIVERY).toBe('log');
+  });
+});
+
+describe('CORS', () => {
+  const corsApp = buildApp({
+    config: { LOG_LEVEL: 'silent', APP_VERSION: 't' },
+    corsOrigins: ['https://app.example.test'],
+  });
+  afterAll(() => corsApp.close());
+
+  const preflight = (origin: string) =>
+    corsApp.inject({
+      method: 'OPTIONS',
+      url: '/v1/health',
+      headers: { origin, 'access-control-request-method': 'POST' },
+    });
+
+  it('allows the web app origin', async () => {
+    const res = await preflight('https://app.example.test');
+    expect(res.headers['access-control-allow-origin']).toBe('https://app.example.test');
+    expect(res.headers['access-control-allow-credentials']).toBeUndefined();
+  });
+
+  it('gives other origins no CORS headers', async () => {
+    const res = await preflight('https://evil.example');
+    expect(res.headers['access-control-allow-origin']).toBeUndefined();
+  });
+
+  it('derives allowed origins from config', () => {
+    expect(corsOrigins({ WEB_BASE_URL: 'http://localhost:3000/' })).toEqual([
+      'http://localhost:3000',
+    ]);
+    expect(
+      corsOrigins({ WEB_BASE_URL: 'x', CORS_ORIGINS: 'https://a.test, https://b.test/path' }),
+    ).toEqual(['https://a.test', 'https://b.test']);
   });
 });

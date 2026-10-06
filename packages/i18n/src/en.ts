@@ -14,6 +14,37 @@ export const en = {
   'queue.next': 'Next',
   'prescription.sign': 'Sign',
   'portal.welcome': 'Welcome, {name}',
+  'common.continue': 'Continue',
+  'error.network': 'Could not reach the server. Check your connection and try again.',
+  'role.doctor': 'Doctor',
+  'role.front_desk': 'Front desk',
+  'role.clinic_admin': 'Clinic admin',
+  'invite.title': 'Set up your staff account',
+  'invite.loading': 'Checking your invite…',
+  'invite.missingToken':
+    'This page needs the full invite link. Open the link exactly as you received it.',
+  'invite.invalid':
+    'This invite link is invalid or has expired. Ask your clinic admin for a new one.',
+  'invite.summary': 'You have been invited to {clinic} as {role}.',
+  'invite.account': 'Account: {identifier}',
+  'invite.expires': 'This link expires on {date}.',
+  'invite.existingIntro': 'You already have a staff account. Confirm it to add this clinic.',
+  'invite.passwordNew': 'Choose a password',
+  'invite.passwordHint': 'At least 12 characters. A short sentence works well.',
+  'invite.passwordConfirm': 'Type the password again',
+  'invite.passwordExisting': 'Your current password',
+  'invite.passwordTooShort': 'Use at least 12 characters.',
+  'invite.passwordMismatch': 'The passwords do not match.',
+  'invite.scanTitle': 'Add an authenticator app',
+  'invite.scanHelp':
+    'Scan this QR code with an authenticator app such as Google Authenticator or Microsoft Authenticator.',
+  'invite.manualKey': 'Can’t scan it? Enter this key instead:',
+  'invite.confirmTitle': 'Confirm with your authenticator app',
+  'invite.codeLabel': '6-digit code from your authenticator app',
+  'invite.codeInvalid': 'Enter the 6 digits shown in your authenticator app.',
+  'invite.finish': 'Finish setup',
+  'invite.done': 'You’re all set. From now on, sign in with your password and authenticator app.',
+  'invite.goToDashboard': 'Go to the clinic dashboard',
 } as const;
 
 export type MessageKey = keyof typeof en;

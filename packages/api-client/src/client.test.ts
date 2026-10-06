@@ -61,3 +61,40 @@ describe('createApiClient', () => {
     await expect(client.getHealth()).rejects.toMatchObject({ status: 502, code: 'INTERNAL' });
   });
 });
+
+describe('invite calls', () => {
+  it('posts the token in the body, never in the URL', async () => {
+    const fetch = vi.fn(async () =>
+      json(200, {
+        organisation: { name: 'Demo Clinic', slug: 'demo-clinic' },
+        role: 'doctor',
+        identifier: 'do****@demo.test',
+        account: 'new',
+        expiresAt: '2026-10-09T10:00:00Z',
+      }),
+    );
+    const client = createApiClient({ baseUrl: 'https://api.test/v1', fetch });
+
+    await expect(client.inspectInvite('secret-token')).resolves.toMatchObject({ account: 'new' });
+    const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('https://api.test/v1/auth/invites/inspect');
+    expect(url).not.toContain('secret-token');
+    expect(JSON.parse(init.body as string)).toEqual({ token: 'secret-token' });
+  });
+
+  it('parses the accept step', async () => {
+    const fetch = vi.fn(async () => json(200, { status: 'confirm_required' }));
+    const client = createApiClient({ baseUrl: 'https://api.test/v1', fetch });
+    await expect(client.acceptInvite('t', 'p')).resolves.toEqual({ status: 'confirm_required' });
+  });
+
+  it('handles 204 No Content on logout', async () => {
+    const fetch = vi.fn(async () => new Response(null, { status: 204 }));
+    const client = createApiClient({
+      baseUrl: 'https://api.test/v1',
+      getAccessToken: () => 'a',
+      fetch,
+    });
+    await expect(client.logout()).resolves.toBeUndefined();
+  });
+});

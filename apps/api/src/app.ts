@@ -1,3 +1,4 @@
+import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import { randomUUID } from 'node:crypto';
 import Fastify, { type FastifyServerOptions } from 'fastify';
@@ -18,6 +19,8 @@ export interface BuildAppOptions {
   trustProxy?: boolean;
   /** Sign-in requests per IP per minute (default 10). */
   signInRateLimit?: number;
+  /** Browser origins allowed to call the API (web app). None means no CORS headers. */
+  corsOrigins?: string[];
 }
 
 export function buildApp({
@@ -25,6 +28,7 @@ export function buildApp({
   services,
   trustProxy = false,
   signInRateLimit = 10,
+  corsOrigins = [],
 }: BuildAppOptions) {
   const logger: FastifyServerOptions['logger'] = {
     level: config.LOG_LEVEL,
@@ -54,6 +58,14 @@ export function buildApp({
   });
 
   registerErrorHandling(app);
+  // Bearer tokens only (no cookies), so credentials are never allowed cross-origin.
+  app.register(cors, {
+    origin: corsOrigins,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+    allowedHeaders: ['authorization', 'content-type', 'idempotency-key'],
+    exposedHeaders: ['x-request-id'],
+    maxAge: 600,
+  });
   app.register(rateLimit, { global: false });
   app.register(systemRoutes, { prefix: '/v1', version: config.APP_VERSION });
   if (services) {

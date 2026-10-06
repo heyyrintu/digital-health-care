@@ -17,6 +17,7 @@
   "dependencies": {
     "@dhc/contracts": "workspace:*",
     "@dhc/db": "workspace:*",
+    "@fastify/cors": "^11.3.0",
     "@fastify/rate-limit": "^11.2.0",
     "@prisma/adapter-pg": "7.10.0",
     "@prisma/client": "7.10.0",

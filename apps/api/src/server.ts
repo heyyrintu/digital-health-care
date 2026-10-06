@@ -1,5 +1,5 @@
 import { buildApp } from './app';
-import { loadConfig } from './config';
+import { corsOrigins, loadConfig } from './config';
 import { createServices } from './services';
 
 const config = loadConfig();
@@ -7,6 +7,7 @@ const app = buildApp({
   config,
   services: createServices(config),
   trustProxy: config.NODE_ENV === 'production',
+  corsOrigins: corsOrigins(config),
 });
 
 const shutdown = async (signal: string) => {

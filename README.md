@@ -45,7 +45,7 @@ pnpm --filter @dhc/web dev        # http://localhost:3000
 pnpm --filter @dhc/mobile start:patient   # or start:clinic
 ```
 
-The seed prints an invite link for each demo staff account. Until the web invite page exists, accept one with `POST /v1/auth/invites/accept` (token = the part after `#`, plus a new password), add the returned `otpauthUri` to an authenticator app, then `POST /v1/auth/invites/complete` with its code. After that, staff sign in with `POST /v1/auth/login` (organisation `demo-clinic`) and their authenticator. Patients sign in with a mobile code (printed in the API console when `OTP_DELIVERY=log`).
+The seed prints an invite link for each demo staff account. Open it in the browser (with the web app running) to set a password and add an authenticator app; after that, staff sign in with `POST /v1/auth/login` (organisation `demo-clinic`) and their authenticator. Patients sign in with a mobile code (printed in the API console when `OTP_DELIVERY=log`).
 
 The mobile apps use native modules, so run them in an Expo development build (EAS profiles `development-patient` / `development-clinic`), not Expo Go.
 

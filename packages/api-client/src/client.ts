@@ -1,5 +1,14 @@
-import { ErrorResponse, HealthResponse, type ErrorCode } from '@dhc/contracts';
-import type { z } from 'zod';
+import {
+  AcceptInviteResponse,
+  ErrorResponse,
+  HealthResponse,
+  InviteDetails,
+  TokenResponse,
+  type ErrorCode,
+} from '@dhc/contracts';
+import { z } from 'zod';
+
+const NoContent = z.undefined();
 
 export class ApiError extends Error {
   constructor(
@@ -53,7 +62,8 @@ export function createApiClient(options: ApiClientOptions) {
       signal,
     });
 
-    const payload: unknown = await response.json().catch(() => undefined);
+    const payload: unknown =
+      response.status === 204 ? undefined : await response.json().catch(() => undefined);
     if (!response.ok) throw toApiError(response, payload);
     return schema.parse(payload);
   }
@@ -62,6 +72,20 @@ export function createApiClient(options: ApiClientOptions) {
     request,
     getHealth: (signal?: AbortSignal) =>
       request('GET', '/health', { schema: HealthResponse, signal }),
+
+    // Staff invite links (the token comes from the invite URL fragment).
+    inspectInvite: (token: string) =>
+      request('POST', '/auth/invites/inspect', { schema: InviteDetails, body: { token } }),
+    acceptInvite: (token: string, password: string) =>
+      request('POST', '/auth/invites/accept', {
+        schema: AcceptInviteResponse,
+        body: { token, password },
+      }),
+    completeInvite: (token: string, code: string) =>
+      request('POST', '/auth/invites/complete', { schema: TokenResponse, body: { token, code } }),
+
+    /** Ends the session of the current access token. */
+    logout: () => request('POST', '/auth/logout', { schema: NoContent }),
   };
 }
 

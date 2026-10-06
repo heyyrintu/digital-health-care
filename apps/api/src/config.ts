@@ -17,6 +17,8 @@ const Env = z
     OTP_DELIVERY: z.enum(['log', 'disabled']).default('disabled'),
     /** Web app origin; staff invite links point here. */
     WEB_BASE_URL: z.url().default('http://localhost:3000'),
+    /** Comma-separated browser origins allowed to call the API. Defaults to WEB_BASE_URL. */
+    CORS_ORIGINS: z.string().optional(),
   })
   .refine((env) => !(env.NODE_ENV === 'production' && env.OTP_DELIVERY === 'log'), {
     message: 'OTP_DELIVERY=log is not allowed in production',
@@ -24,6 +26,16 @@ const Env = z
   });
 
 export type Config = z.infer<typeof Env>;
+
+/** Origins allowed by CORS: CORS_ORIGINS if set, else the web app's origin. */
+export function corsOrigins(config: Pick<Config, 'CORS_ORIGINS' | 'WEB_BASE_URL'>): string[] {
+  const raw = config.CORS_ORIGINS ?? config.WEB_BASE_URL;
+  return raw
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean)
+    .map((o) => new URL(o).origin);
+}
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const parsed = Env.safeParse(env);

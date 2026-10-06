@@ -101,9 +101,7 @@ console.warn(
 );
 console.warn('Staff invite links (valid 72 hours; the token is everything after #):');
 for (const line of links) console.warn(line);
-console.warn(
-  'Accept with POST /v1/auth/invites/accept then /v1/auth/invites/complete until the web page exists.',
-);
+console.warn('Open a link in the browser (web app running) to set a password and authenticator.');
 console.warn(
   'Patients sign in with a mobile code; set OTP_DELIVERY=log to see codes in the API console.',
 );

@@ -15,3 +15,4 @@ All notable changes are recorded here, newest first. Format: version, date, summ
   - Integration suite for auth and tenant isolation, run against Postgres in CI.
   - Development seed with synthetic personas.
 - Staff invite links: clinic admins invite staff by email or mobile; the single-use link (72 h) is the only way to set a staff password and enrol an authenticator. Login no longer offers enrolment. Existing staff accounts confirm with their current password and authenticator. Seed now prints invite links.
+- Web `/invite` page: checks the link, sets (or confirms) the password, shows the authenticator QR code and typed key, and confirms the first code; English and Hindi. The API now allows the web app's origin via CORS.

@@ -16,6 +16,7 @@ This guide explains conventions and lists the endpoint catalogue by module. Fiel
 | Pagination | Cursor based: `?limit=50&cursor=<opaque>`; response `{ data, nextCursor }` |
 | Versioning | URL major version (`/v1`). Additive changes only within a version. Two latest mobile app versions must keep working |
 | Rate limits | Per user and per IP; stricter on OTP, login, upload, payment endpoints. `429` with `Retry-After` |
+| CORS | Only the web app's origin (`WEB_BASE_URL`, or the `CORS_ORIGINS` list) may call the API from a browser. No cookies; credentials are never allowed cross-origin |
 | Real time | Web: Server-Sent Events `/v1/stream/queue`; mobile: WebSocket `/v1/ws`; scribe audio: WebSocket `/v1/scribe/stream` |
 
 ## 2. Error shape
@@ -54,7 +55,7 @@ Rules:
 - **Refresh tokens** are opaque, stored only as SHA-256 hashes, and single-use: each refresh returns a new one. Replaying an old one ends the whole session (`auth.refresh.reuse_detected` in the audit log). Sessions last 30 days for patients and 12 hours for staff.
 - **Patient codes:** 6 digits, valid 5 minutes, stored as an HMAC, 5 attempts per code, at most 3 codes per number per 10 minutes. Delivery goes through an `OtpSender`; in development `OTP_DELIVERY=log` prints the code (forbidden in production) until the SMS provider is chosen (decision O5).
 - **Staff:** passwords hashed with scrypt (at least 12 characters); 5 wrong passwords or codes lock the account for 15 minutes. An authenticator (TOTP) is mandatory and each code works once.
-- **Staff accounts are set up only through invites.** Login never offers authenticator enrolment, so knowing someone's password is never enough to attach a new authenticator. A clinic admin's invite link is single-use, expires after 72 hours, is stored only as a hash, and carries its token in the URL fragment (`/invite#<token>`), which browsers do not send to servers or logs. A new invite for the same person and role replaces the previous one; admins can revoke. The invite is used up only when the first authenticator code is confirmed. A person who already has a staff account (another clinic) confirms with their existing password and authenticator instead.
+- **Staff accounts are set up only through invites.** Login never offers authenticator enrolment, so knowing someone's password is never enough to attach a new authenticator. A clinic admin's invite link is single-use, expires after 72 hours, is stored only as a hash, and carries its token in the URL fragment (`/invite#<token>`), which browsers do not send to servers or logs. A new invite for the same person and role replaces the previous one; admins can revoke. The invite is used up only when the first authenticator code is confirmed. A person who already has a staff account (another clinic) confirms with their existing password and authenticator instead. The web app's `/invite` page walks the person through these steps; it reads the token from the fragment and removes it from the address bar.
 - Unknown user, wrong password and no access in that organisation all return the same `401` message.
 - Sign-in endpoints are rate-limited per IP (10 per minute by default).
 

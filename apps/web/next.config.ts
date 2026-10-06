@@ -16,7 +16,13 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
   // Workspace packages ship TypeScript source.
-  transpilePackages: ['@dhc/api-client', '@dhc/contracts', '@dhc/i18n', '@dhc/tokens'],
+  transpilePackages: [
+    '@dhc/api-client',
+    '@dhc/contracts',
+    '@dhc/domain',
+    '@dhc/i18n',
+    '@dhc/tokens',
+  ],
   async headers() {
     return [
       { source: '/:path*', headers: securityHeaders },
@@ -24,6 +30,7 @@ const nextConfig: NextConfig = {
       { source: '/clinic/:path*', headers: noStore },
       { source: '/platform/:path*', headers: noStore },
       { source: '/display/:path*', headers: noStore },
+      { source: '/invite', headers: noStore },
     ];
   },
 };
