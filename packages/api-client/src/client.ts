@@ -84,6 +84,12 @@ export function createApiClient(options: ApiClientOptions) {
     completeInvite: (token: string, code: string) =>
       request('POST', '/auth/invites/complete', { schema: TokenResponse, body: { token, code } }),
 
+    /** Clinic admin: revoke a pending staff invite. */
+    revokeStaffInvite: (inviteId: string) =>
+      request('POST', `/staff/invites/${encodeURIComponent(inviteId)}/revoke`, {
+        schema: NoContent,
+      }),
+
     /** Ends the session of the current access token. */
     logout: () => request('POST', '/auth/logout', { schema: NoContent }),
   };

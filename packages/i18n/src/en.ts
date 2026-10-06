@@ -78,12 +78,20 @@ export const en = {
   'staff.resetConfirm':
     'This signs {name} out everywhere and clears their password and authenticator. You will get a new setup link to give them. Continue?',
   'staff.resetDo': 'Yes, reset',
-  'staff.resetLink': 'Give this link to {name} directly. It works once and expires in 72 hours.',
+  'staff.shareLink': 'Give this link to {name} directly. It works once and expires in 72 hours.',
   'staff.copy': 'Copy link',
   'staff.copied': 'Copied',
   'invite.resetTitle': 'Reset your sign-in',
   'invite.resetSummary':
     'Your clinic admin at {clinic} has reset your sign-in. Choose a new password and set up your authenticator app again.',
+  'staff.inviteTitle': 'Invite staff',
+  'staff.inviteName': 'Name (optional)',
+  'staff.inviteRole': 'Role',
+  'staff.inviteSend': 'Create invite link',
+  'staff.pendingTitle': 'Pending invites',
+  'staff.noPending': 'No pending invites.',
+  'staff.expires': 'Expires {date}',
+  'staff.revoke': 'Revoke',
 } as const;
 
 export type MessageKey = keyof typeof en;

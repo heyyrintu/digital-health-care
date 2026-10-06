@@ -99,3 +99,18 @@ describe('invite calls', () => {
     await expect(client.logout()).resolves.toBeUndefined();
   });
 });
+
+describe('staff invite calls', () => {
+  it('revokes an invite by id and accepts 204', async () => {
+    const fetch = vi.fn(async () => new Response(null, { status: 204 }));
+    const client = createApiClient({
+      baseUrl: 'https://api.test/v1',
+      getAccessToken: () => 'a',
+      fetch,
+    });
+    await expect(client.revokeStaffInvite('inv-1')).resolves.toBeUndefined();
+    const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('https://api.test/v1/staff/invites/inv-1/revoke');
+    expect(init.method).toBe('POST');
+  });
+});

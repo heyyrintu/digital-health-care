@@ -7,7 +7,7 @@
 - [ ] **Cashfree:** connect the clinic's Cashfree merchant account, choose payment methods, link expiry, test a payment.
 - [ ] Tags and UHID prefix/start number.
 - [ ] Chart model (shared chart or own patients only).
-- [ ] Staff accounts: **Invite staff** with their email or mobile number and role. Share the link with them directly (it works once and expires in 72 hours). They open it, choose a password and add an authenticator app. You can see each invite's status and revoke one that hasn't been used.
+- [ ] Staff accounts: on the dashboard, under **Staff → Invite staff**, enter their email or mobile number, name and role, then **Create invite link**. Share the link with them directly (it works once and expires in 72 hours). They open it, choose a password and add an authenticator app, and then appear in your staff list. **Pending invites** shows links not yet used; **Revoke** cancels one. Creating a new invite for the same person and role replaces the old link.
 - [ ] Message templates (English and Hindi) and approval status.
 - [ ] Import from the previous system (dry run first).
 

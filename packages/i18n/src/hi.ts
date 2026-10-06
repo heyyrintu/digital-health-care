@@ -82,11 +82,19 @@ export const hi: Record<MessageKey, string> = {
   'staff.resetConfirm':
     'इससे {name} हर जगह से साइन आउट हो जाएंगे और उनका पासवर्ड व ऑथेंटिकेटर हट जाएगा। आपको उन्हें देने के लिए एक नया सेटअप लिंक मिलेगा। आगे बढ़ें?',
   'staff.resetDo': 'हाँ, रीसेट करें',
-  'staff.resetLink':
+  'staff.shareLink':
     'यह लिंक सीधे {name} को दें। यह एक बार काम करता है और 72 घंटे में समाप्त हो जाता है।',
   'staff.copy': 'लिंक कॉपी करें',
   'staff.copied': 'कॉपी हो गया',
   'invite.resetTitle': 'अपना साइन-इन रीसेट करें',
   'invite.resetSummary':
     '{clinic} के आपके क्लिनिक एडमिन ने आपका साइन-इन रीसेट किया है। नया पासवर्ड चुनें और अपना ऑथेंटिकेटर ऐप फिर से सेट करें।',
+  'staff.inviteTitle': 'स्टाफ़ को आमंत्रित करें',
+  'staff.inviteName': 'नाम (वैकल्पिक)',
+  'staff.inviteRole': 'भूमिका',
+  'staff.inviteSend': 'निमंत्रण लिंक बनाएँ',
+  'staff.pendingTitle': 'लंबित निमंत्रण',
+  'staff.noPending': 'कोई लंबित निमंत्रण नहीं।',
+  'staff.expires': '{date} को समाप्त',
+  'staff.revoke': 'रद्द करें',
 };
