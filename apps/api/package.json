@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:integration": "vitest run --config vitest.integration.config.ts",
-    "seed": "tsx --env-file-if-exists=../../.env src/scripts/seed.ts"
+    "seed": "tsx --env-file-if-exists=../../.env src/scripts/seed.ts",
+    "support:reset-authenticator": "tsx --env-file-if-exists=../../.env src/scripts/support-reset-authenticator.ts"
   },
   "dependencies": {
     "@dhc/contracts": "workspace:*",

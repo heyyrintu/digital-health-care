@@ -379,7 +379,7 @@ export function toStaffInvite(
   };
 }
 
-function parseIdentifier(raw: string): { email: string } | { phone: string } {
+export function parseIdentifier(raw: string): { email: string } | { phone: string } {
   const value = raw.trim();
   if (value.includes('@')) {
     const email = value.toLowerCase();

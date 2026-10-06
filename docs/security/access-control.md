@@ -13,6 +13,7 @@ Patient, Doctor, Front desk, Clinic Admin, Platform Admin (no clinical access), 
 |---|---|---|---|
 | Cloud console | DevOps + tech lead | SSO with MFA, named accounts | Quarterly |
 | Production database | No standing human access | Break-glass role with approval, time-limited, recorded | Every use |
+| Staff authenticator reset (multi-clinic staff) | Platform support operator | Support command under break-glass, after identity checks and second-person approval ([runbook](../runbooks/support-authenticator-reset.md)); audited into each affected clinic | Every use |
 | Logs and metrics | Engineers | Read-only, no PHI in logs | Quarterly |
 | Secrets (Cashfree keys, DSC, AI keys) | Services only | Secret store; humans rotate via runbook | On rotation |
 | App store and Play consoles | Product owner, tech lead, mobile lead | Organisation accounts with 2FA | Quarterly |

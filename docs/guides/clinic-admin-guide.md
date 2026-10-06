@@ -18,7 +18,7 @@
 - Free-text medicines waiting to be added to the master.
 
 ## Lost phone or authenticator
-If a staff member loses their phone or authenticator app, open **Staff** on the dashboard and choose **Reset sign-in** next to their name. This signs them out everywhere and clears their password and authenticator; you get a new link (valid 72 hours) to give them directly. They open it, choose a new password and set up the authenticator again — their role stays the same. You cannot reset your own sign-in (ask another clinic admin), and someone who also works at another clinic needs platform support.
+If a staff member loses their phone or authenticator app, open **Staff** on the dashboard and choose **Reset sign-in** next to their name. This signs them out everywhere and clears their password and authenticator; you get a new link (valid 72 hours) to give them directly. They open it, choose a new password and set up the authenticator again — their role stays the same. You cannot reset your own sign-in (ask another clinic admin), and someone who also works at another clinic needs platform support: ask them to contact support, who will call them back on their registered number and ask you (or the other clinic's admin) to confirm before sending a new link. Their reset shows in your audit log as `support.authenticator.reset`.
 
 ## Security
 Remove staff accounts the same day someone leaves; revoke lost devices; review the audit log monthly.

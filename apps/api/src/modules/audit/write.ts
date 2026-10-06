@@ -1,5 +1,14 @@
 import type { Prisma, Tx } from '@dhc/db';
-import type { FastifyRequest } from 'fastify';
+
+/**
+ * Where an audited action came from. An HTTP request fits as-is; scripts (support
+ * tooling) pass their own run ID and a descriptive user agent.
+ */
+export interface AuditSource {
+  id: string;
+  ip: string;
+  headers: { 'user-agent'?: string };
+}
 
 export interface AuditEvent {
   action: string;
@@ -16,11 +25,7 @@ export interface AuditEvent {
  * `createMany` issues a plain INSERT (no RETURNING): the sign-in role may write audit
  * rows but never read them.
  */
-export async function writeAudit(
-  tx: Tx,
-  request: FastifyRequest,
-  event: AuditEvent,
-): Promise<void> {
+export async function writeAudit(tx: Tx, request: AuditSource, event: AuditEvent): Promise<void> {
   await tx.auditLog.createMany({
     data: {
       action: event.action,
