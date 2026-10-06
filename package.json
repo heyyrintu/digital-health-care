@@ -18,7 +18,8 @@
     "db:down": "docker compose down",
     "test:integration": "turbo run test:integration",
     "db:migrate": "pnpm --filter @dhc/db migrate:deploy",
-    "db:seed": "pnpm --filter @dhc/api seed"
+    "db:seed": "pnpm --filter @dhc/api seed",
+    "test:e2e": "pnpm --filter @dhc/e2e test:e2e"
   },
   "devDependencies": {
     "@dhc/config": "workspace:*",

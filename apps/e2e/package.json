@@ -1,0 +1,18 @@
+{
+  "name": "@dhc/e2e",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Browser tests (Playwright) against the built API and web app.",
+  "type": "module",
+  "scripts": {
+    "test:e2e": "playwright test",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@dhc/config": "workspace:*",
+    "@dhc/db": "workspace:*",
+    "@playwright/test": "1.56.1",
+    "@types/node": "^22.20.5"
+  }
+}

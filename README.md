@@ -19,6 +19,7 @@ pnpm workspaces + Turborepo ([ADR 0001](docs/adr/0001-one-typescript-monorepo.md
 | `apps/web`            | Next.js: public site, `/app` patient portal, `/clinic` staff dashboard, `/platform` console, `/display/[clinic]` waiting room ([ADR 0002](docs/adr/0002-next-js-for-the-web-app.md))                               |
 | `apps/mobile`         | Expo app that builds the Patient app and the Clinic app via `APP_VARIANT` ([ADR 0003](docs/adr/0003-react-native-with-expo-for-ios-and-android.md), [ADR 0004](docs/adr/0004-two-store-apps-from-one-codebase.md)) |
 | `packages/db`         | Prisma schema, migrations and `withTenant` / `withAuth` — every request runs under row-level security ([ADR 0014](docs/adr/0014-tenant-isolation-with-postgres-row-level-security.md))                             |
+| `apps/e2e`            | Browser tests (Playwright): invite page, web sign-in, staff invites and reset                                                                                                                                      |
 | `packages/contracts`  | Zod schemas — source of truth for the API, OpenAPI 3.1 and the client ([ADR 0007](docs/adr/0007-rest-and-openapi-with-zod-contracts.md))                                                                           |
 | `packages/api-client` | Typed fetch client for web and mobile                                                                                                                                                                              |
 | `packages/domain`     | Shared business rules (UHID, IST dates, money in paise)                                                                                                                                                            |
@@ -54,10 +55,13 @@ The mobile apps use native modules, so run them in an Expo development build (EA
 ```bash
 pnpm check              # lint, typecheck, unit tests and build every package
 pnpm test:integration   # auth and tenant-isolation suites against TEST_DATABASE_URL
+pnpm build && pnpm test:e2e   # browser tests (Playwright) against E2E_DATABASE_URL
 pnpm format             # Prettier
 ```
 
-CI (`.github/workflows/ci.yml`) runs the format check, `turbo run lint typecheck test build`, and the integration suites against a Postgres service on every pull request.
+CI (`.github/workflows/ci.yml`) runs on every pull request: the format check and `turbo run lint typecheck test build`; the integration suites against a Postgres service; and the browser tests, which start the built API and web app against their own Postgres and upload screenshots and traces when a test fails.
+
+Browser tests live in `apps/e2e`. Each test creates its own clinic and invite links directly in the database, so tests are independent and can run in parallel. Locally, create the database once (`docker compose exec postgres createdb -U dhc dhc_e2e`) and install Chromium with `pnpm --filter @dhc/e2e exec playwright install chromium`.
 
 ## Rules
 

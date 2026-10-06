@@ -17,6 +17,8 @@ const Env = z
     OTP_DELIVERY: z.enum(['log', 'disabled']).default('disabled'),
     /** Web app origin; staff invite links point here. */
     WEB_BASE_URL: z.url().default('http://localhost:3000'),
+    /** Sign-in requests allowed per client address per minute. */
+    SIGN_IN_RATE_LIMIT: z.coerce.number().int().min(1).max(100_000).default(10),
     /** Comma-separated browser origins allowed to call the API. Defaults to WEB_BASE_URL. */
     CORS_ORIGINS: z.string().optional(),
   })

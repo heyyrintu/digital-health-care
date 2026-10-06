@@ -15,3 +15,5 @@ android/
 *.log
 expo-env.d.ts
 packages/db/src/generated/
+apps/e2e/test-results/
+apps/e2e/playwright-report/

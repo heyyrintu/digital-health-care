@@ -8,6 +8,7 @@ const app = buildApp({
   services: createServices(config),
   trustProxy: config.NODE_ENV === 'production',
   corsOrigins: corsOrigins(config),
+  signInRateLimit: config.SIGN_IN_RATE_LIMIT,
 });
 
 const shutdown = async (signal: string) => {

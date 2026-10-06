@@ -82,6 +82,8 @@ describe('error shape', () => {
 describe('loadConfig', () => {
   it('applies defaults and rejects bad values', () => {
     expect(loadConfig({}).API_PORT).toBe(4000);
+    expect(loadConfig({}).SIGN_IN_RATE_LIMIT).toBe(10);
+    expect(loadConfig({ SIGN_IN_RATE_LIMIT: '500' }).SIGN_IN_RATE_LIMIT).toBe(500);
     expect(() => loadConfig({ API_PORT: 'abc' })).toThrow(/Invalid environment/);
   });
 
