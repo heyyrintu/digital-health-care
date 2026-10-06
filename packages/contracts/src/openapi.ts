@@ -20,7 +20,9 @@ import {
   CreatedStaffInvite,
   InviteDetails,
   InviteTokenBody,
+  ResetAuthenticatorBody,
   StaffInviteList,
+  StaffMemberList,
 } from './invites';
 import { HealthResponse } from './health';
 import { CursorQuery } from './pagination';
@@ -176,6 +178,24 @@ const operations: Operation[] = [
     summary: 'Revoke a pending invite (clinic admin)',
     pathParams: ['id'],
     status: 204,
+  },
+  {
+    method: 'get',
+    path: '/staff/members',
+    operationId: 'listStaffMembers',
+    summary: 'Staff in this organisation (clinic admin)',
+    response: StaffMemberList,
+  },
+  {
+    method: 'post',
+    path: '/staff/members/{id}/reset-authenticator',
+    operationId: 'resetAuthenticator',
+    summary:
+      'Reset a staff member’s password and authenticator; returns a new setup link (clinic admin)',
+    pathParams: ['id'],
+    body: ResetAuthenticatorBody,
+    response: CreatedStaffInvite,
+    status: 201,
   },
   {
     method: 'get',

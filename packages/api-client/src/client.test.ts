@@ -70,6 +70,7 @@ describe('invite calls', () => {
         role: 'doctor',
         identifier: 'do****@demo.test',
         account: 'new',
+        purpose: 'join',
         expiresAt: '2026-10-09T10:00:00Z',
       }),
     );

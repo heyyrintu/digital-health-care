@@ -71,4 +71,22 @@ export const hi: Record<MessageKey, string> = {
   'patient.name': 'नाम',
   'patient.phone': 'मोबाइल',
   'patient.dob': 'जन्म तिथि',
+  'staff.title': 'स्टाफ़',
+  'staff.you': 'आप',
+  'staff.invitePending': 'निमंत्रण लंबित',
+  'staff.signInReady': 'साइन-इन सेट है',
+  'staff.signInNotReady': 'साइन-इन सेट नहीं है',
+  'staff.lastLogin': 'पिछला साइन-इन: {date}',
+  'staff.neverSignedIn': 'अभी तक साइन इन नहीं किया',
+  'staff.reset': 'साइन-इन रीसेट करें',
+  'staff.resetConfirm':
+    'इससे {name} हर जगह से साइन आउट हो जाएंगे और उनका पासवर्ड व ऑथेंटिकेटर हट जाएगा। आपको उन्हें देने के लिए एक नया सेटअप लिंक मिलेगा। आगे बढ़ें?',
+  'staff.resetDo': 'हाँ, रीसेट करें',
+  'staff.resetLink':
+    'यह लिंक सीधे {name} को दें। यह एक बार काम करता है और 72 घंटे में समाप्त हो जाता है।',
+  'staff.copy': 'लिंक कॉपी करें',
+  'staff.copied': 'कॉपी हो गया',
+  'invite.resetTitle': 'अपना साइन-इन रीसेट करें',
+  'invite.resetSummary':
+    '{clinic} के आपके क्लिनिक एडमिन ने आपका साइन-इन रीसेट किया है। नया पासवर्ड चुनें और अपना ऑथेंटिकेटर ऐप फिर से सेट करें।',
 };

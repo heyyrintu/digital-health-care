@@ -8,6 +8,7 @@ import { auditRoutes } from './modules/audit/routes';
 import { authRoutes } from './modules/auth/routes';
 import { inviteRoutes } from './modules/invites/routes';
 import { patientRoutes } from './modules/patients/routes';
+import { staffRoutes } from './modules/staff/routes';
 import { systemRoutes } from './routes/system';
 import type { Services } from './services';
 
@@ -72,6 +73,7 @@ export function buildApp({
     app.register(authRoutes, { prefix: '/v1', services, signInRateLimit });
     app.register(inviteRoutes, { prefix: '/v1', services, signInRateLimit });
     app.register(patientRoutes, { prefix: '/v1', services });
+    app.register(staffRoutes, { prefix: '/v1', services });
     app.register(auditRoutes, { prefix: '/v1', services });
     app.addHook('onClose', async () => services.db.$disconnect());
   }

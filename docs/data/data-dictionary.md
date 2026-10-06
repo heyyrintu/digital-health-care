@@ -15,7 +15,7 @@ Conventions for every table: `id` (UUID), `organisationId` (except platform-leve
 | Clinic | Physical location | organisationId, name, address, geo, phone, gstin?, timezone, hfrId |
 | User | Platform-level login identity (no organisationId) | phone (unique), email (unique), displayName, status, passwordHash (staff, scrypt), mfaSecret (staff, encrypted), mfaPendingSecret (encrypted, set during invite acceptance until the first code), mfaLastUsedStep (TOTP replay guard), failedLoginCount, lockedUntil, lastLoginAt |
 | Membership | A user's role in one organisation; the auth link to tenants | organisationId, userId, role (patient|doctor|front_desk|clinic_admin), status (invited|active|revoked) |
-| StaffInvite | Single-use link to set up a staff account | organisationId, userId, role, tokenHash, createdByUserId, expiresAt (72 h), acceptedAt, revokedAt |
+| StaffInvite | Single-use link to set up a staff account | organisationId, userId, role, purpose (join|reset), tokenHash, createdByUserId, expiresAt (72 h), acceptedAt, revokedAt |
 | Session | Refresh-token session on one device | userId, organisationId, role, refreshTokenHash, previousRefreshTokenHash (reuse detection), deviceId, userAgent, ip, expiresAt, lastUsedAt, revokedAt, revokedReason |
 | OtpChallenge | Patient sign-in code | phone, organisationId, codeHash (HMAC), attempts, expiresAt, consumedAt |
 | Device | Registered device | userId, platform, model, pushToken, biometricKeyId, lastSeenAt, revokedAt |

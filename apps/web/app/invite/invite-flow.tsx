@@ -126,7 +126,11 @@ export function InviteFlow({ apiBaseUrl }: { apiBaseUrl: string }) {
   return (
     <div className="card">
       <div className="card-header">
-        <h1>{t('invite.title')}</h1>
+        <h1>
+          {'details' in step && step.details.purpose === 'reset'
+            ? t('invite.resetTitle')
+            : t('invite.title')}
+        </h1>
         <button
           type="button"
           className="link-button"
@@ -249,10 +253,12 @@ function Summary({
   return (
     <div className="summary">
       <p>
-        {t('invite.summary', {
-          clinic: details.organisation.name,
-          role: t(`role.${details.role}`),
-        })}
+        {details.purpose === 'reset'
+          ? t('invite.resetSummary', { clinic: details.organisation.name })
+          : t('invite.summary', {
+              clinic: details.organisation.name,
+              role: t(`role.${details.role}`),
+            })}
       </p>
       <p className="hint">{t('invite.account', { identifier: details.identifier })}</p>
       <p className="hint">

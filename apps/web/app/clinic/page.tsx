@@ -5,6 +5,7 @@ import { PatientListResponse, type PatientSummary } from '@dhc/contracts';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, type FormEvent } from 'react';
 import { LocaleToggle, useSession } from './session-provider';
+import { StaffCard } from './staff-card';
 
 /** Signed-in staff home. Patient search is the first real tool; the queue comes in Phase 1. */
 export default function ClinicDashboard() {
@@ -66,6 +67,8 @@ export default function ClinicDashboard() {
           </button>
         </div>
       </header>
+
+      {me.role === 'clinic_admin' && <StaffCard currentUserId={me.user.id} />}
 
       {isStaff && (
         <section aria-labelledby="patients-title" className="card">

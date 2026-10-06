@@ -8,6 +8,8 @@ For doctors using the Clinic app (phone, iPad, Android) or the web dashboard.
 2. Complete onboarding: registration details, HPR ID, DSC setup with a test signature, availability, fees, prescription pad and Google review link.
 3. You can write notes immediately; you can sign prescriptions once the platform team has verified your registration.
 
+**Lost your phone?** Ask your clinic admin to reset your sign-in. They will give you a new link to set a new password and authenticator.
+
 ## Your day
 - **Queue:** My OPD, Booked, Completed, Follow-ups. Each card shows token, waiting time and tags. Tap **Write Rx** or **Scribe** directly from the card.
 - **Patient sheet:** call, ABHA, tags, bill and payment link, vitals, records, assessment, refer, review link, video call.

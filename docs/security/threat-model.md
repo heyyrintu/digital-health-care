@@ -36,6 +36,7 @@ Patient identities and contact details; clinical records (notes, diagnoses, pres
 | T17 | Platform staff accessing clinical data | E | Platform console has no clinical endpoints; break-glass (if ever added) logged and time-limited |
 | T18 | Data loss | D | Multi-AZ database, point-in-time recovery, monthly restore test |
 | T19 | Attacker with a staff password enrols their own authenticator | S, E | Authenticators enrolled only via admin-issued invite links (single-use, 72 h, hashed, URL fragment, revocable); login never offers enrolment |
+| T22 | A clinic admin takes over a staff account that also opens another clinic, via authenticator reset | E | Reset refused when the person is active staff elsewhere (platform support only); no self-reset; reset ends every staff session and is audited (`staff.authenticator.reset`) |
 | T21 | XSS steals web session tokens | S, I | Refresh token only in an httpOnly, SameSite=Strict cookie on `/api/session` (ADR 0015); access token in memory, 15-minute lifetime; session routes check Origin; no third-party scripts on clinical pages |
 | T20 | Invite link intercepted | S | Link alone is not enough for an existing account (password + current authenticator); for a new account the admin sees acceptance in the invite list and audit log and can revoke; short expiry |
 

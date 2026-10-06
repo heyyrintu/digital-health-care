@@ -196,6 +196,7 @@ export class InviteService {
         role: invite.role as StaffRole,
         identifier: maskIdentifier(user.email ?? user.phone ?? ''),
         account: user.mfaSecret ? 'existing' : 'new',
+        purpose: invite.purpose,
         expiresAt: invite.expiresAt.toISOString(),
       };
     });
@@ -290,16 +291,23 @@ export class InviteService {
         where: { id: invite.id, acceptedAt: null, revokedAt: null },
         data: { acceptedAt: now },
       });
-      const activated = await tx.membership.updateMany({
-        where: {
-          organisationId: invite.organisationId,
-          userId: user.id,
-          role: invite.role,
-          status: 'invited',
-        },
-        data: { status: 'active' },
-      });
-      if (accepted.count !== 1 || activated.count !== 1) return { error: INVALID_INVITE() };
+      const membershipKey = {
+        organisationId: invite.organisationId,
+        userId: user.id,
+        role: invite.role,
+      };
+      // Joining activates the invited membership; a reset needs the membership still active
+      // (an admin may have removed the person since issuing the link).
+      const membershipOk =
+        invite.purpose === 'join'
+          ? (
+              await tx.membership.updateMany({
+                where: { ...membershipKey, status: 'invited' },
+                data: { status: 'active' },
+              })
+            ).count === 1
+          : (await tx.membership.count({ where: { ...membershipKey, status: 'active' } })) === 1;
+      if (accepted.count !== 1 || !membershipOk) return { error: INVALID_INVITE() };
 
       await tx.user.update({
         where: { id: user.id },
@@ -313,7 +321,7 @@ export class InviteService {
       const base = { organisationId: invite.organisationId, actorUserId: user.id };
       await writeAudit(tx, request, {
         ...base,
-        action: 'staff.invite.accepted',
+        action: invite.purpose === 'reset' ? 'staff.reset.completed' : 'staff.invite.accepted',
         entityType: 'staff_invite',
         entityId: invite.id,
       });
@@ -348,7 +356,7 @@ export class InviteService {
   }
 }
 
-function toStaffInvite(
+export function toStaffInvite(
   invite: InviteRow,
   user: InviteeIdentity | undefined,
   now: Date,

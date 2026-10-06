@@ -67,6 +67,23 @@ export const en = {
   'patient.name': 'Name',
   'patient.phone': 'Mobile',
   'patient.dob': 'Date of birth',
+  'staff.title': 'Staff',
+  'staff.you': 'You',
+  'staff.invitePending': 'Invite pending',
+  'staff.signInReady': 'Sign-in set up',
+  'staff.signInNotReady': 'Sign-in not set up',
+  'staff.lastLogin': 'Last sign-in: {date}',
+  'staff.neverSignedIn': 'Not signed in yet',
+  'staff.reset': 'Reset sign-in',
+  'staff.resetConfirm':
+    'This signs {name} out everywhere and clears their password and authenticator. You will get a new setup link to give them. Continue?',
+  'staff.resetDo': 'Yes, reset',
+  'staff.resetLink': 'Give this link to {name} directly. It works once and expires in 72 hours.',
+  'staff.copy': 'Copy link',
+  'staff.copied': 'Copied',
+  'invite.resetTitle': 'Reset your sign-in',
+  'invite.resetSummary':
+    'Your clinic admin at {clinic} has reset your sign-in. Choose a new password and set up your authenticator app again.',
 } as const;
 
 export type MessageKey = keyof typeof en;

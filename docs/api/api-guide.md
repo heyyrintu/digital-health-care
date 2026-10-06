@@ -43,6 +43,7 @@ Implemented in Phase 0 (`apps/api/src/modules/auth`). Sign-in requests name the 
 | Patient OTP | `POST /auth/otp/request` `{organisation, phone}` → `POST /auth/otp/verify` `{challengeId, code}` → tokens. Creates the account and patient membership on first sign-in |
 | Staff invite (admin) | `POST /staff/invites` `{identifier, role, displayName?}` → `inviteUrl` (shown once), `GET /staff/invites`, `POST /staff/invites/{id}/revoke` — clinic admin only |
 | Staff invite (invitee) | `POST /auth/invites/inspect` `{token}` → `POST /auth/invites/accept` `{token, password}` → `{status: setup_required, otpauthUri}` or `{status: confirm_required}` → `POST /auth/invites/complete` `{token, code}` → tokens |
+| Staff list and reset (admin) | `GET /staff/members` (team, roles, whether sign-in is set up); `POST /staff/members/{id}/reset-authenticator` `{role?}` → new setup link (shown once) — clinic admin only |
 | Staff login | `POST /auth/login` `{organisation, identifier, password, role?}` → `{status: mfa_required, mfaToken}` → `POST /auth/mfa/verify` `{mfaToken, code}` → tokens |
 | Refresh / logout | `POST /auth/refresh` `{refreshToken}` (rotates), `POST /auth/logout` (ends this session) |
 | Who am I | `GET /me` → user, organisation, role |
@@ -58,6 +59,7 @@ Rules:
 - **Staff accounts are set up only through invites.** Login never offers authenticator enrolment, so knowing someone's password is never enough to attach a new authenticator. A clinic admin's invite link is single-use, expires after 72 hours, is stored only as a hash, and carries its token in the URL fragment (`/invite#<token>`), which browsers do not send to servers or logs. A new invite for the same person and role replaces the previous one; admins can revoke. The invite is used up only when the first authenticator code is confirmed. A person who already has a staff account (another clinic) confirms with their existing password and authenticator instead. The web app's `/invite` page walks the person through these steps; it reads the token from the fragment and removes it from the address bar.
 - Unknown user, wrong password and no access in that organisation all return the same `401` message.
 - Sign-in endpoints are rate-limited per IP (10 per minute by default).
+- **Authenticator reset:** a clinic admin can reset a staff member who lost their authenticator. It clears the person's password and authenticator, ends all their staff sessions, and issues a single-use reset link (same rules as invites); the person sets new ones through `/invite`, and their role is kept. Admins cannot reset themselves, and a person who is staff at another clinic too can only be reset by platform support — otherwise one clinic could take over their access to the other.
 - **Web dashboard:** the browser never holds the refresh token. The web app's `/api/session/*` routes call these endpoints and keep it in an httpOnly cookie, returning only the access token (ADR 0015).
 
 ## 4. Endpoint catalogue (by module)

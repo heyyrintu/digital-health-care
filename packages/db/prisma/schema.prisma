@@ -28,6 +28,13 @@ enum Role {
   clinic_admin
 }
 
+enum InvitePurpose {
+  /// Joining the organisation: completing it activates the invited membership.
+  join
+  /// Authenticator reset by a clinic admin: the membership stays active.
+  reset
+}
+
 enum MembershipStatus {
   /// Created by a staff invite; becomes active when the invite is completed.
   invited
@@ -126,6 +133,7 @@ model StaffInvite {
   organisationId  String    @map("organisation_id") @db.Uuid
   userId          String    @map("user_id") @db.Uuid
   role            Role
+  purpose         InvitePurpose @default(join)
   tokenHash       String    @unique @map("token_hash")
   createdByUserId String    @map("created_by_user_id") @db.Uuid
   expiresAt       DateTime  @map("expires_at") @db.Timestamptz(3)
