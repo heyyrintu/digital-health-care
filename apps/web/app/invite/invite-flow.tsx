@@ -5,6 +5,7 @@ import type { InviteDetails } from '@dhc/contracts';
 import { formatIstDateTime } from '@dhc/domain';
 import { t as translate, type Locale, type MessageKey } from '@dhc/i18n';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import QRCode from 'qrcode';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import {
@@ -15,6 +16,7 @@ import {
   readInviteToken,
   secretFromOtpauth,
 } from '../../lib/invite';
+import { postSession, type SessionTokens } from '../../lib/session-client';
 
 type Step =
   | { kind: 'loading' }
@@ -31,6 +33,7 @@ type Step =
  */
 export function InviteFlow({ apiBaseUrl }: { apiBaseUrl: string }) {
   const api = useMemo(() => createApiClient({ baseUrl: apiBaseUrl }), [apiBaseUrl]);
+  const router = useRouter();
   const token = useRef<string | null>(null);
   const [locale, setLocale] = useState<Locale>('en');
   const [step, setStep] = useState<Step>({ kind: 'loading' });
@@ -107,13 +110,11 @@ export function InviteFlow({ apiBaseUrl }: { apiBaseUrl: string }) {
     if (!isSixDigitCode(code)) return setError(t('invite.codeInvalid'));
     await run(async () => {
       try {
-        const tokens = await api.completeInvite(token.current!, code);
+        // Completed through this site's session route, so the person lands signed in.
+        await postSession<SessionTokens>('invite', { token: token.current, code });
         token.current = null;
-        // The web dashboard has no signed-in session yet, so end this one straight away.
-        await createApiClient({ baseUrl: apiBaseUrl, getAccessToken: () => tokens.accessToken })
-          .logout()
-          .catch(() => undefined);
         setStep({ kind: 'done' });
+        router.replace('/clinic');
       } catch (e) {
         if (e instanceof ApiError && e.status === 404) return setStep({ kind: 'invalid' });
         if (e instanceof ApiError && e.status === 401) return setError(t('invite.codeInvalid'));

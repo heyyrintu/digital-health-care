@@ -8,7 +8,7 @@ Living documents for the build. Product scope is in **PRD v3.0 (Final)** and the
 |---|---|---|---|
 | **PRD v3.0 (Final)** | `product/PRD-v3.0-Final.pdf` | Product owner | Scope changes (master copy in Claude Docs) |
 | **Build Plan — Web, iOS and Android** | `product/Build-Plan-Web-iOS-Android.pdf` (+ `.docx`, `build-plan.md`) | Tech lead | End of each phase (master copy in Claude Docs) |
-| Architecture decision records (ADR 0001–0014 + template) | `adr/` | Tech lead | Before a decision is implemented or changed |
+| Architecture decision records (ADR 0001–0015 + template) | `adr/` | Tech lead | Before a decision is implemented or changed |
 | API guide and endpoint catalogue | `api/api-guide.md` | Backend lead | Every API change (reference itself is generated from OpenAPI) |
 | Webhooks guide (Cashfree, WhatsApp, SMS, ABDM) | `api/webhooks.md` | Backend lead | Provider or event change |
 | Data dictionary | `data/data-dictionary.md` | Backend lead | Every migration |

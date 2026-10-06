@@ -3,7 +3,8 @@
 For doctors using the Clinic app (phone, iPad, Android) or the web dashboard.
 
 ## Getting started
-1. Accept your invite, set a password and add an authenticator app.
+1. Open the invite link from your clinic admin, set a password and add an authenticator app. You are signed in when you finish.
+   Later, sign in on the web at `/clinic/login` with your clinic ID, email or mobile, password and the 6-digit code from the app. The web dashboard signs you out after 15 minutes without activity.
 2. Complete onboarding: registration details, HPR ID, DSC setup with a test signature, availability, fees, prescription pad and Google review link.
 3. You can write notes immediately; you can sign prescriptions once the platform team has verified your registration.
 

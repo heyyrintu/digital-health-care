@@ -58,6 +58,7 @@ Rules:
 - **Staff accounts are set up only through invites.** Login never offers authenticator enrolment, so knowing someone's password is never enough to attach a new authenticator. A clinic admin's invite link is single-use, expires after 72 hours, is stored only as a hash, and carries its token in the URL fragment (`/invite#<token>`), which browsers do not send to servers or logs. A new invite for the same person and role replaces the previous one; admins can revoke. The invite is used up only when the first authenticator code is confirmed. A person who already has a staff account (another clinic) confirms with their existing password and authenticator instead. The web app's `/invite` page walks the person through these steps; it reads the token from the fragment and removes it from the address bar.
 - Unknown user, wrong password and no access in that organisation all return the same `401` message.
 - Sign-in endpoints are rate-limited per IP (10 per minute by default).
+- **Web dashboard:** the browser never holds the refresh token. The web app's `/api/session/*` routes call these endpoints and keep it in an httpOnly cookie, returning only the access token (ADR 0015).
 
 ## 4. Endpoint catalogue (by module)
 
