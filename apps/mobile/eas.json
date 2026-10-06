@@ -1,0 +1,52 @@
+{
+  "cli": {
+    "version": ">= 16.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "base": {
+      "node": "22.22.0",
+      "pnpm": "10.28.0"
+    },
+    "development-patient": {
+      "extends": "base",
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": { "APP_VARIANT": "patient" }
+    },
+    "development-clinic": {
+      "extends": "base",
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": { "APP_VARIANT": "clinic" }
+    },
+    "preview-patient": {
+      "extends": "base",
+      "distribution": "internal",
+      "channel": "preview-patient",
+      "env": { "APP_VARIANT": "patient" }
+    },
+    "preview-clinic": {
+      "extends": "base",
+      "distribution": "internal",
+      "channel": "preview-clinic",
+      "env": { "APP_VARIANT": "clinic" }
+    },
+    "production-patient": {
+      "extends": "base",
+      "autoIncrement": true,
+      "channel": "production-patient",
+      "env": { "APP_VARIANT": "patient" }
+    },
+    "production-clinic": {
+      "extends": "base",
+      "autoIncrement": true,
+      "channel": "production-clinic",
+      "env": { "APP_VARIANT": "clinic" }
+    }
+  },
+  "submit": {
+    "production-patient": {},
+    "production-clinic": {}
+  }
+}

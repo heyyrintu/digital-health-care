@@ -1,0 +1,21 @@
+{
+  "name": "@dhc/contracts",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Zod schemas for the REST API. Source of truth for OpenAPI and the typed client (ADR 0007).",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@dhc/config": "workspace:*"
+  }
+}

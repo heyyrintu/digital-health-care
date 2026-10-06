@@ -1,0 +1,4 @@
+{
+  "extends": ["@dhc/config/tsconfig/base.json", "expo/tsconfig.base"],
+  "include": ["**/*.ts", "**/*.tsx", ".expo/types/**/*.ts", "expo-env.d.ts"]
+}
