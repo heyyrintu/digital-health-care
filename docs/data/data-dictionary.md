@@ -2,19 +2,23 @@
 
 **Status:** Draft · **Owner:** Backend lead · **Update:** with every migration.
 
-Conventions for every table: `id` (UUID), `organisationId` (except platform-level User/Device), `createdAt`, `updatedAt`, `deletedAt` where soft delete applies. Files are stored by S3 key, never by public URL. Fields marked *(encrypted)* use field-level encryption. Row-level security filters every query by `organisationId`.
+Conventions for every table: `id` (UUID), `organisationId` (except platform-level User/Device), `createdAt`, `updatedAt`, `deletedAt` where soft delete applies. Files are stored by S3 key, never by public URL. Fields marked *(encrypted)* use field-level encryption. Row-level security filters every query by `organisationId` (ADR 0014). Database columns are snake_case (`organisation_id`); this document uses the camelCase field names.
+
+**Implemented so far (Phase 0):** Organisation, User, Membership, Session, OtpChallenge, Patient (minimal fields) and AuditLog — see `packages/db/prisma/schema.prisma`. Everything else below is the target design.
 
 ## Platform and identity
 
 | Entity | Purpose | Key fields |
 |---|---|---|
-| Organisation | Practice or clinic group (tenant) | id, name, legalName, status, chartModel (shared|own_patients), brandingId, settings (JSON) |
+| Organisation | Practice or clinic group (tenant) | id, slug (unique, used in sign-in and clinic links), name, legalName, status, chartModel (shared|own_patients), brandingId, settings (JSON) |
 | Branding | Per-organisation look and senders | organisationId, displayName, logoKey, colours, customDomain, whatsappSender, smsSenderId, emailDomain, googleReviewUrl |
 | Clinic | Physical location | organisationId, name, address, geo, phone, gstin?, timezone, hfrId |
-| User | Login identity | phone (unique), email, role, status, passwordHash (staff), mfaSecret (staff, encrypted), lastLoginAt |
-| Session | Refresh-token session | userId, deviceId, refreshTokenHash, expiresAt, revokedAt |
+| User | Platform-level login identity (no organisationId) | phone (unique), email (unique), displayName, status, passwordHash (staff, scrypt), mfaSecret (staff, encrypted), mfaPendingSecret (encrypted, until first code), mfaLastUsedStep (TOTP replay guard), failedLoginCount, lockedUntil, lastLoginAt |
+| Membership | A user's role in one organisation; the auth link to tenants | organisationId, userId, role (patient|doctor|front_desk|clinic_admin), status (active|revoked) |
+| Session | Refresh-token session on one device | userId, organisationId, role, refreshTokenHash, previousRefreshTokenHash (reuse detection), deviceId, userAgent, ip, expiresAt, lastUsedAt, revokedAt, revokedReason |
+| OtpChallenge | Patient sign-in code | phone, organisationId, codeHash (HMAC), attempts, expiresAt, consumedAt |
 | Device | Registered device | userId, platform, model, pushToken, biometricKeyId, lastSeenAt, revokedAt |
-| StaffMember | Staff role in an organisation | userId, organisationId, role (front_desk|clinic_admin), assignedDoctorIds |
+| StaffMember | Staff profile in an organisation (role lives on Membership) | userId, organisationId, assignedDoctorIds |
 | Doctor | Doctor profile | userId, organisationId, name, qualifications, specialty, registrationNumber, council, hprId, rxNumberPrefix, signingProviderRef |
 | DoctorClinic | Doctor practises at clinic | doctorId, clinicId, active, consultationTypeIds |
 | DoctorOnboarding | Onboarding state | doctorId, status (invited|pending_verification|verified|active|suspended), registrationDocKey, verifiedBy, verifiedAt, checklist (JSON) |
@@ -109,7 +113,7 @@ Conventions for every table: `id` (UUID), `organisationId` (except platform-leve
 
 | Entity | Purpose | Key fields |
 |---|---|---|
-| AuditLog | Append-only audit | organisationId, actorUserId, action, entityType, entityId, ip, device, at, metadata |
+| AuditLog | Append-only audit (trigger blocks update/delete) | organisationId (null for platform events), actorUserId, action, entityType, entityId, requestId, ip, userAgent, at, metadata (IDs and reasons only, no patient data) |
 | DataRightsRequest | DPDP request | userId, type (access|correction|erasure), status, handledBy, closedAt |
 | ImportJob | Migration import | organisationId, files, mapping, dryRunReport, status, startedBy, completedAt |
 

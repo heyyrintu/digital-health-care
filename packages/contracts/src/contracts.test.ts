@@ -4,6 +4,7 @@ import {
   DEFAULT_PAGE_LIMIT,
   ErrorResponse,
   HealthResponse,
+  LoginResponse,
   buildOpenApiDocument,
   page,
 } from './index';
@@ -57,13 +58,44 @@ describe('HealthResponse', () => {
 });
 
 describe('buildOpenApiDocument', () => {
-  it('produces an OpenAPI 3.1 document with schema components', () => {
-    const doc = buildOpenApiDocument({ version: '0.0.0' });
+  const doc = buildOpenApiDocument({ version: '0.0.0' });
+
+  it('produces an OpenAPI 3.1 document with the error component', () => {
     expect(doc.openapi).toBe('3.1.0');
-    expect(doc.paths['/health'].get.operationId).toBe('getHealth');
     expect(doc.components.schemas.ErrorResponse).toMatchObject({ type: 'object' });
-    expect(doc.components.schemas.HealthResponse).toMatchObject({
-      required: expect.arrayContaining(['status', 'service', 'version', 'time']),
-    });
+  });
+
+  it('marks only sign-in and health endpoints as public', () => {
+    const publicOps = Object.entries(doc.paths).flatMap(([path, ops]) =>
+      Object.entries(ops)
+        .filter(([, op]) => Array.isArray((op as { security?: unknown[] }).security))
+        .map(([method]) => `${method.toUpperCase()} ${path}`),
+    );
+    expect(publicOps.sort()).toEqual([
+      'GET /health',
+      'POST /auth/login',
+      'POST /auth/mfa/verify',
+      'POST /auth/otp/request',
+      'POST /auth/otp/verify',
+      'POST /auth/refresh',
+    ]);
+  });
+
+  it('describes query and path parameters', () => {
+    const list = doc.paths['/patients']!.get as { parameters: { name: string }[] };
+    expect(list.parameters.map((p) => p.name)).toEqual(['limit', 'cursor', 'q']);
+    const get = doc.paths['/patients/{id}']!.get as { parameters: { in: string }[] };
+    expect(get.parameters[0]!.in).toBe('path');
+  });
+});
+
+describe('LoginResponse', () => {
+  it('distinguishes MFA from MFA enrolment', () => {
+    expect(LoginResponse.parse({ status: 'mfa_required', mfaToken: 't' }).status).toBe(
+      'mfa_required',
+    );
+    expect(() =>
+      LoginResponse.parse({ status: 'mfa_enrolment_required', mfaToken: 't' }),
+    ).toThrow();
   });
 });

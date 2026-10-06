@@ -15,7 +15,10 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "db:up": "docker compose up -d postgres redis",
-    "db:down": "docker compose down"
+    "db:down": "docker compose down",
+    "test:integration": "turbo run test:integration",
+    "db:migrate": "pnpm --filter @dhc/db migrate:deploy",
+    "db:seed": "pnpm --filter @dhc/api seed"
   },
   "devDependencies": {
     "@dhc/config": "workspace:*",

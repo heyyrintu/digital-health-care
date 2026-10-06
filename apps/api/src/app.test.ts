@@ -5,7 +5,7 @@ import { buildApp } from './app';
 import { AppError } from './errors';
 import { loadConfig } from './config';
 
-const app = buildApp({ LOG_LEVEL: 'silent', APP_VERSION: '1.2.3' });
+const app = buildApp({ config: { LOG_LEVEL: 'silent', APP_VERSION: '1.2.3' } });
 
 // Test-only routes that exercise each error path.
 app.get('/v1/_test/app-error', async () => {
@@ -83,5 +83,12 @@ describe('loadConfig', () => {
   it('applies defaults and rejects bad values', () => {
     expect(loadConfig({}).API_PORT).toBe(4000);
     expect(() => loadConfig({ API_PORT: 'abc' })).toThrow(/Invalid environment/);
+  });
+
+  it('refuses to log sign-in codes in production', () => {
+    expect(() => loadConfig({ NODE_ENV: 'production', OTP_DELIVERY: 'log' })).toThrow(
+      /OTP_DELIVERY/,
+    );
+    expect(loadConfig({ NODE_ENV: 'development', OTP_DELIVERY: 'log' }).OTP_DELIVERY).toBe('log');
   });
 });

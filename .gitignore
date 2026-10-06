@@ -14,3 +14,4 @@ android/
 .DS_Store
 *.log
 expo-env.d.ts
+packages/db/src/generated/

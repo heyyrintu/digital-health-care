@@ -1,4 +1,4 @@
 {
   "extends": "@dhc/config/tsconfig/node.json",
-  "include": ["src", "tsup.config.ts"]
+  "include": ["src", "test", "tsup.config.ts", "vitest.config.ts", "vitest.integration.config.ts"]
 }

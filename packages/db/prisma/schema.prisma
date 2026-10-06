@@ -1,0 +1,168 @@
+// Tenancy: every tenant table carries organisation_id and is protected by Postgres
+// row-level security (see migrations and ADR 0014). Platform-level tables (users,
+// sessions, otp_challenges) are only reachable through the system connection.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum OrganisationStatus {
+  active
+  suspended
+}
+
+enum UserStatus {
+  active
+  disabled
+}
+
+enum Role {
+  patient
+  doctor
+  front_desk
+  clinic_admin
+}
+
+enum MembershipStatus {
+  active
+  revoked
+}
+
+model Organisation {
+  id        String             @id @default(uuid()) @db.Uuid
+  slug      String             @unique
+  name      String
+  status    OrganisationStatus @default(active)
+  createdAt DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  memberships Membership[]
+  patients    Patient[]
+  sessions    Session[]
+
+  @@map("organisations")
+}
+
+/// Platform-level login identity. Phone for patients (OTP), email/phone + password + TOTP for staff.
+model User {
+  id                String     @id @default(uuid()) @db.Uuid
+  phone             String?    @unique
+  email             String?    @unique
+  displayName       String?    @map("display_name")
+  status            UserStatus @default(active)
+  passwordHash      String?    @map("password_hash")
+  /// AES-256-GCM encrypted TOTP secret (confirmed).
+  mfaSecret         String?    @map("mfa_secret")
+  /// AES-256-GCM encrypted TOTP secret awaiting first-code confirmation.
+  mfaPendingSecret  String?    @map("mfa_pending_secret")
+  /// Last accepted TOTP time step; a code is never accepted twice.
+  mfaLastUsedStep   Int?       @map("mfa_last_used_step")
+  failedLoginCount  Int        @default(0) @map("failed_login_count")
+  lockedUntil       DateTime?  @map("locked_until") @db.Timestamptz(3)
+  lastLoginAt       DateTime?  @map("last_login_at") @db.Timestamptz(3)
+  createdAt         DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  memberships Membership[]
+  sessions    Session[]
+
+  @@map("users")
+}
+
+/// A user's role in one organisation. The auth link between users and tenants.
+model Membership {
+  id             String           @id @default(uuid()) @db.Uuid
+  organisationId String           @map("organisation_id") @db.Uuid
+  userId         String           @map("user_id") @db.Uuid
+  role           Role
+  status         MembershipStatus @default(active)
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+  user         User         @relation(fields: [userId], references: [id])
+
+  @@unique([organisationId, userId, role])
+  @@index([userId])
+  @@map("memberships")
+}
+
+/// Refresh-token session on one device. Tokens are stored as SHA-256 hashes only.
+model Session {
+  id                       String    @id @default(uuid()) @db.Uuid
+  userId                   String    @map("user_id") @db.Uuid
+  organisationId           String    @map("organisation_id") @db.Uuid
+  role                     Role
+  refreshTokenHash         String    @unique @map("refresh_token_hash")
+  previousRefreshTokenHash String?   @unique @map("previous_refresh_token_hash")
+  userAgent                String?   @map("user_agent")
+  ip                       String?
+  expiresAt                DateTime  @map("expires_at") @db.Timestamptz(3)
+  lastUsedAt               DateTime  @default(now()) @map("last_used_at") @db.Timestamptz(3)
+  revokedAt                DateTime? @map("revoked_at") @db.Timestamptz(3)
+  revokedReason            String?   @map("revoked_reason")
+  createdAt                DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user         User         @relation(fields: [userId], references: [id])
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+/// Patient sign-in code. Only a hash of the code is stored.
+model OtpChallenge {
+  id             String    @id @default(uuid()) @db.Uuid
+  phone          String
+  organisationId String    @map("organisation_id") @db.Uuid
+  codeHash       String    @map("code_hash")
+  attempts       Int       @default(0)
+  expiresAt      DateTime  @map("expires_at") @db.Timestamptz(3)
+  consumedAt     DateTime? @map("consumed_at") @db.Timestamptz(3)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([phone, createdAt])
+  @@map("otp_challenges")
+}
+
+/// Person receiving care. Minimal Phase 0 shape; full fields in docs/data/data-dictionary.md.
+model Patient {
+  id             String    @id @default(uuid()) @db.Uuid
+  organisationId String    @map("organisation_id") @db.Uuid
+  accountUserId  String?   @map("account_user_id") @db.Uuid
+  uhid           String
+  name           String
+  phone          String?
+  dob            DateTime? @db.Date
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+
+  @@unique([organisationId, uhid])
+  @@index([organisationId, phone])
+  @@map("patients")
+}
+
+/// Append-only audit trail. Updates and deletes are blocked by a trigger.
+model AuditLog {
+  id             String   @id @default(uuid()) @db.Uuid
+  organisationId String?  @map("organisation_id") @db.Uuid
+  actorUserId    String?  @map("actor_user_id") @db.Uuid
+  action         String
+  entityType     String?  @map("entity_type")
+  entityId       String?  @map("entity_id")
+  requestId      String?  @map("request_id")
+  ip             String?
+  userAgent      String?  @map("user_agent")
+  metadata       Json?
+  at             DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([organisationId, at])
+  @@map("audit_logs")
+}
