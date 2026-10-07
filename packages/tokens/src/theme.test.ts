@@ -74,6 +74,9 @@ describe('oklchToHex', () => {
   it('keeps alpha and rejects other formats', () => {
     expect(oklchToHex('oklch(1 0 0 / 0.5)')).toBe('#ffffff80');
     expect(() => oklchToHex('#fff')).toThrow();
+    expect(() => oklchToHex('oklch(0.5. 0.1 20)')).toThrow();
+    expect(() => oklchToHex('oklch(. 0.1 20)')).toThrow();
+    expect(oklchToHex('oklch(1 0 0 / 1.5)')).toBe('#ffffffff');
   });
 
   it('gives mobile a hex value for every theme colour', () => {

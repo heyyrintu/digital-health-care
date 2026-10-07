@@ -37,7 +37,9 @@ export type LinkComponent = ComponentType<{
 const PlainLink: LinkComponent = ({ children, ...props }) => <a {...props}>{children}</a>;
 
 const isActive = (item: NavItem, path: string) =>
-  item.exact ? path === item.href : path === item.href || path.startsWith(`${item.href}/`);
+  item.exact
+    ? path === item.href
+    : path === item.href || path.startsWith(item.href === '/' ? '/' : `${item.href}/`);
 
 /**
  * The staff dashboard frame from the demo: a collapsible dark sidebar on desktop, a compact
@@ -76,7 +78,11 @@ export function StaffShell({
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+      if (
+        !event.defaultPrevented &&
+        (event.metaKey || event.ctrlKey) &&
+        event.key.toLowerCase() === 'k'
+      ) {
         event.preventDefault();
         setSearchOpen(true);
       }
@@ -111,6 +117,7 @@ export function StaffShell({
           </span>
           {!collapsed && (
             <Button
+              type="button"
               variant="ghost"
               size="icon"
               className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
@@ -123,6 +130,7 @@ export function StaffShell({
         </div>
         {collapsed && (
           <Button
+            type="button"
             variant="ghost"
             size="icon"
             className="mb-4 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
@@ -165,7 +173,7 @@ export function StaffShell({
         <div
           className={cn(
             'mt-3 shrink-0 border-t border-sidebar-border pt-4',
-            collapsed ? 'flex justify-center' : 'rounded-2xl bg-sidebar-accent/45 p-3',
+            collapsed ? 'flex flex-col items-center gap-2' : 'rounded-2xl bg-sidebar-accent/45 p-3',
           )}
         >
           <div className="flex min-w-0 items-center gap-3">
@@ -183,8 +191,21 @@ export function StaffShell({
               </div>
             )}
           </div>
-          {!collapsed && (
+          {collapsed ? (
             <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              onClick={onSignOut}
+              aria-label={t('session.signOut')}
+              title={t('session.signOut')}
+            >
+              <LogOut />
+            </Button>
+          ) : (
+            <Button
+              type="button"
               variant="ghost"
               size="sm"
               className="mt-2 w-full justify-start px-2 text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
@@ -204,7 +225,7 @@ export function StaffShell({
             className="flex h-10 w-full max-w-md cursor-pointer items-center gap-2 rounded-xl border bg-card px-3 text-sm text-muted-foreground shadow-xs"
           >
             <Search className="h-4 w-4" aria-hidden />
-            {t('ui.searchPlaceholder')}
+            {t('ui.jumpTo')}
             <kbd className="ml-auto rounded-md border bg-muted px-1.5 py-0.5 text-[10px]">
               Ctrl/⌘K
             </kbd>
@@ -221,15 +242,22 @@ export function StaffShell({
             <span className="block truncate text-[11px] text-muted-foreground">{user.name}</span>
           </span>
           <Button
+            type="button"
             variant="ghost"
             size="icon"
             onClick={() => setSearchOpen(true)}
-            aria-label={t('common.search')}
+            aria-label={t('ui.jumpTo')}
           >
             <Search />
           </Button>
           {headerEnd}
-          <Button variant="ghost" size="icon" onClick={onSignOut} aria-label={t('session.signOut')}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={onSignOut}
+            aria-label={t('session.signOut')}
+          >
             <LogOut />
           </Button>
         </div>
@@ -268,7 +296,7 @@ export function StaffShell({
 
         {bottomTabs && bottomTabs.length > 0 && (
           <nav
-            aria-label={t('ui.mainNav')}
+            aria-label={t('ui.tabBar')}
             className="safe-bottom fixed inset-x-0 bottom-0 z-40 grid border-t bg-background shadow-sheet md:hidden"
             style={{ gridTemplateColumns: `repeat(${bottomTabs.length}, minmax(0, 1fr))` }}
           >
@@ -302,7 +330,7 @@ export function StaffShell({
 
       <Dialog open={searchOpen} onOpenChange={setSearchOpen}>
         <DialogContent className="overflow-hidden p-0 sm:max-w-xl">
-          <DialogTitle className="sr-only">{t('ui.searchPlaceholder')}</DialogTitle>
+          <DialogTitle className="sr-only">{t('ui.jumpTo')}</DialogTitle>
           <Command>
             <CommandInput placeholder={t('ui.searchPlaceholder')} />
             <CommandList>

@@ -36,7 +36,10 @@ const light = {
   success: 'oklch(0.515 0.13 153)',
   'success-foreground': 'oklch(0.99 0 0)',
   'success-soft': 'oklch(0.94 0.035 154)',
-  /** Warning safety alerts (warn = amber). */
+  /**
+   * Warning safety alerts (warn = amber). Unlike the other severities, the foreground is for
+   * text on `warning-soft`; amber `warning` is for borders and icons, never a text background.
+   */
   warning: 'oklch(0.72 0.14 72)',
   'warning-foreground': 'oklch(0.38 0.075 63)',
   'warning-soft': 'oklch(0.955 0.045 80)',
@@ -173,7 +176,8 @@ export function themeCssVariables(mode: ThemeMode): Record<string, string> {
   return vars;
 }
 
-const OKLCH = /^oklch\(\s*([\d.]+)\s+([\d.]+)\s+([\d.]+)\s*(?:\/\s*([\d.]+)\s*)?\)$/;
+const NUM = String.raw`(\d*\.?\d+)`;
+const OKLCH = new RegExp(String.raw`^oklch\(\s*${NUM}\s+${NUM}\s+${NUM}\s*(?:\/\s*${NUM}\s*)?\)$`);
 
 /** Converts `oklch(L C H [/ A])` to `#rrggbb` (or `#rrggbbaa`), clipping to the sRGB gamut. */
 export function oklchToHex(value: string): string {
@@ -202,7 +206,7 @@ export function oklchToHex(value: string): string {
   const alpha =
     match[4] === undefined
       ? ''
-      : Math.round(Number(match[4]) * 255)
+      : Math.round(Math.min(1, Number(match[4])) * 255)
           .toString(16)
           .padStart(2, '0');
   return `#${linear.map(channel).join('')}${alpha}`;

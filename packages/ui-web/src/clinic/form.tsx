@@ -3,7 +3,8 @@ import { cn } from '../lib/cn';
 
 /**
  * A labelled form control with a hint or an error. The label wraps the control, so the
- * control needs no id. The hint or error is linked to the control (`aria-describedby`), the
+ * control needs no id; the note sits outside the label so it is not part of the control's
+ * name. The hint or error is linked to the control (`aria-describedby`), the
  * control is marked invalid while there is an error, and the error is announced.
  */
 export function Field({
@@ -29,9 +30,11 @@ export function Field({
         })
       : children;
   return (
-    <label className="block space-y-1.5">
-      <span className="text-sm font-medium">{label}</span>
-      {control}
+    <div className="space-y-1.5">
+      <label className="block space-y-1.5">
+        <span className="text-sm font-medium">{label}</span>
+        {control}
+      </label>
       {hint && !error && (
         <span id={noteId} className="block text-xs text-muted-foreground">
           {hint}
@@ -42,7 +45,7 @@ export function Field({
           {error}
         </span>
       )}
-    </label>
+    </div>
   );
 }
 

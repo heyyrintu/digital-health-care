@@ -152,6 +152,29 @@ describe('StaffShell', () => {
     const current = screen.getAllByRole('link', { current: 'page' });
     expect(current.every((link) => link.getAttribute('href') === '/clinic/queue')).toBe(true);
     expect(screen.getByText('content')).toBeTruthy();
+    // Pages have their own "Search" buttons; the shell's page jump must not match that name.
+    expect(screen.queryAllByRole('button', { name: /search/i })).toHaveLength(0);
+    expect(screen.getAllByRole('button', { name: /jump to a page/i })).toHaveLength(2);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Sign out' })[0]!);
+    expect(onSignOut).toHaveBeenCalled();
+  });
+
+  it('keeps sign-out reachable with the sidebar collapsed', () => {
+    const onSignOut = vi.fn();
+    render(
+      <StaffShell
+        brand={{ name: 'Demo Clinic', letter: 'D' }}
+        user={{ name: 'Asha Rao' }}
+        nav={nav}
+        currentPath="/clinic"
+        onNavigate={() => {}}
+        onSignOut={onSignOut}
+      >
+        <p>content</p>
+      </StaffShell>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse sidebar' }));
+    expect(screen.getByRole('img', { name: 'Asha Rao' })).toBeTruthy();
     fireEvent.click(screen.getAllByRole('button', { name: 'Sign out' })[0]!);
     expect(onSignOut).toHaveBeenCalled();
   });
