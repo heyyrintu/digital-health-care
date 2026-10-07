@@ -3,7 +3,7 @@
 **Owner:** DevOps · **Targets:** recovery point 15 minutes, recovery time 4 hours.
 
 ## Backups
-- RDS: automated daily snapshots + point-in-time recovery (continuous logs); snapshots copied to a second region bucket encrypted (confirm data-residency stance with lawyer before enabling cross-region; default keep within India).
+- RDS: automated daily snapshots + point-in-time recovery (continuous logs); cross-Region copies only after the data-residency stance is confirmed with the lawyer (default: keep within India). If approved, use RDS automated backup replication (snapshots and transaction logs, encrypted) to the second Region, which can be restored; a snapshot export to S3 is for analysis only and cannot be restored.
 - S3: versioning and object lock on clinical buckets; lifecycle rules aligned with retention classes.
 - Infrastructure: Terraform state versioned.
 

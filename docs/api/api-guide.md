@@ -69,7 +69,7 @@ Rules:
 | identity | `/auth/*`, `/me`, `/staff/invites` (built); `/me/devices` |
 | tenancy | `/organisations/current`, `/clinics`, `/settings`, `/branding`, `/tags`, `/uhid-settings` |
 | scheduling | `/availability/versions`, `/availability/exceptions`, `/slots?doctorId&mode&date`, `/appointments` (create, reschedule, cancel, check-in, no-show), `/queue?tab=&date=`, `/display/{clinicId}` |
-| patients | `/patients` (search by phone, name, UHID; built), `/patients/{id}` (built; each view audited), `/families`, `/patients/{id}/allergies|conditions|medications|tags|consents`, `/patients/merge-requests` |
+| patients | `/patients` (search by phone, name, UHID; built), `/patients/{id}` (built; each view audited), `/families`, `/patients/{id}/allergies\|conditions\|medications\|tags\|consents`, `/patients/merge-requests` |
 | clinical | `/consultations`, `/consultations/{id}/vitals`, `/scribe/sessions`, `/assessments/forms`, `/assessments`, `/patients/{id}/ask-ai` |
 | prescribing | `/medicines` (search), `/prescription-templates`, `/prescriptions` (draft, update lines, `/safety-check`, `/sign`, `/amend`, `/void`, `/pdf`), `/verify/{code}` (public) |
 | orders | `/test-orders`, `/test-orders/{id}/results`, `/referrals`, `/attachments` |

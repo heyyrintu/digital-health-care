@@ -3,12 +3,12 @@
 For doctors using the Clinic app (phone, iPad, Android) or the web dashboard.
 
 ## Getting started
-1. Open the invite link from your clinic admin, set a password and add an authenticator app. You are signed in when you finish.
+1. Open the invite link from your clinic admin, set a password and add an authenticator app. You are signed in when you finish. If you already work at another clinic on the platform, confirm with your current password and authenticator code instead.
    Later, sign in on the web at `/clinic/login` with your clinic ID, email or mobile, password and the 6-digit code from the app. The web dashboard signs you out after 15 minutes without activity.
 2. Complete onboarding: registration details, HPR ID, DSC setup with a test signature, availability, fees, prescription pad and Google review link.
 3. You can write notes immediately; you can sign prescriptions once the platform team has verified your registration.
 
-**Lost your phone?** Ask your clinic admin to reset your sign-in. They will give you a new link to set a new password and authenticator.
+**Lost your phone?** Ask your clinic admin to reset your sign-in. They will give you a new link to set a new password and authenticator. If you work at more than one clinic, contact platform support instead: a clinic admin cannot reset you, and support will call you back on your registered number before sending a link.
 
 ## Your day
 - **Queue:** My OPD, Booked, Completed, Follow-ups. Each card shows token, waiting time and tags. Tap **Write Rx** or **Scribe** directly from the card.
@@ -19,7 +19,7 @@ For doctors using the Clinic app (phone, iPad, Android) or the web dashboard.
 2. Optional: **Start scribe**. Ambient mode asks the patient for consent first. On stop, review each Draft section and accept, edit or discard.
 3. Add diagnosis, plan, tests (e.g. MRI knee, right), advice and follow-up date (book it in one tap).
 4. Build the prescription: search medicines, use templates or **Repeat last**. Dosage remarks are written for you in English or Hindi; edit if needed.
-5. Resolve the **Safety** panel: red items block signing; amber need acknowledgement (some need a reason).
+5. Resolve the **Safety** panel: red items block signing (a few can be overridden with a typed reason, where the rule allows it); amber need acknowledgement (some need a reason).
 6. **Sign** with Face ID / fingerprint (or PIN on web). The prescription locks and goes to the patient automatically.
 
 ## After signing

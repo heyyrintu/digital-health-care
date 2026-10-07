@@ -28,6 +28,7 @@
 - [ ] Monitor crash-free sessions, API errors, payment success rate, message delivery for 24 hours.
 
 ## After release
-- [ ] Rollout increased (50% → 100%) if metrics healthy.
+- [ ] Play: staged rollout increased 10% → 50% → 100% if metrics healthy.
+- [ ] App Store: seven-day phased release continuing; pause it if crash rate or errors rise.
 - [ ] Release recorded: version, date, migrations, approver.
 - [ ] Changelog updated; clinic informed of user-visible changes.

@@ -48,6 +48,7 @@ Available for patients of clinics using `<Brand>`.
 | Photos/files | Yes (uploads) | Yes | App functionality | None |
 | Device ID / push token | Yes | Yes | App functionality | Push providers |
 | Crash data | Yes | No | Diagnostics | Error-tracking vendor |
+
 Tracking across other companies' apps: **No**. Advertising: **No**.
 
 Google Play: Data safety form mirrors the table; health apps declaration completed; account deletion URL: `https://<domain>/account/delete`.

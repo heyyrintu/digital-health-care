@@ -16,7 +16,7 @@ One database serves every organisation. A missing `WHERE organisation_id = …` 
 | Postgres row-level security with a restricted role per request | Enforced by the database for every query; one schema | Every request runs in a transaction; policies must be added for each new table |
 
 ## Decision
-Every tenant table carries `organisation_id` and has RLS enabled. The API connects as the schema owner but never queries as it in a request: it always opens a transaction and switches role.
+Every tenant table carries `organisation_id` and has RLS enabled. The API never queries as the role it connects with: every request opens a transaction and switches to a restricted role. In production it connects as a role that is a member of `dhc_app` and `dhc_auth` but does not own the schema (see Consequences); in development it may connect as the owner.
 
 - **`withTenant(db, organisationId, fn)`** runs `SET LOCAL ROLE dhc_app` and `set_config('app.organisation_id', …, true)`. Policies on tenant tables match `organisation_id` against that setting, for reads (`USING`) and writes (`WITH CHECK`). With no organisation set, `dhc_app` sees nothing.
 - **`withAuth(db, fn)`** runs as `dhc_auth` for sign-in: users, sessions, OTP challenges, organisation lookup, membership checks and audit inserts. It has **no** grant on clinical tables, may only insert `patient` memberships, and may only change a membership from `invited` to `active` (completing a staff invite).
