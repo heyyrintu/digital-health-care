@@ -18,6 +18,8 @@ import { useSession } from '../session-provider';
 import { remarksOf, RxLine } from './rx-line';
 
 const AUTOSAVE_MS = 1200;
+/** The most lines a prescription can hold (the API limit). */
+const MAX_LINES = 30;
 
 type SaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'stale' | 'error';
 
@@ -186,8 +188,10 @@ export function PrescriptionCard({
       setError(null);
       setState(edits.current === editsAtStart ? 'saved' : 'dirty');
     } catch (e) {
-      again.current = false;
       if (e instanceof ApiError && e.status === 409 && e.fields.revision === 'stale') {
+        // Edits queued meanwhile cannot save over the newer version; other failures
+        // still retry them once.
+        again.current = false;
         setState('stale');
       } else {
         setState('error');
@@ -237,8 +241,20 @@ export function PrescriptionCard({
     return () => window.removeEventListener('beforeunload', warn);
   }, [state]);
 
+  /** Adds lines after the latest ones, within the limit the API accepts. */
+  const append = (lines: PrescriptionItem[]) => {
+    const current = latest.current.items;
+    if (current.length + lines.length > MAX_LINES) {
+      setNotice(t('rx.tooMany', { max: MAX_LINES }));
+      return false;
+    }
+    edit([...current, ...lines]);
+    return true;
+  };
+
   const add = (line: PrescriptionItem) => {
-    edit([...items, line]);
+    setNotice(null);
+    if (!append([line])) return;
     setQuery('');
     setMatches(null);
   };
@@ -251,8 +267,9 @@ export function PrescriptionCard({
         query: { before: appointmentId },
       });
       if (!last) return setNotice(t('rx.noLast'));
-      edit([...items, ...withNewIds(last.items)]);
-      setNotice(t('rx.repeated', { count: last.items.length, date: last.date }));
+      if (append(withNewIds(last.items))) {
+        setNotice(t('rx.repeated', { count: last.items.length, date: last.date }));
+      }
     } catch (e) {
       fail(e);
     }
@@ -260,7 +277,8 @@ export function PrescriptionCard({
 
   function applyTemplate() {
     const template = templates.find((x) => x.id === templateId);
-    if (template) edit([...items, ...withNewIds(template.items)]);
+    setNotice(null);
+    if (template) append(withNewIds(template.items));
   }
 
   async function deleteTemplate() {
@@ -278,7 +296,7 @@ export function PrescriptionCard({
     event.preventDefault();
     const form = event.currentTarget;
     const name = String(new FormData(form).get('templateName') ?? '').trim();
-    if (!name || items.length === 0) return;
+    if (!name || items.length === 0 || state === 'stale') return;
     try {
       const saved = await api.request('POST', '/prescription-templates', {
         schema: PrescriptionTemplate,
@@ -455,7 +473,7 @@ export function PrescriptionCard({
         </div>
       </fieldset>
 
-      {view.canEdit && items.length > 0 && (
+      {editable && items.length > 0 && (
         <form className="inline-form rx-save-template" onSubmit={(e) => void saveTemplate(e)}>
           <div>
             <label htmlFor="rx-template-name">{t('rx.templateName')}</label>

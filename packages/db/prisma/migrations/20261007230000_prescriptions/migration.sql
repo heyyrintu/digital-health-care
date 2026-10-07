@@ -166,3 +166,38 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON prescription_templates TO dhc_app;
 CREATE POLICY tenant_isolation ON prescription_templates TO dhc_app
   USING (organisation_id = app_current_organisation_id())
   WITH CHECK (organisation_id = app_current_organisation_id());
+
+-- A row must belong to the same organisation as the row it points at. Foreign keys do not
+-- see RLS, so without this a tenant-scoped insert could reference another clinic's
+-- appointment or prescription by ID. A prescription's patient and doctor must also be
+-- the appointment's, which pins them to the organisation through the appointment.
+CREATE FUNCTION prescriptions_same_tenant() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM appointments a
+    WHERE a.id = NEW.appointment_id
+      AND a.organisation_id = NEW.organisation_id
+      AND a.patient_id = NEW.patient_id
+      AND a.doctor_user_id = NEW.doctor_user_id
+  ) THEN
+    RAISE EXCEPTION 'prescription does not match its appointment' USING ERRCODE = '23503';
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER prescriptions_same_tenant
+  BEFORE INSERT OR UPDATE OF organisation_id, appointment_id, patient_id, doctor_user_id
+  ON prescriptions FOR EACH ROW EXECUTE FUNCTION prescriptions_same_tenant();
+
+CREATE FUNCTION prescription_items_same_tenant() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM prescriptions p
+    WHERE p.id = NEW.prescription_id AND p.organisation_id = NEW.organisation_id
+  ) THEN
+    RAISE EXCEPTION 'prescription line does not match its prescription' USING ERRCODE = '23503';
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER prescription_items_same_tenant
+  BEFORE INSERT OR UPDATE OF organisation_id, prescription_id
+  ON prescription_items FOR EACH ROW EXECUTE FUNCTION prescription_items_same_tenant();

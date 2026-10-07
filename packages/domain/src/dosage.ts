@@ -47,6 +47,13 @@ export interface RemarkInput {
 
 export type RemarkLanguage = 'en' | 'hi';
 
+/**
+ * The longest remark a line can carry (the `remarks` limit in @dhc/contracts). It fits the
+ * generated text for the longest valid line: six steps with 60-character doses and
+ * frequencies.
+ */
+export const REMARKS_MAX = 1200;
+
 type Slot = 'morning' | 'afternoon' | 'night' | 'bedtime';
 const SLOTS: Slot[] = ['morning', 'afternoon', 'night', 'bedtime'];
 
@@ -187,16 +194,22 @@ const UNIT = {
   hi: { days: ['दिन', 'दिन'], weeks: ['हफ़्ते', 'हफ़्ते'], months: ['महीने', 'महीने'] },
 } as const;
 
-/** Common dose words in Hindi; numbers and units such as mg and ml stay as written. */
-const HINDI_DOSE_WORDS: [RegExp, string][] = [
-  [/\b(tablets?|tabs?)\b/gi, 'गोली'],
-  [/\bcapsules?\b/gi, 'कैप्सूल'],
-  [/\bdrops?\b/gi, 'बूँद'],
-  [/\bpuffs?\b/gi, 'पफ़'],
-  [/\bsachets?\b/gi, 'पाउच'],
-  [/\bteaspoons?\b/gi, 'चम्मच'],
-  [/\bthin layer\b/gi, 'पतली परत'],
+/** Common dose words in Hindi as [singular, plural]; numbers and units such as mg and ml stay as written. */
+const HINDI_DOSE_WORDS: [RegExp, string, string][] = [
+  [/\b(tablets?|tabs?)\b/gi, 'गोली', 'गोलियाँ'],
+  [/\bcapsules?\b/gi, 'कैप्सूल', 'कैप्सूल'],
+  [/\bdrops?\b/gi, 'बूँद', 'बूँदें'],
+  [/\bpuffs?\b/gi, 'पफ़', 'पफ़'],
+  [/\bsachets?\b/gi, 'पाउच', 'पाउच'],
+  [/\bteaspoons?\b/gi, 'चम्मच', 'चम्मच'],
+  [/\bthin layer\b/gi, 'पतली परत', 'पतली परत'],
 ];
+
+/** True for a dose that starts with a number above one ("2 tablets", "1.5 tablets"). */
+function isPlural(dose: string): boolean {
+  const n = /^([\d.]+)(?![\d./½])/.exec(dose)?.[1];
+  return n !== undefined && Number(n) > 1;
+}
 
 function list(items: string[], lang: RemarkLanguage): string {
   const and = lang === 'en' ? 'and' : 'और';
@@ -207,7 +220,8 @@ function list(items: string[], lang: RemarkLanguage): string {
 function doseText(dose: string, lang: RemarkLanguage): string {
   const d = dose.trim();
   if (lang === 'en') return d;
-  return HINDI_DOSE_WORDS.reduce((s, [re, word]) => s.replace(re, word), d);
+  const plural = isPlural(d);
+  return HINDI_DOSE_WORDS.reduce((s, [re, one, many]) => s.replace(re, plural ? many : one), d);
 }
 
 function durationText(step: DoseStep, lang: RemarkLanguage): string {
@@ -250,11 +264,13 @@ function whenText(freq: Frequency, timing: DoseTiming | null, lang: RemarkLangua
           ? `${MEAL_TIMING.en[timing]} ${list(meals, 'en')}`
           : `${list(meals, 'hi')} ${MEAL_TIMING.hi[timing]}`,
       );
+    } else {
+      // Bedtime only (0-0-0-1): keep the chosen food timing.
+      out.push(GENERAL_TIMING[lang][timing]);
     }
     if (atBedtime) out.push(TIME[lang].bedtime);
     return out;
   }
-  if (timing === 'empty_stomach') out.push(GENERAL_TIMING[lang].empty_stomach);
   if (timing === 'bedtime') return [...out, TIME[lang].bedtime];
   out.push(
     list(
@@ -262,6 +278,8 @@ function whenText(freq: Frequency, timing: DoseTiming | null, lang: RemarkLangua
       lang,
     ),
   );
+  // The time of day first: "in the morning, on an empty stomach".
+  if (timing === 'empty_stomach') out.push(GENERAL_TIMING[lang].empty_stomach);
   return out;
 }
 
@@ -276,7 +294,7 @@ const doseUnit = (dose: string) => dose.trim().replace(/^[\d½./]+\s*/, '');
 
 function amount(value: string, unit: string, lang: RemarkLanguage): string {
   if (!unit) return value;
-  if (lang === 'hi') return `${value} ${doseText(unit, 'hi')}`;
+  if (lang === 'hi') return doseText(`${value} ${unit}`, 'hi');
   if (!COUNTABLE.test(unit)) return `${value} ${unit}`;
   const singular = unit.replace(/s$/i, '');
   return `${value} ${value === '1' || value === '½' ? singular : `${singular}s`}`;

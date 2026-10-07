@@ -216,7 +216,7 @@ export function RxLine({
           <textarea
             id={id('remarks')}
             rows={2}
-            maxLength={600}
+            maxLength={1200}
             value={item.remarks}
             onChange={(e) => set({ remarks: e.target.value })}
           />

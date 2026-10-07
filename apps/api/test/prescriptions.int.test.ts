@@ -280,7 +280,7 @@ describe('prescription drafts', () => {
     const booked = await visit('2026-10-07', 'confirmed', 1);
     expect((await save(booked, [para], 0)).statusCode).toBe(409);
 
-    await save(id, [para], 0);
+    expect((await save(id, [para], 0)).statusCode).toBe(200);
     await h.owner.consultation.create({
       data: {
         organisationId: clinics.a.org.id,
@@ -426,6 +426,20 @@ describe('repeat last and templates', () => {
         .statusCode,
     ).toBe(403);
   });
+
+  it('only saves templates with active medicines this clinic can see', async () => {
+    const { id: _a, ...para } = await line('Paracetamol 650');
+    const unknown = await call('POST', '/prescription-templates', doctorA, {
+      name: 'Unknown',
+      items: [{ ...para, medicineId: randomUUID() }],
+    });
+    expect(unknown.statusCode, unknown.body).toBe(400);
+    await h.owner.medicine.update({ where: { id: para.medicineId }, data: { active: false } });
+    expect(
+      (await call('POST', '/prescription-templates', doctorA, { name: 'Old', items: [para] }))
+        .statusCode,
+    ).toBe(400);
+  });
 });
 
 describe('tenant isolation', () => {
@@ -465,5 +479,49 @@ describe('tenant isolation', () => {
     expect(
       (await save(id, [{ ...para, id: randomUUID(), medicineId: clinicB.id }], 1)).statusCode,
     ).toBe(400);
+  });
+
+  it('a row cannot point at another clinic’s appointment or prescription', async () => {
+    const id = await visit();
+    await save(id, [await line('Paracetamol 650')], 0);
+    const rx = await h.owner.prescription.findFirstOrThrow({ where: { appointmentId: id } });
+    const b = clinics.b.org.id;
+
+    await expect(
+      withTenant(h.services.db, b, (tx) =>
+        tx.prescription.create({
+          data: {
+            organisationId: b,
+            appointmentId: id,
+            patientId: clinics.a.patients[0]!.id,
+            doctorUserId: clinics.a.doctor.userId,
+            language: 'en',
+            version: 2,
+          },
+        }),
+      ),
+    ).rejects.toThrow();
+    await expect(
+      withTenant(h.services.db, b, (tx) =>
+        tx.prescriptionItem.create({
+          data: {
+            id: randomUUID(),
+            organisationId: b,
+            prescriptionId: rx.id,
+            name: 'X',
+            steps: [],
+            remarks: '',
+            sortOrder: 0,
+          },
+        }),
+      ),
+    ).rejects.toThrow();
+    // Even the owner role cannot give a prescription another patient than its visit's.
+    await expect(
+      h.owner.prescription.update({
+        where: { id: rx.id },
+        data: { patientId: clinics.a.patients[1]!.id },
+      }),
+    ).rejects.toThrow();
   });
 });

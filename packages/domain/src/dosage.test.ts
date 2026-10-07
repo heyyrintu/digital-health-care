@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { dosageRemarks, parseFrequency, type DoseStep, type RemarkInput } from './index';
+import {
+  dosageRemarks,
+  parseFrequency,
+  REMARKS_MAX,
+  type DoseStep,
+  type RemarkInput,
+} from './index';
 
 const step = (over: Partial<DoseStep> = {}): DoseStep => ({
   dose: '1 tablet',
@@ -47,7 +53,7 @@ describe('dosageRemarks in English', () => {
     );
     expect(
       dosageRemarks(line({ timing: 'empty_stomach' }, [step({ frequency: '1-0-0' })]), 'en'),
-    ).toBe('Take 1 tablet once a day, on an empty stomach, in the morning, for 5 days.');
+    ).toBe('Take 1 tablet once a day, in the morning, on an empty stomach, for 5 days.');
     expect(dosageRemarks(line({}, [step({ frequency: '1-0-1-1' })]), 'en')).toBe(
       'Take 1 tablet three times a day, after breakfast and dinner, at bedtime, for 5 days.',
     );
@@ -167,7 +173,7 @@ describe('dosageRemarks in Hindi', () => {
 
   it('gives each slot its own amount in Hindi too', () => {
     expect(dosageRemarks(line({}, [step({ frequency: '2-0-1' })]), 'hi')).toBe(
-      'नाश्ते के बाद 2 गोली और रात के खाने के बाद 1 गोली, 5 दिन तक लें।',
+      'नाश्ते के बाद 2 गोलियाँ और रात के खाने के बाद 1 गोली, 5 दिन तक लें।',
     );
   });
 
@@ -192,7 +198,7 @@ describe('dosageRemarks in Hindi', () => {
         'hi',
       ),
     ).toBe(
-      '2 गोली दिन में एक बार, खाने के बाद, 1 हफ़्ते तक, फिर 1 गोली दिन में एक बार, खाने के बाद, 1 हफ़्ते तक लें।',
+      '2 गोलियाँ दिन में एक बार, खाने के बाद, 1 हफ़्ते तक, फिर 1 गोली दिन में एक बार, खाने के बाद, 1 हफ़्ते तक लें।',
     );
     expect(
       dosageRemarks(
@@ -200,5 +206,82 @@ describe('dosageRemarks in Hindi', () => {
         'hi',
       ),
     ).toBe('पतली परत दिन में दो बार, 5 दिन तक लगाएँ।');
+  });
+});
+
+describe('dosageRemarks coverage', () => {
+  const once = (over: Partial<DoseStep>, rest: Partial<RemarkInput> = {}) =>
+    line({ timing: null, ...rest }, [step(over)]);
+
+  it('keeps food timing on a bedtime-only pattern', () => {
+    expect(dosageRemarks(line({}, [step({ frequency: '0-0-0-1' })]), 'en')).toBe(
+      'Take 1 tablet once a day, after food, at bedtime, for 5 days.',
+    );
+    expect(dosageRemarks(line({}, [step({ frequency: '0-0-0-1' })]), 'hi')).toBe(
+      '1 गोली दिन में एक बार, खाने के बाद, सोते समय, 5 दिन तक लें।',
+    );
+  });
+
+  it('puts the time of day before an empty stomach in Hindi too', () => {
+    expect(
+      dosageRemarks(line({ timing: 'empty_stomach' }, [step({ frequency: '1-0-0' })]), 'hi'),
+    ).toBe('1 गोली दिन में एक बार, सुबह, खाली पेट, 5 दिन तक लें।');
+  });
+
+  it('covers STAT, monthly and alternate days, months and with-food timing', () => {
+    const stat = once({ frequency: 'STAT', durationValue: null, durationUnit: null });
+    expect(dosageRemarks(stat, 'en')).toBe('Take 1 tablet immediately, once.');
+    expect(dosageRemarks(stat, 'hi')).toBe('1 गोली तुरंत, एक बार लें।');
+    const monthly = once({ frequency: 'monthly', durationValue: 3, durationUnit: 'months' });
+    expect(dosageRemarks(monthly, 'en')).toBe('Take 1 tablet once a month, for 3 months.');
+    expect(dosageRemarks(monthly, 'hi')).toBe('1 गोली महीने में एक बार, 3 महीने तक लें।');
+    const alternate = once({ frequency: 'alternate days' });
+    expect(dosageRemarks(alternate, 'en')).toBe('Take 1 tablet on alternate days, for 5 days.');
+    expect(dosageRemarks(alternate, 'hi')).toBe('1 गोली एक दिन छोड़कर, 5 दिन तक लें।');
+    expect(dosageRemarks(once({ frequency: 'BD' }, { timing: 'with_food' }), 'en')).toBe(
+      'Take 1 tablet twice a day, with food, for 5 days.',
+    );
+  });
+
+  it('uses the verb for each route, oral when none is chosen', () => {
+    const verbs = (lang: 'en' | 'hi') =>
+      ([null, 'inhaled', 'ear', 'nasal', 'injection', 'other'] as const).map((route) =>
+        dosageRemarks(once({ dose: '2 puffs', frequency: 'BD' }, { route }), lang),
+      );
+    expect(verbs('en').map((r) => r.split(' ')[0])).toEqual([
+      'Take',
+      'Inhale',
+      'Put',
+      'Put',
+      'Inject',
+      'Use',
+    ]);
+    expect(verbs('hi').map((r) => r.replace(/^.*5 दिन तक /, ''))).toEqual([
+      'लें।',
+      'इनहेल करें।',
+      'डालें।',
+      'डालें।',
+      'लगवाएँ।',
+      'इस्तेमाल करें।',
+    ]);
+    expect(dosageRemarks(once({ dose: '2 drops', frequency: 'TDS' }, { route: 'ear' }), 'hi')).toBe(
+      '2 बूँदें दिन में तीन बार, 5 दिन तक डालें।',
+    );
+  });
+
+  it('stays within the remarks limit for the longest valid line', () => {
+    const long = step({
+      dose: '9'.repeat(3) + ' tablets ' + 'x'.repeat(48),
+      frequency: 'f'.repeat(60),
+      durationValue: 365,
+      durationUnit: 'months',
+    });
+    for (const lang of ['en', 'hi'] as const) {
+      const text = dosageRemarks(
+        { steps: Array(6).fill(long), timing: 'empty_stomach', route: 'injection' },
+        lang,
+      );
+      expect(text.length).toBeLessThanOrEqual(REMARKS_MAX);
+    }
   });
 });

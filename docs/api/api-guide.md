@@ -175,7 +175,7 @@ Implemented in Phase 1 (`apps/api/src/modules/prescribing`). The safety engine, 
 - **Remarks:** unless `remarksEdited` is true, the server writes them from the steps, timing and route in the prescription's `language` (English or Hindi) with `dosageRemarks` from `@dhc/domain`, which the web app also uses for the live preview. Frequencies understood: slot patterns (`1-0-1`, with an optional fourth bedtime slot; when any amount is not 1, such as `2-0-2` or `½-0-½`, each slot is written with its own amount — "2 tablets after breakfast and 2 tablets after dinner"), `OD`, `BD`, `TDS`, `QID`, `HS`, `SOS`/`PRN`, `STAT`, weekly, monthly and alternate days; anything else is printed as written.
 - **Saving** follows the notes rules: only the visit's doctor, once the patient has checked in, with a matching `revision` (409 `revision: stale` otherwise); a signed prescription or locked consultation gives 409. A save replaces the draft's lines. `defaultLanguage` is the patient's language.
 - **Repeat last** returns the patient's most recent prescription with lines (any doctor in the organisation) from a visit that started before `before` (the visit being written; 404 if it is not this patient's), or from any visit when `before` is omitted. Lines come without IDs; the client adds new ones.
-- **Audit:** `prescription.viewed|saved|last_viewed` (IDs, revision and line count only), `prescription_template.saved|deleted`.
+- **Audit:** `prescription.viewed` and `prescription.last_viewed` record entity IDs only (the appointment, or the patient); `prescription.saved` adds the revision and line count; `prescription_template.saved|deleted` record the template ID, with the line count on `saved`. Never medicine names or remarks.
 
 ## 4. Endpoint catalogue (by module)
 

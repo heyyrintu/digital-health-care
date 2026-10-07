@@ -170,7 +170,7 @@ test.describe('prescription builder', () => {
     await page.goto(`/clinic/consultations/${today.id}`);
     const rx = page.getByTestId('prescription');
     await rx.getByRole('button', { name: 'Repeat last' }).click();
-    await expect(rx).toContainText(`Added 1 medicines from the ${istDay(-14)} prescription.`);
+    await expect(rx).toContainText(`Copied from the ${istDay(-14)} prescription (lines added: 1).`);
     await expect(rx.getByTestId('rx-line-0')).toContainText('Etoricoxib 90');
 
     await rx.getByLabel('Templates').selectOption({ label: 'Stomach cover' });

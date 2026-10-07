@@ -58,6 +58,14 @@ const withoutId = ({ id: _id, ...line }: ReturnType<typeof itemOut>) => line;
  * dosage remarks, templates and "repeat last". Doctors only; only the visit's doctor
  * writes. Signing, the safety engine and the PDF follow in later slices.
  */
+/** Medicines must be active and in the master this clinic can see (the platform's or its own). */
+async function checkMedicines(tx: Tx, items: { medicineId: string | null }[]): Promise<void> {
+  const ids = [...new Set(items.flatMap((i) => (i.medicineId ? [i.medicineId] : [])))];
+  if (ids.length === 0) return;
+  const found = await tx.medicine.count({ where: { id: { in: ids }, active: true } });
+  if (found !== ids.length) throw invalid('items', 'A medicine is not in the list.');
+}
+
 export class PrescribingService {
   constructor(private readonly s: Services) {}
 
@@ -159,16 +167,7 @@ export class PrescribingService {
         );
       }
 
-      // Medicines must be active and in the master this clinic can see (the platform's or its own).
-      const medicineIds = [
-        ...new Set(body.items.flatMap((i) => (i.medicineId ? [i.medicineId] : []))),
-      ];
-      if (medicineIds.length > 0) {
-        const found = await tx.medicine.count({
-          where: { id: { in: medicineIds }, active: true },
-        });
-        if (found !== medicineIds.length) throw invalid('items', 'A medicine is not in the list.');
-      }
+      await checkMedicines(tx, body.items);
 
       const prescription = existing
         ? await tx.prescription.update({
@@ -290,6 +289,7 @@ export class PrescribingService {
     body: SaveTemplateBody,
   ): Promise<PrescriptionTemplate> {
     return withTenant(this.s.db, actor.organisationId, async (tx) => {
+      await checkMedicines(tx, body.items);
       const row = await tx.prescriptionTemplate.upsert({
         where: {
           organisationId_doctorUserId_name: {
