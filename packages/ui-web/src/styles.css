@@ -72,11 +72,17 @@
   background: linear-gradient(100deg, var(--muted) 20%, var(--accent) 45%, var(--muted) 70%);
   background-size: 240% 100%;
   animation: shimmer 1.6s infinite linear;
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
 }
 
 /* The waiting-room screen's "now serving" token. */
 @utility token-pulse {
   animation: token-pulse 2.8s ease-in-out infinite;
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
 }
 
 @keyframes shimmer {

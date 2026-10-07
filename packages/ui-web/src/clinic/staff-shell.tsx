@@ -37,7 +37,9 @@ export type LinkComponent = ComponentType<{
 const PlainLink: LinkComponent = ({ children, ...props }) => <a {...props}>{children}</a>;
 
 const isActive = (item: NavItem, path: string) =>
-  item.exact ? path === item.href : path === item.href || path.startsWith(`${item.href}/`);
+  item.exact
+    ? path === item.href
+    : path === item.href || path.startsWith(item.href === '/' ? '/' : `${item.href}/`);
 
 /**
  * The staff dashboard frame from the demo: a collapsible dark sidebar on desktop, a compact
@@ -76,7 +78,11 @@ export function StaffShell({
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+      if (
+        !event.defaultPrevented &&
+        (event.metaKey || event.ctrlKey) &&
+        event.key.toLowerCase() === 'k'
+      ) {
         event.preventDefault();
         setSearchOpen(true);
       }
@@ -290,7 +296,7 @@ export function StaffShell({
 
         {bottomTabs && bottomTabs.length > 0 && (
           <nav
-            aria-label={t('ui.mainNav')}
+            aria-label={t('ui.tabBar')}
             className="safe-bottom fixed inset-x-0 bottom-0 z-40 grid border-t bg-background shadow-sheet md:hidden"
             style={{ gridTemplateColumns: `repeat(${bottomTabs.length}, minmax(0, 1fr))` }}
           >

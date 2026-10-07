@@ -406,6 +406,8 @@ export const en = {
   'ui.collapseSidebar': 'Collapse sidebar',
   'ui.expandSidebar': 'Expand sidebar',
   'ui.mainNav': 'Main navigation',
+  'ui.tabBar': 'Quick tabs',
+  'ui.commandMenu': 'Command menu',
   'ui.searchPlaceholder': 'Search pages',
   'ui.jumpTo': 'Jump to a page',
   'ui.noResults': 'No results found.',

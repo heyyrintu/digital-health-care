@@ -117,7 +117,10 @@ export function Avatar({
     <span
       className={cn(
         'grid h-10 w-10 shrink-0 place-items-center rounded-full text-xs font-extrabold ring-2 ring-card',
-        avatarTones[index % avatarTones.length],
+        avatarTones[
+          (((Math.trunc(index) || 0) % avatarTones.length) + avatarTones.length) %
+            avatarTones.length
+        ],
         className,
       )}
       {...(label ? { role: 'img', 'aria-label': label } : { 'aria-hidden': true })}
