@@ -9,6 +9,8 @@ import {
   type MeResponse,
 } from '@dhc/contracts';
 import { formatIstDateTime } from '@dhc/domain';
+import { Avatar, Button, StatusChip, Surface, buttonVariants, cn } from '@dhc/ui-web';
+import { ArrowLeft, Info, Lock } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -147,18 +149,23 @@ function ConsultationScreen({ me }: { me: MeResponse }) {
 
   if (!view) {
     return (
-      <section className="card">
+      <Surface className="space-y-3 p-5 sm:p-6">
         <p>
-          <Link href="/clinic/queue">{t('consult.back')}</Link>
+          <Link href="/clinic/queue" className={backLink}>
+            <ArrowLeft aria-hidden />
+            {t('consult.back')}
+          </Link>
         </p>
         {error ? (
-          <p role="alert" className="alert">
+          <p role="alert" className={alertBox}>
             {error}
           </p>
         ) : (
-          <p aria-live="polite">{t('common.loading')}</p>
+          <p aria-live="polite" className="text-sm text-muted-foreground">
+            {t('common.loading')}
+          </p>
         )}
-      </section>
+      </Surface>
     );
   }
 
@@ -167,82 +174,118 @@ function ConsultationScreen({ me }: { me: MeResponse }) {
   const locked = Boolean(view.consultation?.lockedAt);
 
   return (
-    <div className="consult">
-      <section className="card consult-header">
+    <div className="space-y-6">
+      <section className="space-y-4">
         <p>
-          <Link href={`/clinic/queue?date=${a.date}`}>{t('consult.back')}</Link>
+          <Link href={`/clinic/queue?date=${a.date}`} className={backLink}>
+            <ArrowLeft aria-hidden />
+            {t('consult.back')}
+          </Link>
         </p>
-        <div className="card-header">
-          <h1>
-            {t('consult.title')}: {a.patient.name}
-          </h1>
-          <SaveStatus state={state} savedAt={savedAt} locale={locale} />
+        <div className="flex items-start gap-3 sm:gap-4">
+          <Avatar name={a.patient.name} className="h-12 w-12 text-sm sm:h-14 sm:w-14" />
+          <div className="min-w-0 flex-1">
+            <h1 className="font-display text-2xl font-extrabold leading-tight">
+              {t('consult.title')}: {a.patient.name}
+            </h1>
+            <p className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1.5 text-sm text-muted-foreground">
+              <span className="tabular font-semibold text-foreground">{a.patient.uhid}</span>
+              <span aria-hidden>·</span>
+              <span>
+                <AgeGender patient={a.patient} />
+              </span>
+              <span aria-hidden>·</span>
+              <span className="tabular">
+                {a.date} {a.source === 'walk_in' ? t('appointments.walkInBadge') : a.startTime}
+              </span>
+              <span data-testid="appointment-status">
+                <StatusChip status={a.status} />
+              </span>
+              {a.patient.tags.map((tag) => (
+                <TagChip key={tag.id} tag={tag} />
+              ))}
+            </p>
+          </div>
         </div>
-        <p className="patient-meta">
-          {a.patient.uhid} · <AgeGender patient={a.patient} /> · {a.date}{' '}
-          {a.source === 'walk_in' ? t('appointments.walkInBadge') : a.startTime} ·{' '}
-          <span className="pill" data-testid="appointment-status">
-            {t(`status.${a.status}`)}
-          </span>
-          {a.patient.tags.map((tag) => (
-            <TagChip key={tag.id} tag={tag} />
-          ))}
-        </p>
         {locked ? (
-          <p className="notice">{t('consult.locked')}</p>
+          <p className={noticeBox}>
+            <Lock aria-hidden className="mt-0.5 size-4 shrink-0" />
+            {t('consult.locked')}
+          </p>
         ) : (
-          !view.canEdit && <p className="notice">{t('consult.readOnly')}</p>
+          !view.canEdit && (
+            <p className={noticeBox}>
+              <Info aria-hidden className="mt-0.5 size-4 shrink-0" />
+              {t('consult.readOnly')}
+            </p>
+          )
         )}
         {state === 'stale' && (
-          <p role="alert" className="alert">
+          <p role="alert" className={cn(alertBox, 'flex flex-wrap items-center gap-x-2')}>
             {t('consult.stale')}{' '}
-            <button type="button" className="link-button" onClick={() => void load()}>
+            <Button type="button" variant="link" className="px-1" onClick={() => void load()}>
               {t('consult.reload')}
-            </button>
+            </Button>
           </p>
         )}
         {error && state !== 'stale' && (
-          <p role="alert" className="alert">
+          <p role="alert" className={alertBox}>
             {error}
           </p>
         )}
       </section>
 
-      <div className="consult-body">
-        <aside className="card consult-context">
-          <h2>{t('chart.title')}</h2>
+      <div className="grid gap-6 lg:grid-cols-[minmax(300px,380px)_minmax(0,1fr)] lg:items-start">
+        <aside className="surface min-w-0 p-5 sm:p-6 lg:sticky lg:top-6">
+          <h2 className="font-display text-lg font-bold">{t('chart.title')}</h2>
           {chart ? (
             <ChartPanel chart={chart} editable={me.role === 'doctor'} onChange={setChart} />
           ) : (
-            <p aria-live="polite">{t('common.loading')}</p>
+            <p aria-live="polite" className="mt-3 text-sm text-muted-foreground">
+              {t('common.loading')}
+            </p>
           )}
         </aside>
 
-        <div className="consult-main">
-          <section className="card">
-            <h2>{t('vitals.title')}</h2>
-            <VitalsForm
-              appointmentId={a.id}
-              vitals={view.vitals}
-              patient={a.patient}
-              editable={!locked && !['cancelled', 'no_show', 'rescheduled'].includes(a.status)}
-            />
-          </section>
-          <section className="card">
-            <h2>{t('consult.title')}</h2>
-            <NotesForm
-              notes={notes}
-              followUpDate={followUpDate}
-              patientId={a.patient.id}
-              editable={editable}
-              onChange={edit}
-            />
-          </section>
+        <div className="grid min-w-0 content-start gap-6">
+          <Surface className="p-5 sm:p-6">
+            <section>
+              <h2 className="mb-4 font-display text-lg font-bold">{t('vitals.title')}</h2>
+              <VitalsForm
+                appointmentId={a.id}
+                vitals={view.vitals}
+                patient={a.patient}
+                editable={!locked && !['cancelled', 'no_show', 'rescheduled'].includes(a.status)}
+              />
+            </section>
+          </Surface>
+          <Surface className="p-5 sm:p-6">
+            <section>
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+                <h2 className="font-display text-lg font-bold">{t('consult.title')}</h2>
+                <SaveStatus state={state} savedAt={savedAt} locale={locale} />
+              </div>
+              <NotesForm
+                notes={notes}
+                followUpDate={followUpDate}
+                patientId={a.patient.id}
+                editable={editable}
+                onChange={edit}
+              />
+            </section>
+          </Surface>
         </div>
       </div>
     </div>
   );
 }
+
+const backLink = buttonVariants({
+  variant: 'ghost',
+  className: '-ml-3 text-muted-foreground hover:text-foreground',
+});
+const alertBox = 'rounded-xl bg-danger-soft px-4 py-3 text-sm font-medium text-destructive';
+const noticeBox = 'flex gap-2 rounded-xl bg-info-soft px-4 py-3 text-sm text-info';
 
 function SaveStatus({
   state,
@@ -263,7 +306,24 @@ function SaveStatus({
           ? t('consult.saved', { time: formatIstDateTime(savedAt, locale) })
           : '';
   return (
-    <p className="hint save-status" aria-live="polite" data-testid="save-status">
+    <p
+      role="status"
+      aria-live="polite"
+      data-testid="save-status"
+      className={cn(
+        'inline-flex min-h-6 items-center gap-1.5 whitespace-nowrap text-xs font-medium text-muted-foreground',
+        state === 'error' && 'text-destructive',
+      )}
+    >
+      {text && (
+        <span
+          aria-hidden
+          className={cn(
+            'size-2 rounded-full',
+            state === 'saved' ? 'bg-success' : state === 'error' ? 'bg-destructive' : 'bg-warning',
+          )}
+        />
+      )}
       {text}
     </p>
   );
