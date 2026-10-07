@@ -1,9 +1,13 @@
+import { createDb, seedSampleMedicines } from '@dhc/db';
 import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-/** Checks the apps are built and brings the e2e database up to date. */
-export default function globalSetup() {
+/**
+ * Checks the apps are built, brings the e2e database up to date and loads the sample
+ * medicine master (shared by every test's clinic).
+ */
+export default async function globalSetup() {
   const url = process.env.E2E_DATABASE_URL!;
   const root = (path: string) => fileURLToPath(new URL(`../${path}`, import.meta.url));
 
@@ -18,4 +22,8 @@ export default function globalSetup() {
     env: { ...process.env, DATABASE_URL: url },
     stdio: 'inherit',
   });
+
+  const db = createDb(url);
+  await seedSampleMedicines(db);
+  await db.$disconnect();
 }

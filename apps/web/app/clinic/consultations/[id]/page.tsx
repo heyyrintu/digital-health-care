@@ -18,6 +18,7 @@ import { ClinicShell } from '../../shell';
 import { VitalsForm } from '../../vitals-form';
 import { ChartPanel } from '../chart-panel';
 import { NotesForm } from '../notes-form';
+import { PrescriptionCard } from '../prescription-card';
 
 /** Quiet time after the last keystroke before the notes save. */
 const AUTOSAVE_MS = 1200;
@@ -237,6 +238,9 @@ function ConsultationScreen({ me }: { me: MeResponse }) {
               editable={editable}
               onChange={edit}
             />
+          </section>
+          <section className="card" data-testid="prescription">
+            <PrescriptionCard appointmentId={a.id} patientId={a.patient.id} />
           </section>
         </div>
       </div>

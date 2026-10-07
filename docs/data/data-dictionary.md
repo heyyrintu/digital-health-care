@@ -65,11 +65,11 @@ Conventions for every table: `id` (UUID), `organisationId` (except platform-leve
 
 | Entity | Purpose | Key fields |
 |---|---|---|
-| DrugMolecule | Licensed drug data | name, class, interactionRefs, pregnancySafety, lactationSafety, maxDailyDose, paediatricDoseRange, geriatricCaution, renalAdjustment, hepaticCaution, weightBased, telemedicineList |
-| Medicine | Brand in the master | brandName, moleculeIds, strength, form, scheduleTag, active, source (licensed\|clinic_added) |
-| PrescriptionTemplate | Saved prescription | doctorId, name, items (JSON), advice, tests |
-| Prescription | Prescription document | consultationId, patientId, doctorId, prescriptionNumber (prefix + sequence), version, previousVersionId, status (draft\|signed\|published\|amended\|void), signatureMethod, signedAt, pdfKey, pdfHash, templateVersion, verificationCode, voidReason, language |
-| PrescriptionItem | Medicine line | prescriptionId, medicineId?, nameSnapshot, compositionSnapshot, dose, frequency, timing, duration, route, quantity, remarks (generated, editable), sortOrder |
+| DrugMolecule | Licensed drug data (built: name, drugClass; platform-wide, read-only to clinics) | name, class, interactionRefs, pregnancySafety, lactationSafety, maxDailyDose, paediatricDoseRange, geriatricCaution, renalAdjustment, hepaticCaution, weightBased, telemedicineList |
+| Medicine | Medicine in the master (built) | organisationId (null = platform reference master), name, genericName, composition, form, moleculeIds, defaultRoute, source (reference\|clinic), active · planned: brand mapping, scheduleTag |
+| PrescriptionTemplate | Saved prescription (built) | organisationId, doctorUserId, name (unique per doctor), items (JSON lines without IDs) · planned: advice, tests |
+| Prescription | Prescription document (built: draft fields — appointmentId, patientId, doctorUserId, version, status, language, revision) | consultationId, patientId, doctorId, prescriptionNumber (prefix + sequence), version, previousVersionId, status (draft\|signed\|published\|amended\|void), signatureMethod, signedAt, pdfKey, pdfHash, templateVersion, verificationCode, voidReason, language |
+| PrescriptionItem | Medicine line (built) | id (client-chosen UUID), prescriptionId, medicineId?, name, composition, form (snapshots), route, timing, steps (JSON: dose, frequency, durationValue, durationUnit; several for tapering), quantity, instructions, remarks (generated unless remarksEdited), sortOrder |
 | PrescriptionTest | Test on prescription | prescriptionId, testOrderId |
 | SafetyAlert | Alert and action | prescriptionId, itemId, checkType, severity (block\|warn\|info), message, action (accepted\|changed\|overridden), overrideReason, doctorId, at |
 

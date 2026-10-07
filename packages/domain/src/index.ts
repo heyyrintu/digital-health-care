@@ -5,3 +5,4 @@ export * from './time';
 export * from './uhid';
 export * from './clinical';
 export * from './icd10';
+export * from './dosage';
