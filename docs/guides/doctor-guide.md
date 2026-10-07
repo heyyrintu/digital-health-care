@@ -17,8 +17,7 @@ Open **Availability** from the dashboard and pick the clinic and consultation ty
 - **Slots on a day** shows the resulting slots; tick *Show as patients see it online* to apply the clinic's booking horizon and same-day cutoff.
 
 ## Your day
-- **Appointments:** the day's bookings and walk-ins in time order, with token, status and tags. For a checked-in patient choose **Start consultation**, then **Complete** when you are done; the times are recorded. You can also check patients in, mark no-shows, book, reschedule and cancel.
-- **Queue:** My OPD, Booked, Completed, Follow-ups. Each card shows token, waiting time and tags. Tap **Write Rx** or **Scribe** directly from the card.
+- **Queue:** open **Queue** from the dashboard. It shows your patients by default and refreshes every 15 seconds. **My OPD** lists the patient with you first, then everyone checked in: patients tagged Emergency or Priority come first, then in order of arrival, each with their waiting time. **Booked** is everyone not yet arrived, **Completed** is today's finished visits (with your average consultation time), and **Cancelled and no-shows** is the rest. For a checked-in patient choose **Start consultation**, then **Complete** when you are done; the times are recorded. You can also check patients in, mark no-shows, book, reschedule and cancel. Follow-ups, **Write Rx** and **Scribe** arrive with the consultation module.
 - **Patient sheet:** call, ABHA, tags, bill and payment link, vitals, records, assessment, refer, review link, video call.
 
 ## Consultation

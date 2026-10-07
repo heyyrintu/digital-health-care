@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { AgeGender, TagChip } from './patient-bits';
 import { useSession } from './session-provider';
 import { PracticeCard } from './practice-card';
+import { ScreensCard } from './screens-card';
 import { SettingsCard } from './settings-card';
 import { ClinicShell, canRegister } from './shell';
 import { StaffCard } from './staff-card';
@@ -21,6 +22,7 @@ export default function ClinicDashboard() {
             <PatientSearch role={me.role} />
             {me.role === 'clinic_admin' && <StaffCard currentUserId={me.user.id} />}
             {me.role === 'clinic_admin' && <PracticeCard />}
+            {me.role === 'clinic_admin' && <ScreensCard />}
             {me.role === 'clinic_admin' && <SettingsCard />}
           </>
         )
@@ -72,8 +74,8 @@ function PatientSearch({ role }: { role: string }) {
       <div className="card-header">
         <h1 id="patients-title">{t('dashboard.searchPatients')}</h1>
         <div className="header-actions">
-          <Link className="button-link secondary" href="/clinic/appointments">
-            {t('dashboard.appointments')}
+          <Link className="button-link secondary" href="/clinic/queue">
+            {t('dashboard.queue')}
           </Link>
           <Link className="button-link secondary" href="/clinic/availability">
             {t('dashboard.availability')}

@@ -806,3 +806,133 @@ button.slot:disabled {
 .card-header {
   flex-wrap: wrap;
 }
+
+/* Queue ------------------------------------------------------------------------------ */
+
+.queue-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.queue-filters > div {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.queue-filters input,
+.queue-filters select {
+  width: 100%;
+  min-width: 0;
+}
+
+.queue-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  border-bottom: 1px solid var(--color-neutral-300);
+}
+
+button.tab {
+  font: inherit;
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  border: 0;
+  border-bottom: 3px solid transparent;
+  background: none;
+  color: var(--color-neutral-700, var(--color-neutral-900));
+  cursor: pointer;
+}
+
+button.tab.selected {
+  border-bottom-color: var(--color-brand-600);
+  color: var(--color-brand-700);
+  font-weight: 600;
+}
+
+button.tab .count {
+  font-variant-numeric: tabular-nums;
+  margin-left: var(--space-1);
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--color-neutral-100);
+  font-size: var(--font-size-xs);
+}
+
+.queue-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+  margin: var(--space-3) 0;
+}
+
+.queue-meta button {
+  margin-left: auto;
+}
+
+.pill.waiting {
+  background: var(--color-neutral-100);
+  color: var(--color-neutral-900);
+}
+
+/* Waiting-room screen ------------------------------------------------------------------ */
+
+.display.board {
+  place-items: stretch;
+  align-content: start;
+  padding: var(--space-6);
+  gap: var(--space-6);
+}
+
+.display.board header h1 {
+  font-size: 2.5rem;
+  margin: 0;
+}
+
+.display-message {
+  font-size: 2rem;
+  max-width: 40rem;
+}
+
+.display-offline {
+  color: var(--color-severity-warn, #f59e0b);
+}
+
+.display-doctors {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: var(--space-6);
+}
+
+.display-doctor {
+  border: 1px solid var(--color-neutral-500);
+  border-radius: var(--radius-lg);
+  padding: var(--space-6);
+}
+
+.display-doctor h2 {
+  font-size: 2rem;
+  margin: 0 0 var(--space-4);
+}
+
+.display-doctor .label {
+  font-size: 1.25rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0;
+}
+
+.display-doctor .token {
+  margin: 0 0 var(--space-4);
+  line-height: 1;
+}
+
+.display-doctor .next {
+  font-size: 3rem;
+  font-weight: 700;
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  word-spacing: 0.5em;
+}

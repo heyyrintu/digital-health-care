@@ -68,6 +68,15 @@ import {
   UpdateClinicBody,
   UpdateConsultationTypeBody,
 } from './scheduling';
+import {
+  CreateDisplayScreenBody,
+  CreatedDisplayScreen,
+  DisplayBoard,
+  DisplayScreenList,
+  DisplayTokenBody,
+  QueueQuery,
+  QueueResponse,
+} from './queue';
 import { CreateTagBody, Tag, TagList, UpdateTagBody } from './tags';
 
 interface Operation {
@@ -454,6 +463,47 @@ const operations: Operation[] = [
     body: RescheduleAppointmentBody,
     response: AppointmentDetail,
     status: 201,
+  },
+  {
+    method: 'get',
+    path: '/queue',
+    operationId: 'getQueue',
+    summary: 'A day’s queue grouped by tab: My OPD, Booked, Completed, Closed (staff)',
+    query: QueueQuery,
+    response: QueueResponse,
+  },
+  {
+    method: 'get',
+    path: '/display-screens',
+    operationId: 'listDisplayScreens',
+    summary: 'Active waiting-room screens (clinic admin)',
+    response: DisplayScreenList,
+  },
+  {
+    method: 'post',
+    path: '/display-screens',
+    operationId: 'createDisplayScreen',
+    summary: 'Create a waiting-room screen link; the link is shown once (clinic admin)',
+    body: CreateDisplayScreenBody,
+    response: CreatedDisplayScreen,
+    status: 201,
+  },
+  {
+    method: 'post',
+    path: '/display-screens/{id}/revoke',
+    operationId: 'revokeDisplayScreen',
+    summary: 'Stop a waiting-room screen link working (clinic admin)',
+    pathParams: ['id'],
+    status: 204,
+  },
+  {
+    method: 'post',
+    path: '/display/board',
+    operationId: 'getDisplayBoard',
+    summary: 'Current and next tokens for a waiting-room screen; no names (screen token)',
+    public: true,
+    body: DisplayTokenBody,
+    response: DisplayBoard,
   },
   {
     method: 'post',

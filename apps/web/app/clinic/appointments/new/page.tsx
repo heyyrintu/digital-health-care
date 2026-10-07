@@ -169,7 +169,9 @@ function Book({ me }: { me: MeResponse }) {
               reason: reason || null,
             },
           });
-      router.push(`/clinic/appointments?date=${booked.date}`);
+      router.push(
+        `/clinic/queue?date=${booked.date}&tab=${booked.status === 'checked_in' ? 'myOpd' : 'booked'}`,
+      );
     } catch (e) {
       handle(e);
       setBusy(false);
@@ -180,7 +182,7 @@ function Book({ me }: { me: MeResponse }) {
     <section aria-labelledby="book-title" className="card">
       <h1 id="book-title">{current ? t('book.rescheduleTitle') : t('book.title')}</h1>
       <p>
-        <Link href="/clinic/appointments">{t('appointments.title')}</Link>
+        <Link href="/clinic/queue">{t('queue.title')}</Link>
       </p>
       {current && (
         <p className="hint" data-testid="current-booking">

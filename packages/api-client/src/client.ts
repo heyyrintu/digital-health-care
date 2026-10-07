@@ -101,6 +101,12 @@ export function createApiClient(options: ApiClientOptions) {
         schema: NoContent,
       }),
 
+    /** Clinic admin: stop a waiting-room screen link working. */
+    revokeDisplayScreen: (id: string) =>
+      request('POST', `/display-screens/${encodeURIComponent(id)}/revoke`, {
+        schema: NoContent,
+      }),
+
     /** Ends the session of the current access token. */
     logout: () => request('POST', '/auth/logout', { schema: NoContent }),
   };

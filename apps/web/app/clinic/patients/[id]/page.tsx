@@ -218,7 +218,7 @@ function PatientView({ role }: { role: string }) {
           <ul className="pick-list" data-testid="patient-appointments">
             {appointments.map((a) => (
               <li key={a.id}>
-                <Link href={`/clinic/appointments?date=${a.date}`}>
+                <Link href={`/clinic/queue?date=${a.date}`}>
                   {t('appointments.at', { date: a.date, time: a.startTime })}
                 </Link>{' '}
                 · {a.doctorName ?? t('availability.doctor')} · {a.consultationTypeName}
