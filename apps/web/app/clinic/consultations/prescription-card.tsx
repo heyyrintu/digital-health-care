@@ -111,13 +111,16 @@ export function PrescriptionCard({
   const again = useRef(false);
   const edits = useRef(0);
 
-  const fail = useCallback(
-    (e: unknown) => {
-      if (e instanceof ApiError && e.status === 401) return void signOut('expired');
-      setError(e instanceof ApiError ? e.message : t('error.network'));
-    },
-    [signOut, t],
-  );
+  // Kept in refs so switching the clinic language never re-runs the load (which would
+  // drop unsaved lines).
+  const session = useRef({ signOut, t });
+  useEffect(() => {
+    session.current = { signOut, t };
+  }, [signOut, t]);
+  const fail = useCallback((e: unknown) => {
+    if (e instanceof ApiError && e.status === 401) return void session.current.signOut('expired');
+    setError(e instanceof ApiError ? e.message : session.current.t('error.network'));
+  }, []);
 
   const load = useCallback(async () => {
     setError(null);
@@ -144,20 +147,25 @@ export function PrescriptionCard({
       .request('GET', '/prescription-templates', { schema: PrescriptionTemplateList })
       .then((list) => setTemplates(list.data))
       .catch(() => setTemplates([]));
-    return () => clearTimeout(timer.current);
   }, [api, load]);
 
   // Medicine search, shortly after typing stops.
+  // Results for an older query are dropped, and nothing stays clickable while typing.
   useEffect(() => {
+    setMatches(null);
     const q = query.trim();
-    if (q.length < 2) return setMatches(null);
+    if (q.length < 2) return;
+    let current = true;
     const handle = setTimeout(() => {
       api
         .request('GET', '/medicines', { schema: MedicineList, query: { q } })
-        .then((list) => setMatches(list.data))
-        .catch(fail);
+        .then((list) => current && setMatches(list.data))
+        .catch((e) => current && fail(e));
     }, 250);
-    return () => clearTimeout(handle);
+    return () => {
+      current = false;
+      clearTimeout(handle);
+    };
   }, [api, query, fail]);
 
   const save = useCallback(async () => {
@@ -201,8 +209,25 @@ export function PrescriptionCard({
     edits.current += 1;
     setState('dirty');
     clearTimeout(timer.current);
-    timer.current = setTimeout(() => void save(), AUTOSAVE_MS);
+    timer.current = setTimeout(() => {
+      timer.current = undefined;
+      void save();
+    }, AUTOSAVE_MS);
   };
+
+  // Leaving the screen (e.g. back to the queue) saves lines still waiting for the timer.
+  const saveRef = useRef(save);
+  useEffect(() => {
+    saveRef.current = save;
+  }, [save]);
+  useEffect(
+    () => () => {
+      if (timer.current === undefined) return;
+      clearTimeout(timer.current);
+      void saveRef.current();
+    },
+    [],
+  );
 
   // Warn before leaving with lines not yet saved (same as the notes).
   useEffect(() => {

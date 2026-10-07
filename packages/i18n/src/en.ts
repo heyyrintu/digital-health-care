@@ -443,7 +443,7 @@ export const en = {
   'rx.autoRemarks': 'Use automatic remarks',
   'rx.repeatLast': 'Repeat last',
   'rx.noLast': 'No earlier prescription for this patient.',
-  'rx.repeated': 'Added {count} medicines from {date}.',
+  'rx.repeated': 'Added {count} medicines from the {date} prescription.',
   'rx.templates': 'Templates',
   'rx.chooseTemplate': 'Choose a template',
   'rx.applyTemplate': 'Apply',

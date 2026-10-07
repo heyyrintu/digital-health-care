@@ -107,7 +107,7 @@ CREATE INDEX "prescription_items_prescription_id_idx" ON "prescription_items"("p
 CREATE UNIQUE INDEX "prescription_templates_organisation_id_doctor_user_id_name_key" ON "prescription_templates"("organisation_id", "doctor_user_id", "name");
 
 -- AddForeignKey
-ALTER TABLE "medicines" ADD CONSTRAINT "medicines_organisation_id_fkey" FOREIGN KEY ("organisation_id") REFERENCES "organisations"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "medicines" ADD CONSTRAINT "medicines_organisation_id_fkey" FOREIGN KEY ("organisation_id") REFERENCES "organisations"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
 ALTER TABLE "prescriptions" ADD CONSTRAINT "prescriptions_organisation_id_fkey" FOREIGN KEY ("organisation_id") REFERENCES "organisations"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
@@ -136,11 +136,16 @@ ALTER TABLE prescriptions ADD CONSTRAINT prescriptions_numbers_check
 GRANT SELECT ON drug_molecules TO dhc_app;
 
 -- Row-level security (ADR 0014). Clinics read the platform master (no organisation)
--- and their own medicines, and may only write their own.
+-- and their own medicines. Writes are a separate policy limited to their own rows, so a
+-- clinic can never update (or take over) a platform medicine.
 ALTER TABLE medicines ENABLE ROW LEVEL SECURITY;
 GRANT SELECT, INSERT, UPDATE ON medicines TO dhc_app;
-CREATE POLICY tenant_isolation ON medicines TO dhc_app
-  USING (organisation_id IS NULL OR organisation_id = app_current_organisation_id())
+CREATE POLICY tenant_read ON medicines FOR SELECT TO dhc_app
+  USING (organisation_id IS NULL OR organisation_id = app_current_organisation_id());
+CREATE POLICY tenant_insert ON medicines FOR INSERT TO dhc_app
+  WITH CHECK (organisation_id = app_current_organisation_id());
+CREATE POLICY tenant_update ON medicines FOR UPDATE TO dhc_app
+  USING (organisation_id = app_current_organisation_id())
   WITH CHECK (organisation_id = app_current_organisation_id());
 
 -- Draft lines are replaced as the doctor edits; signed prescriptions will be immutable.

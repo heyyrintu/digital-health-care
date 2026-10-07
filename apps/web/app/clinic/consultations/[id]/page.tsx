@@ -50,13 +50,16 @@ function ConsultationScreen({ me }: { me: MeResponse }) {
   const again = useRef(false);
   const edits = useRef(0);
 
-  const fail = useCallback(
-    (e: unknown) => {
-      if (e instanceof ApiError && e.status === 401) return void signOut('expired');
-      setError(e instanceof ApiError ? e.message : t('error.network'));
-    },
-    [signOut, t],
-  );
+  // Kept in refs so switching the clinic language never re-runs the load (which would
+  // drop unsaved notes).
+  const session = useRef({ signOut, t });
+  useEffect(() => {
+    session.current = { signOut, t };
+  }, [signOut, t]);
+  const fail = useCallback((e: unknown) => {
+    if (e instanceof ApiError && e.status === 401) return void session.current.signOut('expired');
+    setError(e instanceof ApiError ? e.message : session.current.t('error.network'));
+  }, []);
 
   const load = useCallback(async () => {
     setError(null);
@@ -85,7 +88,6 @@ function ConsultationScreen({ me }: { me: MeResponse }) {
 
   useEffect(() => {
     void load();
-    return () => clearTimeout(timer.current);
   }, [load]);
 
   const save = useCallback(async () => {
@@ -135,8 +137,25 @@ function ConsultationScreen({ me }: { me: MeResponse }) {
     edits.current += 1;
     setState('dirty');
     clearTimeout(timer.current);
-    timer.current = setTimeout(() => void save(), AUTOSAVE_MS);
+    timer.current = setTimeout(() => {
+      timer.current = undefined;
+      void save();
+    }, AUTOSAVE_MS);
   };
+
+  // Leaving the screen (e.g. back to the queue) saves notes still waiting for the timer.
+  const saveRef = useRef(save);
+  useEffect(() => {
+    saveRef.current = save;
+  }, [save]);
+  useEffect(
+    () => () => {
+      if (timer.current === undefined) return;
+      clearTimeout(timer.current);
+      void saveRef.current();
+    },
+    [],
+  );
 
   // Warn before leaving with unsaved notes.
   useEffect(() => {

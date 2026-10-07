@@ -53,10 +53,41 @@ describe('dosageRemarks in English', () => {
     );
   });
 
-  it('spells out different amounts per slot', () => {
+  it('gives each slot its own amount whenever an amount is not 1', () => {
     expect(
       dosageRemarks(line({ timing: null }, [step({ dose: 'tablets', frequency: '2-0-1' })]), 'en'),
-    ).toBe('Take tablets 2 in the morning and 1 at night, for 5 days.');
+    ).toBe('Take 2 tablets in the morning and 1 tablet at night, for 5 days.');
+    // Same amount in every slot still says how much.
+    expect(dosageRemarks(line({}, [step({ frequency: '2-0-2' })]), 'en')).toBe(
+      'Take 2 tablets after breakfast and 2 tablets after dinner, for 5 days.',
+    );
+    expect(dosageRemarks(line({ timing: null }, [step({ frequency: '½-0-½' })]), 'en')).toBe(
+      'Take ½ tablet in the morning and ½ tablet at night, for 5 days.',
+    );
+    expect(
+      dosageRemarks(line({ timing: null }, [step({ dose: '5 ml', frequency: '2-0-1' })]), 'en'),
+    ).toBe('Take 2 ml in the morning and 1 ml at night, for 5 days.');
+    // A chosen bedtime is kept.
+    expect(dosageRemarks(line({ timing: 'bedtime' }, [step({ frequency: '2-1-0' })]), 'en')).toBe(
+      'Take 2 tablets in the morning and 1 tablet in the afternoon, at bedtime, for 5 days.',
+    );
+  });
+
+  it('keeps the timing chosen with fixed schedules', () => {
+    expect(
+      dosageRemarks(
+        line({ timing: 'bedtime' }, [
+          step({ frequency: 'SOS', durationValue: null, durationUnit: null }),
+        ]),
+        'en',
+      ),
+    ).toBe('Take 1 tablet when needed, at bedtime.');
+    expect(dosageRemarks(line({ timing: 'after_food' }, [step({ frequency: 'HS' })]), 'en')).toBe(
+      'Take 1 tablet at bedtime, after food, for 5 days.',
+    );
+    expect(dosageRemarks(line({ timing: 'bedtime' }, [step({ frequency: 'HS' })]), 'en')).toBe(
+      'Take 1 tablet at bedtime, for 5 days.',
+    );
   });
 
   it('handles codes, as-needed and long-interval schedules', () => {
@@ -131,6 +162,12 @@ describe('dosageRemarks in Hindi', () => {
   it('writes the PRD example', () => {
     expect(dosageRemarks(line({}, [step({ dose: '5 ml', frequency: '1-1-1' })]), 'hi')).toBe(
       '5 ml दिन में तीन बार, नाश्ते, दोपहर के खाने और रात के खाने के बाद, 5 दिन तक लें।',
+    );
+  });
+
+  it('gives each slot its own amount in Hindi too', () => {
+    expect(dosageRemarks(line({}, [step({ frequency: '2-0-1' })]), 'hi')).toBe(
+      'नाश्ते के बाद 2 गोली और रात के खाने के बाद 1 गोली, 5 दिन तक लें।',
     );
   });
 

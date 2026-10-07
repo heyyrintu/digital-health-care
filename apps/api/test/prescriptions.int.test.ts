@@ -6,7 +6,7 @@ import {
   PrescriptionView,
   type TokenResponse,
 } from '@dhc/contracts';
-import { seedSampleMedicines } from '@dhc/db';
+import { seedSampleMedicines, withTenant } from '@dhc/db';
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import {
@@ -137,6 +137,30 @@ describe('medicine search', () => {
     expect((await call('GET', '/medicines?q=parac', desk)).statusCode).toBe(403);
   });
 
+  it('matches the generic name alone, and leaves out inactive medicines', async () => {
+    await h.owner.medicine.create({
+      data: {
+        name: 'Brand Q 10',
+        genericName: 'Zyxolamide',
+        composition: 'Q 10 mg',
+        form: 'tablet',
+        source: 'reference',
+      },
+    });
+    await h.owner.medicine.create({
+      data: {
+        name: 'Old brand',
+        genericName: 'Zyxolamide',
+        composition: 'Q 5 mg',
+        form: 'tablet',
+        source: 'reference',
+        active: false,
+      },
+    });
+    const found = MedicineList.parse((await call('GET', '/medicines?q=zyxol', doctorA)).json());
+    expect(found.data.map((m) => m.name)).toEqual(['Brand Q 10']);
+  });
+
   it('shows the platform master and the clinic’s own medicines, not other clinics’', async () => {
     await h.owner.medicine.create({
       data: {
@@ -208,6 +232,27 @@ describe('prescription drafts', () => {
     const audit = await h.owner.auditLog.findMany({ where: { action: 'prescription.saved' } });
     expect(audit).toHaveLength(2);
     expect(JSON.stringify(audit.map((a) => a.metadata))).not.toContain('Paracetamol');
+  });
+
+  it('rejects inactive medicines and a duration without a unit', async () => {
+    const id = await visit();
+    const inactive = await h.owner.medicine.create({
+      data: {
+        name: 'Withdrawn 1',
+        genericName: 'Withdrawn',
+        composition: 'W 1 mg',
+        form: 'tablet',
+        source: 'reference',
+        active: false,
+      },
+    });
+    const para = await line('Paracetamol 650');
+    expect((await save(id, [{ ...para, medicineId: inactive.id }], 0)).statusCode).toBe(400);
+    const noUnit = {
+      ...para,
+      steps: [{ dose: '1 tablet', frequency: 'OD', durationValue: 5, durationUnit: null }],
+    };
+    expect((await save(id, [noUnit], 0)).statusCode).toBe(400);
   });
 
   it('checks lines: unique IDs, known medicines, complete fields', async () => {
@@ -384,6 +429,17 @@ describe('repeat last and templates', () => {
 });
 
 describe('tenant isolation', () => {
+  it('a clinic cannot change or take over a platform medicine', async () => {
+    const changed = await withTenant(h.services.db, clinics.a.org.id, (tx) =>
+      tx.medicine.updateMany({
+        where: { organisationId: null },
+        data: { organisationId: clinics.a.org.id, source: 'clinic' },
+      }),
+    );
+    expect(changed.count).toBe(0);
+    expect(await h.owner.medicine.count({ where: { organisationId: null } })).toBeGreaterThan(20);
+  });
+
   it('another organisation’s doctor sees none of it and cannot use its medicines', async () => {
     const id = await visit();
     const para = await line('Paracetamol 650');

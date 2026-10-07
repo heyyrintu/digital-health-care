@@ -217,6 +217,10 @@ function durationText(step: DoseStep, lang: RemarkLanguage): string {
   return lang === 'en' ? `for ${step.durationValue} ${unit}` : `${step.durationValue} ${unit} तक`;
 }
 
+const MEAL_TIMINGS = ['after_food', 'before_food', 'with_food'] as const;
+const isMealTiming = (t: DoseTiming | null): t is (typeof MEAL_TIMINGS)[number] =>
+  (MEAL_TIMINGS as readonly (DoseTiming | null)[]).includes(t);
+
 /** Frequency and timing words for one step, e.g. "three times a day, after breakfast…". */
 function whenText(freq: Frequency, timing: DoseTiming | null, lang: RemarkLanguage): string[] {
   if (freq.kind === 'text') {
@@ -226,31 +230,19 @@ function whenText(freq: Frequency, timing: DoseTiming | null, lang: RemarkLangua
     return [TIMES_A_DAY[lang][freq.times]!, ...(timing ? [GENERAL_TIMING[lang][timing]] : [])];
   }
   if (freq.kind !== 'slots') {
+    // HS already says "at bedtime"; any other timing is added as chosen.
     const fixed = FIXED[lang][freq.kind];
-    return timing && freq.kind !== 'hs' && timing !== 'bedtime'
+    return timing && !(freq.kind === 'hs' && timing === 'bedtime')
       ? [fixed, GENERAL_TIMING[lang][timing]]
       : [fixed];
   }
 
-  const taken = freq.values.map((v, i) => ({ v, slot: SLOTS[i]! })).filter(({ v }) => v !== '0');
-  const uniform = taken.every(({ v }) => v === taken[0]!.v);
+  const taken = slotsTaken(freq);
   const daySlots = taken.filter(({ slot }) => slot !== 'bedtime').map(({ slot }) => slot);
   const atBedtime = taken.some(({ slot }) => slot === 'bedtime');
+  const out: string[] = [TIMES_A_DAY[lang][Math.min(taken.length, 4)]!];
 
-  const out: string[] = [];
-  if (uniform) out.push(TIMES_A_DAY[lang][Math.min(taken.length, 4)]!);
-  else {
-    // Different amounts per slot: spell them out ("2 in the morning, 1 at night").
-    out.push(
-      list(
-        taken.map(({ v, slot }) => `${v} ${TIME[lang][slot]}`),
-        lang,
-      ),
-    );
-    return timing && timing !== 'bedtime' ? [...out, GENERAL_TIMING[lang][timing]] : out;
-  }
-
-  if (timing === 'after_food' || timing === 'before_food' || timing === 'with_food') {
+  if (isMealTiming(timing)) {
     const meals = daySlots.map((s) => MEAL[lang][s as Exclude<Slot, 'bedtime'>]);
     if (meals.length > 0) {
       out.push(
@@ -273,14 +265,65 @@ function whenText(freq: Frequency, timing: DoseTiming | null, lang: RemarkLangua
   return out;
 }
 
+const slotsTaken = (freq: { values: string[] }) =>
+  freq.values.map((v, i) => ({ v, slot: SLOTS[i]! })).filter(({ v }) => v !== '0');
+
+/** Words that take an English plural ("2 tablets", "1 tablet"); units such as ml do not. */
+const COUNTABLE = /^(tablet|tab|capsule|drop|puff|sachet|teaspoon)s?$/i;
+
+/** "tablet" from "1 tablet", "tablets" or "2 tablets"; "ml" from "5 ml"; '' from "2". */
+const doseUnit = (dose: string) => dose.trim().replace(/^[\d½./]+\s*/, '');
+
+function amount(value: string, unit: string, lang: RemarkLanguage): string {
+  if (!unit) return value;
+  if (lang === 'hi') return `${value} ${doseText(unit, 'hi')}`;
+  if (!COUNTABLE.test(unit)) return `${value} ${unit}`;
+  const singular = unit.replace(/s$/i, '');
+  return `${value} ${value === '1' || value === '½' ? singular : `${singular}s`}`;
+}
+
+/**
+ * A slot pattern with amounts other than 1 ("2-0-2", "½-0-½", "2-0-1"): each slot gets
+ * its own amount, so the remark never understates the dose — "2 tablets after breakfast
+ * and 1 tablet after dinner".
+ */
+function slotAmountsText(
+  values: string[],
+  dose: string,
+  timing: DoseTiming | null,
+  lang: RemarkLanguage,
+): string[] {
+  const taken = slotsTaken({ values });
+  const unit = doseUnit(dose);
+  const phrases = taken.map(({ v, slot }) => {
+    const when =
+      isMealTiming(timing) && slot !== 'bedtime'
+        ? lang === 'en'
+          ? `${MEAL_TIMING.en[timing]} ${MEAL.en[slot]}`
+          : `${MEAL.hi[slot]} ${MEAL_TIMING.hi[timing]}`
+        : TIME[lang][slot];
+    const qty = amount(v, unit, lang);
+    return lang === 'en' ? `${qty} ${when}` : `${when} ${qty}`;
+  });
+  const out = [list(phrases, lang)];
+  if (timing === 'empty_stomach') out.push(GENERAL_TIMING[lang].empty_stomach);
+  if (timing === 'bedtime' && !taken.some(({ slot }) => slot === 'bedtime')) {
+    out.push(TIME[lang].bedtime);
+  }
+  return out;
+}
+
 /** "5 ml three times a day, after breakfast, lunch and dinner, for 5 days". */
 function stepText(step: DoseStep, timing: DoseTiming | null, lang: RemarkLanguage): string {
-  const parts = [
-    doseText(step.dose, lang),
-    ...whenText(parseFrequency(step.frequency), timing, lang),
-  ];
+  const freq = parseFrequency(step.frequency);
   const duration = durationText(step, lang);
-  if (duration) parts.push(duration);
+  if (freq.kind === 'slots' && freq.values.some((v) => v !== '0' && v !== '1')) {
+    // The amounts already carry the dose: "2 tablets in the morning…, for 5 days".
+    return [...slotAmountsText(freq.values, step.dose, timing, lang), duration]
+      .filter(Boolean)
+      .join(', ');
+  }
+  const parts = [doseText(step.dose, lang), ...whenText(freq, timing, lang), duration];
   const [first, ...rest] = parts.filter(Boolean);
   return rest.length > 0 ? `${first} ${rest.join(', ')}` : (first ?? '');
 }

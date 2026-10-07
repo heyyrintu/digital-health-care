@@ -108,13 +108,16 @@ export function RxLine({
               type="number"
               min={1}
               max={365}
+              step={1}
               value={step.durationValue ?? ''}
-              onChange={(e) =>
+              onChange={(e) => {
+                // Keep the last valid number while the box holds a fraction or is out of range.
+                if (e.target.value && !e.target.validity.valid) return;
                 setStep(i, {
                   durationValue: e.target.value ? Number(e.target.value) : null,
                   durationUnit: step.durationUnit ?? 'days',
-                })
-              }
+                });
+              }}
             />
           </div>
           <div>
@@ -176,9 +179,10 @@ export function RxLine({
           <label htmlFor={id('route')}>{t('rx.route')}</label>
           <select
             id={id('route')}
-            value={item.route ?? 'oral'}
-            onChange={(e) => set({ route: e.target.value as MedicineRoute })}
+            value={item.route ?? ''}
+            onChange={(e) => set({ route: (e.target.value || null) as MedicineRoute | null })}
           >
+            <option value="">{t('rx.timing.none')}</option>
             {ROUTES.map((r) => (
               <option key={r} value={r}>
                 {t(`rx.route.${r}`)}

@@ -24,6 +24,9 @@ export default async function globalSetup() {
   });
 
   const db = createDb(url);
-  await seedSampleMedicines(db);
-  await db.$disconnect();
+  try {
+    await seedSampleMedicines(db);
+  } finally {
+    await db.$disconnect();
+  }
 }

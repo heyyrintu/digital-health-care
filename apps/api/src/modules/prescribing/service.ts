@@ -159,12 +159,14 @@ export class PrescribingService {
         );
       }
 
-      // Medicines must be in the master this clinic can see (the platform's or its own).
+      // Medicines must be active and in the master this clinic can see (the platform's or its own).
       const medicineIds = [
         ...new Set(body.items.flatMap((i) => (i.medicineId ? [i.medicineId] : []))),
       ];
       if (medicineIds.length > 0) {
-        const found = await tx.medicine.count({ where: { id: { in: medicineIds } } });
+        const found = await tx.medicine.count({
+          where: { id: { in: medicineIds }, active: true },
+        });
         if (found !== medicineIds.length) throw invalid('items', 'A medicine is not in the list.');
       }
 

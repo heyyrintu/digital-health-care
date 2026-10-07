@@ -696,7 +696,7 @@ model Medicine {
   active         Boolean        @default(true)
   createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  organisation Organisation? @relation(fields: [organisationId], references: [id])
+  organisation Organisation? @relation(fields: [organisationId], references: [id], onDelete: Restrict)
 
   @@index([organisationId])
   @@map("medicines")

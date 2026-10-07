@@ -48,13 +48,18 @@ export type MedicineQuery = z.infer<typeof MedicineQuery>;
 // ---- Prescription lines -------------------------------------------------------------
 
 /** One step of a schedule; a tapering course has several, followed in order. */
-export const DoseStep = z.object({
-  dose: z.string().trim().max(60),
-  /** `1-0-1` style (morning-afternoon-night[-bedtime]), a code (OD, BD, TDS, SOS…) or free text. */
-  frequency: z.string().trim().max(60),
-  durationValue: z.number().int().min(1).max(365).nullable(),
-  durationUnit: DurationUnit.nullable(),
-});
+export const DoseStep = z
+  .object({
+    dose: z.string().trim().max(60),
+    /** `1-0-1` style (morning-afternoon-night[-bedtime]), a code (OD, BD, TDS, SOS…) or free text. */
+    frequency: z.string().trim().max(60),
+    durationValue: z.number().int().min(1).max(365).nullable(),
+    durationUnit: DurationUnit.nullable(),
+  })
+  .refine((step) => step.durationValue === null || step.durationUnit !== null, {
+    message: 'A duration needs a unit (days, weeks or months).',
+    path: ['durationUnit'],
+  });
 export type DoseStep = z.infer<typeof DoseStep>;
 
 const lineFields = {
