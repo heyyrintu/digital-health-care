@@ -204,6 +204,14 @@ export function PrescriptionCard({
     timer.current = setTimeout(() => void save(), AUTOSAVE_MS);
   };
 
+  // Warn before leaving with lines not yet saved (same as the notes).
+  useEffect(() => {
+    if (state !== 'dirty' && state !== 'saving') return;
+    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [state]);
+
   const add = (line: PrescriptionItem) => {
     edit([...items, line]);
     setQuery('');

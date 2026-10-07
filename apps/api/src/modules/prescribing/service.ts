@@ -213,7 +213,10 @@ export class PrescribingService {
     });
   }
 
-  /** The patient's latest prescription with lines from another visit, for "Repeat last". */
+  /**
+   * The patient's latest prescription with lines, for "Repeat last": from visits before
+   * `before` when given (the visit being written), otherwise from any visit.
+   */
   async last(
     request: FastifyRequest,
     actor: Actor,
@@ -226,12 +229,23 @@ export class PrescribingService {
         select: { id: true },
       });
       if (!patient) throw NOT_FOUND();
+      // "Last" is relative to the visit being written: from an older visit, a later
+      // visit's prescription must not be offered.
+      const current = before
+        ? await tx.appointment.findFirst({
+            where: { id: before, patientId },
+            select: { startAt: true },
+          })
+        : null;
+      if (before && !current) throw NOT_FOUND();
       const found = await tx.prescription.findFirst({
         where: {
           patientId,
           status: { not: 'void' },
           items: { some: {} },
-          ...(before ? { appointmentId: { not: before } } : {}),
+          ...(current
+            ? { appointmentId: { not: before }, appointment: { startAt: { lt: current.startAt } } }
+            : {}),
         },
         include: {
           items: { orderBy: { sortOrder: 'asc' } },

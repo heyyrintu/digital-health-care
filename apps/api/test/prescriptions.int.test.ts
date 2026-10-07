@@ -313,6 +313,34 @@ describe('repeat last and templates', () => {
     ).toBe(403);
   });
 
+  it('never offers a later visit’s prescription when writing an older visit', async () => {
+    const older = await visit('2026-09-20', 'in_consultation');
+    const later = await visit('2026-10-06', 'in_consultation');
+    await save(later, [await line('Etoricoxib 90')], 0);
+    const patientId = clinics.a.patients[0]!.id;
+    const fromOlder = LastPrescription.parse(
+      (
+        await call('GET', `/patients/${patientId}/last-prescription?before=${older}`, doctorA)
+      ).json(),
+    );
+    expect(fromOlder.last).toBeNull();
+    const anyVisit = LastPrescription.parse(
+      (await call('GET', `/patients/${patientId}/last-prescription`, doctorA)).json(),
+    );
+    expect(anyVisit.last?.appointmentId).toBe(later);
+    // A visit of another patient is not a valid reference point.
+    const otherPatientVisit = await visit('2026-10-06', 'checked_in', 1);
+    expect(
+      (
+        await call(
+          'GET',
+          `/patients/${patientId}/last-prescription?before=${otherPatientVisit}`,
+          doctorA,
+        )
+      ).statusCode,
+    ).toBe(404);
+  });
+
   it('keeps each doctor’s templates; saving the same name replaces it', async () => {
     const { id: _a, ...para } = await line('Paracetamol 650');
     const { id: _b, ...ppi } = await line('Pantoprazole 40', {
