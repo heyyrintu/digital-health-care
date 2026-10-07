@@ -1,4 +1,4 @@
-# ADR 0012: Delivery in six phases with two-week sprints
+# ADR 0012: Delivery in seven phases (foundations plus six) with two-week sprints
 
 - **Status:** Accepted
 - **Date:** 2026-10-06

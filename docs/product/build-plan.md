@@ -8,6 +8,8 @@ The demo is approved. We build the production platform as **one TypeScript monor
 
 This document is the engineering companion to PRD v3.0 (Final): the PRD says *what* to build; this says *how*, *in what order* and *who*.
 
+> **Changes since the Oct 6, 2026 Word and PDF editions** (this Markdown is the maintained copy): D12 now spells out the phase count (Phase 0 plus six delivery phases); message links need an OTP or signed-in session before showing prescription or consent content (§6, threat model T23); the next-steps brief now names PRD v3.0 (Final).
+
 | \#  | Decision                       | Choice                                                                                                                                                          |
 |-----|--------------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | D1  | Codebase strategy              | One monorepo (pnpm + Turborepo), TypeScript end to end                                                                                                          |
@@ -21,7 +23,7 @@ This document is the engineering companion to PRD v3.0 (Final): the PRD says *wh
 | D9  | Offline                        | Read-mostly offline: today's queue, patient summaries and drafts cached on device; writes queued and synced                                                     |
 | D10 | Releases                       | EAS Build + Submit for stores, TestFlight and Play testing tracks, web via CI to AWS; over-the-air updates for JavaScript-only fixes                            |
 | D11 | Store accounts                 | Owned by the legal entity that operates the platform (see open decision O1)                                                                                     |
-| D12 | Delivery                       | 6 phases, 2-week sprints, pilot at month 7                                                                                                                      |
+| D12 | Delivery                       | Phase 0 foundations plus six delivery phases (7 in all, §9), 2-week sprints, pilot at month 7                                                                    |
 | D13 | Payment gateway                | Cashfree Payments on web, iOS and Android: payment links, in-app checkout with UPI Intent, web checkout, refunds, signed webhooks, daily reconciliation (§6.10) |
 
 ## 2. Brainstorm: options and trade-offs
@@ -329,7 +331,7 @@ Queued writes carry idempotency keys and show a clear "waiting to sync" badge. I
 
 - One notification service decides the channel (WhatsApp, SMS, email, push) per PRD §8.1; apps only register devices and handle taps.
 
-- Every link in a message is a signed, short-lived deep link that opens the app if installed, otherwise the web portal with OTP or date-of-birth check.
+- Every link in a message is a signed, short-lived deep link that opens the app if installed, otherwise the web portal. Prescription and consent content needs an OTP or a signed-in session; a date-of-birth check is enough only for other destinations (for example appointment details or a payment link).
 
 ### 6.6 Files and documents
 
@@ -680,7 +682,7 @@ Rule: a pull request that changes behaviour updates the relevant document in the
 
 ### 11.3 Next steps (first two weeks)
 
-1.  Close O1 and O2; start hiring or agency selection with this document and PRD v2.2 as the brief.
+1.  Close O1 and O2; start hiring or agency selection with this document and PRD v3.0 (Final) as the brief.
 
 2.  Apply for D-U-N-S, Apple and Google organisation accounts, DLT registration, WhatsApp Business verification and ABDM sandbox access — these have the longest lead times.
 
