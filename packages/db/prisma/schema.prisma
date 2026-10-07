@@ -35,6 +35,17 @@ enum InvitePurpose {
   reset
 }
 
+enum Gender {
+  female
+  male
+  other
+}
+
+enum Language {
+  en
+  hi
+}
+
 enum MembershipStatus {
   /// Created by a staff invite; becomes active when the invite is completed.
   invited
@@ -50,10 +61,13 @@ model Organisation {
   createdAt DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  memberships Membership[]
-  patients    Patient[]
-  sessions    Session[]
-  invites     StaffInvite[]
+  memberships  Membership[]
+  patients     Patient[]
+  sessions     Session[]
+  invites      StaffInvite[]
+  uhidSettings UhidSettings?
+  tags         Tag[]
+  patientTags  PatientTag[]
 
   @@map("organisations")
 }
@@ -165,21 +179,83 @@ model OtpChallenge {
 
 /// Person receiving care. Minimal Phase 0 shape; full fields in docs/data/data-dictionary.md.
 model Patient {
-  id             String    @id @default(uuid()) @db.Uuid
-  organisationId String    @map("organisation_id") @db.Uuid
-  accountUserId  String?   @map("account_user_id") @db.Uuid
-  uhid           String
-  name           String
-  phone          String?
-  dob            DateTime? @db.Date
-  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  id                    String    @id @default(uuid()) @db.Uuid
+  organisationId        String    @map("organisation_id") @db.Uuid
+  accountUserId         String?   @map("account_user_id") @db.Uuid
+  uhid                  String
+  name                  String
+  /// E.164. Family members may share one number (one account, several patients).
+  phone                 String?
+  dob                   DateTime? @db.Date
+  gender                Gender?
+  email                 String?
+  address               String?
+  bloodGroup            String?   @map("blood_group")
+  language              Language  @default(en)
+  emergencyContactName  String?   @map("emergency_contact_name")
+  emergencyContactPhone String?   @map("emergency_contact_phone")
+  /// Under-18s (or anyone without a phone) are linked to the adult who looks after them.
+  guardianPatientId     String?   @map("guardian_patient_id") @db.Uuid
+  createdByUserId       String?   @map("created_by_user_id") @db.Uuid
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   organisation Organisation @relation(fields: [organisationId], references: [id])
+  guardian     Patient?     @relation("Guardian", fields: [guardianPatientId], references: [id])
+  dependants   Patient[]    @relation("Guardian")
+  tags         PatientTag[]
 
   @@unique([organisationId, uhid])
   @@index([organisationId, phone])
+  @@index([guardianPatientId])
   @@map("patients")
+}
+
+/// Per-organisation UHID numbering, e.g. prefix "EK" from 10001 gives EK10001.
+model UhidSettings {
+  organisationId String   @id @map("organisation_id") @db.Uuid
+  prefix         String   @default("")
+  nextNumber     Int      @default(1) @map("next_number")
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+
+  @@map("uhid_settings")
+}
+
+/// Configurable patient label (Priority, Emergency, VIP, ...).
+model Tag {
+  id             String    @id @default(uuid()) @db.Uuid
+  organisationId String    @map("organisation_id") @db.Uuid
+  name           String
+  /// `#rrggbb`
+  colour         String
+  /// Emergency and Priority can sort patients to the top of the queue.
+  sortToTop      Boolean   @default(false) @map("sort_to_top")
+  archivedAt     DateTime? @map("archived_at") @db.Timestamptz(3)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+  patients     PatientTag[]
+
+  @@unique([organisationId, name])
+  @@map("tags")
+}
+
+model PatientTag {
+  organisationId String   @map("organisation_id") @db.Uuid
+  patientId      String   @map("patient_id") @db.Uuid
+  tagId          String   @map("tag_id") @db.Uuid
+  addedByUserId  String   @map("added_by_user_id") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+  patient      Patient      @relation(fields: [patientId], references: [id])
+  tag          Tag          @relation(fields: [tagId], references: [id])
+
+  @@id([patientId, tagId])
+  @@index([organisationId, tagId])
+  @@map("patient_tags")
 }
 
 /// Append-only audit trail. Updates and deletes are blocked by a trigger.

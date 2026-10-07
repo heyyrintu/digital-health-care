@@ -1,32 +1,33 @@
 import { describe, expect, it } from 'vitest';
 import {
+  ageFrom,
   formatInr,
   formatIstDateTime,
   formatUhid,
   istDateKey,
-  parseUhid,
   rupeesToPaise,
 } from './index';
 
 describe('UHID', () => {
-  it('formats with prefix and padding', () => {
-    expect(formatUhid({ prefix: 'GC', padTo: 6 }, 123)).toBe('GC-000123');
-  });
-
-  it('does not truncate sequences longer than the padding', () => {
-    expect(formatUhid({ prefix: 'GC', padTo: 3 }, 12345)).toBe('GC-12345');
+  it('joins the prefix and sequence without padding (PRD §5.4)', () => {
+    expect(formatUhid('EK', 10001)).toBe('EK10001');
+    expect(formatUhid('', 10001)).toBe('10001');
   });
 
   it('rejects invalid prefixes and sequences', () => {
-    expect(() => formatUhid({ prefix: 'gc', padTo: 6 }, 1)).toThrow();
-    expect(() => formatUhid({ prefix: 'GC', padTo: 6 }, 0)).toThrow();
-    expect(() => formatUhid({ prefix: 'GC', padTo: 6 }, 1.5)).toThrow();
+    expect(() => formatUhid('ek', 1)).toThrow();
+    expect(() => formatUhid('EK-', 1)).toThrow();
+    expect(() => formatUhid('EK', 0)).toThrow();
+    expect(() => formatUhid('EK', 1.5)).toThrow();
   });
+});
 
-  it('round-trips through parse, case-insensitively', () => {
-    expect(parseUhid(' gc-000123 ')).toEqual({ prefix: 'GC', sequence: 123 });
-    expect(parseUhid('GC000123')).toBeNull();
-    expect(parseUhid('GC-0')).toBeNull();
+describe('ageFrom', () => {
+  it('counts completed years, and months for babies', () => {
+    expect(ageFrom('1992-03-14', '2026-10-07')).toEqual({ years: 34, months: 414 });
+    expect(ageFrom('1992-10-08', '2026-10-07').years).toBe(33);
+    expect(ageFrom('2026-03-10', '2026-10-07')).toEqual({ years: 0, months: 6 });
+    expect(ageFrom('2026-10-07', '2026-10-07')).toEqual({ years: 0, months: 0 });
   });
 });
 

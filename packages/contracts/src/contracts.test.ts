@@ -87,7 +87,7 @@ describe('buildOpenApiDocument', () => {
 
   it('describes query and path parameters', () => {
     const list = doc.paths['/patients']!.get as { parameters: { name: string }[] };
-    expect(list.parameters.map((p) => p.name)).toEqual(['limit', 'cursor', 'q']);
+    expect(list.parameters.map((p) => p.name)).toEqual(['limit', 'cursor', 'q', 'tagId']);
     const get = doc.paths['/patients/{id}']!.get as { parameters: { in: string }[] };
     expect(get.parameters[0]!.in).toBe('path');
   });

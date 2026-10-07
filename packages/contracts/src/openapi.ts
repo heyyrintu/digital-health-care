@@ -26,10 +26,22 @@ import {
 } from './invites';
 import { HealthResponse } from './health';
 import { CursorQuery } from './pagination';
-import { PatientListQuery, PatientListResponse, PatientSummary } from './patients';
+import {
+  CreatePatientBody,
+  DuplicateCheckBody,
+  DuplicateCheckResponse,
+  PatientDetail,
+  PatientListQuery,
+  PatientListResponse,
+  SetPatientTagsBody,
+  UhidSettings,
+  UpdatePatientBody,
+  UpdateUhidSettingsBody,
+} from './patients';
+import { CreateTagBody, Tag, TagList, UpdateTagBody } from './tags';
 
 interface Operation {
-  method: 'get' | 'post';
+  method: 'get' | 'post' | 'put' | 'patch';
   path: string;
   operationId: string;
   summary: string;
@@ -151,9 +163,92 @@ const operations: Operation[] = [
     method: 'get',
     path: '/patients/{id}',
     operationId: 'getPatient',
-    summary: 'Patient summary (staff; view is audited)',
+    summary: 'Patient demographics and family (staff; view is audited)',
     pathParams: ['id'],
-    response: PatientSummary,
+    response: PatientDetail,
+  },
+  {
+    method: 'post',
+    path: '/patients',
+    operationId: 'createPatient',
+    summary:
+      'Register a patient and assign the next UHID (front desk, doctor, clinic admin); 409 on likely duplicates unless allowDuplicate',
+    body: CreatePatientBody,
+    response: PatientDetail,
+    status: 201,
+  },
+  {
+    method: 'patch',
+    path: '/patients/{id}',
+    operationId: 'updatePatient',
+    summary: 'Edit demographics (front desk, doctor, clinic admin)',
+    pathParams: ['id'],
+    body: UpdatePatientBody,
+    response: PatientDetail,
+  },
+  {
+    method: 'post',
+    path: '/patients/duplicate-check',
+    operationId: 'checkPatientDuplicates',
+    summary: 'Find existing patients with the same phone and name, or name and date of birth',
+    body: DuplicateCheckBody,
+    response: DuplicateCheckResponse,
+  },
+  {
+    method: 'put',
+    path: '/patients/{id}/tags',
+    operationId: 'setPatientTags',
+    summary: 'Replace a patient’s tags (front desk, doctor)',
+    pathParams: ['id'],
+    body: SetPatientTagsBody,
+    response: PatientDetail,
+  },
+  {
+    method: 'get',
+    path: '/tags',
+    operationId: 'listTags',
+    summary: 'Tags configured for this organisation (staff)',
+    response: TagList,
+  },
+  {
+    method: 'post',
+    path: '/tags',
+    operationId: 'createTag',
+    summary: 'Add a tag (clinic admin)',
+    body: CreateTagBody,
+    response: Tag,
+    status: 201,
+  },
+  {
+    method: 'patch',
+    path: '/tags/{id}',
+    operationId: 'updateTag',
+    summary: 'Rename, recolour, archive or restore a tag (clinic admin)',
+    pathParams: ['id'],
+    body: UpdateTagBody,
+    response: Tag,
+  },
+  {
+    method: 'post',
+    path: '/tags/defaults',
+    operationId: 'addDefaultTags',
+    summary: 'Add the default tags that are missing (clinic admin)',
+    response: TagList,
+  },
+  {
+    method: 'get',
+    path: '/uhid-settings',
+    operationId: 'getUhidSettings',
+    summary: 'UHID prefix and next number (staff)',
+    response: UhidSettings,
+  },
+  {
+    method: 'put',
+    path: '/uhid-settings',
+    operationId: 'updateUhidSettings',
+    summary: 'Set the UHID prefix and next number (clinic admin)',
+    body: UpdateUhidSettingsBody,
+    response: UhidSettings,
   },
   {
     method: 'post',

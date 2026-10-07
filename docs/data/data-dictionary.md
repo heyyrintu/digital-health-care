@@ -28,8 +28,9 @@ Conventions for every table: `id` (UUID), `organisationId` (except platform-leve
 
 | Entity | Purpose | Key fields |
 |---|---|---|
-| Patient | Person receiving care | organisationId, accountUserId, uhid (unique per org), name, dob, gender, relationToAccount, guardianPatientId, phone, address, emergencyContact, bloodGroup, language, mergedIntoId |
-| Tag / PatientTag | Configurable labels | Tag: organisationId, name, colour, sortToTop · PatientTag: patientId, tagId, addedBy |
+| Patient | Person receiving care | organisationId, accountUserId, uhid (unique per org), name, phone (E.164; family members may share one), dob, gender (female\|male\|other), email, address, bloodGroup, language (en\|hi), emergencyContactName, emergencyContactPhone, guardianPatientId (one level: a guardian has no guardian), createdByUserId, mergedIntoId (planned) |
+| UhidSettings | Per-organisation UHID numbering | organisationId (key), prefix (up to 8 letters or digits), nextNumber (default 10001); UHID = prefix + number, e.g. EK10001 |
+| Tag / PatientTag | Configurable labels | Tag: organisationId, name (unique per org), colour (#rrggbb), sortToTop, archivedAt (archived, never deleted) · PatientTag: organisationId, patientId, tagId, addedByUserId, createdAt |
 | Allergy | Recorded allergy | patientId, substance, class, reaction, severity, source (patient\|doctor), verifiedByDoctor |
 | MedicalCondition | Chronic condition | patientId, condition, code?, since, status, verified |
 | CurrentMedication | Ongoing medicine | patientId, medicineName, moleculeId?, dose, since, source |

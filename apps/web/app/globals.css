@@ -215,7 +215,7 @@ button.secondary {
 }
 
 .card .search {
-  grid-template-columns: 1fr auto;
+  grid-template-columns: 1fr auto auto;
   align-items: end;
 }
 
@@ -362,4 +362,219 @@ button.danger {
 .invite-form select {
   width: 100%;
   min-width: 0;
+}
+
+/* Patient register ------------------------------------------------------------------ */
+
+button.primary,
+.button-link {
+  font: inherit;
+  font-weight: 600;
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--color-brand-600);
+  color: var(--color-neutral-0);
+  cursor: pointer;
+}
+
+.button-link {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+button.primary:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* The colour marks the tag; text stays dark on white so contrast never depends on it. */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--tag, var(--color-neutral-500));
+  border-radius: var(--radius-full);
+  background: var(--color-neutral-0);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  line-height: 1.8;
+  white-space: nowrap;
+}
+
+.tag::before {
+  content: '';
+  width: 0.6em;
+  height: 0.6em;
+  border-radius: 50%;
+  background: var(--tag, var(--color-neutral-500));
+}
+
+.tags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.tag-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.tag-list li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.tag-list li button {
+  margin-left: auto;
+}
+
+.card .inline-form {
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  align-items: end;
+  gap: var(--space-3);
+}
+
+.inline-form > div {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.inline-form input {
+  width: 100%;
+  min-width: 0;
+}
+
+.card .inline-form button[type='submit'] {
+  margin-top: 0;
+  padding: 0 var(--space-4);
+}
+
+.inline-form input[type='color'] {
+  padding: var(--space-1);
+}
+
+.card label.checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-weight: 400;
+  margin-top: 0;
+  min-height: 44px;
+}
+
+.card label.checkbox input {
+  min-height: 0;
+  width: 1.2em;
+  height: 1.2em;
+}
+
+.card .patient-form {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-3);
+}
+
+.patient-form .field {
+  display: grid;
+  gap: var(--space-1);
+  align-content: start;
+  min-width: 0;
+}
+
+.patient-form .field.wide {
+  grid-column: 1 / -1;
+}
+
+.patient-form input,
+.patient-form select {
+  width: 100%;
+  min-width: 0;
+}
+
+.patient-form fieldset {
+  border: 1px solid var(--color-neutral-300);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  margin: 0;
+}
+
+.patient-form legend {
+  font-weight: 600;
+  padding: 0 var(--space-1);
+}
+
+.card .patient-form .search {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--space-2);
+}
+
+.tag-picker,
+.patient-form .field.tag-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+}
+
+.tag-editor {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: start;
+}
+
+.tag-editor fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+
+.pick-list {
+  list-style: none;
+  padding: 0;
+  margin: var(--space-2) 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.patient-meta {
+  font-size: var(--font-size-lg);
+  margin: 0;
+}
+
+.details {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-3) var(--space-6);
+  margin: 0;
+}
+
+.details dt {
+  font-size: var(--font-size-sm);
+  color: var(--color-neutral-500);
+}
+
+.details dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 600px) {
+  .card .search {
+    grid-template-columns: 1fr;
+  }
+
+  .patients {
+    display: block;
+    overflow-x: auto;
+  }
 }

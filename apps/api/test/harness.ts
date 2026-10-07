@@ -52,7 +52,7 @@ export type Harness = ReturnType<typeof createHarness>;
 
 export async function resetDatabase(owner: Db) {
   await owner.$executeRawUnsafe(
-    'TRUNCATE audit_logs, staff_invites, sessions, otp_challenges, memberships, patients, users, organisations CASCADE',
+    'TRUNCATE audit_logs, staff_invites, sessions, otp_challenges, memberships, patient_tags, tags, uhid_settings, patients, users, organisations CASCADE',
   );
 }
 
@@ -66,21 +66,7 @@ export interface StaffFixture {
 export async function seedTwoClinics(h: Harness) {
   const make = async (slug: string, name: string, patients: string[]) => {
     const org = await h.owner.organisation.create({ data: { slug, name } });
-    const staff = async (
-      role: 'doctor' | 'clinic_admin' | 'front_desk',
-      email: string,
-    ): Promise<StaffFixture> => {
-      const totpSecret = generateTotpSecret();
-      const user = await h.owner.user.create({
-        data: {
-          email,
-          passwordHash: await hashPassword(STAFF_PASSWORD),
-          mfaSecret: h.services.cipher.encrypt(totpSecret),
-        },
-      });
-      await h.owner.membership.create({ data: { organisationId: org.id, userId: user.id, role } });
-      return { userId: user.id, email, totpSecret };
-    };
+    const staff = (role: StaffRoleName, email: string) => addStaff(h, org.id, role, email);
     const doctor = await staff('doctor', `doctor@${slug}.test`);
     const admin = await staff('clinic_admin', `admin@${slug}.test`);
     const patientRows = await Promise.all(
@@ -99,6 +85,27 @@ export async function seedTwoClinics(h: Harness) {
   const a = await make('clinic-a', 'Clinic A', ['Asha Verma', 'Kamla Devi']);
   const b = await make('clinic-b', 'Clinic B', ['Ravi Mehra', 'Imran Khan', 'Neha Kapoor']);
   return { a, b };
+}
+
+type StaffRoleName = 'doctor' | 'clinic_admin' | 'front_desk';
+
+/** A signed-up staff member (password + authenticator) with an active membership. */
+export async function addStaff(
+  h: Harness,
+  organisationId: string,
+  role: StaffRoleName,
+  email: string,
+): Promise<StaffFixture> {
+  const totpSecret = generateTotpSecret();
+  const user = await h.owner.user.create({
+    data: {
+      email,
+      passwordHash: await hashPassword(STAFF_PASSWORD),
+      mfaSecret: h.services.cipher.encrypt(totpSecret),
+    },
+  });
+  await h.owner.membership.create({ data: { organisationId, userId: user.id, role } });
+  return { userId: user.id, email, totpSecret };
 }
 
 /** Full staff sign-in: password step, then a fresh TOTP code. */

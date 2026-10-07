@@ -62,14 +62,37 @@ Rules:
 - **Authenticator reset:** a clinic admin can reset a staff member who lost their authenticator. It clears the person's password and authenticator, ends all their staff sessions, and issues a single-use reset link (same rules as invites); the person sets new ones through `/invite`, and their role is kept. Admins cannot reset themselves, and a person who is staff at another clinic too can only be reset by platform support — otherwise one clinic could take over their access to the other. Support resets have no HTTP endpoint: an operator runs the `support-reset-authenticator` command shipped in the API build ([runbook](../runbooks/support-authenticator-reset.md)), which issues the same kind of reset link for one of the person's clinics, revokes their open links everywhere, and writes `support.authenticator.reset` into every clinic's audit log.
 - **Web dashboard:** the browser never holds the refresh token. The web app's `/api/session/*` routes call these endpoints and keep it in an httpOnly cookie, returning only the access token (ADR 0015).
 
+## 3a. Patient register
+
+Implemented in Phase 1 (`apps/api/src/modules/patients`). Demographics only: nothing here is clinical, so front desk may use all of it.
+
+| Action | Endpoint | Who |
+|---|---|---|
+| Search | `GET /patients?q=&tagId=` (name, mobile or UHID; cursor pages) | All staff |
+| View | `GET /patients/{id}` → demographics, tags, guardian and family; audited as `patient.viewed` | All staff |
+| Check for duplicates | `POST /patients/duplicate-check` `{name, phone?, dob?}` → `{candidates}` | Front desk, doctor, clinic admin |
+| Register | `POST /patients` (demographics, `tagIds?`, `allowDuplicate`) → 201 with the new UHID | Front desk, doctor, clinic admin |
+| Edit | `PATCH /patients/{id}`: omit a field to keep it, send `null` to clear it | Front desk, doctor, clinic admin |
+| Tag | `PUT /patients/{id}/tags` `{tagIds}` (replaces the set) | Front desk, doctor |
+| Tags | `GET /tags`; `POST /tags`, `PATCH /tags/{id}` (rename, recolour, `archived`), `POST /tags/defaults` | List: all staff. Change: clinic admin |
+| UHID numbering | `GET /uhid-settings` → `{prefix, nextNumber, nextUhid}`; `PUT /uhid-settings` `{prefix, nextNumber}` | Read: all staff. Change: clinic admin |
+
+Rules:
+- **UHIDs** are the clinic's prefix followed by the next number, with no separator or padding (prefix `EK` from 10001 gives `EK10001`). Until an admin sets them, numbering starts at `10001` with no prefix. The number is taken under a row lock, so concurrent registrations never share a UHID, and numbers already in use (imported patients keep theirs) are skipped.
+- **Duplicates:** a likely duplicate is a patient with the same mobile and name, or the same name and date of birth (names compared ignoring case and extra spaces). Registering returns `409` with `fields.duplicates` (the matching IDs) unless `allowDuplicate` is true; the audit entry records the override. Families share one mobile, so the same number alone is never a duplicate.
+- **Families:** one mobile can hold several patients. A patient without a mobile must be linked to a guardian (`guardianPatientId`), one level deep: a guardian has no guardian, and a patient who is someone's guardian cannot be given one. The detail view lists the guardian, dependants and others on the same mobile.
+- **Phone numbers** are Indian mobiles in any common format and are stored as E.164 (`+91…`). Dates of birth cannot be in the future.
+- **Tags** are archived, never deleted. An archived tag stays on the patients who have it and can be removed, but cannot be newly assigned. Emergency and Priority are marked to sort to the top of the queue (used when the queue is built). `POST /tags/defaults` adds whichever of the six PRD defaults are missing.
+- **Audit:** `patient.created` (with `duplicateOverride`), `patient.updated` (field names only, never values), `patient.tags.changed` (tag IDs added and removed), `tag.created`, `tag.updated`, `tag.defaults_added`, `uhid_settings.updated`.
+
 ## 4. Endpoint catalogue (by module)
 
 | Module | Main resources and actions |
 |---|---|
 | identity | `/auth/*`, `/me`, `/staff/invites` (built); `/me/devices` |
-| tenancy | `/organisations/current`, `/clinics`, `/settings`, `/branding`, `/tags`, `/uhid-settings` |
+| tenancy | `/organisations/current`, `/clinics`, `/settings`, `/branding`, `/tags` (built), `/uhid-settings` (built) |
 | scheduling | `/availability/versions`, `/availability/exceptions`, `/slots?doctorId&mode&date`, `/appointments` (create, reschedule, cancel, check-in, no-show), `/queue?tab=&date=`, `/display/{clinicId}` |
-| patients | `/patients` (search by phone, name, UHID; built), `/patients/{id}` (built; each view audited), `/families`, `/patients/{id}/allergies\|conditions\|medications\|tags\|consents`, `/patients/merge-requests` |
+| patients | `/patients` (search by phone, name or UHID, filter by tag; register; built), `/patients/{id}` (demographics and family, each view audited; edit; built), `/patients/duplicate-check` (built), `/patients/{id}/tags` (built), `/patients/{id}/allergies\|conditions\|medications\|consents`, `/patients/merge-requests` |
 | clinical | `/consultations`, `/consultations/{id}/vitals`, `/scribe/sessions`, `/assessments/forms`, `/assessments`, `/patients/{id}/ask-ai` |
 | prescribing | `/medicines` (search), `/prescription-templates`, `/prescriptions` (draft, update lines, `/safety-check`, `/sign`, `/amend`, `/void`, `/pdf`), `/verify/{code}` (public) |
 | orders | `/test-orders`, `/test-orders/{id}/results`, `/referrals`, `/attachments` |
