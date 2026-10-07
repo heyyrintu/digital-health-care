@@ -690,3 +690,119 @@ div.inline-form {
   width: 100%;
   margin-top: var(--space-3);
 }
+
+/* Appointments ---------------------------------------------------------------------- */
+
+.appointment-list {
+  list-style: none;
+  padding: 0;
+  margin: var(--space-3) 0 0;
+}
+
+.appt {
+  display: grid;
+  grid-template-columns: 3rem 1fr auto;
+  gap: var(--space-3);
+  align-items: start;
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--color-neutral-100);
+}
+
+.appt p {
+  margin: 0 0 var(--space-1);
+}
+
+.appt-token {
+  font-size: var(--font-size-lg);
+  font-weight: 700;
+  text-align: center;
+  border: 1px solid var(--color-neutral-300);
+  border-radius: var(--radius-md);
+  padding: var(--space-1) 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.appt .pill:first-child {
+  margin-left: 0;
+}
+
+.appt.status-cancelled,
+.appt.status-no_show,
+.appt.status-rescheduled {
+  color: var(--color-neutral-500);
+}
+
+.appt-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+
+.walk-in {
+  margin: var(--space-4) 0;
+  padding: var(--space-3);
+  border: 1px dashed var(--color-neutral-300);
+  border-radius: var(--radius-md);
+}
+
+.walk-in p {
+  margin-top: 0;
+}
+
+.slot-picker {
+  border: 0;
+  padding: 0;
+  margin: var(--space-3) 0;
+}
+
+.slot-picker legend {
+  font-weight: 600;
+  margin-bottom: var(--space-2);
+}
+
+.slot-picker .slot-grid {
+  margin: 0;
+}
+
+button.slot {
+  font: inherit;
+  min-height: 44px;
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-brand-600);
+  border-radius: var(--radius-md);
+  background: var(--color-neutral-0);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+
+button.slot.selected {
+  background: var(--color-brand-600);
+  color: var(--color-neutral-0);
+}
+
+button.slot:disabled {
+  border-color: var(--color-neutral-300);
+  color: var(--color-neutral-500);
+  cursor: default;
+}
+
+.slot-note {
+  font-size: var(--font-size-xs);
+}
+
+@media (max-width: 600px) {
+  .appt {
+    grid-template-columns: 3rem 1fr;
+  }
+
+  .appt-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+}
+
+/* Headers with several actions wrap instead of overflowing on phones. */
+.card-header {
+  flex-wrap: wrap;
+}

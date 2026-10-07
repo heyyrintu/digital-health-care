@@ -72,6 +72,9 @@ function PatientSearch({ role }: { role: string }) {
       <div className="card-header">
         <h1 id="patients-title">{t('dashboard.searchPatients')}</h1>
         <div className="header-actions">
+          <Link className="button-link secondary" href="/clinic/appointments">
+            {t('dashboard.appointments')}
+          </Link>
           <Link className="button-link secondary" href="/clinic/availability">
             {t('dashboard.availability')}
           </Link>

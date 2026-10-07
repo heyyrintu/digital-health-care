@@ -123,6 +123,7 @@ export function PracticeCard() {
           body: {
             horizonDays: Number(data.get('horizonDays')),
             sameDayCutoffMinutes: Number(data.get('cutoff')),
+            overbookPerDay: Number(data.get('overbook')),
           },
         }),
       );
@@ -278,6 +279,18 @@ export function PracticeCard() {
               max={1440}
               required
               defaultValue={rules.sameDayCutoffMinutes}
+            />
+          </div>
+          <div>
+            <label htmlFor="rules-overbook">{t('practice.overbook')}</label>
+            <input
+              id="rules-overbook"
+              name="overbook"
+              type="number"
+              min={0}
+              max={50}
+              required
+              defaultValue={rules.overbookPerDay}
             />
           </div>
           <button type="submit" disabled={busy}>

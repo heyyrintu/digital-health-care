@@ -58,6 +58,25 @@ enum AvailabilityExceptionType {
   extra_session
 }
 
+/// PRD §5.2. Rescheduled links to the new appointment.
+enum AppointmentStatus {
+  pending
+  confirmed
+  checked_in
+  in_consultation
+  completed
+  cancelled
+  no_show
+  rescheduled
+}
+
+enum AppointmentSource {
+  front_desk
+  walk_in
+  app
+  web
+}
+
 enum MembershipStatus {
   /// Created by a staff invite; becomes active when the invite is completed.
   invited
@@ -85,6 +104,8 @@ model Organisation {
   bookingRules           BookingRules?
   availabilityVersions   AvailabilityVersion[]
   availabilityExceptions AvailabilityException[]
+  appointments           Appointment[]
+  appointmentHistory     AppointmentStatusHistory[]
 
   @@map("organisations")
 }
@@ -217,10 +238,11 @@ model Patient {
   createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt             DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  organisation Organisation @relation(fields: [organisationId], references: [id])
-  guardian     Patient?     @relation("Guardian", fields: [guardianPatientId], references: [id])
-  dependants   Patient[]    @relation("Guardian")
+  organisation Organisation  @relation(fields: [organisationId], references: [id])
+  guardian     Patient?      @relation("Guardian", fields: [guardianPatientId], references: [id])
+  dependants   Patient[]     @relation("Guardian")
   tags         PatientTag[]
+  appointments Appointment[]
 
   @@unique([organisationId, uhid])
   @@index([organisationId, phone])
@@ -291,6 +313,7 @@ model Clinic {
   organisation           Organisation            @relation(fields: [organisationId], references: [id])
   availabilityVersions   AvailabilityVersion[]
   availabilityExceptions AvailabilityException[]
+  appointments           Appointment[]
 
   @@unique([organisationId, name])
   @@map("clinics")
@@ -313,6 +336,7 @@ model ConsultationType {
   organisation           Organisation            @relation(fields: [organisationId], references: [id])
   availabilityVersions   AvailabilityVersion[]
   availabilityExceptions AvailabilityException[]
+  appointments           Appointment[]
 
   @@unique([organisationId, name])
   @@map("consultation_types")
@@ -323,6 +347,8 @@ model BookingRules {
   organisationId       String   @id @map("organisation_id") @db.Uuid
   horizonDays          Int      @default(30) @map("horizon_days")
   sameDayCutoffMinutes Int      @default(60) @map("same_day_cutoff_minutes")
+  /// Staff may book this many extra patients into taken slots per doctor per day.
+  overbookPerDay       Int      @default(2) @map("overbook_per_day")
   updatedAt            DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   organisation Organisation @relation(fields: [organisationId], references: [id])
@@ -385,6 +411,67 @@ model AvailabilityException {
 }
 
 /// Append-only audit trail. Updates and deletes are blocked by a trigger.
+/// A booking or walk-in (PRD §4.3, §5). Times are instants; `date` is the IST day the
+/// queue and token belong to.
+model Appointment {
+  id                    String            @id @default(uuid()) @db.Uuid
+  organisationId        String            @map("organisation_id") @db.Uuid
+  patientId             String            @map("patient_id") @db.Uuid
+  doctorUserId          String            @map("doctor_user_id") @db.Uuid
+  clinicId              String            @map("clinic_id") @db.Uuid
+  consultationTypeId    String            @map("consultation_type_id") @db.Uuid
+  date                  DateTime          @db.Date
+  startAt               DateTime          @map("start_at") @db.Timestamptz(3)
+  endAt                 DateTime          @map("end_at") @db.Timestamptz(3)
+  status                AppointmentStatus
+  source                AppointmentSource
+  /// Per doctor, clinic and day, in booking order.
+  tokenNumber           Int               @map("token_number")
+  /// Booked into a slot that was already taken (staff only, within the daily limit).
+  overbook              Boolean           @default(false)
+  reason                String?
+  cancelReason          String?           @map("cancel_reason")
+  rescheduledFromId     String?           @unique @map("rescheduled_from_id") @db.Uuid
+  checkedInAt           DateTime?         @map("checked_in_at") @db.Timestamptz(3)
+  consultationStartedAt DateTime?         @map("consultation_started_at") @db.Timestamptz(3)
+  completedAt           DateTime?         @map("completed_at") @db.Timestamptz(3)
+  createdByUserId       String            @map("created_by_user_id") @db.Uuid
+  createdAt             DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organisation     Organisation               @relation(fields: [organisationId], references: [id])
+  patient          Patient                    @relation(fields: [patientId], references: [id])
+  clinic           Clinic                     @relation(fields: [clinicId], references: [id])
+  consultationType ConsultationType           @relation(fields: [consultationTypeId], references: [id])
+  rescheduledFrom  Appointment?               @relation("Reschedule", fields: [rescheduledFromId], references: [id], onDelete: Restrict)
+  rescheduledTo    Appointment?               @relation("Reschedule")
+  history          AppointmentStatusHistory[]
+
+  @@unique([doctorUserId, clinicId, date, tokenNumber])
+  @@index([organisationId, date])
+  @@index([doctorUserId, date])
+  @@index([patientId])
+  @@map("appointments")
+}
+
+/// Every status change, with who and when (PRD §5.2). Append-only.
+model AppointmentStatusHistory {
+  id             String             @id @default(uuid()) @db.Uuid
+  organisationId String             @map("organisation_id") @db.Uuid
+  appointmentId  String             @map("appointment_id") @db.Uuid
+  fromStatus     AppointmentStatus? @map("from_status")
+  toStatus       AppointmentStatus  @map("to_status")
+  actorUserId    String             @map("actor_user_id") @db.Uuid
+  note           String?
+  at             DateTime           @db.Timestamptz(3)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+  appointment  Appointment  @relation(fields: [appointmentId], references: [id])
+
+  @@index([appointmentId])
+  @@map("appointment_status_history")
+}
+
 model AuditLog {
   id             String   @id @default(uuid()) @db.Uuid
   organisationId String?  @map("organisation_id") @db.Uuid

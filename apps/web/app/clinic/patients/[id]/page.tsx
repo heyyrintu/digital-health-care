@@ -2,7 +2,9 @@
 
 import { ApiError } from '@dhc/api-client';
 import {
+  AppointmentList,
   PatientDetail,
+  type Appointment,
   TagList as TagListResponse,
   type CreatePatientBody,
   type Tag,
@@ -27,6 +29,7 @@ function PatientView({ role }: { role: string }) {
   const { api, locale, signOut, t } = useSession();
   const [patient, setPatient] = useState<PatientDetail | null>(null);
   const [tags, setTags] = useState<Tag[]>([]);
+  const [appointments, setAppointments] = useState<Appointment[] | null>(null);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [editing, setEditing] = useState(false);
   const [saved, setSaved] = useState<string | null>(null);
@@ -51,6 +54,10 @@ function PatientView({ role }: { role: string }) {
       .request('GET', `/patients/${encodeURIComponent(id)}`, { schema: PatientDetail })
       .then(show)
       .catch(handle);
+    api
+      .request('GET', '/appointments', { schema: AppointmentList, query: { patientId: id } })
+      .then((list) => setAppointments(list.data))
+      .catch(() => setAppointments([]));
     if (canTag(role)) {
       api
         .request('GET', '/tags', { schema: TagListResponse })
@@ -194,6 +201,31 @@ function PatientView({ role }: { role: string }) {
               }
             />
           </dl>
+        )}
+      </section>
+
+      <section aria-labelledby="patient-appointments-title" className="card">
+        <div className="card-header">
+          <h2 id="patient-appointments-title">{t('patient.appointments')}</h2>
+          {canRegister(role) && (
+            <Link className="button-link" href={`/clinic/appointments/new?patientId=${patient.id}`}>
+              {t('patient.book')}
+            </Link>
+          )}
+        </div>
+        {appointments && appointments.length === 0 && <p>{t('patient.noAppointments')}</p>}
+        {appointments && appointments.length > 0 && (
+          <ul className="pick-list" data-testid="patient-appointments">
+            {appointments.map((a) => (
+              <li key={a.id}>
+                <Link href={`/clinic/appointments?date=${a.date}`}>
+                  {t('appointments.at', { date: a.date, time: a.startTime })}
+                </Link>{' '}
+                · {a.doctorName ?? t('availability.doctor')} · {a.consultationTypeName}
+                <span className="pill">{t(`status.${a.status}`)}</span>
+              </li>
+            ))}
+          </ul>
         )}
       </section>
 

@@ -341,72 +341,111 @@ export class AvailabilityService {
     });
   }
 
-  /** One day's slots. Appointments will mark slots busy once booking lands. */
+  /** One day's slots, with booked slots marked busy. */
   async slots(actor: Actor, query: SlotsQuery): Promise<SlotsResponse> {
-    const { doctorId, clinicId, consultationTypeId, date, channel } = query;
-    const loaded = await withTenant(this.s.db, actor.organisationId, async (tx) => {
-      const [clinic, type, rules] = await Promise.all([
-        tx.clinic.findUnique({ where: { id: clinicId }, select: { active: true } }),
-        tx.consultationType.findUnique({ where: { id: consultationTypeId } }),
-        tx.bookingRules.findUnique({ where: { organisationId: actor.organisationId } }),
-      ]);
-      if (!clinic || !type) throw NOT_FOUND();
-      if (!clinic.active || !type.active) return null;
-
-      const day = toDbDate(date);
-      const [version, exceptions] = await Promise.all([
-        tx.availabilityVersion.findFirst({
-          where: {
-            doctorUserId: doctorId,
-            clinicId,
-            consultationTypeId,
-            effectiveFrom: { lte: day },
-          },
-          orderBy: { effectiveFrom: 'desc' },
-        }),
-        tx.availabilityException.findMany({
-          where: {
-            startDate: { lte: day },
-            endDate: { gte: day },
-            AND: [
-              { OR: [{ doctorUserId: null }, { doctorUserId: doctorId }] },
-              { OR: [{ clinicId: null }, { clinicId }] },
-              { OR: [{ consultationTypeId: null }, { consultationTypeId }] },
-            ],
-          },
-        }),
-      ]);
-      return { type, rules, version, exceptions };
-    });
-    if (!loaded) return { date, slots: [], closed: 'no_schedule' };
-
-    const { type, rules, version, exceptions } = loaded;
-    const versions: ScheduleVersion[] = version
-      ? [
-          {
-            effectiveFrom: fromDbDate(version.effectiveFrom),
-            weekly: version.weekly as WeeklySchedule,
-            slotMinutes: version.slotMinutes,
-            bufferMinutes: version.bufferMinutes,
-          },
-        ]
-      : [];
-    return slotsForDay({
-      date,
-      versions,
-      exceptions: exceptions.map((e) => ({
-        type: e.type,
-        startDate: fromDbDate(e.startDate),
-        endDate: fromDbDate(e.endDate),
-        startTime: e.startTime,
-        endTime: e.endTime,
-      })),
-      window: rules
-        ? { horizonDays: rules.horizonDays, sameDayCutoffMinutes: rules.sameDayCutoffMinutes }
-        : DEFAULT_BOOKING_RULES,
-      now: this.s.now(),
-      channel,
-      defaultSlotMinutes: type.defaultDurationMin,
+    const now = this.s.now();
+    return withTenant(this.s.db, actor.organisationId, async (tx) => {
+      const loaded = await loadDaySlots(tx, actor.organisationId, query, now);
+      if (!loaded) throw NOT_FOUND();
+      return loaded.day;
     });
   }
+}
+
+/** Statuses whose slot stays taken (completed visits included, so nobody is booked over them). */
+const SLOT_HOLDING = [
+  'pending',
+  'confirmed',
+  'checked_in',
+  'in_consultation',
+  'completed',
+] as const;
+
+/**
+ * One day's slots for a doctor, clinic and consultation type, read inside an existing
+ * transaction so booking can check a slot under its lock. Appointments for the doctor
+ * that day (at any clinic) mark overlapping slots busy; walk-ins hold no slot.
+ * Returns null when the clinic or consultation type does not exist.
+ */
+export async function loadDaySlots(
+  tx: Tx,
+  organisationId: string,
+  query: SlotsQuery,
+  now: Date,
+  options: { ignoreAppointmentId?: string } = {},
+) {
+  const { doctorId, clinicId, consultationTypeId, date, channel } = query;
+  const [clinic, type, rules] = await Promise.all([
+    tx.clinic.findUnique({ where: { id: clinicId }, select: { active: true } }),
+    tx.consultationType.findUnique({ where: { id: consultationTypeId } }),
+    tx.bookingRules.findUnique({ where: { organisationId } }),
+  ]);
+  if (!clinic || !type) return null;
+  const bookingRules = rules
+    ? {
+        horizonDays: rules.horizonDays,
+        sameDayCutoffMinutes: rules.sameDayCutoffMinutes,
+        overbookPerDay: rules.overbookPerDay,
+      }
+    : DEFAULT_BOOKING_RULES;
+  if (!clinic.active || !type.active) {
+    return { day: { date, slots: [], closed: 'no_schedule' } as SlotsResponse, type, bookingRules };
+  }
+
+  const day = toDbDate(date);
+  const [version, exceptions, booked] = await Promise.all([
+    tx.availabilityVersion.findFirst({
+      where: { doctorUserId: doctorId, clinicId, consultationTypeId, effectiveFrom: { lte: day } },
+      orderBy: { effectiveFrom: 'desc' },
+    }),
+    tx.availabilityException.findMany({
+      where: {
+        startDate: { lte: day },
+        endDate: { gte: day },
+        AND: [
+          { OR: [{ doctorUserId: null }, { doctorUserId: doctorId }] },
+          { OR: [{ clinicId: null }, { clinicId }] },
+          { OR: [{ consultationTypeId: null }, { consultationTypeId }] },
+        ],
+      },
+    }),
+    tx.appointment.findMany({
+      where: {
+        doctorUserId: doctorId,
+        date: day,
+        status: { in: [...SLOT_HOLDING] },
+        source: { not: 'walk_in' },
+        ...(options.ignoreAppointmentId ? { id: { not: options.ignoreAppointmentId } } : {}),
+      },
+      select: { startAt: true, endAt: true },
+    }),
+  ]);
+
+  const versions: ScheduleVersion[] = version
+    ? [
+        {
+          effectiveFrom: fromDbDate(version.effectiveFrom),
+          weekly: version.weekly as WeeklySchedule,
+          slotMinutes: version.slotMinutes,
+          bufferMinutes: version.bufferMinutes,
+        },
+      ]
+    : [];
+  const result = slotsForDay({
+    date,
+    versions,
+    exceptions: exceptions.map((e) => ({
+      type: e.type,
+      startDate: fromDbDate(e.startDate),
+      endDate: fromDbDate(e.endDate),
+      startTime: e.startTime,
+      endTime: e.endTime,
+    })),
+    window: bookingRules,
+    now,
+    channel,
+    busy: booked.map((b) => ({ start: b.startAt, end: b.endAt })),
+    defaultSlotMinutes: type.defaultDurationMin,
+  });
+  return { day: result as SlotsResponse, type, bookingRules };
 }
