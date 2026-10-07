@@ -6,7 +6,7 @@
  * enrol an authenticator. Re-running issues fresh links for anyone not yet set up.
  */
 import { DEFAULT_TAGS } from '@dhc/contracts';
-import { createDb } from '@dhc/db';
+import { createDb, seedSampleMedicines } from '@dhc/db';
 import { istDate } from '@dhc/domain';
 import { randomBytes } from 'node:crypto';
 import { hashToken } from '../auth/tokens';
@@ -167,10 +167,14 @@ if (!hasSchedule) {
   });
 }
 
+// Synthetic sample of the medicine master (generic names only); production loads the
+// licensed drug database.
+await seedSampleMedicines(db);
+
 await db.$disconnect();
 
 console.warn(
-  `Seeded organisation "demo-clinic" with ${staff.length} staff, ${personas.length} synthetic patients, the default tags, a clinic with two consultation types and Dr. Demo's weekly schedule (new UHIDs start at DC10001).`,
+  `Seeded organisation "demo-clinic" with ${staff.length} staff, ${personas.length} synthetic patients, the default tags, a clinic with two consultation types, Dr. Demo's weekly schedule and the sample medicine master (new UHIDs start at DC10001).`,
 );
 console.warn('Staff invite links (valid 72 hours; the token is everything after #):');
 for (const line of links) console.warn(line);

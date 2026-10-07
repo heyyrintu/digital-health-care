@@ -18,6 +18,7 @@ import { ClinicShell } from '../../shell';
 import { VitalsForm } from '../../vitals-form';
 import { ChartPanel } from '../chart-panel';
 import { NotesForm } from '../notes-form';
+import { PrescriptionCard } from '../prescription-card';
 
 /** Quiet time after the last keystroke before the notes save. */
 const AUTOSAVE_MS = 1200;
@@ -26,11 +27,13 @@ type SaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'stale' | 'error';
 
 /** The consultation screen (PRD §6.1): patient context beside this visit's record. */
 export default function ConsultationPage() {
-  return <ClinicShell>{(me) => <ConsultationScreen me={me} />}</ClinicShell>;
+  const { id } = useParams<{ id: string }>();
+  // Keyed by visit: moving to another visit starts afresh, so a pending or running save
+  // keeps the refs (lines, revision) of the visit it was made on.
+  return <ClinicShell>{(me) => <ConsultationScreen key={id} id={id} me={me} />}</ClinicShell>;
 }
 
-function ConsultationScreen({ me }: { me: MeResponse }) {
-  const { id } = useParams<{ id: string }>();
+function ConsultationScreen({ id, me }: { id: string; me: MeResponse }) {
   const { api, locale, signOut, t } = useSession();
   const [view, setView] = useState<ConsultationView | null>(null);
   const [chart, setChart] = useState<PatientChart | null>(null);
@@ -49,13 +52,16 @@ function ConsultationScreen({ me }: { me: MeResponse }) {
   const again = useRef(false);
   const edits = useRef(0);
 
-  const fail = useCallback(
-    (e: unknown) => {
-      if (e instanceof ApiError && e.status === 401) return void signOut('expired');
-      setError(e instanceof ApiError ? e.message : t('error.network'));
-    },
-    [signOut, t],
-  );
+  // Kept in refs so switching the clinic language never re-runs the load (which would
+  // drop unsaved notes).
+  const session = useRef({ signOut, t });
+  useEffect(() => {
+    session.current = { signOut, t };
+  }, [signOut, t]);
+  const fail = useCallback((e: unknown) => {
+    if (e instanceof ApiError && e.status === 401) return void session.current.signOut('expired');
+    setError(e instanceof ApiError ? e.message : session.current.t('error.network'));
+  }, []);
 
   const load = useCallback(async () => {
     setError(null);
@@ -84,7 +90,6 @@ function ConsultationScreen({ me }: { me: MeResponse }) {
 
   useEffect(() => {
     void load();
-    return () => clearTimeout(timer.current);
   }, [load]);
 
   const save = useCallback(async () => {
@@ -134,8 +139,26 @@ function ConsultationScreen({ me }: { me: MeResponse }) {
     edits.current += 1;
     setState('dirty');
     clearTimeout(timer.current);
-    timer.current = setTimeout(() => void save(), AUTOSAVE_MS);
+    timer.current = setTimeout(() => {
+      timer.current = undefined;
+      void save();
+    }, AUTOSAVE_MS);
   };
+
+  // Leaving the screen (e.g. back to the queue) saves notes still waiting for the timer.
+  const saveRef = useRef(save);
+  useEffect(() => {
+    saveRef.current = save;
+  }, [save]);
+  useEffect(
+    () => () => {
+      if (timer.current === undefined) return;
+      clearTimeout(timer.current);
+      timer.current = undefined;
+      void saveRef.current();
+    },
+    [],
+  );
 
   // Warn before leaving with unsaved notes.
   useEffect(() => {
@@ -237,6 +260,9 @@ function ConsultationScreen({ me }: { me: MeResponse }) {
               editable={editable}
               onChange={edit}
             />
+          </section>
+          <section className="card" data-testid="prescription">
+            <PrescriptionCard key={a.id} appointmentId={a.id} patientId={a.patient.id} />
           </section>
         </div>
       </div>

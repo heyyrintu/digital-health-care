@@ -159,6 +159,24 @@ Implemented in Phase 1 (`apps/api/src/modules/clinical`). Prescriptions, the saf
 - **Notes** (`chiefComplaint`, `symptoms[{text, duration}]`, `examination`, `diagnoses[{code, label}]`, `plan`, `privateNotes`, `testsAdvised`, `advice`) are stored as one document encrypted with AES-256-GCM (the field cipher); `followUpDate` stays in the clear for reminders. Only the visit's doctor writes, once the patient has checked in (409 before; 403 for another doctor). `revision` must match the stored one (0 for the first save) or the save gets 409 with `fields.revision = stale`, so a second tab cannot overwrite newer notes; each save returns the next revision. Diagnoses may carry an ICD-10 code (a starter list ships in `@dhc/domain`; the full code set comes from a licensed source) or be free text.
 - **Locking:** once the visit's prescription is signed (next slices), `lockedAt` is set and notes and vitals give 409.
 
+## 3f. Prescription builder
+
+Implemented in Phase 1 (`apps/api/src/modules/prescribing`). The safety engine, signing, the PDF and versions follow in the next slices.
+
+| Action | Endpoint | Who |
+|---|---|---|
+| Medicine search | `GET /medicines?q` (2+ characters; name, generic name or composition; up to 20) | Doctor |
+| Draft | `GET /appointments/{id}/prescription` → `{prescription, defaultLanguage, canEdit}`; `PUT /appointments/{id}/prescription` `{language, items, revision}` | Doctor (writing: the visit's doctor) |
+| Repeat last | `GET /patients/{id}/last-prescription?before={appointmentId}` → `{last: {appointmentId, date, doctorName, items} \| null}` | Doctor |
+| Templates | `GET /prescription-templates` (own); `POST /prescription-templates` `{name, items}` → 201 (same name replaces); `DELETE /prescription-templates/{id}` → 204 | Doctor |
+
+- **Medicine master:** the platform's reference list (`organisation_id` null; the licensed drug database in production, a synthetic sample of generic products in development and tests) plus medicines the clinic adds. Row-level security shows each clinic the reference list and its own; separate write policies let it insert and update only its own, so a reference medicine can never be changed or taken over. Inactive medicines are left out of search and rejected on save (400).
+- **Lines:** each has a client-chosen `id` (a random UUID, so edits keep it), `medicineId` (null for free text, shown as "not in the medicine list"), a snapshot of `name`, `composition` and `form`, `route`, `timing`, `steps[{dose, frequency, durationValue, durationUnit}]` (more than one step is a tapering course), `quantity`, `instructions` and `remarks`. Medicine IDs must be active and visible to the clinic (400 otherwise); line IDs must be unique; a step with a duration needs its unit.
+- **Remarks:** unless `remarksEdited` is true, the server writes them from the steps, timing and route in the prescription's `language` (English or Hindi) with `dosageRemarks` from `@dhc/domain`, which the web app also uses for the live preview. Frequencies understood: slot patterns (`1-0-1`, with an optional fourth bedtime slot; when any amount is not 1, such as `2-0-2` or `½-0-½`, each slot is written with its own amount — "2 tablets after breakfast and 2 tablets after dinner"; a measured dose such as `500 mg` is repeated, "2 × 500 mg"), `OD`, `BD`, `TDS`, `QID`, `HS`, `SOS`/`PRN`, `STAT`, weekly, monthly and alternate days; anything else is printed as written.
+- **Saving** follows the notes rules: only the visit's doctor, once the patient has checked in, with a matching `revision` (409 `revision: stale` otherwise); a signed prescription or locked consultation gives 409. A save replaces the draft's lines. `defaultLanguage` is the patient's language.
+- **Repeat last** returns the patient's most recent prescription with lines (any doctor in the organisation) from a visit that started before `before` (the visit being written; 404 if it is not this patient's), or from any visit when `before` is omitted. Lines come without IDs; the client adds new ones.
+- **Audit:** `prescription.viewed` and `prescription.last_viewed` record entity IDs only (the appointment, or the patient); `prescription.saved` adds the revision and line count; `prescription_template.saved|deleted` record the template ID, with the line count on `saved`. Never medicine names or remarks.
+
 ## 4. Endpoint catalogue (by module)
 
 | Module | Main resources and actions |
@@ -168,7 +186,7 @@ Implemented in Phase 1 (`apps/api/src/modules/clinical`). Prescriptions, the saf
 | scheduling | `/availability/versions` (built), `/availability/exceptions` (built), `/slots?doctorId&clinicId&consultationTypeId&date&channel` (built), `/appointments` (book, walk-in, list, confirm, check-in, start, complete, cancel, no-show, reschedule; built), `/queue?date` (built), `/display-screens` (built), `/display/board` (built) |
 | patients | `/patients` (search by phone, name or UHID, filter by tag; register; built), `/patients/{id}` (demographics and family, each view audited; edit; built), `/patients/duplicate-check` (built), `/patients/{id}/tags` (built), `/patients/{id}/chart` and `/patients/{id}/allergies\|conditions\|medications` (built), `/patients/{id}/consents`, `/patients/merge-requests` |
 | clinical | `/appointments/{id}/consultation` (built), `/appointments/{id}/vitals` (built), `/scribe/sessions`, `/assessments/forms`, `/assessments`, `/patients/{id}/ask-ai` |
-| prescribing | `/medicines` (search), `/prescription-templates`, `/prescriptions` (draft, update lines, `/safety-check`, `/sign`, `/amend`, `/void`, `/pdf`), `/verify/{code}` (public) |
+| prescribing | `/medicines` (search; built), `/prescription-templates` (built), `/appointments/{id}/prescription` (draft and lines; built), `/patients/{id}/last-prescription` (built), `/prescriptions` ( `/safety-check`, `/sign`, `/amend`, `/void`, `/pdf`), `/verify/{code}` (public) |
 | orders | `/test-orders`, `/test-orders/{id}/results`, `/referrals`, `/attachments` |
 | billing | `/price-list`, `/bills`, `/bills/{id}/payment-link`, `/bills/{id}/checkout-session`, `/bills/{id}/counter-payment`, `/refunds`, `/receipts/{id}`, `/reports/collections`, `/reports/reconciliation` |
 | messaging | `/message-templates`, `/notifications`, `/inbox/threads`, `/inbox/threads/{id}/reply`, `/opt-ins`, `/delivery-log` |
