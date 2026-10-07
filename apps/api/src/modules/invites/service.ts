@@ -347,10 +347,9 @@ export class InviteService {
     if (!invite || invite.acceptedAt || invite.revokedAt || invite.expiresAt <= this.s.now()) {
       return null;
     }
-    const [organisation, user] = await Promise.all([
-      tx.organisation.findUnique({ where: { id: invite.organisationId } }),
-      tx.user.findUnique({ where: { id: invite.userId } }),
-    ]);
+    // One after another: a transaction is one connection, which runs one query at a time.
+    const organisation = await tx.organisation.findUnique({ where: { id: invite.organisationId } });
+    const user = await tx.user.findUnique({ where: { id: invite.userId } });
     if (organisation?.status !== 'active' || user?.status !== 'active') return null;
     return { invite, organisation, user };
   }

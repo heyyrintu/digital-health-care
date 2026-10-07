@@ -3,8 +3,12 @@
 // sessions, otp_challenges) are only reachable through the system connection.
 
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider        = "prisma-client"
+  output          = "../src/generated/prisma"
+  // Load `include`d relations in one SQL query. Without it Prisma fetches each relation
+  // as its own query, all at once, and a transaction is one connection, which runs one
+  // query at a time (pg warns about this).
+  previewFeatures = ["relationJoins"]
 }
 
 datasource db {

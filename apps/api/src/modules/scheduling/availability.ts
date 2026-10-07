@@ -375,11 +375,10 @@ export async function loadDaySlots(
   options: { ignoreAppointmentId?: string } = {},
 ) {
   const { doctorId, clinicId, consultationTypeId, date, channel } = query;
-  const [clinic, type, rules] = await Promise.all([
-    tx.clinic.findUnique({ where: { id: clinicId }, select: { active: true } }),
-    tx.consultationType.findUnique({ where: { id: consultationTypeId } }),
-    tx.bookingRules.findUnique({ where: { organisationId } }),
-  ]);
+  // One after another: a transaction is one connection, which runs one query at a time.
+  const clinic = await tx.clinic.findUnique({ where: { id: clinicId }, select: { active: true } });
+  const type = await tx.consultationType.findUnique({ where: { id: consultationTypeId } });
+  const rules = await tx.bookingRules.findUnique({ where: { organisationId } });
   if (!clinic || !type) return null;
   const bookingRules = rules
     ? {
@@ -393,33 +392,31 @@ export async function loadDaySlots(
   }
 
   const day = toDbDate(date);
-  const [version, exceptions, booked] = await Promise.all([
-    tx.availabilityVersion.findFirst({
-      where: { doctorUserId: doctorId, clinicId, consultationTypeId, effectiveFrom: { lte: day } },
-      orderBy: { effectiveFrom: 'desc' },
-    }),
-    tx.availabilityException.findMany({
-      where: {
-        startDate: { lte: day },
-        endDate: { gte: day },
-        AND: [
-          { OR: [{ doctorUserId: null }, { doctorUserId: doctorId }] },
-          { OR: [{ clinicId: null }, { clinicId }] },
-          { OR: [{ consultationTypeId: null }, { consultationTypeId }] },
-        ],
-      },
-    }),
-    tx.appointment.findMany({
-      where: {
-        doctorUserId: doctorId,
-        date: day,
-        status: { in: [...SLOT_HOLDING] },
-        source: { not: 'walk_in' },
-        ...(options.ignoreAppointmentId ? { id: { not: options.ignoreAppointmentId } } : {}),
-      },
-      select: { startAt: true, endAt: true },
-    }),
-  ]);
+  const version = await tx.availabilityVersion.findFirst({
+    where: { doctorUserId: doctorId, clinicId, consultationTypeId, effectiveFrom: { lte: day } },
+    orderBy: { effectiveFrom: 'desc' },
+  });
+  const exceptions = await tx.availabilityException.findMany({
+    where: {
+      startDate: { lte: day },
+      endDate: { gte: day },
+      AND: [
+        { OR: [{ doctorUserId: null }, { doctorUserId: doctorId }] },
+        { OR: [{ clinicId: null }, { clinicId }] },
+        { OR: [{ consultationTypeId: null }, { consultationTypeId }] },
+      ],
+    },
+  });
+  const booked = await tx.appointment.findMany({
+    where: {
+      doctorUserId: doctorId,
+      date: day,
+      status: { in: [...SLOT_HOLDING] },
+      source: { not: 'walk_in' },
+      ...(options.ignoreAppointmentId ? { id: { not: options.ignoreAppointmentId } } : {}),
+    },
+    select: { startAt: true, endAt: true },
+  });
 
   const versions: ScheduleVersion[] = version
     ? [

@@ -57,18 +57,17 @@ export const authRoutes: FastifyPluginAsync<AuthRoutesOptions> = async (
 
   app.get('/me', { preHandler: authenticate(services) }, async (request) => {
     const { userId, organisationId, role } = authOf(request);
-    const [user, organisation] = await withAuth(services.db, (tx) =>
-      Promise.all([
-        tx.user.findUnique({
-          where: { id: userId },
-          select: { id: true, displayName: true, phone: true, email: true },
-        }),
-        tx.organisation.findUnique({
-          where: { id: organisationId },
-          select: { id: true, slug: true, name: true },
-        }),
-      ]),
-    );
+    // One after another: a transaction is one connection, which runs one query at a time.
+    const { user, organisation } = await withAuth(services.db, async (tx) => ({
+      user: await tx.user.findUnique({
+        where: { id: userId },
+        select: { id: true, displayName: true, phone: true, email: true },
+      }),
+      organisation: await tx.organisation.findUnique({
+        where: { id: organisationId },
+        select: { id: true, slug: true, name: true },
+      }),
+    }));
     if (!user || !organisation) throw new AppError(401, 'UNAUTHENTICATED', 'Please sign in again.');
     return MeResponse.parse({ user, organisation, role });
   });
