@@ -2,6 +2,8 @@
 
 import { ApiError } from '@dhc/api-client';
 import { AppointmentDetail, VitalsResponse, type Vitals } from '@dhc/contracts';
+import { PageHeader, Surface } from '@dhc/ui-web';
+import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -36,33 +38,53 @@ function VitalsScreen() {
   }, [api, id, signOut, t]);
 
   return (
-    <section className="card">
+    <section className="mx-auto max-w-3xl space-y-5">
       <p>
-        <Link href={`/clinic/queue${appointment ? `?date=${appointment.date}` : ''}`}>
+        <Link
+          href={`/clinic/queue${appointment ? `?date=${appointment.date}` : ''}`}
+          className="inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+        >
+          <ArrowLeft className="size-4" aria-hidden />
           {t('consult.back')}
         </Link>
       </p>
       {error && (
-        <p role="alert" className="alert">
+        <p
+          role="alert"
+          className="rounded-xl bg-danger-soft p-4 text-sm font-medium text-destructive"
+        >
           {error}
         </p>
       )}
       {appointment && vitals !== undefined ? (
         <>
-          <h1>{t('vitals.pageTitle', { name: appointment.patient.name })}</h1>
-          <p className="patient-meta">
-            {appointment.patient.uhid} · <AgeGender patient={appointment.patient} /> ·{' '}
-            {t('queue.token', { token: appointment.tokenNumber })}
-          </p>
-          <VitalsForm
-            appointmentId={appointment.id}
-            vitals={vitals}
-            patient={appointment.patient}
-            editable={!['cancelled', 'no_show', 'rescheduled'].includes(appointment.status)}
+          <PageHeader
+            title={t('vitals.pageTitle', { name: appointment.patient.name })}
+            sub={
+              <>
+                <span className="tabular">{appointment.patient.uhid}</span> ·{' '}
+                <AgeGender patient={appointment.patient} /> ·{' '}
+                <span className="font-semibold text-foreground">
+                  {t('queue.token', { token: appointment.tokenNumber })}
+                </span>
+              </>
+            }
           />
+          <Surface className="p-5 sm:p-6">
+            <VitalsForm
+              appointmentId={appointment.id}
+              vitals={vitals}
+              patient={appointment.patient}
+              editable={!['cancelled', 'no_show', 'rescheduled'].includes(appointment.status)}
+            />
+          </Surface>
         </>
       ) : (
-        !error && <p aria-live="polite">{t('common.loading')}</p>
+        !error && (
+          <p aria-live="polite" className="text-sm text-muted-foreground">
+            {t('common.loading')}
+          </p>
+        )
       )}
     </section>
   );

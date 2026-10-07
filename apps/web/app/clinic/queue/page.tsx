@@ -14,6 +14,18 @@ import {
   type Tag,
 } from '@dhc/contracts';
 import { istDateKey } from '@dhc/domain';
+import {
+  Button,
+  buttonVariants,
+  cn,
+  EmptyState,
+  Input,
+  Label,
+  NativeSelect,
+  PageHeader,
+  Surface,
+} from '@dhc/ui-web';
+import { CalendarPlus, RefreshCw, UserPlus } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useState } from 'react';
@@ -145,28 +157,37 @@ function Queue({ me }: { me: MeResponse }) {
   const rows = queue ? queue[tab].filter(matches) : null;
 
   return (
-    <section aria-labelledby="queue-title" className="card">
-      <div className="card-header">
-        <h1 id="queue-title">{t('queue.title')}</h1>
-        {canRegister(me.role) && (
-          <div className="header-actions">
-            <Link className="button-link secondary" href="/clinic/appointments/new?walkIn=1">
-              {t('appointments.walkIn')}
-            </Link>
-            <Link className="button-link" href={`/clinic/appointments/new?date=${date}`}>
-              {t('appointments.book')}
-            </Link>
-          </div>
-        )}
-      </div>
-      <p>
-        <Link href="/clinic">{t('availability.back')}</Link>
-      </p>
+    <section aria-labelledby="queue-title" className="space-y-5">
+      <PageHeader
+        title={<span id="queue-title">{t('queue.title')}</span>}
+        sub={
+          <Link href="/clinic" className="underline-offset-4 hover:text-foreground hover:underline">
+            {t('availability.back')}
+          </Link>
+        }
+        actions={
+          canRegister(me.role) && (
+            <>
+              <Link
+                className={buttonVariants({ variant: 'outline' })}
+                href="/clinic/appointments/new?walkIn=1"
+              >
+                <UserPlus aria-hidden />
+                {t('appointments.walkIn')}
+              </Link>
+              <Link className={buttonVariants()} href={`/clinic/appointments/new?date=${date}`}>
+                <CalendarPlus aria-hidden />
+                {t('appointments.book')}
+              </Link>
+            </>
+          )
+        }
+      />
 
-      <div className="queue-filters">
-        <div>
-          <label htmlFor="queue-date">{t('appointments.date')}</label>
-          <input
+      <Surface className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-3 sm:p-5 lg:grid-cols-5">
+        <div className="space-y-2">
+          <Label htmlFor="queue-date">{t('appointments.date')}</Label>
+          <Input
             id="queue-date"
             type="date"
             value={date}
@@ -174,9 +195,9 @@ function Queue({ me }: { me: MeResponse }) {
           />
         </div>
         {doctors.length > 1 && (
-          <div>
-            <label htmlFor="queue-doctor">{t('availability.doctor')}</label>
-            <select
+          <div className="space-y-2">
+            <Label htmlFor="queue-doctor">{t('availability.doctor')}</Label>
+            <NativeSelect
               id="queue-doctor"
               value={doctorId}
               onChange={(e) => setDoctorId(e.target.value)}
@@ -187,12 +208,12 @@ function Queue({ me }: { me: MeResponse }) {
                   {d.displayName ?? d.userId}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </div>
         )}
-        <div>
-          <label htmlFor="queue-search">{t('common.search')}</label>
-          <input
+        <div className="col-span-2 space-y-2 sm:col-span-1">
+          <Label htmlFor="queue-search">{t('common.search')}</Label>
+          <Input
             id="queue-search"
             type="search"
             value={q}
@@ -201,91 +222,126 @@ function Queue({ me }: { me: MeResponse }) {
           />
         </div>
         {tags.length > 0 && (
-          <div>
-            <label htmlFor="queue-tag">{t('dashboard.filterTag')}</label>
-            <select id="queue-tag" value={tagId} onChange={(e) => setTagId(e.target.value)}>
+          <div className="space-y-2">
+            <Label htmlFor="queue-tag">{t('dashboard.filterTag')}</Label>
+            <NativeSelect id="queue-tag" value={tagId} onChange={(e) => setTagId(e.target.value)}>
               <option value="">{t('queue.allTags')}</option>
               {tags.map((tag) => (
                 <option key={tag.id} value={tag.id}>
                   {tag.name}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </div>
         )}
-        <div>
-          <label htmlFor="queue-mode">{t('practice.typeMode')}</label>
-          <select id="queue-mode" value={mode} onChange={(e) => setMode(e.target.value)}>
+        <div className="space-y-2">
+          <Label htmlFor="queue-mode">{t('practice.typeMode')}</Label>
+          <NativeSelect id="queue-mode" value={mode} onChange={(e) => setMode(e.target.value)}>
             <option value="">{t('queue.allModes')}</option>
             {MODES.map((m) => (
               <option key={m} value={m}>
                 {t(`mode.${m}`)}
               </option>
             ))}
-          </select>
+          </NativeSelect>
+        </div>
+      </Surface>
+
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="scrollbar-none -mx-4 overflow-x-auto px-4 lg:mx-0 lg:px-0">
+          <div
+            className="inline-flex min-w-max gap-1 rounded-xl bg-muted p-1"
+            role="tablist"
+            aria-label={t('queue.title')}
+          >
+            {TABS.map((key) => (
+              <button
+                key={key}
+                type="button"
+                role="tab"
+                id={`tab-${key}`}
+                aria-selected={tab === key}
+                aria-controls="queue-panel"
+                className={cn(
+                  'inline-flex min-h-11 cursor-pointer items-center gap-2 whitespace-nowrap rounded-lg px-3.5 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                  tab === key
+                    ? 'bg-card text-foreground shadow-xs'
+                    : 'text-muted-foreground hover:text-foreground',
+                )}
+                onClick={() => go({ tab: key })}
+              >
+                {t(`queue.tab.${key}`)}{' '}
+                <span
+                  className={cn(
+                    'tabular inline-flex min-w-6 justify-center rounded-full px-1.5 py-0.5 text-xs font-bold',
+                    tab === key ? 'bg-accent text-accent-foreground' : 'bg-background',
+                  )}
+                >
+                  {queue?.[key].length ?? '–'}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+          {queue?.averageConsultationMinutes != null && (
+            <span data-testid="average-consult">
+              {t('queue.average', { minutes: queue.averageConsultationMinutes })}
+            </span>
+          )}
+          {updated && (
+            <span>
+              {t('queue.updated', {
+                time: updated.toLocaleTimeString(locale === 'hi' ? 'hi-IN' : 'en-IN', {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                }),
+              })}
+            </span>
+          )}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-11 min-h-11 sm:h-9 sm:min-h-9"
+            onClick={() => load().catch(handle)}
+          >
+            <RefreshCw aria-hidden />
+            {t('queue.refresh')}
+          </Button>
         </div>
       </div>
 
-      <div className="queue-tabs" role="tablist" aria-label={t('queue.title')}>
-        {TABS.map((key) => (
-          <button
-            key={key}
-            type="button"
-            role="tab"
-            id={`tab-${key}`}
-            aria-selected={tab === key}
-            aria-controls="queue-panel"
-            className={tab === key ? 'tab selected' : 'tab'}
-            onClick={() => go({ tab: key })}
-          >
-            {t(`queue.tab.${key}`)} <span className="count">{queue?.[key].length ?? '–'}</span>
-          </button>
-        ))}
-      </div>
-
-      <div className="queue-meta hint">
-        {queue?.averageConsultationMinutes != null && (
-          <span data-testid="average-consult">
-            {t('queue.average', { minutes: queue.averageConsultationMinutes })}
-          </span>
-        )}
-        {updated && (
-          <span>
-            {t('queue.updated', {
-              time: updated.toLocaleTimeString(locale === 'hi' ? 'hi-IN' : 'en-IN', {
-                hour: '2-digit',
-                minute: '2-digit',
-              }),
-            })}
-          </span>
-        )}
-        <button type="button" className="secondary" onClick={() => load().catch(handle)}>
-          {t('queue.refresh')}
-        </button>
-      </div>
-
       {error && (
-        <p role="alert" className="alert">
+        <p
+          role="alert"
+          className="rounded-xl bg-danger-soft p-4 text-sm font-medium text-destructive"
+        >
           {error}
         </p>
       )}
       <div id="queue-panel" role="tabpanel" aria-labelledby={`tab-${tab}`}>
-        {queue && queue[tab].length === 0 && <p>{t(`queue.empty.${tab}`)}</p>}
-        {rows && queue && queue[tab].length > 0 && rows.length === 0 && <p>{t('queue.noMatch')}</p>}
+        {queue && queue[tab].length === 0 && <EmptyState title={t(`queue.empty.${tab}`)} />}
+        {rows && queue && queue[tab].length > 0 && rows.length === 0 && (
+          <EmptyState title={t('queue.noMatch')} />
+        )}
         {rows && rows.length > 0 && (
-          <ul className="appointment-list" data-testid="appointments">
-            {rows.map((a) => (
-              <AppointmentRow
-                key={a.id}
-                a={a}
-                me={{ role: me.role, userId: me.user.id }}
-                today={today}
-                now={now}
-                busy={busyId === a.id}
-                onAct={act}
-              />
-            ))}
-          </ul>
+          <Surface className="overflow-hidden">
+            <ul className="divide-y divide-border/60" data-testid="appointments">
+              {rows.map((a) => (
+                <AppointmentRow
+                  key={a.id}
+                  a={a}
+                  me={{ role: me.role, userId: me.user.id }}
+                  today={today}
+                  now={now}
+                  busy={busyId === a.id}
+                  onAct={act}
+                />
+              ))}
+            </ul>
+          </Surface>
         )}
       </div>
     </section>

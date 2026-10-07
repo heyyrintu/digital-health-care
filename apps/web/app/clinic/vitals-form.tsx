@@ -3,6 +3,7 @@
 import { ApiError } from '@dhc/api-client';
 import { Vitals, type PregnancyStatus, type VitalsBody } from '@dhc/contracts';
 import { ageFrom, formatIstDateTime, istDateKey, WEIGHT_REQUIRED_UNDER_YEARS } from '@dhc/domain';
+import { Button, Input, Label, NativeSelect } from '@dhc/ui-web';
 import { useState, type FormEvent } from 'react';
 import { useSession } from './session-provider';
 
@@ -77,16 +78,17 @@ export function VitalsForm({
   }
 
   return (
-    <form className="vitals" onSubmit={(e) => void save(e)} aria-label={t('vitals.title')}>
-      <div className="vitals-grid">
+    <form className="space-y-5" onSubmit={(e) => void save(e)} aria-label={t('vitals.title')}>
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
         {FIELDS.map(({ key, label, step }) => (
-          <div key={key}>
-            <label htmlFor={`vitals-${key}`}>{t(label as 'vitals.pulse')}</label>
-            <input
+          <div key={key} className="space-y-2">
+            <Label htmlFor={`vitals-${key}`}>{t(label as 'vitals.pulse')}</Label>
+            <Input
               id={`vitals-${key}`}
               name={key}
               type="number"
               inputMode="decimal"
+              className="tabular"
               step={step}
               defaultValue={current?.[key] ?? ''}
               disabled={!editable}
@@ -94,9 +96,9 @@ export function VitalsForm({
           </div>
         ))}
         {patient.gender === 'female' && (ageYears === null || ageYears >= 12) && (
-          <div>
-            <label htmlFor="vitals-pregnancyStatus">{t('vitals.pregnancy')}</label>
-            <select
+          <div className="col-span-2 space-y-2 sm:col-span-1">
+            <Label htmlFor="vitals-pregnancyStatus">{t('vitals.pregnancy')}</Label>
+            <NativeSelect
               id="vitals-pregnancyStatus"
               name="pregnancyStatus"
               defaultValue={current?.pregnancyStatus ?? ''}
@@ -108,13 +110,15 @@ export function VitalsForm({
                   {t(`vitals.pregnancy.${p}`)}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </div>
         )}
       </div>
-      <p className="hint" aria-live="polite">
+      <p className="text-sm text-muted-foreground" aria-live="polite">
         {current?.bmi != null && (
-          <strong data-testid="bmi">{t('vitals.bmi', { bmi: current.bmi })} · </strong>
+          <strong data-testid="bmi" className="font-semibold text-foreground">
+            {t('vitals.bmi', { bmi: current.bmi })} ·{' '}
+          </strong>
         )}
         {current &&
           t('vitals.recordedBy', {
@@ -123,20 +127,30 @@ export function VitalsForm({
           })}
       </p>
       {child && current?.weightKg == null && (
-        <p className="notice" data-testid="child-weight">
+        <p
+          className="rounded-xl bg-warning-soft p-4 text-sm font-medium text-warning-foreground"
+          data-testid="child-weight"
+        >
           {t('vitals.childWeight')}
         </p>
       )}
       {error && (
-        <p role="alert" className="alert">
+        <p
+          role="alert"
+          className="rounded-xl bg-danger-soft p-4 text-sm font-medium text-destructive"
+        >
           {error}
         </p>
       )}
-      {saved && <p className="notice">{t('vitals.saved')}</p>}
+      {saved && (
+        <p className="rounded-xl bg-success-soft p-4 text-sm font-medium text-success">
+          {t('vitals.saved')}
+        </p>
+      )}
       {editable && (
-        <button type="submit" disabled={busy}>
+        <Button type="submit" className="w-full sm:w-auto" disabled={busy}>
           {t('vitals.save')}
-        </button>
+        </Button>
       )}
     </form>
   );

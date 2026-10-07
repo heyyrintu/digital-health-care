@@ -11,6 +11,8 @@ import {
   type MeResponse,
 } from '@dhc/contracts';
 import { istDateKey } from '@dhc/domain';
+import { buttonVariants, Label, NativeSelect, PageHeader, Surface } from '@dhc/ui-web';
+import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { useSession } from '../session-provider';
@@ -35,7 +37,11 @@ export default function AvailabilityPage() {
 
 function NotAllowed() {
   const { t } = useSession();
-  return <p>{t('common.notAllowed')}</p>;
+  return (
+    <p className="rounded-xl bg-muted p-4 text-sm text-muted-foreground">
+      {t('common.notAllowed')}
+    </p>
+  );
 }
 
 function Availability({ me }: { me: MeResponse }) {
@@ -91,78 +97,94 @@ function Availability({ me }: { me: MeResponse }) {
       : null;
 
   return (
-    <>
-      <section aria-labelledby="availability-title" className="card">
-        <div className="card-header">
-          <h1 id="availability-title">{t('availability.title')}</h1>
-          <Link href="/clinic">{t('availability.back')}</Link>
-        </div>
-        {error && (
-          <p role="alert" className="alert">
-            {error}
-          </p>
-        )}
-        {doctors && (clinics.length === 0 || types.length === 0) && (
-          <p>{t('availability.needSetup')}</p>
-        )}
-        {doctors && doctors.length === 0 && me.role !== 'doctor' && (
-          <p>{t('availability.noDoctors')}</p>
-        )}
-        {doctors && clinics.length > 0 && types.length > 0 && (
-          <div className="pickers">
-            {me.role !== 'doctor' && doctors.length > 0 && (
-              <div>
-                <label htmlFor="pick-doctor">{t('availability.doctor')}</label>
-                <select
-                  id="pick-doctor"
-                  value={doctorId}
-                  onChange={(e) => setDoctorId(e.target.value)}
-                >
-                  {doctors.map((d) => (
-                    <option key={d.userId} value={d.userId}>
-                      {d.displayName ?? d.userId}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-            <div>
-              <label htmlFor="pick-clinic">{t('availability.clinic')}</label>
-              <select
-                id="pick-clinic"
-                value={clinicId}
-                onChange={(e) => setClinicId(e.target.value)}
-              >
-                {clinics.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label htmlFor="pick-type">{t('availability.type')}</label>
-              <select id="pick-type" value={typeId} onChange={(e) => setTypeId(e.target.value)}>
-                {types.map((ty) => (
-                  <option key={ty.id} value={ty.id}>
-                    {ty.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-        )}
-      </section>
-      {selection && (
-        <>
-          <SlotPreview selection={selection} />
-          <ScheduleCard
-            key={`${selection.doctorId}-${selection.clinic.id}-${selection.type.id}`}
-            selection={selection}
-          />
-          <ExceptionsCard selection={selection} />
-        </>
+    <section aria-labelledby="availability-title" className="space-y-6">
+      <PageHeader
+        title={<span id="availability-title">{t('availability.title')}</span>}
+        actions={
+          <Link href="/clinic" className={buttonVariants({ variant: 'ghost' })}>
+            <ArrowLeft aria-hidden />
+            {t('availability.back')}
+          </Link>
+        }
+      />
+      {error && (
+        <p
+          role="alert"
+          className="rounded-xl bg-danger-soft p-4 text-sm font-medium text-destructive"
+        >
+          {error}
+        </p>
       )}
-    </>
+      {doctors && (clinics.length === 0 || types.length === 0) && (
+        <p className="rounded-xl bg-muted p-4 text-sm text-muted-foreground">
+          {t('availability.needSetup')}
+        </p>
+      )}
+      {doctors && doctors.length === 0 && me.role !== 'doctor' && (
+        <p className="rounded-xl bg-muted p-4 text-sm text-muted-foreground">
+          {t('availability.noDoctors')}
+        </p>
+      )}
+      {doctors && clinics.length > 0 && types.length > 0 && (
+        <Surface className="grid gap-4 p-5 sm:grid-cols-2 sm:p-6 lg:grid-cols-3">
+          {me.role !== 'doctor' && doctors.length > 0 && (
+            <div className="space-y-2">
+              <Label htmlFor="pick-doctor">{t('availability.doctor')}</Label>
+              <NativeSelect
+                id="pick-doctor"
+                value={doctorId}
+                onChange={(e) => setDoctorId(e.target.value)}
+              >
+                {doctors.map((d) => (
+                  <option key={d.userId} value={d.userId}>
+                    {d.displayName ?? d.userId}
+                  </option>
+                ))}
+              </NativeSelect>
+            </div>
+          )}
+          <div className="space-y-2">
+            <Label htmlFor="pick-clinic">{t('availability.clinic')}</Label>
+            <NativeSelect
+              id="pick-clinic"
+              value={clinicId}
+              onChange={(e) => setClinicId(e.target.value)}
+            >
+              {clinics.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </NativeSelect>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="pick-type">{t('availability.type')}</Label>
+            <NativeSelect id="pick-type" value={typeId} onChange={(e) => setTypeId(e.target.value)}>
+              {types.map((ty) => (
+                <option key={ty.id} value={ty.id}>
+                  {ty.name}
+                </option>
+              ))}
+            </NativeSelect>
+          </div>
+        </Surface>
+      )}
+      {selection && (
+        <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,24rem)] lg:grid-rows-[auto_1fr]">
+          <div className="min-w-0 lg:col-start-2 lg:row-start-1">
+            <SlotPreview selection={selection} />
+          </div>
+          <div className="min-w-0 lg:col-start-1 lg:row-span-2 lg:row-start-1">
+            <ScheduleCard
+              key={`${selection.doctorId}-${selection.clinic.id}-${selection.type.id}`}
+              selection={selection}
+            />
+          </div>
+          <div className="min-w-0 lg:col-start-2 lg:row-start-2">
+            <ExceptionsCard selection={selection} />
+          </div>
+        </div>
+      )}
+    </section>
   );
 }

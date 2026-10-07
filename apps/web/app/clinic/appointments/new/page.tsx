@@ -17,6 +17,8 @@ import {
   type Slot,
 } from '@dhc/contracts';
 import { istDateKey } from '@dhc/domain';
+import { Button, cn, Input, Label, NativeSelect, PageHeader, Surface } from '@dhc/ui-web';
+import { ArrowLeft, Search } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useState, type FormEvent } from 'react';
@@ -179,46 +181,69 @@ function Book({ me }: { me: MeResponse }) {
   }
 
   return (
-    <section aria-labelledby="book-title" className="card">
-      <h1 id="book-title">{current ? t('book.rescheduleTitle') : t('book.title')}</h1>
-      <p>
-        <Link href="/clinic/queue">{t('queue.title')}</Link>
-      </p>
+    <section aria-labelledby="book-title" className="mx-auto max-w-3xl space-y-5">
+      <PageHeader
+        title={<span id="book-title">{current ? t('book.rescheduleTitle') : t('book.title')}</span>}
+        sub={
+          <Link
+            href="/clinic/queue"
+            className="inline-flex items-center gap-1 underline-offset-4 hover:text-foreground hover:underline"
+          >
+            <ArrowLeft className="size-4" aria-hidden />
+            {t('queue.title')}
+          </Link>
+        }
+      />
       {current && (
-        <p className="hint" data-testid="current-booking">
+        <p
+          className="rounded-xl bg-info-soft p-4 text-sm font-medium text-info"
+          data-testid="current-booking"
+        >
           {t('book.current', {
             when: t('appointments.at', { date: current.date, time: current.startTime }),
           })}
         </p>
       )}
 
-      <h2>{t('book.patient')}</h2>
-      {patient ? (
-        <p data-testid="booking-patient">
-          <strong>{patient.name}</strong> · {patient.uhid} · <AgeGender patient={patient} />{' '}
-          {!current && (
-            <button type="button" className="secondary" onClick={() => setPatient(null)}>
-              {t('book.change')}
-            </button>
-          )}
-        </p>
-      ) : (
-        <PatientFinder onPick={setPatient} />
-      )}
+      <Surface className="space-y-4 p-5 sm:p-6">
+        <h2 className="font-display text-lg font-bold">{t('book.patient')}</h2>
+        {patient ? (
+          <p
+            className="flex flex-wrap items-center gap-x-2 gap-y-2 rounded-xl bg-accent/50 p-3 text-sm"
+            data-testid="booking-patient"
+          >
+            <strong className="font-display text-base font-bold">{patient.name}</strong> ·{' '}
+            <span className="tabular">{patient.uhid}</span> · <AgeGender patient={patient} />{' '}
+            {!current && (
+              <Button
+                type="button"
+                variant="outline"
+                className="ml-auto"
+                onClick={() => setPatient(null)}
+              >
+                {t('book.change')}
+              </Button>
+            )}
+          </p>
+        ) : (
+          <PatientFinder onPick={setPatient} />
+        )}
+      </Surface>
 
       {patient && (
         <form
+          className="surface space-y-6 p-5 sm:p-6"
           onSubmit={(e) => {
             e.preventDefault();
             void book(false, reasonOf(e.currentTarget));
           }}
           noValidate
         >
-          <div className="pickers">
+          <div className="grid gap-4 sm:grid-cols-3">
             {doctors.length > 0 && (
-              <div>
-                <label htmlFor="book-doctor">{t('availability.doctor')}</label>
-                <select
+              <div className="space-y-2">
+                <Label htmlFor="book-doctor">{t('availability.doctor')}</Label>
+                <NativeSelect
                   id="book-doctor"
                   value={doctorId}
                   onChange={(e) => setDoctorId(e.target.value)}
@@ -228,12 +253,12 @@ function Book({ me }: { me: MeResponse }) {
                       {d.displayName ?? d.userId}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
               </div>
             )}
-            <div>
-              <label htmlFor="book-clinic">{t('availability.clinic')}</label>
-              <select
+            <div className="space-y-2">
+              <Label htmlFor="book-clinic">{t('availability.clinic')}</Label>
+              <NativeSelect
                 id="book-clinic"
                 value={clinicId}
                 onChange={(e) => setClinicId(e.target.value)}
@@ -243,38 +268,43 @@ function Book({ me }: { me: MeResponse }) {
                     {c.name}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </div>
-            <div>
-              <label htmlFor="book-type">{t('availability.type')}</label>
-              <select id="book-type" value={typeId} onChange={(e) => setTypeId(e.target.value)}>
+            <div className="space-y-2">
+              <Label htmlFor="book-type">{t('availability.type')}</Label>
+              <NativeSelect
+                id="book-type"
+                value={typeId}
+                onChange={(e) => setTypeId(e.target.value)}
+              >
                 {types.map((ty) => (
                   <option key={ty.id} value={ty.id}>
                     {ty.name}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
             </div>
           </div>
 
           {!current && (
-            <div className="walk-in">
-              <p className="hint">{t('book.walkInHelp')}</p>
-              <button
+            <div className="flex flex-col gap-3 rounded-xl border border-dashed border-border p-4 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-muted-foreground">{t('book.walkInHelp')}</p>
+              <Button
                 type="button"
-                className={walkInFirst ? 'primary' : 'secondary'}
+                variant={walkInFirst ? 'default' : 'outline'}
+                className="shrink-0"
                 disabled={busy || !doctorId || !clinicId || !typeId}
                 onClick={(e) => void book(true, reasonOf(e.currentTarget.form))}
               >
                 {t('book.addWalkIn')}
-              </button>
+              </Button>
             </div>
           )}
 
-          <div className="inline-form">
-            <div>
-              <label htmlFor="book-date">{t('book.date')}</label>
-              <input
+          <div className="flex flex-wrap items-end gap-x-6 gap-y-3">
+            <div className="w-full space-y-2 sm:w-56">
+              <Label htmlFor="book-date">{t('book.date')}</Label>
+              <Input
                 id="book-date"
                 type="date"
                 min={today}
@@ -282,9 +312,10 @@ function Book({ me }: { me: MeResponse }) {
                 onChange={(e) => setDate(e.target.value)}
               />
             </div>
-            <label className="checkbox">
+            <label className="flex min-h-11 cursor-pointer items-center gap-2.5 text-sm font-medium">
               <input
                 type="checkbox"
+                className="size-4 accent-[var(--color-primary)]"
                 checked={overbook}
                 onChange={(e) => {
                   setOverbook(e.target.checked);
@@ -295,57 +326,81 @@ function Book({ me }: { me: MeResponse }) {
             </label>
           </div>
 
-          <fieldset className="slot-picker">
-            <legend>{t('book.slots')}</legend>
-            {day?.closed && <p>{t(`closed.${day.closed}`)}</p>}
+          <fieldset className="min-w-0">
+            <legend className="mb-3 text-sm font-semibold">{t('book.slots')}</legend>
+            {day?.closed && (
+              <p className="rounded-xl bg-muted p-4 text-center text-sm text-muted-foreground">
+                {t(`closed.${day.closed}`)}
+              </p>
+            )}
             {day && day.slots.length > 0 && (
-              <div className="slot-grid" role="group">
-                {day.slots.map((s) => (
-                  <button
-                    key={s.start}
-                    type="button"
-                    className={slot?.start === s.start ? 'slot selected' : 'slot'}
-                    aria-pressed={slot?.start === s.start}
-                    disabled={!choosable(s)}
-                    data-testid={`slot-${s.startTime}`}
-                    onClick={() => setSlot(s)}
-                  >
-                    {s.startTime}
-                    {s.unavailableReason === 'busy' && (
-                      <span className="slot-note"> · {t('book.taken')}</span>
-                    )}
-                    {s.unavailableReason && s.unavailableReason !== 'busy' && (
-                      <span className="visually-hidden"> ({t(`slot.${s.unavailableReason}`)})</span>
-                    )}
-                  </button>
-                ))}
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4 md:grid-cols-6" role="group">
+                {day.slots.map((s) => {
+                  const chosen = slot?.start === s.start;
+                  const canPick = choosable(s);
+                  return (
+                    <button
+                      key={s.start}
+                      type="button"
+                      className={cn(
+                        'tabular min-h-11 cursor-pointer rounded-full border px-2 py-2 text-sm font-semibold leading-tight transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 active:scale-[.98]',
+                        chosen
+                          ? 'border-primary bg-primary text-primary-foreground shadow-button'
+                          : !canPick
+                            ? 'cursor-not-allowed border-transparent bg-muted text-muted-foreground line-through'
+                            : s.unavailableReason === 'busy'
+                              ? 'border-warning bg-warning-soft text-warning-foreground'
+                              : 'border-border/70 bg-card hover:border-primary hover:text-primary',
+                      )}
+                      aria-pressed={chosen}
+                      disabled={!canPick}
+                      data-testid={`slot-${s.startTime}`}
+                      onClick={() => setSlot(s)}
+                    >
+                      {s.startTime}
+                      {s.unavailableReason === 'busy' && (
+                        <span className="inline-block w-full text-[10px] font-medium">
+                          {' '}
+                          · {t('book.taken')}
+                        </span>
+                      )}
+                      {s.unavailableReason && s.unavailableReason !== 'busy' && (
+                        <span className="sr-only"> ({t(`slot.${s.unavailableReason}`)})</span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </fieldset>
 
           {!current && (
-            <div className="inline-form">
-              <div>
-                <label htmlFor="book-reason">{t('book.reason')}</label>
-                <input id="book-reason" name="reason" maxLength={300} />
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="book-reason">{t('book.reason')}</Label>
+              <Input id="book-reason" name="reason" maxLength={300} />
             </div>
           )}
 
           {error && (
-            <p role="alert" className="alert">
+            <p
+              role="alert"
+              className="rounded-xl bg-danger-soft p-4 text-sm font-medium text-destructive"
+            >
               {error}
             </p>
           )}
-          <button type="submit" className="primary" disabled={busy || !slot}>
+          <Button type="submit" size="lg" className="w-full sm:w-auto" disabled={busy || !slot}>
             {slot
               ? t(current ? 'book.move' : 'book.confirm', { time: slot.startTime })
               : t('book.pickSlot')}
-          </button>
+          </Button>
         </form>
       )}
       {!patient && error && (
-        <p role="alert" className="alert">
+        <p
+          role="alert"
+          className="rounded-xl bg-danger-soft p-4 text-sm font-medium text-destructive"
+        >
           {error}
         </p>
       )}
@@ -372,28 +427,42 @@ function PatientFinder({ onPick }: { onPick(p: Who): void }) {
 
   return (
     <>
-      <form className="search" role="search" onSubmit={search}>
-        <label htmlFor="find-patient" className="visually-hidden">
+      <form className="flex gap-2" role="search" onSubmit={search}>
+        <label htmlFor="find-patient" className="sr-only">
           {t('book.findPatient')}
         </label>
-        <input
-          id="find-patient"
-          type="search"
-          value={q}
-          placeholder={t('book.findPatient')}
-          onChange={(e) => setQ(e.target.value)}
-        />
-        <button type="submit">{t('common.search')}</button>
+        <div className="relative min-w-0 flex-1">
+          <Search
+            className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+            aria-hidden
+          />
+          <Input
+            id="find-patient"
+            type="search"
+            className="pl-10"
+            value={q}
+            placeholder={t('book.findPatient')}
+            onChange={(e) => setQ(e.target.value)}
+          />
+        </div>
+        <Button type="submit">{t('common.search')}</Button>
       </form>
-      {results && results.length === 0 && <p>{t('dashboard.noPatients')}</p>}
+      {results && results.length === 0 && (
+        <p className="rounded-xl bg-muted p-4 text-sm text-muted-foreground">
+          {t('dashboard.noPatients')}
+        </p>
+      )}
       {results && results.length > 0 && (
-        <ul className="pick-list">
+        <ul className="divide-y divide-border/60 rounded-xl border border-border/60">
           {results.map((p) => (
-            <li key={p.id}>
-              {p.name} · {p.uhid} · <AgeGender patient={p} />{' '}
-              <button type="button" className="secondary" onClick={() => onPick(p)}>
+            <li key={p.id} className="flex flex-wrap items-center gap-x-2 gap-y-2 p-3 text-sm">
+              <span className="min-w-0 flex-1">
+                <span className="font-semibold">{p.name}</span> · {p.uhid} ·{' '}
+                <AgeGender patient={p} />
+              </span>{' '}
+              <Button type="button" variant="outline" onClick={() => onPick(p)}>
                 {t('book.choose')}
-              </button>
+              </Button>
             </li>
           ))}
         </ul>
