@@ -17,10 +17,16 @@ Open **Availability** from the dashboard and pick the clinic and consultation ty
 - **Slots on a day** shows the resulting slots; tick *Show as patients see it online* to apply the clinic's booking horizon and same-day cutoff.
 
 ## Your day
-- **Queue:** open **Queue** from the dashboard. It shows your patients by default and refreshes every 15 seconds. **My OPD** lists the patient with you first, then everyone checked in: patients tagged Emergency or Priority come first, then in order of arrival, each with their waiting time. **Booked** is everyone not yet arrived, **Completed** is today's finished visits (with your average consultation time), and **Cancelled and no-shows** is the rest. For a checked-in patient choose **Start consultation**, then **Complete** when you are done; the times are recorded. You can also check patients in, mark no-shows, book, reschedule and cancel. Follow-ups, **Write Rx** and **Scribe** arrive with the consultation module.
+- **Queue:** open **Queue** from the dashboard. It shows your patients by default and refreshes every 15 seconds. **My OPD** lists the patient with you first, then everyone checked in: patients tagged Emergency or Priority come first, then in order of arrival, each with their waiting time. **Booked** is everyone not yet arrived, **Completed** is today's finished visits (with your average consultation time), and **Cancelled and no-shows** is the rest. For a checked-in patient choose **Start consultation**, then **Complete** when you are done; the times are recorded. You can also check patients in, mark no-shows, book, reschedule and cancel. Once a patient has checked in, **Consultation** on their row opens the consultation screen. Follow-ups, prescriptions and **Scribe** arrive in later updates.
 - **Patient sheet:** call, ABHA, tags, bill and payment link, vitals, records, assessment, refer, review link, video call.
 
 ## Consultation
+Available now on the web: open **Consultation** from a checked-in patient's row in the queue.
+- **Patient chart (left):** allergies (red), conditions and current medicines, and recent visits with their diagnoses. **Add** records a new entry; tick *Reported by the patient* if you have not confirmed it yet, and it shows as unverified. **Remove** asks for a reason; the entry is kept in the record. The chart is shared by the clinic's doctors.
+- **Vitals:** front desk may already have recorded them; correct or complete them and choose **Save vitals**. BMI is worked out for you. Children under 12 need today's weight.
+- **Notes:** chief complaint, symptoms with duration, examination, diagnosis, plan, tests advised, advice, private notes (never printed or shared) and a follow-up date with **Book follow-up**. For a diagnosis, type a name or code and pick an ICD-10 match, or press Enter to keep your own wording. Notes save by themselves a moment after you stop typing (the top right shows *Saved*). If you had the visit open in another tab, the older tab tells you to reload instead of overwriting newer notes. Another doctor's visit opens read-only.
+
+When prescriptions, safety checks and signing arrive, the full flow will be:
 1. Check allergies (red banner), conditions and recent visits.
 2. Optional: **Start scribe**. Ambient mode asks the patient for consent first. On stop, review each Draft section and accept, edit or discard.
 3. Add diagnosis, plan, tests (e.g. MRI knee, right), advice and follow-up date (book it in one tap).

@@ -107,6 +107,19 @@ export function createApiClient(options: ApiClientOptions) {
         schema: NoContent,
       }),
 
+    /** Doctor: remove an allergy, condition or current medicine; the entry is kept with the reason. */
+    removeChartEntry: (
+      patientId: string,
+      kind: 'allergies' | 'conditions' | 'medications',
+      entryId: string,
+      reason: string,
+    ) =>
+      request(
+        'POST',
+        `/patients/${encodeURIComponent(patientId)}/${kind}/${encodeURIComponent(entryId)}/remove`,
+        { schema: NoContent, body: { reason } },
+      ),
+
     /** Ends the session of the current access token. */
     logout: () => request('POST', '/auth/logout', { schema: NoContent }),
   };

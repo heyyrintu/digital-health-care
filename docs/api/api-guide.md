@@ -141,6 +141,24 @@ Implemented in Phase 1 (`apps/api/src/modules/queue`).
 - **Screens** are kiosk links `…/display#<token>`: 32 random bytes, stored only as a SHA-256 hash, never in a URL path (the token stays in the fragment and travels in the request body), so it does not reach server logs. A screen shows, per doctor, the token in consultation and the next five waiting, in queue order; never patient names. Revoked or unknown tokens give 404. (Build plan §6 names the route `/display/[clinic]`; a guessable clinic ID in the path was replaced by the token link.)
 - **Audit:** `display_screen.created`, `display_screen.revoked`.
 
+## 3e. Patient chart, vitals and consultation notes
+
+Implemented in Phase 1 (`apps/api/src/modules/clinical`). Prescriptions, the safety engine and signing follow in the next slices.
+
+| Action | Endpoint | Who |
+|---|---|---|
+| Chart | `GET /patients/{id}/chart` → `{patientId, allergies, conditions, medications, recentVisits}` | Doctor |
+| Add to chart | `POST /patients/{id}/allergies` `{substance, reaction?, source?}`; `POST /patients/{id}/conditions` `{name, icd10Code?, source?}`; `POST /patients/{id}/medications` `{name, dose?, source?}` → 201 | Doctor |
+| Remove from chart | `POST /patients/{id}/allergies\|conditions\|medications/{entryId}/remove` `{reason}` → 204 | Doctor |
+| Vitals | `GET /appointments/{id}/vitals` → `{vitals}`; `PUT /appointments/{id}/vitals` `{bpSystolic?, bpDiastolic?, pulse?, temperatureC?, spo2?, weightKg?, heightCm?, painScore?, pregnancyStatus?}` | Front desk, doctor |
+| Consultation | `GET /appointments/{id}/consultation` → `{appointment, consultation, vitals, canEdit}`; `PUT /appointments/{id}/consultation` `{notes, followUpDate, revision}` | Doctor (writing: the visit's doctor) |
+
+- **Access (PRD §3.2):** chart and notes are doctors' only, shared across the organisation's doctors (the "shared chart" model; "own patients only" is a later setting). Front desk records vitals; clinic admins have no clinical access. Every view and change is audited (`chart.viewed`, `allergy|condition|medication.added|removed`, `vitals.viewed|saved`, `consultation.viewed|saved`) with IDs, revisions and removal reasons only.
+- **Chart entries** are never deleted: removing one keeps it with who, when and why, because past prescriptions were checked against it. `source: patient` marks patient-reported entries, shown as unverified (safety rule SR-21).
+- **Vitals** are one set per visit. `PUT` replaces the whole set (readings left out are cleared), within plausible ranges (400 otherwise). BMI is worked out from weight and height. Allowed while the visit is pending, booked, checked in, in consultation or completed; 409 for cancelled, no-show or rescheduled visits.
+- **Notes** (`chiefComplaint`, `symptoms[{text, duration}]`, `examination`, `diagnoses[{code, label}]`, `plan`, `privateNotes`, `testsAdvised`, `advice`) are stored as one document encrypted with AES-256-GCM (the field cipher); `followUpDate` stays in the clear for reminders. Only the visit's doctor writes, once the patient has checked in (409 before; 403 for another doctor). `revision` must match the stored one (0 for the first save) or the save gets 409 with `fields.revision = stale`, so a second tab cannot overwrite newer notes; each save returns the next revision. Diagnoses may carry an ICD-10 code (a starter list ships in `@dhc/domain`; the full code set comes from a licensed source) or be free text.
+- **Locking:** once the visit's prescription is signed (next slices), `lockedAt` is set and notes and vitals give 409.
+
 ## 4. Endpoint catalogue (by module)
 
 | Module | Main resources and actions |
@@ -148,8 +166,8 @@ Implemented in Phase 1 (`apps/api/src/modules/queue`).
 | identity | `/auth/*`, `/me`, `/staff/invites` (built); `/me/devices` |
 | tenancy | `/organisations/current`, `/clinics` (built), `/consultation-types` (built), `/booking-rules` (built), `/doctors` (built), `/settings`, `/branding`, `/tags` (built), `/uhid-settings` (built) |
 | scheduling | `/availability/versions` (built), `/availability/exceptions` (built), `/slots?doctorId&clinicId&consultationTypeId&date&channel` (built), `/appointments` (book, walk-in, list, confirm, check-in, start, complete, cancel, no-show, reschedule; built), `/queue?date` (built), `/display-screens` (built), `/display/board` (built) |
-| patients | `/patients` (search by phone, name or UHID, filter by tag; register; built), `/patients/{id}` (demographics and family, each view audited; edit; built), `/patients/duplicate-check` (built), `/patients/{id}/tags` (built), `/patients/{id}/allergies\|conditions\|medications\|consents`, `/patients/merge-requests` |
-| clinical | `/consultations`, `/consultations/{id}/vitals`, `/scribe/sessions`, `/assessments/forms`, `/assessments`, `/patients/{id}/ask-ai` |
+| patients | `/patients` (search by phone, name or UHID, filter by tag; register; built), `/patients/{id}` (demographics and family, each view audited; edit; built), `/patients/duplicate-check` (built), `/patients/{id}/tags` (built), `/patients/{id}/chart` and `/patients/{id}/allergies\|conditions\|medications` (built), `/patients/{id}/consents`, `/patients/merge-requests` |
+| clinical | `/appointments/{id}/consultation` (built), `/appointments/{id}/vitals` (built), `/scribe/sessions`, `/assessments/forms`, `/assessments`, `/patients/{id}/ask-ai` |
 | prescribing | `/medicines` (search), `/prescription-templates`, `/prescriptions` (draft, update lines, `/safety-check`, `/sign`, `/amend`, `/void`, `/pdf`), `/verify/{code}` (public) |
 | orders | `/test-orders`, `/test-orders/{id}/results`, `/referrals`, `/attachments` |
 | billing | `/price-list`, `/bills`, `/bills/{id}/payment-link`, `/bills/{id}/checkout-session`, `/bills/{id}/counter-payment`, `/refunds`, `/receipts/{id}`, `/reports/collections`, `/reports/reconciliation` |

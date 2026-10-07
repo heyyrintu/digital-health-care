@@ -1,6 +1,7 @@
 export * from './appointments';
 export * from './audit';
 export * from './auth';
+export * from './consultations';
 export * from './errors';
 export * from './health';
 export * from './invites';

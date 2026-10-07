@@ -417,7 +417,8 @@ export class AppointmentService {
     });
   }
 
-  private async detail(tx: Tx, id: string): Promise<AppointmentDetail> {
+  /** One appointment inside the caller's transaction (also used by the clinical module). */
+  async detail(tx: Tx, id: string): Promise<AppointmentDetail> {
     const row = await tx.appointment.findUnique({
       where: { id },
       include: { ...include, history: { orderBy: { at: 'asc' } } },

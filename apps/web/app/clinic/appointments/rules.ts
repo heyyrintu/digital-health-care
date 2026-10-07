@@ -36,3 +36,13 @@ export function actionsFor(
 export const canReschedule = (a: Appointment, role: string) =>
   (a.status === 'pending' || a.status === 'confirmed') &&
   ['front_desk', 'doctor', 'clinic_admin'].includes(role);
+
+/** Doctors open the consultation screen once the patient has arrived (PRD §6.1). */
+export const canConsult = (a: Appointment, role: string) =>
+  role === 'doctor' && ['checked_in', 'in_consultation', 'completed'].includes(a.status);
+
+/** Front desk takes vitals for today's visits that are going ahead; doctors do it in the consultation. */
+export const canRecordVitals = (a: Appointment, role: string, today: string) =>
+  role === 'front_desk' &&
+  a.date === today &&
+  ['pending', 'confirmed', 'checked_in', 'in_consultation'].includes(a.status);

@@ -31,9 +31,9 @@ Conventions for every table: `id` (UUID), `organisationId` (except platform-leve
 | Patient | Person receiving care | organisationId, accountUserId, uhid (unique per org), name, phone (E.164; family members may share one), dob, gender (female\|male\|other), email, address, bloodGroup, language (en\|hi), emergencyContactName, emergencyContactPhone, guardianPatientId (one level: a guardian has no guardian), createdByUserId, mergedIntoId (planned) |
 | UhidSettings | Per-organisation UHID numbering | organisationId (key), prefix (up to 8 letters or digits), nextNumber (default 10001); UHID = prefix + number, e.g. EK10001 |
 | Tag / PatientTag | Configurable labels | Tag: organisationId, name (unique per org), colour (#rrggbb), sortToTop, archivedAt (archived, never deleted) · PatientTag: organisationId, patientId, tagId, addedByUserId, createdAt |
-| Allergy | Recorded allergy | patientId, substance, class, reaction, severity, source (patient\|doctor), verifiedByDoctor |
-| MedicalCondition | Chronic condition | patientId, condition, code?, since, status, verified |
-| CurrentMedication | Ongoing medicine | patientId, medicineName, moleculeId?, dose, since, source |
+| Allergy | Recorded allergy (built) | patientId, substance, reaction, source (doctor\|patient; patient = unverified), recordedByUserId, createdAt, removedAt, removedByUserId, removedReason (removed, never deleted) · planned: class/molecule link for the safety engine, severity |
+| MedicalCondition | Known condition (built) | patientId, name, icd10Code?, source, recordedByUserId, createdAt, removedAt, removedByUserId, removedReason · planned: since |
+| CurrentMedication | Ongoing medicine from elsewhere (built) | patientId, name, dose?, source, recordedByUserId, createdAt, removedAt, removedByUserId, removedReason · planned: moleculeId, since |
 | Consent | Recorded consent | patientId, type (data_processing\|telemedicine\|guardian\|scribe\|abdm), version, givenBy, givenAt, withdrawnAt, context (consultationId?) |
 | MessagingOptIn | Channel opt-in | patientId, channel (whatsapp\|sms\|email\|push), status, source, at |
 | AbhaLink | ABHA linked to patient | patientId, abhaNumber (encrypted), abhaAddress, linkedVia, verifiedAt, status |
@@ -55,8 +55,8 @@ Conventions for every table: `id` (UUID), `organisationId` (except platform-leve
 
 | Entity | Purpose | Key fields |
 |---|---|---|
-| Consultation | Visit record | appointmentId, patientId, doctorId, mode, chiefComplaint, symptoms, examination (JSON, specialty template), diagnosisText, icd10Codes, plan, privateNotes (encrypted), advice, followUpDate, lockedAt |
-| Vitals | Measurements | consultationId, patientId, bp, pulse, tempC, spo2, weightKg, heightCm, bmi, painScore, pregnancyStatus, breastfeeding, recordedBy, recordedAt |
+| Consultation | Visit record (built) | appointmentId (one per visit), patientId, doctorUserId, notesCipher (AES-256-GCM JSON: chiefComplaint, symptoms[{text, duration}], examination, diagnoses[{code?, label}], plan, privateNotes, testsAdvised, advice), followUpDate, revision (autosave guard), lockedAt (set when the prescription is signed) · planned: specialty examination templates |
+| Vitals | Measurements, one set per visit (built) | appointmentId, patientId, bpSystolic, bpDiastolic, pulse, temperatureC, spo2, weightKg, heightCm, painScore (0–10), pregnancyStatus (not_pregnant\|pregnant\|breastfeeding), recordedByUserId, updatedAt; BMI computed; ranges checked in the database |
 | ScribeSession | AI scribe run | consultationId, mode (ambient\|dictation), consentId, language, audioKey, audioDeletedAt, transcript (encrypted), draft (JSON), acceptedSections, modelVersion, promptVersion, status |
 | AssessmentForm / Assessment | Questionnaires | Form: organisationId, name, questions (JSON), scoring · Assessment: formId, patientId, answers, score, completedAt, source |
 | AskAiQuery | Ask AI log | patientId, doctorId, question, answer, citations (JSON), modelVersion, at |

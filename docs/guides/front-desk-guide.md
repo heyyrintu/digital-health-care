@@ -11,7 +11,7 @@ Open **Queue** for today and check the doctor's sessions. Turn on the waiting-ro
 - **Children and people without a phone:** under **Guardian**, search for the parent or carer and choose them. A family can share one mobile number.
 - **Tags:** on the patient's page, tick tags such as Priority or Insurance and choose **Save tags**. Emergency and Priority patients will appear first in the queue.
 - **Scan & Share:** patient scans the clinic QR → appears in the queue with details → check in.
-- Record vitals if asked (weight is required for children under 12).
+- **Vitals:** in **Queue**, choose **Vitals** on today's patient, enter what you measured (BP, pulse, temperature, SpO₂, weight, height, pain score) and **Save vitals**. Weight is required for children under 12; the page reminds you. Saving sends the whole set, so a box you clear is cleared. You cannot see the doctor's notes or the patient's medical history.
 
 ## Bookings by phone
 To check when a doctor is free, open **Availability**, choose the doctor, clinic and consultation type, and pick a date under **Slots on a day**. Crossed-out times are past or taken. Schedules and leave are set by the doctor or clinic admin.

@@ -936,3 +936,176 @@ button.tab .count {
   font-variant-numeric: tabular-nums;
   word-spacing: 0.5em;
 }
+
+/* Consultation ---------------------------------------------------------------------- */
+
+.consult {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.consult h1 {
+  margin-bottom: var(--space-2);
+}
+
+.consult-body {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.consult-main {
+  display: grid;
+  gap: var(--space-4);
+  align-content: start;
+}
+
+@media (min-width: 900px) {
+  .consult-body {
+    grid-template-columns: minmax(240px, 300px) 1fr;
+    align-items: start;
+  }
+
+  .consult-context {
+    position: sticky;
+    top: var(--space-4);
+  }
+}
+
+.consult-context h3,
+.notes h3 {
+  font-size: var(--font-size-md);
+  margin: var(--space-4) 0 var(--space-1);
+}
+
+.chart-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.chart-list li {
+  overflow-wrap: anywhere;
+}
+
+.chart-list.danger li {
+  border-left: 4px solid var(--color-status-danger);
+  background: #fef2f2;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+}
+
+.chart-add {
+  border-top: 1px dashed var(--color-neutral-300);
+  padding-top: var(--space-2);
+}
+
+.check {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  font-weight: 400;
+}
+
+.card .check input {
+  min-height: auto;
+}
+
+.save-status {
+  margin: 0;
+  white-space: nowrap;
+}
+
+.notes {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.card textarea,
+.card select {
+  font: inherit;
+  min-height: 44px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-neutral-500);
+  border-radius: var(--radius-md);
+  width: 100%;
+}
+
+.note-field,
+.diagnosis {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.symptom-row {
+  display: grid;
+  grid-template-columns: 2fr 1fr auto;
+  gap: var(--space-2);
+  align-items: end;
+}
+
+.symptom-row > div,
+.vitals-grid > div,
+.follow-up > div {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.diagnosis-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.diagnosis .pick-list button {
+  width: 100%;
+  text-align: left;
+}
+
+.follow-up {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: end;
+}
+
+.vitals-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: var(--space-2) var(--space-3);
+}
+
+@media (max-width: 600px) {
+  .symptom-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+.consult-main .card + .card {
+  margin-top: 0;
+}
+
+.vitals-grid > div,
+.symptom-row > div {
+  min-width: 0;
+}
+
+.vitals-grid input,
+.symptom-row input,
+.notes > input,
+.diagnosis input {
+  width: 100%;
+  min-width: 0;
+}
+
+.notes > .link-button {
+  justify-self: start;
+}
