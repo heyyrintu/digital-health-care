@@ -144,7 +144,7 @@ export class AppointmentService {
       throw invalid('reason', 'Give a reason for cancelling.');
     }
     return withTenant(this.s.db, actor.organisationId, async (tx) => {
-      const appointment = await tx.appointment.findUnique({ where: { id } });
+      const appointment = await this.lockRow(tx, id);
       if (!appointment) throw NOT_FOUND();
       if (!rule.from.includes(appointment.status)) {
         throw new AppError(
@@ -197,7 +197,7 @@ export class AppointmentService {
     body: RescheduleAppointmentBody,
   ): Promise<AppointmentDetail> {
     return withTenant(this.s.db, actor.organisationId, async (tx) => {
-      const old = await tx.appointment.findUnique({ where: { id } });
+      const old = await this.lockRow(tx, id);
       if (!old) throw NOT_FOUND();
       if (!['pending', 'confirmed'].includes(old.status)) {
         throw new AppError(409, 'CONFLICT', 'Only booked appointments can be rescheduled.');
@@ -306,6 +306,8 @@ export class AppointmentService {
             date: toDbDate(date),
             overbook: true,
             status: { in: SLOT_HOLDING },
+            // Moving an overbooked patient within the day adds no one.
+            ...(p.rescheduledFromId ? { id: { not: p.rescheduledFromId } } : {}),
           },
         });
         if (used >= loaded.bookingRules.overbookPerDay) {
@@ -381,6 +383,16 @@ export class AppointmentService {
       },
     });
     return created.id;
+  }
+
+  /**
+   * Reads an appointment holding its row lock until the transaction ends, so two status
+   * changes (or reschedules) of the same appointment never both pass the status check.
+   * RLS still applies: another organisation's row is not found.
+   */
+  private async lockRow(tx: Tx, id: string) {
+    await tx.$queryRaw`SELECT id FROM appointments WHERE id = ${id}::uuid FOR UPDATE`;
+    return tx.appointment.findUnique({ where: { id } });
   }
 
   private record(

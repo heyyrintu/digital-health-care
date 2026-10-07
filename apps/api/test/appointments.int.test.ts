@@ -27,6 +27,8 @@ let asha: string;
 let kamla: string;
 
 beforeEach(async () => {
+  // Each test starts at 10:00 IST; the clock only moves forward otherwise.
+  h.clock.ms = Date.UTC(2026, 9, 6, 4, 30);
   await resetDatabase(h.owner);
   clinics = await seedTwoClinics(h);
   [asha, kamla] = clinics.a.patients.map((p) => p.id) as [string, string];
@@ -261,6 +263,50 @@ describe('rescheduling', () => {
       startAt: at(WED, '10:45'),
     });
     expect(again.statusCode).toBe(409);
+  });
+});
+
+describe('concurrent changes to one appointment', () => {
+  it('lets only one of two simultaneous reschedules or status changes through', async () => {
+    const appt = await booked({ startAt: at(WED, '10:00') });
+    const moves = await Promise.all([
+      call('POST', `/appointments/${appt.id}/reschedule`, desk, { startAt: at(WED, '10:15') }),
+      call('POST', `/appointments/${appt.id}/reschedule`, doctorA, { startAt: at(WED, '10:30') }),
+    ]);
+    expect(moves.map((r) => r.statusCode).sort()).toEqual([201, 409]);
+
+    const today = await booked({ patientId: kamla, startAt: at(TODAY, '10:30') });
+    await act(today.id, 'check_in', desk);
+    const race = await Promise.all([
+      act(today.id, 'start', doctorA),
+      act(today.id, 'cancel', desk, 'Left early'),
+    ]);
+    expect(race.map((r) => r.statusCode).sort()).toEqual([200, 409]);
+    const final = AppointmentDetail.parse(
+      (await call('GET', `/appointments/${today.id}`, desk)).json(),
+    );
+    expect(final.history).toHaveLength(3);
+  });
+
+  it('does not count a moved overbooked patient against the daily limit', async () => {
+    await call('PUT', '/booking-rules', adminA, {
+      horizonDays: 30,
+      sameDayCutoffMinutes: 60,
+      overbookPerDay: 1,
+    });
+    await booked({ startAt: at(WED, '10:00') });
+    await booked({ patientId: kamla, startAt: at(WED, '10:15') });
+    const extra = await booked({
+      patientId: await registerPatient('Neha Kapoor'),
+      startAt: at(WED, '10:00'),
+      overbook: true,
+    });
+    const moved = await call('POST', `/appointments/${extra.id}/reschedule`, desk, {
+      startAt: at(WED, '10:15'),
+      overbook: true,
+    });
+    expect(moved.statusCode, moved.body).toBe(201);
+    expect(moved.json().overbook).toBe(true);
   });
 });
 
