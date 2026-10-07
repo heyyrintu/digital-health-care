@@ -3,7 +3,8 @@
  * in OKLCH for light and dark, font families, the base radius, shadows and gradients.
  *
  * Changes from the demo, for WCAG AA (4.5:1) text contrast: light destructive, success and
- * info are slightly darker, and dark mode puts dark text on those three instead of white.
+ * info are slightly darker, dark mode puts dark text on those three instead of white, and
+ * the sidebar's brand tile (sidebar-primary) carries dark text in both modes.
  *
  * Names follow shadcn/ui (`--background`, `--primary`, `--card-foreground`, ...) so its
  * components work unchanged. `theme.css` maps each one to a Tailwind colour; a test keeps the
@@ -60,7 +61,7 @@ const light = {
   sidebar: 'oklch(0.25 0.035 190)',
   'sidebar-foreground': 'oklch(0.93 0.012 180)',
   'sidebar-primary': 'oklch(0.73 0.1 177)',
-  'sidebar-primary-foreground': 'oklch(0.99 0 0)',
+  'sidebar-primary-foreground': 'oklch(0.17 0.03 190)',
   'sidebar-accent': 'oklch(0.34 0.05 187)',
   'sidebar-accent-foreground': 'oklch(0.99 0 0)',
   'sidebar-border': 'oklch(0.38 0.035 190)',
@@ -72,7 +73,7 @@ const light = {
 export type ThemeColor = keyof typeof light;
 
 /** Dark mode overrides only what changes; the rest is the light value. */
-const dark: Partial<Record<ThemeColor, string>> = {
+export const darkOverrides: Partial<Record<ThemeColor, string>> = {
   background: 'oklch(0.17 0.02 205)',
   foreground: 'oklch(0.94 0.008 180)',
   card: 'oklch(0.215 0.024 203)',
@@ -117,7 +118,7 @@ const dark: Partial<Record<ThemeColor, string>> = {
 
 export const themeColors: Record<ThemeMode, Record<ThemeColor, string>> = {
   light,
-  dark: { ...light, ...dark },
+  dark: { ...light, ...darkOverrides },
 };
 
 /** Shadows and gradients: web only (React Native draws shadows differently). */
