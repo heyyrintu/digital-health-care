@@ -49,7 +49,7 @@ All alerts and actions are stored in `SafetyAlert` and appear in the audit log.
 - Monthly alert review: alerts shown vs accepted vs overridden, to tune non-critical visibility and reduce alert fatigue.
 
 ## Test pack (minimum cases per rule)
-Each rule needs at least one positive case (fires) and one negative case (does not fire), using synthetic personas:
+Each rule needs at least one positive case (fires) and one negative case (does not fire), using synthetic personas. The negative case is the same persona with the trigger removed: no allergy, a different molecule, weight recorded, a dose within range, an in-person consultation, a complete line.
 
 | Persona (synthetic) | Exercises |
 |---|---|
@@ -58,10 +58,16 @@ Each rule needs at least one positive case (fires) and one negative case (does n
 | Adult with chronic kidney disease | SR-09, SR-16 |
 | Adult with asthma | SR-09 (non-selective beta-blocker) |
 | Pregnant patient | SR-10, SR-11 |
-| 6-year-old, no weight today | SR-12; with weight → SR-13 |
+| 6-year-old, no weight today | SR-12; with weight and a dose outside the mg/kg/day range → SR-13 |
+| Adult, dose × frequency above the maximum daily dose for the age band | SR-14 |
+| Same molecule twice, or already in current medications | SR-07 |
+| Adult with liver disease recorded | SR-17 |
 | 72-year-old | SR-15 |
 | Online consultation | SR-18, SR-19 |
 | Incomplete line | SR-20 |
+| Allergy entered by the patient, not yet verified | SR-21 (label on the related alert) |
+| Medicine typed as free text (not in the master) | SR-22 |
+| Contraindicated and moderate interaction pairs, chosen by the clinical advisor from the licensed database | SR-04, SR-06 |
 
 ## Sign-off record
 | Version | Date | Clinical advisor | Doctor (Dr. Gupta) | Notes |
