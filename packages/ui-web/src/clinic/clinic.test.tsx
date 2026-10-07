@@ -147,6 +147,9 @@ describe('StaffShell', () => {
     const current = screen.getAllByRole('link', { current: 'page' });
     expect(current.every((link) => link.getAttribute('href') === '/clinic/queue')).toBe(true);
     expect(screen.getByText('content')).toBeTruthy();
+    // Pages have their own "Search" buttons; the shell's page jump must not match that name.
+    expect(screen.queryAllByRole('button', { name: /search/i })).toHaveLength(0);
+    expect(screen.getAllByRole('button', { name: 'Jump to a page' }).length).toBeGreaterThan(0);
     fireEvent.click(screen.getAllByRole('button', { name: 'Sign out' })[0]!);
     expect(onSignOut).toHaveBeenCalled();
   });

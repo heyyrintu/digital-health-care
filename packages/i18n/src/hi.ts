@@ -411,6 +411,7 @@ export const hi: Record<MessageKey, string> = {
   'ui.expandSidebar': 'साइडबार बड़ा करें',
   'ui.mainNav': 'मुख्य नेविगेशन',
   'ui.searchPlaceholder': 'पेज खोजें',
+  'ui.jumpTo': 'किसी पेज पर जाएँ',
   'ui.noResults': 'कोई नतीजा नहीं मिला।',
   'ui.pages': 'पेज',
   'ui.empty': 'अभी यहाँ कुछ नहीं है।',

@@ -111,6 +111,7 @@ export function StaffShell({
           </span>
           {!collapsed && (
             <Button
+              type="button"
               variant="ghost"
               size="icon"
               className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
@@ -123,6 +124,7 @@ export function StaffShell({
         </div>
         {collapsed && (
           <Button
+            type="button"
             variant="ghost"
             size="icon"
             className="mb-4 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
@@ -181,6 +183,7 @@ export function StaffShell({
           </div>
           {!collapsed && (
             <Button
+              type="button"
               variant="ghost"
               size="sm"
               className="mt-2 w-full justify-start px-2 text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
@@ -200,7 +203,7 @@ export function StaffShell({
             className="flex h-10 w-full max-w-md cursor-pointer items-center gap-2 rounded-xl border bg-card px-3 text-sm text-muted-foreground shadow-xs"
           >
             <Search className="h-4 w-4" aria-hidden />
-            {t('ui.searchPlaceholder')}
+            {t('ui.jumpTo')}
             <kbd className="ml-auto rounded-md border bg-muted px-1.5 py-0.5 text-[10px]">⌘K</kbd>
           </button>
           <div className="flex shrink-0 items-center gap-2">{headerEnd}</div>
@@ -215,15 +218,22 @@ export function StaffShell({
             <span className="block truncate text-[11px] text-muted-foreground">{user.name}</span>
           </span>
           <Button
+            type="button"
             variant="ghost"
             size="icon"
             onClick={() => setSearchOpen(true)}
-            aria-label={t('common.search')}
+            aria-label={t('ui.jumpTo')}
           >
             <Search />
           </Button>
           {headerEnd}
-          <Button variant="ghost" size="icon" onClick={onSignOut} aria-label={t('session.signOut')}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={onSignOut}
+            aria-label={t('session.signOut')}
+          >
             <LogOut />
           </Button>
         </div>
@@ -293,7 +303,7 @@ export function StaffShell({
 
       <Dialog open={searchOpen} onOpenChange={setSearchOpen}>
         <DialogContent className="overflow-hidden p-0 sm:max-w-xl">
-          <DialogTitle className="sr-only">{t('ui.searchPlaceholder')}</DialogTitle>
+          <DialogTitle className="sr-only">{t('ui.jumpTo')}</DialogTitle>
           <Command>
             <CommandInput placeholder={t('ui.searchPlaceholder')} />
             <CommandList>

@@ -407,6 +407,7 @@ export const en = {
   'ui.expandSidebar': 'Expand sidebar',
   'ui.mainNav': 'Main navigation',
   'ui.searchPlaceholder': 'Search pages',
+  'ui.jumpTo': 'Jump to a page',
   'ui.noResults': 'No results found.',
   'ui.pages': 'Pages',
   'ui.empty': 'Nothing here yet.',
