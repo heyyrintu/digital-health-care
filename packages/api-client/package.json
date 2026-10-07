@@ -1,0 +1,22 @@
+{
+  "name": "@dhc/api-client",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Typed API client for web and mobile, built on @dhc/contracts.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@dhc/contracts": "workspace:*",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@dhc/config": "workspace:*"
+  }
+}

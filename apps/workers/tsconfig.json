@@ -1,0 +1,4 @@
+{
+  "extends": "@dhc/config/tsconfig/node.json",
+  "include": ["src", "tsup.config.ts"]
+}

@@ -1,0 +1,28 @@
+{
+  "name": "@dhc/db",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Prisma schema, migrations and tenant-scoped database access (row-level security).",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "generate": "prisma generate",
+    "migrate:dev": "prisma migrate dev",
+    "migrate:deploy": "prisma migrate deploy",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "7.10.0",
+    "@prisma/client": "7.10.0",
+    "pg": "^8.23.1"
+  },
+  "devDependencies": {
+    "@dhc/config": "workspace:*",
+    "@types/node": "^22.20.5",
+    "@types/pg": "^8.23.1",
+    "prisma": "7.10.0"
+  }
+}

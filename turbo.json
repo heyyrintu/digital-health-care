@@ -1,0 +1,31 @@
+{
+  "$schema": "https://turborepo.com/schema.json",
+  "agentGuidance": false,
+  "globalDependencies": ["eslint.config.mjs"],
+  "tasks": {
+    "generate": {
+      "outputs": ["src/generated/**"]
+    },
+    "build": {
+      "dependsOn": ["^build", "generate", "^generate"],
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
+    },
+    "typecheck": {
+      "dependsOn": ["^typecheck", "generate", "^generate"]
+    },
+    "lint": {},
+    "test": {
+      "dependsOn": ["generate", "^generate"]
+    },
+    "test:integration": {
+      "dependsOn": ["generate", "^generate"],
+      "cache": false,
+      "env": ["TEST_DATABASE_URL"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true,
+      "dependsOn": ["^generate"]
+    }
+  }
+}

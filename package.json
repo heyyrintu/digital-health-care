@@ -1,0 +1,33 @@
+{
+  "name": "digital-health-care",
+  "private": true,
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=22.12"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "check": "turbo run lint typecheck test build",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "db:up": "docker compose up -d postgres redis",
+    "db:down": "docker compose down",
+    "test:integration": "turbo run test:integration",
+    "db:migrate": "pnpm --filter @dhc/db migrate:deploy",
+    "db:seed": "pnpm --filter @dhc/api seed",
+    "test:e2e": "pnpm --filter @dhc/e2e test:e2e"
+  },
+  "devDependencies": {
+    "@dhc/config": "workspace:*",
+    "@types/node": "^22.20.5",
+    "eslint": "^10.12.0",
+    "prettier": "^3.9.9",
+    "turbo": "^2.11.7",
+    "typescript": "~5.9.3",
+    "vitest": "^5.0.3"
+  }
+}

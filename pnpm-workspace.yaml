@@ -1,0 +1,7 @@
+packages:
+  - apps/*
+  - packages/*
+
+# Keep React Native tooling on the version Expo SDK 57 ships with.
+overrides:
+  '@react-native/metro-config': 0.86.3
