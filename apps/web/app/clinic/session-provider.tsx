@@ -3,6 +3,7 @@
 import { ApiError, createApiClient, type ApiClient } from '@dhc/api-client';
 import { MeResponse } from '@dhc/contracts';
 import { t as translate, type Locale, type MessageKey } from '@dhc/i18n';
+import { Button, UiLocaleProvider } from '@dhc/ui-web';
 import {
   createContext,
   useCallback,
@@ -154,7 +155,11 @@ export function SessionProvider({
     [status, me, endedReason, api, locale, startSession, signOut],
   );
 
-  return <Context.Provider value={value}>{children}</Context.Provider>;
+  return (
+    <Context.Provider value={value}>
+      <UiLocaleProvider locale={locale}>{children}</UiLocaleProvider>
+    </Context.Provider>
+  );
 }
 
 export function useSession(): SessionContext {
@@ -166,13 +171,14 @@ export function useSession(): SessionContext {
 export function LocaleToggle() {
   const { locale, setLocale } = useSession();
   return (
-    <button
+    <Button
       type="button"
-      className="link-button"
+      variant="ghost"
+      size="sm"
       onClick={() => setLocale(locale === 'en' ? 'hi' : 'en')}
       lang={locale === 'en' ? 'hi' : 'en'}
     >
       {locale === 'en' ? 'हिंदी' : 'English'}
-    </button>
+    </Button>
   );
 }
