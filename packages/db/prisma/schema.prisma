@@ -77,6 +77,19 @@ enum AppointmentSource {
   web
 }
 
+/// Who supplied a chart entry. Patient-reported entries are checked but labelled
+/// unverified until a doctor confirms them (safety rule SR-21).
+enum ChartSource {
+  doctor
+  patient
+}
+
+enum PregnancyStatus {
+  not_pregnant
+  pregnant
+  breastfeeding
+}
+
 enum MembershipStatus {
   /// Created by a staff invite; becomes active when the invite is completed.
   invited
@@ -107,6 +120,11 @@ model Organisation {
   appointments           Appointment[]
   appointmentHistory     AppointmentStatusHistory[]
   displayScreens         DisplayScreen[]
+  allergies              Allergy[]
+  conditions             MedicalCondition[]
+  medications            CurrentMedication[]
+  vitals                 Vitals[]
+  consultations          Consultation[]
 
   @@map("organisations")
 }
@@ -239,11 +257,14 @@ model Patient {
   createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt             DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  organisation Organisation  @relation(fields: [organisationId], references: [id])
-  guardian     Patient?      @relation("Guardian", fields: [guardianPatientId], references: [id])
-  dependants   Patient[]     @relation("Guardian")
+  organisation Organisation        @relation(fields: [organisationId], references: [id])
+  guardian     Patient?            @relation("Guardian", fields: [guardianPatientId], references: [id])
+  dependants   Patient[]           @relation("Guardian")
   tags         PatientTag[]
   appointments Appointment[]
+  allergies    Allergy[]
+  conditions   MedicalCondition[]
+  medications  CurrentMedication[]
 
   @@unique([organisationId, uhid])
   @@index([organisationId, phone])
@@ -448,6 +469,8 @@ model Appointment {
   rescheduledFrom  Appointment?               @relation("Reschedule", fields: [rescheduledFromId], references: [id], onDelete: Restrict)
   rescheduledTo    Appointment?               @relation("Reschedule")
   history          AppointmentStatusHistory[]
+  vitals           Vitals?
+  consultation     Consultation?
 
   @@unique([doctorUserId, clinicId, date, tokenNumber])
   @@index([organisationId, date])
@@ -491,6 +514,122 @@ model DisplayScreen {
 
   @@index([organisationId])
   @@map("display_screens")
+}
+
+/// A recorded allergy (PRD §6.1). Never deleted: removing one keeps the row with who,
+/// when and why, because past prescriptions were checked against it.
+model Allergy {
+  id               String      @id @default(uuid()) @db.Uuid
+  organisationId   String      @map("organisation_id") @db.Uuid
+  patientId        String      @map("patient_id") @db.Uuid
+  substance        String
+  reaction         String?
+  source           ChartSource
+  recordedByUserId String      @map("recorded_by_user_id") @db.Uuid
+  createdAt        DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  removedAt        DateTime?   @map("removed_at") @db.Timestamptz(3)
+  removedByUserId  String?     @map("removed_by_user_id") @db.Uuid
+  removedReason    String?     @map("removed_reason")
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+  patient      Patient      @relation(fields: [patientId], references: [id])
+
+  @@index([patientId])
+  @@map("allergies")
+}
+
+/// A known condition (diabetes, kidney disease…), optionally ICD-10 coded. Resolved, not
+/// deleted.
+model MedicalCondition {
+  id               String      @id @default(uuid()) @db.Uuid
+  organisationId   String      @map("organisation_id") @db.Uuid
+  patientId        String      @map("patient_id") @db.Uuid
+  name             String
+  icd10Code        String?     @map("icd10_code")
+  source           ChartSource
+  recordedByUserId String      @map("recorded_by_user_id") @db.Uuid
+  createdAt        DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  removedAt        DateTime?   @map("removed_at") @db.Timestamptz(3)
+  removedByUserId  String?     @map("removed_by_user_id") @db.Uuid
+  removedReason    String?     @map("removed_reason")
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+  patient      Patient      @relation(fields: [patientId], references: [id])
+
+  @@index([patientId])
+  @@map("medical_conditions")
+}
+
+/// A medicine the patient already takes (from elsewhere). Stopped, not deleted.
+model CurrentMedication {
+  id               String      @id @default(uuid()) @db.Uuid
+  organisationId   String      @map("organisation_id") @db.Uuid
+  patientId        String      @map("patient_id") @db.Uuid
+  name             String
+  dose             String?
+  source           ChartSource
+  recordedByUserId String      @map("recorded_by_user_id") @db.Uuid
+  createdAt        DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  removedAt        DateTime?   @map("removed_at") @db.Timestamptz(3)
+  removedByUserId  String?     @map("removed_by_user_id") @db.Uuid
+  removedReason    String?     @map("removed_reason")
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+  patient      Patient      @relation(fields: [patientId], references: [id])
+
+  @@index([patientId])
+  @@map("current_medications")
+}
+
+/// Vitals for one visit (PRD §6.1). Front desk or the doctor records them; one row per
+/// appointment, updated in place.
+model Vitals {
+  id               String           @id @default(uuid()) @db.Uuid
+  organisationId   String           @map("organisation_id") @db.Uuid
+  appointmentId    String           @unique @map("appointment_id") @db.Uuid
+  patientId        String           @map("patient_id") @db.Uuid
+  bpSystolic       Int?             @map("bp_systolic")
+  bpDiastolic      Int?             @map("bp_diastolic")
+  pulse            Int?
+  temperatureC     Decimal?         @map("temperature_c") @db.Decimal(4, 1)
+  spo2             Int?
+  weightKg         Decimal?         @map("weight_kg") @db.Decimal(5, 2)
+  heightCm         Decimal?         @map("height_cm") @db.Decimal(5, 1)
+  painScore        Int?             @map("pain_score")
+  pregnancyStatus  PregnancyStatus? @map("pregnancy_status")
+  recordedByUserId String           @map("recorded_by_user_id") @db.Uuid
+  createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+  appointment  Appointment  @relation(fields: [appointmentId], references: [id])
+
+  @@index([patientId])
+  @@map("vitals")
+}
+
+/// The doctor's record of a visit (PRD §6.1). The clinical text (complaint, symptoms,
+/// examination, diagnoses, plan, notes, advice) is one encrypted JSON document; only
+/// the follow-up date and bookkeeping stay in the clear. `revision` guards autosave
+/// against a second tab overwriting newer text. Locked once the prescription is signed.
+model Consultation {
+  id             String    @id @default(uuid()) @db.Uuid
+  organisationId String    @map("organisation_id") @db.Uuid
+  appointmentId  String    @unique @map("appointment_id") @db.Uuid
+  patientId      String    @map("patient_id") @db.Uuid
+  doctorUserId   String    @map("doctor_user_id") @db.Uuid
+  notesCipher    String    @map("notes_cipher")
+  followUpDate   DateTime? @map("follow_up_date") @db.Date
+  revision       Int       @default(1)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  lockedAt       DateTime? @map("locked_at") @db.Timestamptz(3)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+  appointment  Appointment  @relation(fields: [appointmentId], references: [id])
+
+  @@index([patientId])
+  @@map("consultations")
 }
 
 model AuditLog {

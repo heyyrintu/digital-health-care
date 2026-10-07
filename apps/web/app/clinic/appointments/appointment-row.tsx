@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useState, type FormEvent } from 'react';
 import { AgeGender, TagChip } from '../patient-bits';
 import { useSession } from '../session-provider';
-import { actionsFor, canReschedule } from './rules';
+import { actionsFor, canConsult, canRecordVitals, canReschedule } from './rules';
 
 const minutesSince = (iso: string | null, now: Date) =>
   iso ? Math.max(0, Math.floor((now.getTime() - Date.parse(iso)) / 60_000)) : 0;
@@ -104,6 +104,16 @@ export function AppointmentRow({
               {t(`action.${action}`)}
             </button>
           ))}
+        {canConsult(a, me.role) && (
+          <Link className="button-link" href={`/clinic/consultations/${a.id}`}>
+            {t('action.consult')}
+          </Link>
+        )}
+        {canRecordVitals(a, me.role, today) && (
+          <Link className="button-link secondary" href={`/clinic/appointments/${a.id}/vitals`}>
+            {t('action.vitals')}
+          </Link>
+        )}
         {canReschedule(a, me.role) && (
           <Link
             className="button-link secondary"
