@@ -127,13 +127,27 @@ Implemented in Phase 1 (`apps/api/src/modules/appointments`). Staff booking only
 - **Reschedule** works on pending or confirmed bookings: the new appointment is checked like a fresh booking (its own slot may be the old one's), the old one becomes `rescheduled` and the two are linked (`rescheduledFromId` / `rescheduledToId`).
 - **Audit:** `appointment.created`, `appointment.status_changed`, `appointment.rescheduled` (IDs, dates, statuses and source only; never reasons or patient details). Every status change is also kept in the appointment's history with who and when.
 
+## 3d. Queue and waiting-room screens
+
+Implemented in Phase 1 (`apps/api/src/modules/queue`).
+
+| Action | Endpoint | Who |
+|---|---|---|
+| Queue | `GET /queue?date&doctorId&clinicId` → `{date, myOpd, booked, completed, closed, averageConsultationMinutes}` (date defaults to today, IST) | All staff |
+| Screens | `GET /display-screens`; `POST /display-screens` `{clinicId, label}` → 201 with the `link` (shown once); `POST /display-screens/{id}/revoke` → 204 | Clinic admin |
+| Screen board | `POST /display/board` `{token}` → `{clinicName, date, doctors: [{doctorName, nowServing, next}]}` | Public (the screen's token; rate limited) |
+
+- **Tabs:** `myOpd` is the patient in consultation first, then checked-in patients — those with a "show first" tag (Emergency, Priority) ahead of the rest, then by check-in time; `booked` is pending and confirmed by time; `completed` is newest first; `closed` is cancelled, no-show and rescheduled. `averageConsultationMinutes` is the mean of the day's completed consultations (start to completion). The web queue refreshes every 15 seconds while visible; live push may replace polling later.
+- **Screens** are kiosk links `…/display#<token>`: 32 random bytes, stored only as a SHA-256 hash, never in a URL path (the token stays in the fragment and travels in the request body), so it does not reach server logs. A screen shows, per doctor, the token in consultation and the next five waiting, in queue order; never patient names. Revoked or unknown tokens give 404. (Build plan §6 names the route `/display/[clinic]`; a guessable clinic ID in the path was replaced by the token link.)
+- **Audit:** `display_screen.created`, `display_screen.revoked`.
+
 ## 4. Endpoint catalogue (by module)
 
 | Module | Main resources and actions |
 |---|---|
 | identity | `/auth/*`, `/me`, `/staff/invites` (built); `/me/devices` |
 | tenancy | `/organisations/current`, `/clinics` (built), `/consultation-types` (built), `/booking-rules` (built), `/doctors` (built), `/settings`, `/branding`, `/tags` (built), `/uhid-settings` (built) |
-| scheduling | `/availability/versions` (built), `/availability/exceptions` (built), `/slots?doctorId&clinicId&consultationTypeId&date&channel` (built), `/appointments` (book, walk-in, list, confirm, check-in, start, complete, cancel, no-show, reschedule; built), `/queue?tab=&date=`, `/display/{clinicId}` |
+| scheduling | `/availability/versions` (built), `/availability/exceptions` (built), `/slots?doctorId&clinicId&consultationTypeId&date&channel` (built), `/appointments` (book, walk-in, list, confirm, check-in, start, complete, cancel, no-show, reschedule; built), `/queue?date` (built), `/display-screens` (built), `/display/board` (built) |
 | patients | `/patients` (search by phone, name or UHID, filter by tag; register; built), `/patients/{id}` (demographics and family, each view audited; edit; built), `/patients/duplicate-check` (built), `/patients/{id}/tags` (built), `/patients/{id}/allergies\|conditions\|medications\|consents`, `/patients/merge-requests` |
 | clinical | `/consultations`, `/consultations/{id}/vitals`, `/scribe/sessions`, `/assessments/forms`, `/assessments`, `/patients/{id}/ask-ai` |
 | prescribing | `/medicines` (search), `/prescription-templates`, `/prescriptions` (draft, update lines, `/safety-check`, `/sign`, `/amend`, `/void`, `/pdf`), `/verify/{code}` (public) |

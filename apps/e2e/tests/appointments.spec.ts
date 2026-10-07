@@ -93,7 +93,7 @@ test.describe('appointments', () => {
     await page.getByLabel('Reason for visit (optional)').fill('Knee pain');
     await page.getByRole('button', { name: 'Book 09:20' }).click();
 
-    await expect(page).toHaveURL(new RegExp(`/clinic/appointments\\?date=${day}`));
+    await expect(page).toHaveURL(new RegExp(`/clinic/queue\\?date=${day}&tab=booked`));
     const row = page.getByTestId('appointment-E2E-000001');
     await expect(row).toContainText('09:20');
     await expect(row).toContainText('Knee pain');
@@ -105,18 +105,23 @@ test.describe('appointments', () => {
     await expect(page.getByTestId('current-booking')).toContainText('09:20');
     await page.getByTestId('slot-09:40').click();
     await page.getByRole('button', { name: 'Move to 09:40' }).click();
-    const rows = page.getByTestId('appointment-E2E-000001');
-    await expect(rows).toHaveCount(2);
-    await expect(rows.filter({ hasText: '09:20' })).toContainText('Rescheduled');
-    const moved = rows.filter({ hasText: '09:40' });
+    // The new booking is in Booked; the old one moved to Cancelled and no-shows.
+    const moved = page.getByTestId('appointment-E2E-000001');
+    await expect(moved).toHaveCount(1);
+    await expect(moved).toContainText('09:40');
     await expect(moved.getByTestId('appointment-status')).toHaveText('Booked');
 
     // Cancel needs a reason.
     await moved.getByRole('button', { name: 'Cancel appointment' }).click();
     await moved.getByLabel('Reason for cancelling').fill('Patient travelling');
     await moved.getByRole('button', { name: 'Cancel appointment' }).click();
-    await expect(moved.getByTestId('appointment-status')).toHaveText('Cancelled');
-    await expect(moved).toContainText('Patient travelling');
+    await expect(page.getByTestId('appointment-E2E-000001')).toHaveCount(0);
+
+    await page.getByRole('tab', { name: /Cancelled and no-shows/ }).click();
+    const closed = page.getByTestId('appointment-E2E-000001');
+    await expect(closed).toHaveCount(2);
+    await expect(closed.filter({ hasText: '09:20' })).toContainText('Rescheduled');
+    await expect(closed.filter({ hasText: '09:40' })).toContainText('Patient travelling');
 
     // The patient page lists all three states.
     await page.getByRole('link', { name: 'Asha Verma' }).first().click();
@@ -144,16 +149,21 @@ test.describe('appointments', () => {
     });
 
     await setUpFromInvite(page, clinic.inviteLink('front_desk'), 'desk synthetic passphrase');
-    await page.getByRole('link', { name: 'Appointments' }).click();
+    await page.getByRole('link', { name: 'Queue' }).click();
     await page.getByRole('link', { name: 'Add walk-in' }).click();
     await page.getByPlaceholder('Find patient by name, mobile or UHID').fill('Ravi');
     await page.getByRole('button', { name: 'Search' }).click();
     await page.getByRole('button', { name: 'Choose' }).click();
     await page.getByRole('button', { name: 'Add as walk-in today' }).click();
 
+    await expect(page.getByRole('tab', { name: /My OPD/ })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
     const walkIn = page.getByTestId('appointment-E2E-000002');
     await expect(walkIn.getByTestId('appointment-status')).toHaveText('Checked in');
     await expect(walkIn).toContainText('Walk-in');
+    await expect(walkIn.getByTestId('waiting-time')).toContainText('Waiting 0 min');
 
     // Overbook Kamla into the taken 09:00 slot tomorrow.
     await page.goto(`/clinic/appointments/new?patientId=${patients[2]!.id}&date=${day}`);
@@ -193,12 +203,17 @@ test.describe('appointments', () => {
       },
     });
 
-    await page.getByRole('link', { name: 'Appointments' }).click();
+    await page.getByRole('link', { name: 'Queue' }).click();
     const row = page.getByTestId('appointment-E2E-000001');
     await row.getByRole('button', { name: 'Start consultation' }).click();
     await expect(row.getByTestId('appointment-status')).toHaveText('In consultation');
     await row.getByRole('button', { name: 'Complete' }).click();
-    await expect(row.getByTestId('appointment-status')).toHaveText('Completed');
-    await expect(row.getByRole('button')).toHaveCount(0);
+    await expect(row).toHaveCount(0);
+
+    await page.getByRole('tab', { name: /Completed/ }).click();
+    const done = page.getByTestId('appointment-E2E-000001');
+    await expect(done.getByTestId('appointment-status')).toHaveText('Completed');
+    await expect(done.getByRole('button')).toHaveCount(0);
+    await expect(page.getByTestId('average-consult')).toContainText('Average consultation');
   });
 });

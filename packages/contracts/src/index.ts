@@ -7,5 +7,6 @@ export * from './invites';
 export * from './openapi';
 export * from './pagination';
 export * from './patients';
+export * from './queue';
 export * from './scheduling';
 export * from './tags';

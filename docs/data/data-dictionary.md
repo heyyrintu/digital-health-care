@@ -4,7 +4,7 @@
 
 Conventions for every table: `id` (UUID), `organisationId` (except platform-level User/Device), `createdAt`, `updatedAt`, `deletedAt` where soft delete applies. Files are stored by S3 key, never by public URL. Fields marked *(encrypted)* use field-level encryption. Row-level security filters every query by `organisationId` (ADR 0014). Database columns are snake_case (`organisation_id`); this document uses the camelCase field names.
 
-**Implemented so far:** Organisation, User, Membership, StaffInvite, Session, OtpChallenge and AuditLog (Phase 0); Patient, UhidSettings, Tag and PatientTag (patient register); Clinic, ConsultationType, BookingRules, AvailabilityVersion and AvailabilityException (availability); Appointment and AppointmentStatusHistory (appointments) — see `packages/db/prisma/schema.prisma`. Everything else below is the target design.
+**Implemented so far:** Organisation, User, Membership, StaffInvite, Session, OtpChallenge and AuditLog (Phase 0); Patient, UhidSettings, Tag and PatientTag (patient register); Clinic, ConsultationType, BookingRules, AvailabilityVersion and AvailabilityException (availability); Appointment and AppointmentStatusHistory (appointments); DisplayScreen (queue) — see `packages/db/prisma/schema.prisma`. Everything else below is the target design.
 
 ## Platform and identity
 
@@ -48,6 +48,7 @@ Conventions for every table: `id` (UUID), `organisationId` (except platform-leve
 | AvailabilityException | Leave (a doctor), holiday (a clinic, or every clinic when clinicId is empty), extra session (doctor + clinic + type) | organisationId, type (leave\|holiday\|extra_session), doctorUserId?, clinicId?, consultationTypeId?, startDate, endDate, startTime?, endTime? (both or neither; none = whole day), reason?, createdByUserId |
 | Appointment | Booking or walk-in (built; never deleted) | organisationId, patientId, doctorUserId, clinicId, consultationTypeId, date (IST day of the queue), startAt, endAt, status (pending\|confirmed\|checked_in\|in_consultation\|completed\|cancelled\|no_show\|rescheduled), source (front_desk\|walk_in\|app\|web; scan_share planned), tokenNumber (per doctor + clinic + day, unique), overbook, reason, cancelReason, rescheduledFromId (unique: the booking this one replaced), checkedInAt, consultationStartedAt, completedAt (visit timing), createdByUserId; planned: joinInfo, holdExpiresAt |
 | AppointmentStatusHistory | Status timeline (built; append-only) | organisationId, appointmentId, fromStatus (empty when created), toStatus, actorUserId, at, note (cancel reason) |
+| DisplayScreen | Waiting-room screen link (built; revoked, never deleted) | organisationId, clinicId, label, tokenHash (SHA-256 of the link token, unique), createdByUserId, createdAt, revokedAt |
 | VisitTiming | Consultation duration (held on Appointment for now: checkedInAt, consultationStartedAt, completedAt) | appointmentId, startedAt, endedAt |
 
 ## Clinical
