@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import {
+  darkOverrides,
   oklchToHex,
   themeColors,
   themeCssVariables,
@@ -26,8 +27,11 @@ describe('theme.css', () => {
 });
 
 describe('themeColors', () => {
-  it('gives dark mode a value for every colour', () => {
-    expect(Object.keys(themeColors.dark).sort()).toEqual(Object.keys(themeColors.light).sort());
+  it('only overrides colours that exist, each with a different value in dark mode', () => {
+    for (const [name, value] of Object.entries(darkOverrides)) {
+      expect(themeColors.light, name).toHaveProperty(name);
+      expect(value, name).not.toBe(themeColors.light[name as ThemeColor]);
+    }
   });
 
   it('keeps foreground text readable on its background', () => {
@@ -47,6 +51,7 @@ describe('themeColors', () => {
       ['info', 'info-soft'],
       ['primary', 'accent'],
       ['sidebar-foreground', 'sidebar'],
+      ['sidebar-primary-foreground', 'sidebar-primary'],
     ];
     for (const mode of ['light', 'dark'] as const) {
       const hex = themeHex(mode);

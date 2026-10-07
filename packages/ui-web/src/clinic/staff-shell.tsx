@@ -169,7 +169,11 @@ export function StaffShell({
           )}
         >
           <div className="flex min-w-0 items-center gap-3">
-            <Avatar name={user.name} className="ring-sidebar" />
+            <Avatar
+              name={user.name}
+              className="ring-sidebar"
+              label={collapsed ? user.name : undefined}
+            />
             {!collapsed && (
               <div className="min-w-0 flex-1">
                 <p className="truncate text-xs font-semibold">{user.name}</p>
@@ -201,7 +205,9 @@ export function StaffShell({
           >
             <Search className="h-4 w-4" aria-hidden />
             {t('ui.searchPlaceholder')}
-            <kbd className="ml-auto rounded-md border bg-muted px-1.5 py-0.5 text-[10px]">⌘K</kbd>
+            <kbd className="ml-auto rounded-md border bg-muted px-1.5 py-0.5 text-[10px]">
+              Ctrl/⌘K
+            </kbd>
           </button>
           <div className="flex shrink-0 items-center gap-2">{headerEnd}</div>
         </header>
@@ -252,12 +258,15 @@ export function StaffShell({
         </nav>
 
         <main
-          className={cn('mx-auto max-w-[1500px] p-4 md:p-6 xl:p-8', bottomTabs && 'pb-28 md:pb-6')}
+          className={cn(
+            'mx-auto max-w-[1500px] p-4 md:p-6 xl:p-8',
+            bottomTabs?.length && 'pb-28 md:pb-6',
+          )}
         >
           {children}
         </main>
 
-        {bottomTabs && (
+        {bottomTabs && bottomTabs.length > 0 && (
           <nav
             aria-label={t('ui.mainNav')}
             className="safe-bottom fixed inset-x-0 bottom-0 z-40 grid border-t bg-background shadow-sheet md:hidden"

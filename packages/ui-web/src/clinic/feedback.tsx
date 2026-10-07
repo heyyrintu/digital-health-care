@@ -71,7 +71,7 @@ export function Stat({
     </>
   );
   const classes =
-    'surface group flex min-h-28 flex-col items-start justify-between gap-3 p-4 text-left transition duration-200';
+    'surface group flex min-h-28 flex-col items-start justify-between gap-3 p-4 text-left font-sans text-foreground transition duration-200';
   return onClick ? (
     <button
       type="button"

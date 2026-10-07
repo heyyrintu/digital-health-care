@@ -92,15 +92,20 @@ const avatarTones = [
   'bg-success-soft text-success',
 ];
 
-/** Initials in a circle. `index` picks the tone, so a list can vary them. */
+/**
+ * Initials in a circle. `index` picks the tone, so a list can vary them. Decorative next to
+ * a visible name; pass `label` when it stands alone so screen readers get the name.
+ */
 export function Avatar({
   name,
   className,
   index = 0,
+  label,
 }: {
   name: string;
   className?: string;
   index?: number;
+  label?: string;
 }) {
   const initials = name
     .split(/\s+/)
@@ -115,7 +120,7 @@ export function Avatar({
         avatarTones[index % avatarTones.length],
         className,
       )}
-      aria-hidden
+      {...(label ? { role: 'img', 'aria-label': label } : { 'aria-hidden': true })}
     >
       {initials}
     </span>

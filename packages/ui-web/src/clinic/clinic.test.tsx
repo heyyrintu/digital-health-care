@@ -73,6 +73,11 @@ describe('feedback and forms', () => {
     );
     expect(screen.getByLabelText(/Mobile/)).toBeTruthy();
     expect(screen.getByRole('alert').textContent).toBe('Enter 10 digits');
+    const input = screen.getByLabelText(/Mobile/);
+    expect(input.getAttribute('aria-invalid')).toBe('true');
+    expect(document.getElementById(input.getAttribute('aria-describedby')!)?.textContent).toBe(
+      'Enter 10 digits',
+    );
     expect(screen.queryByText('10 digits')).toBeNull();
   });
 
