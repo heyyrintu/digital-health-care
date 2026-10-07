@@ -215,12 +215,20 @@ export function slotsForDay(input: SlotsForDayInput): DaySlots {
   // Part-day leave and holidays remove the slots they overlap.
   const blocked = todays
     .filter((e) => e.type !== 'extra_session' && e.startTime && e.endTime)
-    .map((e) => [minutesOf(e.startTime!), minutesOf(e.endTime!)] as const);
-  const open = ranges.filter(([s, e]) => !blocked.some(([bs, be]) => s < be && bs < e));
+    .map((e) => ({ type: e.type, start: minutesOf(e.startTime!), end: minutesOf(e.endTime!) }));
+  const open = ranges.filter(([s, e]) => !blocked.some((b) => s < b.end && b.start < e));
 
-  // An extra session may repeat a regular slot; keep one of each start time.
-  const unique = [...new Map(open.map((r) => [r[0], r])).values()].sort((a, b) => a[0] - b[0]);
-  if (unique.length === 0) return day(ranges.length > 0 ? 'leave' : 'no_schedule');
+  // An extra session may overlap regular slots, on or off their grid; in time order,
+  // keep each slot only if it starts after the last kept one ends.
+  const unique: [number, number][] = [];
+  for (const r of [...open].sort((a, b) => a[0] - b[0])) {
+    const last = unique.at(-1);
+    if (!last || r[0] >= last[1]) unique.push(r);
+  }
+  if (unique.length === 0) {
+    if (ranges.length === 0) return day('no_schedule');
+    return day(blocked.some((b) => b.type === 'leave') ? 'leave' : 'holiday');
+  }
 
   const cutoff = new Date(now.getTime() + window.sameDayCutoffMinutes * 60_000);
   const slots = unique.map(([s, e]): Slot => {

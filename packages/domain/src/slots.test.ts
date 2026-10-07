@@ -79,6 +79,12 @@ describe('slotsForDay', () => {
     const holiday = { type: 'holiday' as const, startDate: TODAY, endDate: TODAY };
     expect(slotsForDay(base({ exceptions: [holiday] })).closed).toBe('holiday');
 
+    // A part-day holiday covering every session reads as a holiday, not leave.
+    const allDayHours = { ...holiday, startTime: '09:00', endTime: '18:00' };
+    expect(slotsForDay(base({ exceptions: [allDayHours] })).closed).toBe('holiday');
+    const allDayLeave = { ...leave, startTime: '09:00', endTime: '18:00' };
+    expect(slotsForDay(base({ exceptions: [allDayLeave] })).closed).toBe('leave');
+
     const morningOff = { ...leave, startTime: '10:20', endTime: '11:00' };
     expect(times(base({ exceptions: [morningOff] }))).toEqual(['10:00', '17:00', '17:15']);
   });
@@ -101,6 +107,9 @@ describe('slotsForDay', () => {
       '17:30',
       '17:45',
     ]);
+    // Off the regular grid: overlapping slots are dropped, the earliest kept.
+    const offGrid = { ...extra, startTime: '17:10', endTime: '17:40' };
+    expect(times(base({ exceptions: [offGrid] })).slice(4)).toEqual(['17:00', '17:15']);
     // An extra session on a day with no schedule uses the default slot length.
     const thursday = { ...extra, startDate: '2026-10-08', endDate: '2026-10-08' };
     expect(

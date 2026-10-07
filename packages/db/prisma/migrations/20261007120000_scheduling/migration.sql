@@ -119,10 +119,10 @@ ALTER TABLE "availability_versions" ADD CONSTRAINT "availability_versions_consul
 ALTER TABLE "availability_exceptions" ADD CONSTRAINT "availability_exceptions_organisation_id_fkey" FOREIGN KEY ("organisation_id") REFERENCES "organisations"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "availability_exceptions" ADD CONSTRAINT "availability_exceptions_clinic_id_fkey" FOREIGN KEY ("clinic_id") REFERENCES "clinics"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "availability_exceptions" ADD CONSTRAINT "availability_exceptions_clinic_id_fkey" FOREIGN KEY ("clinic_id") REFERENCES "clinics"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "availability_exceptions" ADD CONSTRAINT "availability_exceptions_consultation_type_id_fkey" FOREIGN KEY ("consultation_type_id") REFERENCES "consultation_types"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+ALTER TABLE "availability_exceptions" ADD CONSTRAINT "availability_exceptions_consultation_type_id_fkey" FOREIGN KEY ("consultation_type_id") REFERENCES "consultation_types"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 
 -- Guard rails the API also checks (PRD §4.3).

@@ -19,6 +19,8 @@ export function SlotPreview({ selection }: { selection: Selection }) {
     if (!date) return;
     let cancelled = false;
     setError(null);
+    // Never leave another day's slots on screen while loading or after a failure.
+    setDay(null);
     api
       .request('GET', '/slots', {
         schema: SlotsResponse,

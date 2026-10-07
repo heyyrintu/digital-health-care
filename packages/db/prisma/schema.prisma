@@ -375,8 +375,10 @@ model AvailabilityException {
   createdAt          DateTime                  @default(now()) @map("created_at") @db.Timestamptz(3)
 
   organisation     Organisation      @relation(fields: [organisationId], references: [id])
-  clinic           Clinic?           @relation(fields: [clinicId], references: [id])
-  consultationType ConsultationType? @relation(fields: [consultationTypeId], references: [id])
+  // Restrict, not SetNull: an empty clinic means "every clinic", so a deleted clinic
+  // must never widen a holiday.
+  clinic           Clinic?           @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  consultationType ConsultationType? @relation(fields: [consultationTypeId], references: [id], onDelete: Restrict)
 
   @@index([organisationId, startDate])
   @@map("availability_exceptions")
