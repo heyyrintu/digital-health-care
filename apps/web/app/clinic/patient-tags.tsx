@@ -30,7 +30,7 @@ export function TagPicker({
         >
           <input
             type="checkbox"
-            className="size-4 accent-[var(--color-primary)]"
+            className="size-4 accent-primary"
             checked={selected.includes(tag.id)}
             onChange={(e) =>
               onChange(

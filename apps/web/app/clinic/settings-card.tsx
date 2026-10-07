@@ -221,11 +221,7 @@ export function SettingsCard() {
           />
         </div>
         <label className="flex min-h-11 items-center gap-2 text-sm sm:col-span-2">
-          <input
-            type="checkbox"
-            name="sortToTop"
-            className="size-4 accent-[var(--color-primary)]"
-          />{' '}
+          <input type="checkbox" name="sortToTop" className="size-4 accent-primary" />{' '}
           {t('settings.tagSortTop')}
         </label>
         <Button type="submit" disabled={busy} className="sm:col-span-2 sm:justify-self-start">

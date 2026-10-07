@@ -299,7 +299,7 @@ function ChartSection({
             <input
               type="checkbox"
               name="patientReported"
-              className="size-4 shrink-0 accent-[var(--color-primary)]"
+              className="size-4 shrink-0 accent-primary"
             />{' '}
             {t('chart.patientReported')}
           </label>

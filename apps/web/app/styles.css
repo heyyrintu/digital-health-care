@@ -13,11 +13,11 @@
 
 @layer base {
   * {
-    border-color: var(--color-border);
+    border-color: var(--border);
   }
   body {
-    background-color: var(--color-background);
-    color: var(--color-foreground);
+    background-color: var(--background);
+    color: var(--foreground);
     font-family: var(--font-sans);
     font-size: 15px;
     line-height: 1.55;
@@ -32,7 +32,7 @@
     text-wrap: balance;
   }
   ::selection {
-    background: color-mix(in oklab, var(--color-primary) 25%, transparent);
+    background: color-mix(in oklab, var(--primary) 25%, transparent);
   }
 }
 

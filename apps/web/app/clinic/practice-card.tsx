@@ -273,7 +273,7 @@ export function PracticeCard() {
           <Input id="type-follow-up" name="followUpFee" type="number" min={0} step="0.01" />
         </div>
         <label className="flex min-h-11 items-center gap-2 text-sm sm:col-span-2">
-          <input type="checkbox" name="prepay" className="size-4 accent-[var(--color-primary)]" />{' '}
+          <input type="checkbox" name="prepay" className="size-4 accent-primary" />{' '}
           {t('practice.typePrepay')}
         </label>
         <Button type="submit" disabled={busy} className="sm:col-span-2 sm:justify-self-start">

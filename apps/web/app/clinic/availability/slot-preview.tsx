@@ -64,7 +64,7 @@ export function SlotPreview({ selection }: { selection: Selection }) {
         <label className="flex min-h-11 cursor-pointer items-center gap-2.5 text-sm font-medium">
           <input
             type="checkbox"
-            className="size-4 accent-[var(--color-primary)]"
+            className="size-4 accent-primary"
             checked={asPatient}
             onChange={(e) => setAsPatient(e.target.checked)}
           />{' '}

@@ -188,7 +188,7 @@ function Login() {
                       name="role"
                       value={role}
                       defaultChecked={i === 0}
-                      className="size-4 accent-[var(--color-primary)]"
+                      className="size-4 accent-primary"
                     />
                     {t(`role.${role as 'doctor' | 'front_desk' | 'clinic_admin'}`)}
                   </label>

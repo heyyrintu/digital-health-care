@@ -315,7 +315,7 @@ function Book({ me }: { me: MeResponse }) {
             <label className="flex min-h-11 cursor-pointer items-center gap-2.5 text-sm font-medium">
               <input
                 type="checkbox"
-                className="size-4 accent-[var(--color-primary)]"
+                className="size-4 accent-primary"
                 checked={overbook}
                 onChange={(e) => {
                   setOverbook(e.target.checked);
