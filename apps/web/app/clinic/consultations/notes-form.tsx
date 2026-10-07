@@ -123,7 +123,7 @@ export function NotesForm({
               value={notes[key]}
               maxLength={key === 'testsAdvised' ? 2000 : 4000}
               onChange={(e) => set({ [key]: e.target.value })}
-              className={cn(textareaLook, key === 'privateNotes' && 'border-dashed bg-muted/40')}
+              className={cn(key === 'privateNotes' && 'border-dashed bg-muted/40')}
             />
           </div>
         ))}
@@ -157,9 +157,6 @@ export function NotesForm({
 
 const fieldLabel = 'block text-sm font-semibold';
 const groupHeading = 'text-[11px] font-bold uppercase tracking-wide text-muted-foreground';
-/** Brings ui-web's Textarea in line with Input (radius, surface, focus ring). */
-const textareaLook =
-  'rounded-xl bg-card px-3.5 py-2.5 shadow-xs transition-[border-color,box-shadow] focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/20';
 
 /** ICD-10 search with free text allowed (PRD §6.1). */
 function DiagnosisPicker({
