@@ -11,7 +11,7 @@ Testing effort follows risk. Highest risk: safety engine, signing and immutabili
 | Unit (domain, safety, dosage remarks, slots, UHID) | Vitest | Every PR |
 | API integration (roles, tenants, errors) | Vitest + test DB | Every PR |
 | Tenant isolation suite | Dedicated | Every PR, blocks merge |
-| Web end-to-end | Playwright (`apps/e2e`) — built today: invite page, staff web sign-in (cookie, reload, sign-out, 15-minute idle), dashboard invites and authenticator reset | Every PR (full suite while it is small); nightly once it grows |
+| Web end-to-end | Playwright (`apps/e2e`) — built today: invite page, staff web sign-in (cookie, reload, sign-out, 15-minute idle), dashboard invites and authenticator reset, patient register (UHID settings, tags, walk-in registration with duplicate warning, guardian, edit) | Every PR (full suite while it is small); nightly once it grows |
 | Mobile end-to-end | Maestro (iOS simulator, Android emulator, phone + tablet) | Nightly, before each store build |
 | Provider contract tests | Recorded sandbox payloads (Cashfree, WhatsApp, SMS, ABDM) | Nightly |
 | Safety rule pack | `safety/safety-rule-catalogue.md` cases | Any rule change |

@@ -6,3 +6,4 @@ export * from './invites';
 export * from './openapi';
 export * from './pagination';
 export * from './patients';
+export * from './tags';

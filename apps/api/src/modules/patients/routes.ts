@@ -1,73 +1,109 @@
-import { PatientListQuery, PatientListResponse, PatientSummary, STAFF_ROLES } from '@dhc/contracts';
-import { withTenant, type Patient } from '@dhc/db';
+import {
+  CreatePatientBody,
+  CreateTagBody,
+  DuplicateCheckBody,
+  DuplicateCheckResponse,
+  PatientDetail,
+  PatientListQuery,
+  PatientListResponse,
+  STAFF_ROLES,
+  SetPatientTagsBody,
+  Tag,
+  TagList,
+  UhidSettings,
+  UpdatePatientBody,
+  UpdateTagBody,
+  UpdateUhidSettingsBody,
+} from '@dhc/contracts';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { AppError } from '../../errors';
 import { authOf, authenticate, requireRole } from '../../plugins/authenticate';
 import type { Services } from '../../services';
-import { writeAudit } from '../audit/write';
+import { PatientService } from './service';
+import { TagService } from './tags';
 
 const IdParams = z.object({ id: z.uuid() });
 
-const toSummary = (p: Patient): PatientSummary => ({
-  id: p.id,
-  uhid: p.uhid,
-  name: p.name,
-  phone: p.phone,
-  dob: p.dob ? p.dob.toISOString().slice(0, 10) : null,
-});
-
-/** Staff-only patient lookup. Every query runs inside the caller's organisation (RLS). */
+/**
+ * Patient register and its settings. PRD §3.2: front desk, doctors and clinic admins
+ * register patients; front desk and doctors assign tags; clinic admins configure tags
+ * and UHIDs.
+ */
 export const patientRoutes: FastifyPluginAsync<{ services: Services }> = async (
   app,
   { services },
 ) => {
-  const guard = { preHandler: [authenticate(services), requireRole(...STAFF_ROLES)] };
+  const patients = new PatientService(services);
+  const tags = new TagService(services);
+  const auth = authenticate(services);
+  const staff = { preHandler: [auth, requireRole(...STAFF_ROLES)] };
+  const registrar = { preHandler: [auth, requireRole('front_desk', 'doctor', 'clinic_admin')] };
+  const tagger = { preHandler: [auth, requireRole('front_desk', 'doctor')] };
+  const admin = { preHandler: [auth, requireRole('clinic_admin')] };
 
-  app.get('/patients', guard, async (request) => {
-    const { organisationId } = authOf(request);
-    const { limit, cursor, q } = PatientListQuery.parse(request.query);
-    const rows = await withTenant(services.db, organisationId, (tx) =>
-      tx.patient.findMany({
-        where: q
-          ? {
-              OR: [
-                { name: { contains: q, mode: 'insensitive' } },
-                { uhid: { contains: q.toUpperCase() } },
-                { phone: { contains: q } },
-              ],
-            }
-          : undefined,
-        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
-        take: limit + 1,
-        ...(cursor ? { cursor: { id: decodeCursor(cursor) }, skip: 1 } : {}),
-      }),
-    );
-    const pageRows = rows.slice(0, limit);
-    return PatientListResponse.parse({
-      data: pageRows.map(toSummary),
-      nextCursor: rows.length > limit ? encodeCursor(pageRows[pageRows.length - 1]!.id) : null,
+  app.get('/patients', staff, async (request) => {
+    const query = PatientListQuery.parse(request.query);
+    const { data, lastId } = await patients.list(authOf(request), query, decodeCursor);
+    return PatientListResponse.parse({ data, nextCursor: lastId ? encodeCursor(lastId) : null });
+  });
+
+  app.get('/patients/:id', staff, async (request) => {
+    const { id } = IdParams.parse(request.params);
+    return PatientDetail.parse(await patients.view(request, authOf(request), id));
+  });
+
+  app.post('/patients', registrar, async (request, reply) => {
+    const body = CreatePatientBody.parse(request.body);
+    const created = await patients.create(request, authOf(request), body);
+    return reply.status(201).send(PatientDetail.parse(created));
+  });
+
+  app.patch('/patients/:id', registrar, async (request) => {
+    const { id } = IdParams.parse(request.params);
+    const body = UpdatePatientBody.parse(request.body);
+    return PatientDetail.parse(await patients.update(request, authOf(request), id, body));
+  });
+
+  app.post('/patients/duplicate-check', registrar, async (request) => {
+    const body = DuplicateCheckBody.parse(request.body);
+    return DuplicateCheckResponse.parse({
+      candidates: await patients.duplicates(authOf(request), body),
     });
   });
 
-  app.get('/patients/:id', guard, async (request) => {
-    const { organisationId, userId } = authOf(request);
+  app.put('/patients/:id/tags', tagger, async (request) => {
     const { id } = IdParams.parse(request.params);
-    const patient = await withTenant(services.db, organisationId, async (tx) => {
-      const found = await tx.patient.findUnique({ where: { id } });
-      // Another organisation's patient is indistinguishable from a missing one.
-      if (!found) return null;
-      await writeAudit(tx, request, {
-        action: 'patient.viewed',
-        organisationId,
-        actorUserId: userId,
-        entityType: 'patient',
-        entityId: id,
-      });
-      return found;
-    });
-    if (!patient) throw new AppError(404, 'NOT_FOUND', 'Not found.');
-    return PatientSummary.parse(toSummary(patient));
+    const { tagIds } = SetPatientTagsBody.parse(request.body);
+    return PatientDetail.parse(await patients.setTags(request, authOf(request), id, tagIds));
+  });
+
+  app.get('/tags', staff, async (request) =>
+    TagList.parse({ data: await tags.list(authOf(request)) }),
+  );
+
+  app.post('/tags', admin, async (request, reply) => {
+    const body = CreateTagBody.parse(request.body);
+    return reply.status(201).send(Tag.parse(await tags.create(request, authOf(request), body)));
+  });
+
+  app.patch('/tags/:id', admin, async (request) => {
+    const { id } = IdParams.parse(request.params);
+    const body = UpdateTagBody.parse(request.body);
+    return Tag.parse(await tags.update(request, authOf(request), id, body));
+  });
+
+  app.post('/tags/defaults', admin, async (request) =>
+    TagList.parse({ data: await tags.addDefaults(request, authOf(request)) }),
+  );
+
+  app.get('/uhid-settings', staff, async (request) =>
+    UhidSettings.parse(await patients.uhidSettings(authOf(request))),
+  );
+
+  app.put('/uhid-settings', admin, async (request) => {
+    const body = UpdateUhidSettingsBody.parse(request.body);
+    return UhidSettings.parse(await patients.updateUhidSettings(request, authOf(request), body));
   });
 };
 

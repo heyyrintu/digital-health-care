@@ -5,6 +5,7 @@
  * Staff accounts are created as invites: open each printed link to set a password and
  * enrol an authenticator. Re-running issues fresh links for anyone not yet set up.
  */
+import { DEFAULT_TAGS } from '@dhc/contracts';
 import { createDb } from '@dhc/db';
 import { randomBytes } from 'node:crypto';
 import { hashToken } from '../auth/tokens';
@@ -94,10 +95,21 @@ for (const [i, p] of personas.entries()) {
   });
 }
 
+// UHID numbering and the default tags (PRD §5.4).
+await db.uhidSettings.upsert({
+  where: { organisationId: org.id },
+  update: {},
+  create: { organisationId: org.id, prefix: 'DC', nextNumber: 10001 },
+});
+await db.tag.createMany({
+  data: DEFAULT_TAGS.map((t) => ({ ...t, organisationId: org.id })),
+  skipDuplicates: true,
+});
+
 await db.$disconnect();
 
 console.warn(
-  `Seeded organisation "demo-clinic" with ${staff.length} staff and ${personas.length} synthetic patients.`,
+  `Seeded organisation "demo-clinic" with ${staff.length} staff, ${personas.length} synthetic patients and the default tags (new UHIDs start at DC10001).`,
 );
 console.warn('Staff invite links (valid 72 hours; the token is everything after #):');
 for (const line of links) console.warn(line);
