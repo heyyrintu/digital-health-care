@@ -7,7 +7,7 @@ test.describe('patient register', () => {
 
     await page.getByLabel('Prefix (letters or digits, optional)').fill('ek');
     await page.getByLabel('Next number').fill('501');
-    await page.getByRole('button', { name: 'Save' }).click();
+    await page.getByLabel('Clinic settings').getByRole('button', { name: 'Save' }).click();
     await expect(page.getByTestId('uhid-preview')).toHaveText(
       'The next patient registered gets EK501.',
     );

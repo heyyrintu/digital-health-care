@@ -10,6 +10,12 @@ For doctors using the Clinic app (phone, iPad, Android) or the web dashboard.
 
 **Lost your phone?** Ask your clinic admin to reset your sign-in. They will give you a new link to set a new password and authenticator. If you work at more than one clinic, contact platform support instead: a clinic admin cannot reset you, and support will call you back on your registered number before sending a link.
 
+## Your availability
+Open **Availability** from the dashboard and pick the clinic and consultation type.
+- **Weekly schedule:** add one or more sessions per day (for example 10:00–13:00 and 17:00–20:00; the gap is your break), the minutes per slot and an optional break after each slot, and the date it applies from, then **Save schedule**. A new schedule never changes days before its start date, so existing bookings are safe. An upcoming schedule can be withdrawn until it starts.
+- **Leave and extra sessions:** add leave for whole days, or give a start and end time for part of a day; it applies at every clinic. Add an extra session on a specific date at the chosen clinic. Either can be removed until it starts.
+- **Slots on a day** shows the resulting slots; tick *Show as patients see it online* to apply the clinic's booking horizon and same-day cutoff.
+
 ## Your day
 - **Queue:** My OPD, Booked, Completed, Follow-ups. Each card shows token, waiting time and tags. Tap **Write Rx** or **Scribe** directly from the card.
 - **Patient sheet:** call, ABHA, tags, bill and payment link, vitals, records, assessment, refer, review link, video call.

@@ -4,7 +4,7 @@
 
 Conventions for every table: `id` (UUID), `organisationId` (except platform-level User/Device), `createdAt`, `updatedAt`, `deletedAt` where soft delete applies. Files are stored by S3 key, never by public URL. Fields marked *(encrypted)* use field-level encryption. Row-level security filters every query by `organisationId` (ADR 0014). Database columns are snake_case (`organisation_id`); this document uses the camelCase field names.
 
-**Implemented so far (Phase 0):** Organisation, User, Membership, StaffInvite, Session, OtpChallenge, Patient (minimal fields) and AuditLog — see `packages/db/prisma/schema.prisma`. Everything else below is the target design.
+**Implemented so far:** Organisation, User, Membership, StaffInvite, Session, OtpChallenge and AuditLog (Phase 0); Patient, UhidSettings, Tag and PatientTag (patient register); Clinic, ConsultationType, BookingRules, AvailabilityVersion and AvailabilityException (availability) — see `packages/db/prisma/schema.prisma`. Everything else below is the target design.
 
 ## Platform and identity
 
@@ -12,7 +12,7 @@ Conventions for every table: `id` (UUID), `organisationId` (except platform-leve
 |---|---|---|
 | Organisation | Practice or clinic group (tenant) | id, slug (unique, used in sign-in and clinic links), name, legalName, status, chartModel (shared\|own_patients), brandingId, settings (JSON) |
 | Branding | Per-organisation look and senders | organisationId, displayName, logoKey, colours, customDomain, whatsappSender, smsSenderId, emailDomain, googleReviewUrl |
-| Clinic | Physical location | organisationId, name, address, geo, phone, gstin?, timezone, hfrId |
+| Clinic | Physical location (built: name unique per org, address, phone, timezone default Asia/Kolkata, active) | organisationId, name, address, geo, phone, gstin?, timezone, hfrId, active |
 | User | Platform-level login identity (no organisationId) | phone (unique), email (unique), displayName, status, passwordHash (staff, scrypt), mfaSecret (staff, encrypted), mfaPendingSecret (encrypted, set during invite acceptance until the first code), mfaLastUsedStep (TOTP replay guard), failedLoginCount, lockedUntil, lastLoginAt |
 | Membership | A user's role in one organisation; the auth link to tenants | organisationId, userId, role (patient\|doctor\|front_desk\|clinic_admin), status (invited\|active\|revoked) |
 | StaffInvite | Single-use link to set up a staff account | organisationId, userId, role, purpose (join\|reset), tokenHash, createdByUserId, expiresAt (72 h), acceptedAt, revokedAt |
@@ -42,9 +42,10 @@ Conventions for every table: `id` (UUID), `organisationId` (except platform-leve
 
 | Entity | Purpose | Key fields |
 |---|---|---|
-| ConsultationType | Mode and pricing | organisationId, name, mode (in_person\|audio\|video), defaultDurationMin, fee, followUpFee, requiresPrepayment, active |
-| AvailabilityVersion | Weekly schedule version | doctorId, clinicId, consultationTypeId, effectiveFrom, weekdays/sessions (JSON), slotMin, bufferMin, breaks |
-| AvailabilityException | Leave, holiday, extra session | doctorId, startDate, endDate, type, startTime?, endTime?, reason |
+| ConsultationType | Mode and pricing | organisationId, name (unique per org), mode (in_person\|audio\|video), defaultDurationMin (5–240), feePaise, followUpFeePaise?, requiresPrepayment, active |
+| BookingRules | Patient booking window (built; more rules to come) | organisationId (key), horizonDays (default 30, 1–365), sameDayCutoffMinutes (default 60, 0–1440) |
+| AvailabilityVersion | Weekly schedule version; never edited, a new one takes over from its date | organisationId, doctorUserId, clinicId, consultationTypeId, effectiveFrom (date, unique with doctor + clinic + type), weekly (JSON: `{mon: [{start, end}]}`, IST `HH:MM`; gaps between sessions are breaks), slotMinutes (5–240), bufferMinutes (0–120), createdByUserId |
+| AvailabilityException | Leave (a doctor), holiday (a clinic, or every clinic when clinicId is empty), extra session (doctor + clinic + type) | organisationId, type (leave\|holiday\|extra_session), doctorUserId?, clinicId?, consultationTypeId?, startDate, endDate, startTime?, endTime? (both or neither; none = whole day), reason?, createdByUserId |
 | Appointment | Booking | patientId, doctorId, clinicId, consultationTypeId, startAt, endAt, status, source (app\|web\|front_desk\|walk_in\|scan_share), tokenNumber, reason, joinInfo, rescheduledFromId, cancelReason, overbook, holdExpiresAt |
 | AppointmentStatusHistory | Status timeline | appointmentId, fromStatus, toStatus, actorUserId, at, note |
 | VisitTiming | Consultation duration | appointmentId, startedAt, endedAt |
