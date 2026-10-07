@@ -7,6 +7,8 @@ settings:
 overrides:
   '@react-native/metro-config': 0.86.3
 
+packageExtensionsChecksum: sha256-zX8si1CR7WJFpgM7Nw61nR4hS6pgbc4fL7/8kOyeYmE=
+
 importers:
 
   .:
@@ -411,7 +413,7 @@ importers:
         version: 0.575.0(react@19.3.0)
       react-day-picker:
         specifier: ^9.14.0
-        version: 9.14.0(react@19.3.0)
+        version: 9.14.0(@types/react@19.3.0)(react@19.3.0)
       sonner:
         specifier: ^2.0.7
         version: 2.0.8(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
@@ -5067,7 +5069,11 @@ packages:
     resolution: {integrity: sha512-tBaoDWjPwe0M5pGrum4H0SR6Lyk+BO9oHnp9JbKpGKW2mlraNPgP9BMfsg5pWpwrssARmeqk7YBl2oXutZTaHA==}
     engines: {node: '>=18'}
     peerDependencies:
+      '@types/react': '*'
       react: '>=16.8.0'
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
 
   react-devtools-core@6.1.5:
     resolution: {integrity: sha512-ePrwPfxAnB+7hgnEr8vpKxL9cmnp7F322t8oqcPshbIQQhDKgFDW4tjhF2wjVbdXF9O/nyuy3sQWd9JGpiLPvA==}
@@ -11078,13 +11084,15 @@ snapshots:
       defu: 6.1.7
       destr: 2.0.5
 
-  react-day-picker@9.14.0(react@19.3.0):
+  react-day-picker@9.14.0(@types/react@19.3.0)(react@19.3.0):
     dependencies:
       '@date-fns/tz': 1.5.0
       '@tabby_ai/hijri-converter': 1.0.5
       date-fns: 4.4.0
       date-fns-jalali: 4.1.0-0
       react: 19.3.0
+    optionalDependencies:
+      '@types/react': 19.3.0
 
   react-devtools-core@6.1.5:
     dependencies:
