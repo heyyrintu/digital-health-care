@@ -25,7 +25,9 @@ interface Actor {
 /** Where numbering starts until a clinic admin sets its own prefix and number. */
 export const DEFAULT_UHID_START = 10001;
 
-const withTags = { tags: { include: { tag: true }, orderBy: { createdAt: 'asc' } } } as const;
+export const withTags = {
+  tags: { include: { tag: true }, orderBy: { createdAt: 'asc' } },
+} as const;
 type PatientWithTags = Prisma.PatientGetPayload<{ include: typeof withTags }>;
 
 const NOT_FOUND = () => new AppError(404, 'NOT_FOUND', 'Not found.');
@@ -35,7 +37,7 @@ const invalid = (field: string, message: string) =>
 /** Collapses runs of spaces so duplicate checks and search treat "Asha  Verma" as "Asha Verma". */
 const cleanName = (name: string) => name.trim().replace(/\s+/g, ' ');
 
-function toSummary(p: PatientWithTags): PatientSummary {
+export function toSummary(p: PatientWithTags): PatientSummary {
   return {
     id: p.id,
     uhid: p.uhid,

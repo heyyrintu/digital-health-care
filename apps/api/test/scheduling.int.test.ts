@@ -132,16 +132,23 @@ describe('clinic setup', () => {
     expect((await call('GET', '/booking-rules', desk)).json()).toEqual({
       horizonDays: 30,
       sameDayCutoffMinutes: 60,
+      overbookPerDay: 2,
     });
     const put = await call('PUT', '/booking-rules', adminA, {
       horizonDays: 14,
       sameDayCutoffMinutes: 120,
+      overbookPerDay: 1,
     });
     expect(put.statusCode).toBe(200);
     expect((await call('GET', '/booking-rules', desk)).json().horizonDays).toBe(14);
     expect(
-      (await call('PUT', '/booking-rules', adminA, { horizonDays: 0, sameDayCutoffMinutes: 0 }))
-        .statusCode,
+      (
+        await call('PUT', '/booking-rules', adminA, {
+          horizonDays: 0,
+          sameDayCutoffMinutes: 0,
+          overbookPerDay: 0,
+        })
+      ).statusCode,
     ).toBe(400);
   });
 });

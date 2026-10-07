@@ -1,4 +1,12 @@
 import { z } from 'zod';
+import {
+  AppointmentActionBody,
+  AppointmentDetail,
+  AppointmentList,
+  AppointmentListQuery,
+  CreateAppointmentBody,
+  RescheduleAppointmentBody,
+} from './appointments';
 import { AuditListResponse } from './audit';
 import {
   LoginBody,
@@ -402,6 +410,50 @@ const operations: Operation[] = [
     summary: 'Slots for a doctor, clinic and consultation type on one day (staff)',
     query: SlotsQuery,
     response: SlotsResponse,
+  },
+  {
+    method: 'get',
+    path: '/appointments',
+    operationId: 'listAppointments',
+    summary: 'A day’s appointments (default today, IST) or one patient’s (staff)',
+    query: AppointmentListQuery,
+    response: AppointmentList,
+  },
+  {
+    method: 'post',
+    path: '/appointments',
+    operationId: 'createAppointment',
+    summary: 'Book a slot, overbook, or add a walk-in (front desk, doctor, clinic admin)',
+    body: CreateAppointmentBody,
+    response: AppointmentDetail,
+    status: 201,
+  },
+  {
+    method: 'get',
+    path: '/appointments/{id}',
+    operationId: 'getAppointment',
+    summary: 'An appointment with its status history (staff)',
+    pathParams: ['id'],
+    response: AppointmentDetail,
+  },
+  {
+    method: 'post',
+    path: '/appointments/{id}/actions',
+    operationId: 'actOnAppointment',
+    summary: 'Confirm, check in, start, complete, cancel or mark no-show',
+    pathParams: ['id'],
+    body: AppointmentActionBody,
+    response: AppointmentDetail,
+  },
+  {
+    method: 'post',
+    path: '/appointments/{id}/reschedule',
+    operationId: 'rescheduleAppointment',
+    summary: 'Move to another slot; returns the new appointment (front desk, doctor, clinic admin)',
+    pathParams: ['id'],
+    body: RescheduleAppointmentBody,
+    response: AppointmentDetail,
+    status: 201,
   },
   {
     method: 'post',

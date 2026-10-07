@@ -84,6 +84,8 @@ export const BookingRules = z.object({
   horizonDays: z.number().int().min(1).max(365),
   /** Same-day patient bookings close this many minutes before the slot. */
   sameDayCutoffMinutes: z.number().int().min(0).max(1440),
+  /** Staff may book this many extra patients into taken slots per doctor per day. */
+  overbookPerDay: z.number().int().min(0).max(50),
 });
 export type BookingRules = z.infer<typeof BookingRules>;
 

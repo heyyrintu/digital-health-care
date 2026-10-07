@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import Fastify, { type FastifyServerOptions } from 'fastify';
 import type { Config } from './config';
 import { registerErrorHandling } from './errors';
+import { appointmentRoutes } from './modules/appointments/routes';
 import { auditRoutes } from './modules/audit/routes';
 import { authRoutes } from './modules/auth/routes';
 import { inviteRoutes } from './modules/invites/routes';
@@ -75,6 +76,7 @@ export function buildApp({
     app.register(inviteRoutes, { prefix: '/v1', services, signInRateLimit });
     app.register(patientRoutes, { prefix: '/v1', services });
     app.register(schedulingRoutes, { prefix: '/v1', services });
+    app.register(appointmentRoutes, { prefix: '/v1', services });
     app.register(staffRoutes, { prefix: '/v1', services });
     app.register(auditRoutes, { prefix: '/v1', services });
     app.addHook('onClose', async () => services.db.$disconnect());

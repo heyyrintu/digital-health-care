@@ -4,7 +4,7 @@
 
 Conventions for every table: `id` (UUID), `organisationId` (except platform-level User/Device), `createdAt`, `updatedAt`, `deletedAt` where soft delete applies. Files are stored by S3 key, never by public URL. Fields marked *(encrypted)* use field-level encryption. Row-level security filters every query by `organisationId` (ADR 0014). Database columns are snake_case (`organisation_id`); this document uses the camelCase field names.
 
-**Implemented so far:** Organisation, User, Membership, StaffInvite, Session, OtpChallenge and AuditLog (Phase 0); Patient, UhidSettings, Tag and PatientTag (patient register); Clinic, ConsultationType, BookingRules, AvailabilityVersion and AvailabilityException (availability) — see `packages/db/prisma/schema.prisma`. Everything else below is the target design.
+**Implemented so far:** Organisation, User, Membership, StaffInvite, Session, OtpChallenge and AuditLog (Phase 0); Patient, UhidSettings, Tag and PatientTag (patient register); Clinic, ConsultationType, BookingRules, AvailabilityVersion and AvailabilityException (availability); Appointment and AppointmentStatusHistory (appointments) — see `packages/db/prisma/schema.prisma`. Everything else below is the target design.
 
 ## Platform and identity
 
@@ -43,12 +43,12 @@ Conventions for every table: `id` (UUID), `organisationId` (except platform-leve
 | Entity | Purpose | Key fields |
 |---|---|---|
 | ConsultationType | Mode and pricing | organisationId, name (unique per org), mode (in_person\|audio\|video), defaultDurationMin (5–240), feePaise, followUpFeePaise?, requiresPrepayment, active |
-| BookingRules | Patient booking window (built; more rules to come) | organisationId (key), horizonDays (default 30, 1–365), sameDayCutoffMinutes (default 60, 0–1440) |
+| BookingRules | Booking window and limits (built; more rules to come) | organisationId (key), horizonDays (default 30, 1–365), sameDayCutoffMinutes (default 60, 0–1440), overbookPerDay (default 2, 0–50; per doctor per day) |
 | AvailabilityVersion | Weekly schedule version; never edited, a new one takes over from its date | organisationId, doctorUserId, clinicId, consultationTypeId, effectiveFrom (date, unique with doctor + clinic + type), weekly (JSON: `{mon: [{start, end}]}`, IST `HH:MM`; gaps between sessions are breaks), slotMinutes (5–240), bufferMinutes (0–120), createdByUserId |
 | AvailabilityException | Leave (a doctor), holiday (a clinic, or every clinic when clinicId is empty), extra session (doctor + clinic + type) | organisationId, type (leave\|holiday\|extra_session), doctorUserId?, clinicId?, consultationTypeId?, startDate, endDate, startTime?, endTime? (both or neither; none = whole day), reason?, createdByUserId |
-| Appointment | Booking | patientId, doctorId, clinicId, consultationTypeId, startAt, endAt, status, source (app\|web\|front_desk\|walk_in\|scan_share), tokenNumber, reason, joinInfo, rescheduledFromId, cancelReason, overbook, holdExpiresAt |
-| AppointmentStatusHistory | Status timeline | appointmentId, fromStatus, toStatus, actorUserId, at, note |
-| VisitTiming | Consultation duration | appointmentId, startedAt, endedAt |
+| Appointment | Booking or walk-in (built; never deleted) | organisationId, patientId, doctorUserId, clinicId, consultationTypeId, date (IST day of the queue), startAt, endAt, status (pending\|confirmed\|checked_in\|in_consultation\|completed\|cancelled\|no_show\|rescheduled), source (front_desk\|walk_in\|app\|web; scan_share planned), tokenNumber (per doctor + clinic + day, unique), overbook, reason, cancelReason, rescheduledFromId (unique: the booking this one replaced), checkedInAt, consultationStartedAt, completedAt (visit timing), createdByUserId; planned: joinInfo, holdExpiresAt |
+| AppointmentStatusHistory | Status timeline (built; append-only) | organisationId, appointmentId, fromStatus (empty when created), toStatus, actorUserId, at, note (cancel reason) |
+| VisitTiming | Consultation duration (held on Appointment for now: checkedInAt, consultationStartedAt, completedAt) | appointmentId, startedAt, endedAt |
 
 ## Clinical
 

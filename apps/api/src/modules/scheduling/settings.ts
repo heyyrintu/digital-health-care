@@ -20,7 +20,11 @@ export interface Actor {
 }
 
 /** PRD §4.3 defaults until a clinic admin sets its own. */
-export const DEFAULT_BOOKING_RULES: BookingRules = { horizonDays: 30, sameDayCutoffMinutes: 60 };
+export const DEFAULT_BOOKING_RULES: BookingRules = {
+  horizonDays: 30,
+  sameDayCutoffMinutes: 60,
+  overbookPerDay: 2,
+};
 
 const NOT_FOUND = () => new AppError(404, 'NOT_FOUND', 'Not found.');
 const DUPLICATE_NAME = () =>
@@ -43,6 +47,12 @@ const toConsultationType = (t: Prisma.ConsultationTypeGetPayload<object>): Consu
   followUpFeePaise: t.followUpFeePaise,
   requiresPrepayment: t.requiresPrepayment,
   active: t.active,
+});
+
+const toRules = (r: Prisma.BookingRulesGetPayload<object>): BookingRules => ({
+  horizonDays: r.horizonDays,
+  sameDayCutoffMinutes: r.sameDayCutoffMinutes,
+  overbookPerDay: r.overbookPerDay,
 });
 
 /**
@@ -156,9 +166,7 @@ export class SchedulingSettingsService {
     const row = await withTenant(this.s.db, actor.organisationId, (tx) =>
       tx.bookingRules.findUnique({ where: { organisationId: actor.organisationId } }),
     );
-    return row
-      ? { horizonDays: row.horizonDays, sameDayCutoffMinutes: row.sameDayCutoffMinutes }
-      : DEFAULT_BOOKING_RULES;
+    return row ? toRules(row) : DEFAULT_BOOKING_RULES;
   }
 
   async updateBookingRules(
@@ -178,7 +186,7 @@ export class SchedulingSettingsService {
         actorUserId: actor.userId,
         metadata: { ...body },
       });
-      return { horizonDays: row.horizonDays, sameDayCutoffMinutes: row.sameDayCutoffMinutes };
+      return toRules(row);
     });
   }
 

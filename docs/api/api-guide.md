@@ -105,13 +105,35 @@ Implemented in Phase 1 (`apps/api/src/modules/scheduling`; the slot engine is `s
 - **Slots:** each session is cut into slots back to back, with the buffer after each, never running past the session end. `channel=patient` applies the booking horizon (`closed: beyond_horizon`) and the same-day cutoff (`unavailableReason: cutoff`); staff see past slots as `past` and may book further ahead. `busy` will mark booked slots once appointments land. A whole day off returns `closed: leave | holiday | no_schedule | past`.
 - **Audit:** `clinic.created|updated`, `consultation_type.created|updated`, `booking_rules.updated`, `availability.version_created|version_deleted`, `availability.exception_created|exception_deleted` (IDs, dates and types only).
 
+## 3c. Appointments
+
+Implemented in Phase 1 (`apps/api/src/modules/appointments`). Staff booking only for now; patient self-booking, holds and payment come with the patient app and Cashfree.
+
+| Action | Endpoint | Who |
+|---|---|---|
+| Day list | `GET /appointments?date&doctorId&clinicId` (date defaults to today, IST; ordered by time) | All staff |
+| Patient's appointments | `GET /appointments?patientId` (newest first, any day) | All staff |
+| View | `GET /appointments/{id}` → appointment with its status history | All staff |
+| Book | `POST /appointments` `{patientId, doctorUserId, clinicId, consultationTypeId, startAt, overbook?, reason?}` → 201 | Front desk, doctor, clinic admin |
+| Walk-in | `POST /appointments` with `walkIn: true` and no `startAt` → 201, checked in today | Front desk, doctor, clinic admin |
+| Status change | `POST /appointments/{id}/actions` `{action, reason?}` | See below |
+| Reschedule | `POST /appointments/{id}/reschedule` `{startAt, doctorUserId?, clinicId?, consultationTypeId?, overbook?}` → 201 with the new appointment | Front desk, doctor, clinic admin |
+
+- **Slots:** `startAt` must be the start of one of the doctor's slots that day (`GET /slots`). A taken slot gives `SLOT_TAKEN` (409); with `overbook: true` it is allowed while the doctor has fewer than `overbookPerDay` overbooked patients that day, else `BOOKING_LIMIT` (409). Past slots and made-up times also give `SLOT_TAKEN`. Bookings for one doctor and day are serialised with a transaction-scoped Postgres advisory lock, so concurrent requests can never share a slot.
+- **Busy slots:** pending, booked, checked-in, in-consultation and completed appointments mark their slot busy in `GET /slots` for that doctor at every clinic; cancelled, no-show and rescheduled ones free it. Walk-ins hold no slot.
+- **Tokens** number each doctor's patients per clinic per day, in booking order (walk-ins included). A rescheduled booking gets a new token on its new day.
+- **One per day:** a patient cannot hold two active bookings with the same doctor on one day (409; reschedule instead).
+- **Actions and roles:** `confirm` (pending → confirmed; front desk, doctor, admin), `check_in` (pending/confirmed → checked in; on the day only; front desk, doctor), `start` and `complete` (checked in → in consultation → completed; the patient's own doctor only), `cancel` (needs `reason`; front desk, doctor, admin), `no_show` (after the slot starts; front desk, doctor). Anything else gives 409. Staff bookings are created confirmed; walk-ins are created checked in. Automatic no-show after the slot is planned (worker).
+- **Reschedule** works on pending or confirmed bookings: the new appointment is checked like a fresh booking (its own slot may be the old one's), the old one becomes `rescheduled` and the two are linked (`rescheduledFromId` / `rescheduledToId`).
+- **Audit:** `appointment.created`, `appointment.status_changed`, `appointment.rescheduled` (IDs, dates, statuses and source only; never reasons or patient details). Every status change is also kept in the appointment's history with who and when.
+
 ## 4. Endpoint catalogue (by module)
 
 | Module | Main resources and actions |
 |---|---|
 | identity | `/auth/*`, `/me`, `/staff/invites` (built); `/me/devices` |
 | tenancy | `/organisations/current`, `/clinics` (built), `/consultation-types` (built), `/booking-rules` (built), `/doctors` (built), `/settings`, `/branding`, `/tags` (built), `/uhid-settings` (built) |
-| scheduling | `/availability/versions` (built), `/availability/exceptions` (built), `/slots?doctorId&clinicId&consultationTypeId&date&channel` (built), `/appointments` (create, reschedule, cancel, check-in, no-show), `/queue?tab=&date=`, `/display/{clinicId}` |
+| scheduling | `/availability/versions` (built), `/availability/exceptions` (built), `/slots?doctorId&clinicId&consultationTypeId&date&channel` (built), `/appointments` (book, walk-in, list, confirm, check-in, start, complete, cancel, no-show, reschedule; built), `/queue?tab=&date=`, `/display/{clinicId}` |
 | patients | `/patients` (search by phone, name or UHID, filter by tag; register; built), `/patients/{id}` (demographics and family, each view audited; edit; built), `/patients/duplicate-check` (built), `/patients/{id}/tags` (built), `/patients/{id}/allergies\|conditions\|medications\|consents`, `/patients/merge-requests` |
 | clinical | `/consultations`, `/consultations/{id}/vitals`, `/scribe/sessions`, `/assessments/forms`, `/assessments`, `/patients/{id}/ask-ai` |
 | prescribing | `/medicines` (search), `/prescription-templates`, `/prescriptions` (draft, update lines, `/safety-check`, `/sign`, `/amend`, `/void`, `/pdf`), `/verify/{code}` (public) |
