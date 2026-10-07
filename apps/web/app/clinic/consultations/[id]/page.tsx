@@ -152,9 +152,11 @@ function ConsultationScreen({ me }: { me: MeResponse }) {
     () => () => {
       if (timer.current === undefined) return;
       clearTimeout(timer.current);
+      timer.current = undefined;
       void saveRef.current();
     },
-    [],
+    // Also when moving to another visit, before its load replaces the pending edit.
+    [load],
   );
 
   // Warn before leaving with unsaved notes.

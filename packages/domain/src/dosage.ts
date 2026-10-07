@@ -312,7 +312,9 @@ function slotAmountsText(
   lang: RemarkLanguage,
 ): string[] {
   const taken = slotsTaken({ values });
+  const whole = dose.trim();
   const unit = doseUnit(dose);
+  const measured = unit !== whole && unit !== '' && !COUNTABLE.test(unit);
   const phrases = taken.map(({ v, slot }) => {
     const when =
       isMealTiming(timing) && slot !== 'bedtime'
@@ -320,7 +322,8 @@ function slotAmountsText(
           ? `${MEAL_TIMING.en[timing]} ${MEAL.en[slot]}`
           : `${MEAL.hi[slot]} ${MEAL_TIMING.hi[timing]}`
         : TIME[lang][slot];
-    const qty = amount(v, unit, lang);
+    // A measured dose ("500 mg", "5 ml") is one unit of medicine: "2 × 500 mg".
+    const qty = measured ? (v === '1' ? whole : `${v} × ${whole}`) : amount(v, unit, lang);
     return lang === 'en' ? `${qty} ${when}` : `${when} ${qty}`;
   });
   const out = [list(phrases, lang)];

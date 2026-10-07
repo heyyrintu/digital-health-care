@@ -72,7 +72,10 @@ describe('dosageRemarks in English', () => {
     );
     expect(
       dosageRemarks(line({ timing: null }, [step({ dose: '5 ml', frequency: '2-0-1' })]), 'en'),
-    ).toBe('Take 2 ml in the morning and 1 ml at night, for 5 days.');
+    ).toBe('Take 2 × 5 ml in the morning and 5 ml at night, for 5 days.');
+    expect(dosageRemarks(line({}, [step({ dose: '500 mg', frequency: '2-0-1' })]), 'hi')).toBe(
+      'नाश्ते के बाद 2 × 500 mg और रात के खाने के बाद 500 mg, 5 दिन तक लें।',
+    );
     // A chosen bedtime is kept.
     expect(dosageRemarks(line({ timing: 'bedtime' }, [step({ frequency: '2-1-0' })]), 'en')).toBe(
       'Take 2 tablets in the morning and 1 tablet in the afternoon, at bedtime, for 5 days.',

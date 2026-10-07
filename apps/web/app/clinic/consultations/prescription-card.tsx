@@ -228,9 +228,11 @@ export function PrescriptionCard({
     () => () => {
       if (timer.current === undefined) return;
       clearTimeout(timer.current);
+      timer.current = undefined;
       void saveRef.current();
     },
-    [],
+    // Also when moving to another visit, before its load replaces the pending edit.
+    [load],
   );
 
   // Warn before leaving with lines not yet saved (same as the notes).
