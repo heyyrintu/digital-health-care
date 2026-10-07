@@ -10,6 +10,8 @@ import {
   type PatientSummary,
   type Tag,
 } from '@dhc/contracts';
+import { Button, PageHeader, Surface } from '@dhc/ui-web';
+import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
@@ -30,7 +32,11 @@ export default function RegisterPatientPage() {
 
 function NotAllowed() {
   const { t } = useSession();
-  return <p className="alert">{t('common.notAllowed')}</p>;
+  return (
+    <p className="alert rounded-xl bg-danger-soft px-4 py-3 text-sm text-destructive">
+      {t('common.notAllowed')}
+    </p>
+  );
 }
 
 function RegisterForm({ tagging }: { tagging: boolean }) {
@@ -96,59 +102,85 @@ function RegisterForm({ tagging }: { tagging: boolean }) {
     });
 
   return (
-    <section aria-labelledby="register-title" className="card">
-      <p>
-        <Link href="/clinic">{t('patient.back')}</Link>
+    <section aria-labelledby="register-title" className="mx-auto max-w-3xl">
+      <p className="mb-3">
+        <Link
+          href="/clinic"
+          className="inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+        >
+          <ArrowLeft className="size-4" aria-hidden />
+          {t('patient.back')}
+        </Link>
       </p>
-      <h1 id="register-title">{t('patient.registerTitle')}</h1>
-      {nextUhid && <p className="hint">{t('patient.uhidNext', { uhid: nextUhid })}</p>}
+      <PageHeader
+        title={<span id="register-title">{t('patient.registerTitle')}</span>}
+        sub={nextUhid ? t('patient.uhidNext', { uhid: nextUhid }) : undefined}
+      />
 
       {duplicates && pending ? (
-        <div className="notice" role="alert" data-testid="duplicates">
-          <h2>{t('patient.duplicatesTitle')}</h2>
-          <p>{t('patient.duplicatesHelp')}</p>
-          <ul className="pick-list">
+        <Surface
+          className="mb-4 border-l-4 border-l-warning p-4 sm:p-6"
+          role="alert"
+          data-testid="duplicates"
+        >
+          <h2 className="font-display text-lg font-bold">{t('patient.duplicatesTitle')}</h2>
+          <p className="mt-1 text-sm text-muted-foreground">{t('patient.duplicatesHelp')}</p>
+          <ul className="pick-list mt-4 grid list-none gap-2 p-0">
             {duplicates.map((d) => (
-              <li key={d.id}>
-                <strong>{d.name}</strong> · {d.uhid} · <AgeGender patient={d} /> · {d.phone ?? '—'}{' '}
-                <Link href={`/clinic/patients/${d.id}`}>{t('patient.open')}</Link>
+              <li
+                key={d.id}
+                className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-xl border border-border bg-card px-3 py-2"
+              >
+                <span className="min-w-0">
+                  <strong>{d.name}</strong> · <span className="tabular">{d.uhid}</span> ·{' '}
+                  <AgeGender patient={d} /> · <span className="tabular">{d.phone ?? '—'}</span>
+                </span>{' '}
+                <Link
+                  href={`/clinic/patients/${d.id}`}
+                  className="inline-flex min-h-11 items-center text-sm font-semibold text-primary hover:underline"
+                >
+                  {t('patient.open')}
+                </Link>
               </li>
             ))}
           </ul>
-          <div className="confirm-actions">
-            <button
+          <div className="confirm-actions mt-4 flex flex-wrap gap-2">
+            <Button
               type="button"
-              className="primary"
               disabled={busy}
               onClick={() => void run(() => create({ ...pending, allowDuplicate: true }))}
             >
               {t('patient.registerAnyway')}
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className="secondary"
+              variant="outline"
               onClick={() => {
                 setDuplicates(null);
                 setPending(null);
               }}
             >
               {t('common.cancel')}
-            </button>
+            </Button>
           </div>
-        </div>
+        </Surface>
       ) : null}
 
       {error && (
-        <p role="alert" className="alert" id="register-error">
+        <p
+          role="alert"
+          className="alert mb-4 rounded-xl bg-danger-soft px-4 py-3 text-sm text-destructive"
+          id="register-error"
+        >
           {error}
         </p>
       )}
 
-      <div hidden={Boolean(duplicates)}>
+      <Surface className="p-4 sm:p-6" hidden={Boolean(duplicates)}>
         <PatientForm submitLabel={t('patient.register')} busy={busy} onSubmit={submit}>
           {tagging && <TagPicker tags={tags} selected={tagIds} onChange={setTagIds} />}
         </PatientForm>
-      </div>
+      </Surface>
     </section>
   );
 }

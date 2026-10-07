@@ -4,6 +4,7 @@ import { ApiError, createApiClient } from '@dhc/api-client';
 import type { InviteDetails } from '@dhc/contracts';
 import { formatIstDateTime } from '@dhc/domain';
 import { t as translate, type Locale, type MessageKey } from '@dhc/i18n';
+import { Button, Input, Label, Surface, UiLocaleProvider, buttonVariants, cn } from '@dhc/ui-web';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import QRCode from 'qrcode';
@@ -123,121 +124,190 @@ export function InviteFlow({ apiBaseUrl }: { apiBaseUrl: string }) {
     });
   }
 
+  const stage =
+    step.kind === 'password' ? 1 : step.kind === 'scan' || step.kind === 'confirm' ? 2 : 3;
+  const showStages = step.kind !== 'loading' && step.kind !== 'missing' && step.kind !== 'invalid';
+
   return (
-    <div className="card">
-      <div className="card-header">
-        <h1>
-          {'details' in step && step.details.purpose === 'reset'
-            ? t('invite.resetTitle')
-            : t('invite.title')}
-        </h1>
-        <button
-          type="button"
-          className="link-button"
-          onClick={() => setLocale(locale === 'en' ? 'hi' : 'en')}
-          lang={locale === 'en' ? 'hi' : 'en'}
-        >
-          {locale === 'en' ? 'हिंदी' : 'English'}
-        </button>
-      </div>
-
-      {error && (
-        <p role="alert" className="alert">
-          {error}
-        </p>
-      )}
-
-      {step.kind === 'loading' && !error && <p aria-live="polite">{t('invite.loading')}</p>}
-      {step.kind === 'missing' && <p role="alert">{t('invite.missingToken')}</p>}
-      {step.kind === 'invalid' && <p role="alert">{t('invite.invalid')}</p>}
-
-      {(step.kind === 'password' || step.kind === 'scan' || step.kind === 'confirm') && (
-        <Summary details={step.details} t={t} locale={locale} />
-      )}
-
-      {step.kind === 'password' && (
-        <form onSubmit={(e) => void submitPassword(e, step.details)} noValidate>
-          {step.details.account === 'existing' && <p>{t('invite.existingIntro')}</p>}
-          <label htmlFor="password">
-            {step.details.account === 'new'
-              ? t('invite.passwordNew')
-              : t('invite.passwordExisting')}
-          </label>
-          <input
-            id="password"
-            name="password"
-            type="password"
-            required
-            minLength={step.details.account === 'new' ? MIN_PASSWORD_LENGTH : 1}
-            autoComplete={step.details.account === 'new' ? 'new-password' : 'current-password'}
-            aria-describedby={step.details.account === 'new' ? 'password-hint' : undefined}
-          />
-          {step.details.account === 'new' && (
-            <>
-              <p id="password-hint" className="hint">
-                {t('invite.passwordHint')}
-              </p>
-              <label htmlFor="confirm">{t('invite.passwordConfirm')}</label>
-              <input
-                id="confirm"
-                name="confirm"
-                type="password"
-                required
-                autoComplete="new-password"
-              />
-            </>
-          )}
-          <button type="submit" disabled={busy}>
-            {t('common.continue')}
-          </button>
-        </form>
-      )}
-
-      {step.kind === 'scan' && (
-        <section aria-labelledby="scan-title">
-          <h2 id="scan-title">{t('invite.scanTitle')}</h2>
-          <p>{t('invite.scanHelp')}</p>
-          {step.qr && (
-            <img
-              className="qr"
-              src={step.qr}
-              width={220}
-              height={220}
-              alt={t('invite.scanTitle')}
-            />
-          )}
-          <p className="hint">{t('invite.manualKey')}</p>
-          <p className="key" data-testid="manual-key">
-            {groupKey(step.secret)}
-          </p>
-          <CodeForm
-            busy={busy}
-            onSubmit={submitCode}
-            label={t('invite.codeLabel')}
-            submit={t('invite.finish')}
-          />
-        </section>
-      )}
-
-      {step.kind === 'confirm' && (
-        <section aria-labelledby="confirm-title">
-          <h2 id="confirm-title">{t('invite.confirmTitle')}</h2>
-          <CodeForm
-            busy={busy}
-            onSubmit={submitCode}
-            label={t('invite.codeLabel')}
-            submit={t('invite.finish')}
-          />
-        </section>
-      )}
-
-      {step.kind === 'done' && (
-        <div role="status">
-          <p>{t('invite.done')}</p>
-          <Link href="/clinic">{t('invite.goToDashboard')}</Link>
+    <UiLocaleProvider locale={locale}>
+      <Surface className="w-full max-w-md p-6 sm:p-8" lang={locale}>
+        <div className="flex items-start justify-between gap-3">
+          <h1 className="font-display text-2xl font-extrabold leading-tight">
+            {'details' in step && step.details.purpose === 'reset'
+              ? t('invite.resetTitle')
+              : t('invite.title')}
+          </h1>
+          <Button
+            type="button"
+            variant="link"
+            className="-mr-2 shrink-0 px-2"
+            onClick={() => setLocale(locale === 'en' ? 'hi' : 'en')}
+            lang={locale === 'en' ? 'hi' : 'en'}
+          >
+            {locale === 'en' ? 'हिंदी' : 'English'}
+          </Button>
         </div>
-      )}
-    </div>
+
+        {showStages && (
+          <ol className="mt-4 flex gap-1.5" aria-hidden="true">
+            {[1, 2, 3].map((n) => (
+              <li
+                key={n}
+                className={cn('h-1.5 flex-1 rounded-full', n <= stage ? 'bg-primary' : 'bg-muted')}
+              />
+            ))}
+          </ol>
+        )}
+
+        <div className="mt-6 space-y-5">
+          {error && (
+            <p
+              role="alert"
+              className="rounded-xl bg-danger-soft px-3.5 py-2.5 text-sm font-medium text-destructive"
+            >
+              {error}
+            </p>
+          )}
+
+          {step.kind === 'loading' && !error && (
+            <p aria-live="polite" className="text-sm text-muted-foreground">
+              {t('invite.loading')}
+            </p>
+          )}
+          {step.kind === 'missing' && (
+            <p
+              role="alert"
+              className="rounded-xl bg-danger-soft px-3.5 py-2.5 text-sm font-medium text-destructive"
+            >
+              {t('invite.missingToken')}
+            </p>
+          )}
+          {step.kind === 'invalid' && (
+            <p
+              role="alert"
+              className="rounded-xl bg-danger-soft px-3.5 py-2.5 text-sm font-medium text-destructive"
+            >
+              {t('invite.invalid')}
+            </p>
+          )}
+
+          {(step.kind === 'password' || step.kind === 'scan' || step.kind === 'confirm') && (
+            <Summary details={step.details} t={t} locale={locale} />
+          )}
+
+          {step.kind === 'password' && (
+            <form
+              onSubmit={(e) => void submitPassword(e, step.details)}
+              noValidate
+              className="space-y-4"
+            >
+              {step.details.account === 'existing' && (
+                <p className="text-sm text-muted-foreground">{t('invite.existingIntro')}</p>
+              )}
+              <div className="space-y-1.5">
+                <Label htmlFor="password">
+                  {step.details.account === 'new'
+                    ? t('invite.passwordNew')
+                    : t('invite.passwordExisting')}
+                </Label>
+                <Input
+                  id="password"
+                  name="password"
+                  type="password"
+                  required
+                  minLength={step.details.account === 'new' ? MIN_PASSWORD_LENGTH : 1}
+                  autoComplete={
+                    step.details.account === 'new' ? 'new-password' : 'current-password'
+                  }
+                  aria-describedby={step.details.account === 'new' ? 'password-hint' : undefined}
+                />
+                {step.details.account === 'new' && (
+                  <p id="password-hint" className="text-xs text-muted-foreground">
+                    {t('invite.passwordHint')}
+                  </p>
+                )}
+              </div>
+              {step.details.account === 'new' && (
+                <div className="space-y-1.5">
+                  <Label htmlFor="confirm">{t('invite.passwordConfirm')}</Label>
+                  <Input
+                    id="confirm"
+                    name="confirm"
+                    type="password"
+                    required
+                    autoComplete="new-password"
+                  />
+                </div>
+              )}
+              <Button type="submit" disabled={busy} size="lg" className="w-full">
+                {t('common.continue')}
+              </Button>
+            </form>
+          )}
+
+          {step.kind === 'scan' && (
+            <section aria-labelledby="scan-title" className="space-y-4">
+              <div>
+                <h2 id="scan-title" className="font-display text-lg font-bold">
+                  {t('invite.scanTitle')}
+                </h2>
+                <p className="mt-1 text-sm text-muted-foreground">{t('invite.scanHelp')}</p>
+              </div>
+              {step.qr && (
+                <img
+                  className="qr mx-auto block rounded-xl border border-border bg-card p-2"
+                  src={step.qr}
+                  width={220}
+                  height={220}
+                  alt={t('invite.scanTitle')}
+                />
+              )}
+              <div className="rounded-xl bg-muted px-4 py-3">
+                <p className="text-xs text-muted-foreground">{t('invite.manualKey')}</p>
+                <p
+                  className="key mt-1 break-all font-mono text-base font-semibold tracking-wider tabular"
+                  data-testid="manual-key"
+                >
+                  {groupKey(step.secret)}
+                </p>
+              </div>
+              <CodeForm
+                busy={busy}
+                onSubmit={submitCode}
+                label={t('invite.codeLabel')}
+                submit={t('invite.finish')}
+              />
+            </section>
+          )}
+
+          {step.kind === 'confirm' && (
+            <section aria-labelledby="confirm-title" className="space-y-4">
+              <h2 id="confirm-title" className="font-display text-lg font-bold">
+                {t('invite.confirmTitle')}
+              </h2>
+              <CodeForm
+                busy={busy}
+                onSubmit={submitCode}
+                label={t('invite.codeLabel')}
+                submit={t('invite.finish')}
+              />
+            </section>
+          )}
+
+          {step.kind === 'done' && (
+            <div
+              role="status"
+              className="space-y-4 rounded-xl bg-success-soft px-4 py-4 text-sm text-success"
+            >
+              <p className="font-medium">{t('invite.done')}</p>
+              <Link href="/clinic" className={buttonVariants({ className: 'w-full' })}>
+                {t('invite.goToDashboard')}
+              </Link>
+            </div>
+          )}
+        </div>
+      </Surface>
+    </UiLocaleProvider>
   );
 }
 
@@ -251,8 +321,8 @@ function Summary({
   locale: Locale;
 }) {
   return (
-    <div className="summary">
-      <p>
+    <div className="summary space-y-1 rounded-xl border border-border bg-accent/40 px-4 py-3">
+      <p className="text-sm font-medium">
         {details.purpose === 'reset'
           ? t('invite.resetSummary', { clinic: details.organisation.name })
           : t('invite.summary', {
@@ -260,8 +330,10 @@ function Summary({
               role: t(`role.${details.role}`),
             })}
       </p>
-      <p className="hint">{t('invite.account', { identifier: details.identifier })}</p>
-      <p className="hint">
+      <p className="text-xs text-muted-foreground">
+        {t('invite.account', { identifier: details.identifier })}
+      </p>
+      <p className="text-xs text-muted-foreground">
         {t('invite.expires', { date: formatIstDateTime(details.expiresAt, locale) })}
       </p>
     </div>
@@ -280,20 +352,23 @@ function CodeForm({
   submit: string;
 }) {
   return (
-    <form onSubmit={(e) => void onSubmit(e)} noValidate>
-      <label htmlFor="code">{label}</label>
-      <input
-        id="code"
-        name="code"
-        inputMode="numeric"
-        pattern="[0-9]*"
-        maxLength={7}
-        autoComplete="one-time-code"
-        required
-      />
-      <button type="submit" disabled={busy}>
+    <form onSubmit={(e) => void onSubmit(e)} noValidate className="space-y-4">
+      <div className="space-y-1.5">
+        <Label htmlFor="code">{label}</Label>
+        <Input
+          id="code"
+          className="tabular text-center font-mono text-lg tracking-[0.3em] md:text-lg"
+          name="code"
+          inputMode="numeric"
+          pattern="[0-9]*"
+          maxLength={7}
+          autoComplete="one-time-code"
+          required
+        />
+      </div>
+      <Button type="submit" disabled={busy} size="lg" className="w-full">
         {submit}
-      </button>
+      </Button>
     </form>
   );
 }

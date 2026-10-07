@@ -10,6 +10,8 @@ import {
   type Tag,
 } from '@dhc/contracts';
 import { formatIstDateTime } from '@dhc/domain';
+import { Button, PageHeader, StatusChip, Surface, buttonVariants } from '@dhc/ui-web';
+import { ArrowLeft, CalendarPlus, Pencil } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useState } from 'react';
@@ -97,19 +99,33 @@ function PatientView({ role }: { role: string }) {
       setSaved('details');
     });
 
+  const back = (
+    <p className="mb-3">
+      <Link
+        href="/clinic"
+        className="inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+      >
+        <ArrowLeft className="size-4" aria-hidden />
+        {t('patient.back')}
+      </Link>
+    </p>
+  );
+
   if (!patient) {
     return (
-      <section className="card">
-        <p>
-          <Link href="/clinic">{t('patient.back')}</Link>
-        </p>
-        {error ? (
-          <p role="alert" className="alert">
-            {error}
-          </p>
-        ) : (
-          <p aria-live="polite">{t('common.loading')}</p>
-        )}
+      <section>
+        {back}
+        <Surface className="p-4 sm:p-6">
+          {error ? (
+            <p role="alert" className="alert text-sm text-destructive">
+              {error}
+            </p>
+          ) : (
+            <p aria-live="polite" className="text-sm text-muted-foreground">
+              {t('common.loading')}
+            </p>
+          )}
+        </Surface>
       </section>
     );
   }
@@ -122,137 +138,198 @@ function PatientView({ role }: { role: string }) {
       .join();
 
   return (
-    <>
-      <section aria-labelledby="patient-title" className="card">
-        <p>
-          <Link href="/clinic">{t('patient.back')}</Link>
-        </p>
-        <h1 id="patient-title">{patient.name}</h1>
-        <p className="patient-meta" data-testid="patient-meta">
-          <span data-testid="patient-uhid">{patient.uhid}</span> · <AgeGender patient={patient} /> ·{' '}
-          {patient.phone ?? '—'}
-        </p>
-        <p className="hint">
-          {t('patient.registeredOn', { date: formatIstDateTime(patient.createdAt, locale) })}
-        </p>
-        <p data-testid="patient-tags">
-          <TagList tags={patient.tags} />
-        </p>
-        {error && (
-          <p role="alert" className="alert">
-            {error}
+    <div className="grid gap-4 sm:gap-6">
+      <section aria-labelledby="patient-title">
+        {back}
+        <PageHeader
+          title={<span id="patient-title">{patient.name}</span>}
+          sub={
+            <>
+              <span
+                className="patient-meta block text-base text-foreground"
+                data-testid="patient-meta"
+              >
+                <span data-testid="patient-uhid" className="tabular font-semibold">
+                  {patient.uhid}
+                </span>{' '}
+                · <AgeGender patient={patient} /> ·{' '}
+                <span className="tabular">{patient.phone ?? '—'}</span>
+              </span>
+              <span className="mt-1 block">
+                {t('patient.registeredOn', { date: formatIstDateTime(patient.createdAt, locale) })}
+              </span>
+            </>
+          }
+          actions={
+            canRegister(role) ? (
+              <Link
+                className={buttonVariants()}
+                href={`/clinic/appointments/new?patientId=${patient.id}`}
+              >
+                <CalendarPlus aria-hidden />
+                {t('patient.book')}
+              </Link>
+            ) : undefined
+          }
+        />
+        <Surface className="grid gap-4 p-4 sm:p-6">
+          <p data-testid="patient-tags" className="flex flex-wrap gap-1.5">
+            <TagList tags={patient.tags} />
           </p>
-        )}
-        {saved && (
-          <p role="status" className="notice">
-            {t('patient.saved')}
-          </p>
-        )}
-        {canTag(role) && tags.length > 0 && (
-          <div className="tag-editor">
-            <TagPicker tags={tags} selected={selectedTags} onChange={setSelectedTags} />
-            <button
-              type="button"
-              className="primary"
-              disabled={busy || !tagsChanged}
-              onClick={() => void saveTags()}
+          {error && (
+            <p
+              role="alert"
+              className="alert rounded-xl bg-danger-soft px-4 py-3 text-sm text-destructive"
             >
-              {t('patient.saveTags')}
-            </button>
-          </div>
-        )}
-      </section>
-
-      <section aria-labelledby="details-title" className="card">
-        <div className="card-header">
-          <h2 id="details-title">{t('patient.details')}</h2>
-          {canRegister(role) && !editing && (
-            <button type="button" className="secondary" onClick={() => setEditing(true)}>
-              {t('patient.edit')}
-            </button>
+              {error}
+            </p>
           )}
-        </div>
-        {editing ? (
-          <PatientForm
-            initial={patient}
-            submitLabel={t('common.save')}
-            busy={busy}
-            onSubmit={saveDetails}
-          >
-            <div className="field wide">
-              <button type="button" className="secondary" onClick={() => setEditing(false)}>
-                {t('common.cancel')}
-              </button>
+          {saved && (
+            <p
+              role="status"
+              className="notice rounded-xl bg-success-soft px-4 py-3 text-sm text-success"
+            >
+              {t('patient.saved')}
+            </p>
+          )}
+          {canTag(role) && tags.length > 0 && (
+            <div className="tag-editor grid justify-items-start gap-3">
+              <TagPicker tags={tags} selected={selectedTags} onChange={setSelectedTags} />
+              <Button type="button" disabled={busy || !tagsChanged} onClick={() => void saveTags()}>
+                {t('patient.saveTags')}
+              </Button>
             </div>
-          </PatientForm>
-        ) : (
-          <dl className="details">
-            <Row label={t('patient.dob')} value={patient.dob} />
-            <Row label={t('patient.email')} value={patient.email} />
-            <Row label={t('patient.address')} value={patient.address} />
-            <Row label={t('patient.bloodGroup')} value={patient.bloodGroup} />
-            <Row label={t('patient.language')} value={t(`language.${patient.language}`)} />
-            <Row label={t('patient.emergencyName')} value={patient.emergencyContactName} />
-            <Row label={t('patient.emergencyPhone')} value={patient.emergencyContactPhone} />
-            <Row
-              label={t('patient.guardian')}
-              value={
-                patient.guardian ? `${patient.guardian.name} · ${patient.guardian.uhid}` : null
-              }
-            />
-          </dl>
-        )}
-      </section>
-
-      <section aria-labelledby="patient-appointments-title" className="card">
-        <div className="card-header">
-          <h2 id="patient-appointments-title">{t('patient.appointments')}</h2>
-          {canRegister(role) && (
-            <Link className="button-link" href={`/clinic/appointments/new?patientId=${patient.id}`}>
-              {t('patient.book')}
-            </Link>
           )}
-        </div>
-        {appointments && appointments.length === 0 && <p>{t('patient.noAppointments')}</p>}
-        {appointments && appointments.length > 0 && (
-          <ul className="pick-list" data-testid="patient-appointments">
-            {appointments.map((a) => (
-              <li key={a.id}>
-                <Link href={`/clinic/queue?date=${a.date}`}>
-                  {t('appointments.at', { date: a.date, time: a.startTime })}
-                </Link>{' '}
-                · {a.doctorName ?? t('availability.doctor')} · {a.consultationTypeName}
-                <span className="pill">{t(`status.${a.status}`)}</span>
-              </li>
-            ))}
-          </ul>
-        )}
+        </Surface>
       </section>
 
-      <section aria-labelledby="family-title" className="card">
-        <h2 id="family-title">{t('patient.family')}</h2>
-        {patient.family.length === 0 ? (
-          <p>{t('patient.noFamily')}</p>
-        ) : (
-          <ul className="pick-list" data-testid="family">
-            {patient.family.map((f) => (
-              <li key={f.id}>
-                <Link href={`/clinic/patients/${f.id}`}>{f.name}</Link> · {f.uhid} ·{' '}
-                {t(`relation.${f.relation}`)}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-    </>
+      <Surface className="p-4 sm:p-6">
+        <section aria-labelledby="details-title">
+          <div className="card-header mb-4 flex flex-wrap items-center justify-between gap-3">
+            <h2 id="details-title" className="font-display text-lg font-bold">
+              {t('patient.details')}
+            </h2>
+            {canRegister(role) && !editing && (
+              <Button type="button" variant="outline" onClick={() => setEditing(true)}>
+                <Pencil aria-hidden />
+                {t('patient.edit')}
+              </Button>
+            )}
+          </div>
+          {editing ? (
+            <PatientForm
+              initial={patient}
+              submitLabel={t('common.save')}
+              busy={busy}
+              onSubmit={saveDetails}
+            >
+              <div className="field wide sm:col-span-2">
+                <Button type="button" variant="outline" onClick={() => setEditing(false)}>
+                  {t('common.cancel')}
+                </Button>
+              </div>
+            </PatientForm>
+          ) : (
+            <dl className="details m-0 grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
+              <Row label={t('patient.dob')} value={patient.dob} />
+              <Row label={t('patient.email')} value={patient.email} />
+              <Row label={t('patient.address')} value={patient.address} />
+              <Row label={t('patient.bloodGroup')} value={patient.bloodGroup} />
+              <Row label={t('patient.language')} value={t(`language.${patient.language}`)} />
+              <Row label={t('patient.emergencyName')} value={patient.emergencyContactName} />
+              <Row label={t('patient.emergencyPhone')} value={patient.emergencyContactPhone} />
+              <Row
+                label={t('patient.guardian')}
+                value={
+                  patient.guardian ? `${patient.guardian.name} · ${patient.guardian.uhid}` : null
+                }
+              />
+            </dl>
+          )}
+        </section>
+      </Surface>
+
+      <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
+        <Surface className="p-4 sm:p-6">
+          <section aria-labelledby="patient-appointments-title">
+            <div className="card-header mb-4 flex flex-wrap items-center justify-between gap-3">
+              <h2 id="patient-appointments-title" className="font-display text-lg font-bold">
+                {t('patient.appointments')}
+              </h2>
+            </div>
+            {appointments && appointments.length === 0 && (
+              <p className="text-sm text-muted-foreground">{t('patient.noAppointments')}</p>
+            )}
+            {appointments && appointments.length > 0 && (
+              <ul
+                className="pick-list m-0 grid list-none gap-2 p-0"
+                data-testid="patient-appointments"
+              >
+                {appointments.map((a) => (
+                  <li
+                    key={a.id}
+                    className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 rounded-xl border border-border px-3 py-2"
+                  >
+                    <span className="min-w-0">
+                      <Link
+                        href={`/clinic/queue?date=${a.date}`}
+                        className="tabular font-semibold text-primary hover:underline"
+                      >
+                        {t('appointments.at', { date: a.date, time: a.startTime })}
+                      </Link>{' '}
+                      <span className="text-sm text-muted-foreground">
+                        · {a.doctorName ?? t('availability.doctor')} · {a.consultationTypeName}
+                      </span>
+                    </span>
+                    <StatusChip status={a.status} />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </Surface>
+
+        <Surface className="p-4 sm:p-6">
+          <section aria-labelledby="family-title">
+            <h2 id="family-title" className="mb-4 font-display text-lg font-bold">
+              {t('patient.family')}
+            </h2>
+            {patient.family.length === 0 ? (
+              <p className="text-sm text-muted-foreground">{t('patient.noFamily')}</p>
+            ) : (
+              <ul className="pick-list m-0 grid list-none gap-2 p-0" data-testid="family">
+                {patient.family.map((f) => (
+                  <li
+                    key={f.id}
+                    className="flex min-h-11 flex-wrap items-center gap-x-2 rounded-xl border border-border px-3 py-2"
+                  >
+                    <Link
+                      href={`/clinic/patients/${f.id}`}
+                      className="font-semibold text-primary hover:underline"
+                    >
+                      {f.name}
+                    </Link>{' '}
+                    <span className="text-sm text-muted-foreground">
+                      · <span className="tabular">{f.uhid}</span> · {t(`relation.${f.relation}`)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </Surface>
+      </div>
+    </div>
   );
 }
 
 function Row({ label, value }: { label: string; value: string | null }) {
   return (
-    <div>
-      <dt>{label}</dt>
-      <dd>{value ?? '—'}</dd>
+    <div className="min-w-0">
+      <dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        {label}
+      </dt>
+      <dd className="m-0 mt-1 break-words [overflow-wrap:anywhere]">{value ?? '—'}</dd>
     </div>
   );
 }
