@@ -578,3 +578,115 @@ button.primary:disabled {
     overflow-x: auto;
   }
 }
+
+/* Availability ---------------------------------------------------------------------- */
+
+.button-link.secondary {
+  font-weight: 400;
+  border: 1px solid var(--color-neutral-500);
+  background: var(--color-neutral-0);
+  color: var(--color-neutral-900);
+}
+
+.pickers {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-3);
+}
+
+.pickers > div {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.week {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 var(--space-4);
+  display: grid;
+  gap: var(--space-1);
+}
+
+.week li {
+  display: grid;
+  grid-template-columns: 8rem 1fr;
+  gap: var(--space-3);
+}
+
+.week-editor fieldset {
+  border: 0;
+  border-top: 1px solid var(--color-neutral-100);
+  margin: 0;
+  padding: var(--space-3) 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+}
+
+.week-editor legend {
+  float: left;
+  width: 8rem;
+  font-weight: 600;
+  padding: 0;
+}
+
+.week-editor .session {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.week-editor .session input {
+  width: auto;
+}
+
+.slot-grid {
+  list-style: none;
+  padding: 0;
+  margin: var(--space-3) 0 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.slot-grid li {
+  border: 1px solid var(--color-brand-600);
+  border-radius: var(--radius-md);
+  padding: var(--space-1) var(--space-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.slot-grid li.unavailable {
+  border-color: var(--color-neutral-300);
+  color: var(--color-neutral-500);
+  text-decoration: line-through;
+}
+
+@media (max-width: 560px) {
+  .week li {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+
+  .week-editor legend {
+    float: none;
+    width: 100%;
+  }
+}
+
+.field-error {
+  color: var(--color-status-danger);
+  font-size: var(--font-size-sm);
+}
+
+/* Field rows that are not forms of their own (inside a larger form, or filters). */
+div.inline-form {
+  display: grid;
+  margin-bottom: var(--space-3);
+}
+
+.week-editor > button.primary {
+  width: 100%;
+  margin-top: var(--space-3);
+}

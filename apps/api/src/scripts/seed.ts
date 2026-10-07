@@ -7,6 +7,7 @@
  */
 import { DEFAULT_TAGS } from '@dhc/contracts';
 import { createDb } from '@dhc/db';
+import { istDate } from '@dhc/domain';
 import { randomBytes } from 'node:crypto';
 import { hashToken } from '../auth/tokens';
 import { INVITE_TTL_MS } from '../modules/invites/service';
@@ -37,12 +38,14 @@ const staff = [
 ] as const;
 
 const links: string[] = [];
+const userIds: Record<string, string> = {};
 for (const s of staff) {
   const user = await db.user.upsert({
     where: { email: s.email },
     update: {},
     create: { email: s.email, displayName: s.displayName },
   });
+  userIds[s.role] = user.id;
   const key = { organisationId: org.id, userId: user.id, role: s.role };
   const membership = await db.membership.upsert({
     where: { organisationId_userId_role: key },
@@ -106,10 +109,68 @@ await db.tag.createMany({
   skipDuplicates: true,
 });
 
+// A clinic, two consultation types and Dr. Demo's weekly schedule (PRD §4.3).
+const clinic = await db.clinic.upsert({
+  where: { organisationId_name: { organisationId: org.id, name: 'Main clinic' } },
+  update: {},
+  create: { organisationId: org.id, name: 'Main clinic', address: '1 Synthetic Marg, New Delhi' },
+});
+const inPerson = await db.consultationType.upsert({
+  where: { organisationId_name: { organisationId: org.id, name: 'In-person consultation' } },
+  update: {},
+  create: {
+    organisationId: org.id,
+    name: 'In-person consultation',
+    mode: 'in_person',
+    defaultDurationMin: 15,
+    feePaise: 80000,
+    followUpFeePaise: 50000,
+  },
+});
+await db.consultationType.upsert({
+  where: { organisationId_name: { organisationId: org.id, name: 'Video consultation' } },
+  update: {},
+  create: {
+    organisationId: org.id,
+    name: 'Video consultation',
+    mode: 'video',
+    defaultDurationMin: 15,
+    feePaise: 70000,
+    requiresPrepayment: true,
+  },
+});
+const doctorId = userIds.doctor!;
+const hasSchedule = await db.availabilityVersion.findFirst({
+  where: { doctorUserId: doctorId, clinicId: clinic.id, consultationTypeId: inPerson.id },
+});
+if (!hasSchedule) {
+  const morning = { start: '10:00', end: '13:00' };
+  const evening = { start: '17:00', end: '20:00' };
+  await db.availabilityVersion.create({
+    data: {
+      organisationId: org.id,
+      doctorUserId: doctorId,
+      clinicId: clinic.id,
+      consultationTypeId: inPerson.id,
+      effectiveFrom: new Date(`${istDate(new Date())}T00:00:00Z`),
+      weekly: {
+        mon: [morning, evening],
+        tue: [morning, evening],
+        wed: [morning, evening],
+        thu: [morning, evening],
+        fri: [morning, evening],
+        sat: [morning],
+      },
+      slotMinutes: 15,
+      createdByUserId: doctorId,
+    },
+  });
+}
+
 await db.$disconnect();
 
 console.warn(
-  `Seeded organisation "demo-clinic" with ${staff.length} staff, ${personas.length} synthetic patients and the default tags (new UHIDs start at DC10001).`,
+  `Seeded organisation "demo-clinic" with ${staff.length} staff, ${personas.length} synthetic patients, the default tags, a clinic with two consultation types and Dr. Demo's weekly schedule (new UHIDs start at DC10001).`,
 );
 console.warn('Staff invite links (valid 72 hours; the token is everything after #):');
 for (const line of links) console.warn(line);

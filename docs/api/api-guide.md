@@ -85,13 +85,33 @@ Rules:
 - **Tags** are archived, never deleted. An archived tag stays on the patients who have it and can be removed, but cannot be newly assigned. Emergency and Priority are marked to sort to the top of the queue (used when the queue is built). `POST /tags/defaults` adds whichever of the six PRD defaults are missing.
 - **Audit:** `patient.created` (with `duplicateOverride`), `patient.updated` (field names only, never values), `patient.tags.changed` (tag IDs added and removed), `tag.created`, `tag.updated`, `tag.defaults_added`, `uhid_settings.updated`.
 
+## 3b. Clinics, availability and slots
+
+Implemented in Phase 1 (`apps/api/src/modules/scheduling`; the slot engine is `slotsForDay` in `packages/domain/src/slots.ts`). Times are IST wall-clock `HH:MM`; dates are `YYYY-MM-DD` in IST; fees are integers in paise.
+
+| Action | Endpoint | Who |
+|---|---|---|
+| Clinics | `GET /clinics`; `POST /clinics` `{name, address?, phone?}`; `PATCH /clinics/{id}` (incl. `active`) | Read: all staff · change: clinic admin |
+| Consultation types | `GET /consultation-types`; `POST` `{name, mode, defaultDurationMin, feePaise, followUpFeePaise?, requiresPrepayment}`; `PATCH /consultation-types/{id}` | Read: all staff · change: clinic admin |
+| Booking rules | `GET /booking-rules`; `PUT /booking-rules` `{horizonDays, sameDayCutoffMinutes}` (defaults 30 and 60) | Read: all staff · change: clinic admin |
+| Doctors | `GET /doctors` → active doctors (for pickers) | All staff |
+| Weekly schedules | `GET /availability/versions?doctorId&clinicId&consultationTypeId`; `POST /availability/versions` `{doctorUserId?, clinicId, consultationTypeId, effectiveFrom, weekly, slotMinutes?, bufferMinutes}`; `DELETE /availability/versions/{id}` | Read: all staff · change: the doctor (own) or a clinic admin |
+| Leave, holidays, extra sessions | `GET /availability/exceptions?doctorId&clinicId&from`; `POST /availability/exceptions` `{type, doctorUserId?, clinicId?, consultationTypeId?, startDate, endDate, startTime?, endTime?, reason?}`; `DELETE /availability/exceptions/{id}` | Read: all staff · leave and extra sessions: the doctor (own) or a clinic admin · holidays: clinic admin |
+| Slots | `GET /slots?doctorId&clinicId&consultationTypeId&date&channel=staff\|patient` → `{date, slots: [{start, end, startTime, endTime, available, unavailableReason?}], closed?}` | All staff |
+
+- **Versions, not edits:** a weekly schedule is never changed. `POST` adds a version that applies from `effectiveFrom` (today or later, IST) until a later one; the slots of earlier days never move. A version can be withdrawn (`DELETE`) only before its start date (409 once started). Two versions cannot start on the same day for the same doctor, clinic and type (409). An empty `weekly` means "not consulting from this date".
+- **Validation:** sessions must be `HH:MM`, end after they start, fit at least one slot and not overlap on the same day; errors come back per field (`weekly.mon.0`, `weekly.mon`). `slotMinutes` defaults to the consultation type's duration. A doctor's `doctorUserId` defaults to themselves; anyone else's gives 403.
+- **Exceptions:** leave and holidays without times cover whole days; with times they remove only the slots they overlap. A holiday without a clinic closes every clinic. Extra sessions need a clinic, a type and times, and use the version's slot length (or the type's duration on an unscheduled day). Start dates are today or later; removal only before the start date. Clinic, type and doctor IDs are checked within the organisation (another organisation's IDs give 400).
+- **Slots:** each session is cut into slots back to back, with the buffer after each, never running past the session end. `channel=patient` applies the booking horizon (`closed: beyond_horizon`) and the same-day cutoff (`unavailableReason: cutoff`); staff see past slots as `past` and may book further ahead. `busy` will mark booked slots once appointments land. A whole day off returns `closed: leave | holiday | no_schedule | past`.
+- **Audit:** `clinic.created|updated`, `consultation_type.created|updated`, `booking_rules.updated`, `availability.version_created|version_deleted`, `availability.exception_created|exception_deleted` (IDs, dates and types only).
+
 ## 4. Endpoint catalogue (by module)
 
 | Module | Main resources and actions |
 |---|---|
 | identity | `/auth/*`, `/me`, `/staff/invites` (built); `/me/devices` |
-| tenancy | `/organisations/current`, `/clinics`, `/settings`, `/branding`, `/tags` (built), `/uhid-settings` (built) |
-| scheduling | `/availability/versions`, `/availability/exceptions`, `/slots?doctorId&mode&date`, `/appointments` (create, reschedule, cancel, check-in, no-show), `/queue?tab=&date=`, `/display/{clinicId}` |
+| tenancy | `/organisations/current`, `/clinics` (built), `/consultation-types` (built), `/booking-rules` (built), `/doctors` (built), `/settings`, `/branding`, `/tags` (built), `/uhid-settings` (built) |
+| scheduling | `/availability/versions` (built), `/availability/exceptions` (built), `/slots?doctorId&clinicId&consultationTypeId&date&channel` (built), `/appointments` (create, reschedule, cancel, check-in, no-show), `/queue?tab=&date=`, `/display/{clinicId}` |
 | patients | `/patients` (search by phone, name or UHID, filter by tag; register; built), `/patients/{id}` (demographics and family, each view audited; edit; built), `/patients/duplicate-check` (built), `/patients/{id}/tags` (built), `/patients/{id}/allergies\|conditions\|medications\|consents`, `/patients/merge-requests` |
 | clinical | `/consultations`, `/consultations/{id}/vitals`, `/scribe/sessions`, `/assessments/forms`, `/assessments`, `/patients/{id}/ask-ai` |
 | prescribing | `/medicines` (search), `/prescription-templates`, `/prescriptions` (draft, update lines, `/safety-check`, `/sign`, `/amend`, `/void`, `/pdf`), `/verify/{code}` (public) |

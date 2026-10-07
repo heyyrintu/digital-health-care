@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { AgeGender, TagChip } from './patient-bits';
 import { useSession } from './session-provider';
+import { PracticeCard } from './practice-card';
 import { SettingsCard } from './settings-card';
 import { ClinicShell, canRegister } from './shell';
 import { StaffCard } from './staff-card';
@@ -19,6 +20,7 @@ export default function ClinicDashboard() {
           <>
             <PatientSearch role={me.role} />
             {me.role === 'clinic_admin' && <StaffCard currentUserId={me.user.id} />}
+            {me.role === 'clinic_admin' && <PracticeCard />}
             {me.role === 'clinic_admin' && <SettingsCard />}
           </>
         )
@@ -69,11 +71,16 @@ function PatientSearch({ role }: { role: string }) {
     <section aria-labelledby="patients-title" className="card">
       <div className="card-header">
         <h1 id="patients-title">{t('dashboard.searchPatients')}</h1>
-        {canRegister(role) && (
-          <Link className="button-link" href="/clinic/patients/new">
-            {t('dashboard.registerPatient')}
+        <div className="header-actions">
+          <Link className="button-link secondary" href="/clinic/availability">
+            {t('dashboard.availability')}
           </Link>
-        )}
+          {canRegister(role) && (
+            <Link className="button-link" href="/clinic/patients/new">
+              {t('dashboard.registerPatient')}
+            </Link>
+          )}
+        </div>
       </div>
       <form className="search" onSubmit={submit} role="search">
         <label htmlFor="q" className="visually-hidden">

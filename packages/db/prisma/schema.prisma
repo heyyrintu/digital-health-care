@@ -46,6 +46,18 @@ enum Language {
   hi
 }
 
+enum ConsultationMode {
+  in_person
+  audio
+  video
+}
+
+enum AvailabilityExceptionType {
+  leave
+  holiday
+  extra_session
+}
+
 enum MembershipStatus {
   /// Created by a staff invite; becomes active when the invite is completed.
   invited
@@ -61,36 +73,41 @@ model Organisation {
   createdAt DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  memberships  Membership[]
-  patients     Patient[]
-  sessions     Session[]
-  invites      StaffInvite[]
-  uhidSettings UhidSettings?
-  tags         Tag[]
-  patientTags  PatientTag[]
+  memberships            Membership[]
+  patients               Patient[]
+  sessions               Session[]
+  invites                StaffInvite[]
+  uhidSettings           UhidSettings?
+  tags                   Tag[]
+  patientTags            PatientTag[]
+  clinics                Clinic[]
+  consultationTypes      ConsultationType[]
+  bookingRules           BookingRules?
+  availabilityVersions   AvailabilityVersion[]
+  availabilityExceptions AvailabilityException[]
 
   @@map("organisations")
 }
 
 /// Platform-level login identity. Phone for patients (OTP), email/phone + password + TOTP for staff.
 model User {
-  id                String     @id @default(uuid()) @db.Uuid
-  phone             String?    @unique
-  email             String?    @unique
-  displayName       String?    @map("display_name")
-  status            UserStatus @default(active)
-  passwordHash      String?    @map("password_hash")
+  id               String     @id @default(uuid()) @db.Uuid
+  phone            String?    @unique
+  email            String?    @unique
+  displayName      String?    @map("display_name")
+  status           UserStatus @default(active)
+  passwordHash     String?    @map("password_hash")
   /// AES-256-GCM encrypted TOTP secret (confirmed).
-  mfaSecret         String?    @map("mfa_secret")
+  mfaSecret        String?    @map("mfa_secret")
   /// AES-256-GCM encrypted TOTP secret awaiting first-code confirmation.
-  mfaPendingSecret  String?    @map("mfa_pending_secret")
+  mfaPendingSecret String?    @map("mfa_pending_secret")
   /// Last accepted TOTP time step; a code is never accepted twice.
-  mfaLastUsedStep   Int?       @map("mfa_last_used_step")
-  failedLoginCount  Int        @default(0) @map("failed_login_count")
-  lockedUntil       DateTime?  @map("locked_until") @db.Timestamptz(3)
-  lastLoginAt       DateTime?  @map("last_login_at") @db.Timestamptz(3)
-  createdAt         DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt         DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
+  mfaLastUsedStep  Int?       @map("mfa_last_used_step")
+  failedLoginCount Int        @default(0) @map("failed_login_count")
+  lockedUntil      DateTime?  @map("locked_until") @db.Timestamptz(3)
+  lastLoginAt      DateTime?  @map("last_login_at") @db.Timestamptz(3)
+  createdAt        DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   memberships Membership[]
   sessions    Session[]
@@ -143,17 +160,17 @@ model Session {
 /// Single-use link a clinic admin sends to a new staff member. The only way to set a staff
 /// password and enrol an authenticator. Only a hash of the token is stored.
 model StaffInvite {
-  id              String    @id @default(uuid()) @db.Uuid
-  organisationId  String    @map("organisation_id") @db.Uuid
-  userId          String    @map("user_id") @db.Uuid
+  id              String        @id @default(uuid()) @db.Uuid
+  organisationId  String        @map("organisation_id") @db.Uuid
+  userId          String        @map("user_id") @db.Uuid
   role            Role
   purpose         InvitePurpose @default(join)
-  tokenHash       String    @unique @map("token_hash")
-  createdByUserId String    @map("created_by_user_id") @db.Uuid
-  expiresAt       DateTime  @map("expires_at") @db.Timestamptz(3)
-  acceptedAt      DateTime? @map("accepted_at") @db.Timestamptz(3)
-  revokedAt       DateTime? @map("revoked_at") @db.Timestamptz(3)
-  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  tokenHash       String        @unique @map("token_hash")
+  createdByUserId String        @map("created_by_user_id") @db.Uuid
+  expiresAt       DateTime      @map("expires_at") @db.Timestamptz(3)
+  acceptedAt      DateTime?     @map("accepted_at") @db.Timestamptz(3)
+  revokedAt       DateTime?     @map("revoked_at") @db.Timestamptz(3)
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
 
   organisation Organisation @relation(fields: [organisationId], references: [id])
   user         User         @relation(fields: [userId], references: [id])
@@ -256,6 +273,115 @@ model PatientTag {
   @@id([patientId, tagId])
   @@index([organisationId, tagId])
   @@map("patient_tags")
+}
+
+/// Physical location where doctors consult.
+model Clinic {
+  id             String   @id @default(uuid()) @db.Uuid
+  organisationId String   @map("organisation_id") @db.Uuid
+  name           String
+  address        String?
+  phone          String?
+  /// Only Asia/Kolkata is supported for now (no daylight saving).
+  timezone       String   @default("Asia/Kolkata")
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organisation           Organisation            @relation(fields: [organisationId], references: [id])
+  availabilityVersions   AvailabilityVersion[]
+  availabilityExceptions AvailabilityException[]
+
+  @@unique([organisationId, name])
+  @@map("clinics")
+}
+
+/// How a patient is seen, for how long and at what fee (amounts in paise).
+model ConsultationType {
+  id                 String           @id @default(uuid()) @db.Uuid
+  organisationId     String           @map("organisation_id") @db.Uuid
+  name               String
+  mode               ConsultationMode
+  defaultDurationMin Int              @map("default_duration_min")
+  feePaise           Int              @map("fee_paise")
+  followUpFeePaise   Int?             @map("follow_up_fee_paise")
+  requiresPrepayment Boolean          @default(false) @map("requires_prepayment")
+  active             Boolean          @default(true)
+  createdAt          DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organisation           Organisation            @relation(fields: [organisationId], references: [id])
+  availabilityVersions   AvailabilityVersion[]
+  availabilityExceptions AvailabilityException[]
+
+  @@unique([organisationId, name])
+  @@map("consultation_types")
+}
+
+/// Per-organisation booking window (PRD §4.3). More rules arrive with appointments.
+model BookingRules {
+  organisationId       String   @id @map("organisation_id") @db.Uuid
+  horizonDays          Int      @default(30) @map("horizon_days")
+  sameDayCutoffMinutes Int      @default(60) @map("same_day_cutoff_minutes")
+  updatedAt            DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+
+  @@map("booking_rules")
+}
+
+/// A doctor's weekly schedule for one clinic and consultation type, from a date onwards.
+/// Never edited once in force: a change is a new version with a later effectiveFrom.
+model AvailabilityVersion {
+  id                 String   @id @default(uuid()) @db.Uuid
+  organisationId     String   @map("organisation_id") @db.Uuid
+  doctorUserId       String   @map("doctor_user_id") @db.Uuid
+  clinicId           String   @map("clinic_id") @db.Uuid
+  consultationTypeId String   @map("consultation_type_id") @db.Uuid
+  effectiveFrom      DateTime @map("effective_from") @db.Date
+  /// `{ mon: [{ start: "10:00", end: "13:00" }], ... }`, IST wall-clock.
+  weekly             Json
+  slotMinutes        Int      @map("slot_minutes")
+  bufferMinutes      Int      @default(0) @map("buffer_minutes")
+  createdByUserId    String   @map("created_by_user_id") @db.Uuid
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organisation     Organisation     @relation(fields: [organisationId], references: [id])
+  clinic           Clinic           @relation(fields: [clinicId], references: [id])
+  consultationType ConsultationType @relation(fields: [consultationTypeId], references: [id])
+
+  @@unique([doctorUserId, clinicId, consultationTypeId, effectiveFrom])
+  @@index([organisationId, doctorUserId])
+  @@map("availability_versions")
+}
+
+/// Leave (a doctor), a holiday (a whole clinic) or an extra session.
+model AvailabilityException {
+  id                 String                    @id @default(uuid()) @db.Uuid
+  organisationId     String                    @map("organisation_id") @db.Uuid
+  type               AvailabilityExceptionType
+  /// Null for a clinic-wide holiday.
+  doctorUserId       String?                   @map("doctor_user_id") @db.Uuid
+  /// Null for leave (the doctor is away from every clinic).
+  clinicId           String?                   @map("clinic_id") @db.Uuid
+  /// Extra sessions only.
+  consultationTypeId String?                   @map("consultation_type_id") @db.Uuid
+  startDate          DateTime                  @map("start_date") @db.Date
+  endDate            DateTime                  @map("end_date") @db.Date
+  startTime          String?                   @map("start_time")
+  endTime            String?                   @map("end_time")
+  reason             String?
+  createdByUserId    String                    @map("created_by_user_id") @db.Uuid
+  createdAt          DateTime                  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organisation     Organisation      @relation(fields: [organisationId], references: [id])
+  // Restrict, not SetNull: an empty clinic means "every clinic", so a deleted clinic
+  // must never widen a holiday.
+  clinic           Clinic?           @relation(fields: [clinicId], references: [id], onDelete: Restrict)
+  consultationType ConsultationType? @relation(fields: [consultationTypeId], references: [id], onDelete: Restrict)
+
+  @@index([organisationId, startDate])
+  @@map("availability_exceptions")
 }
 
 /// Append-only audit trail. Updates and deletes are blocked by a trigger.

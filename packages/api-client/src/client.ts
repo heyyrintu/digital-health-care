@@ -90,6 +90,17 @@ export function createApiClient(options: ApiClientOptions) {
         schema: NoContent,
       }),
 
+    /** Withdraw a weekly schedule that has not started yet. */
+    deleteAvailabilityVersion: (id: string) =>
+      request('DELETE', `/availability/versions/${encodeURIComponent(id)}`, {
+        schema: NoContent,
+      }),
+    /** Remove leave, a holiday or an extra session that has not started yet. */
+    deleteAvailabilityException: (id: string) =>
+      request('DELETE', `/availability/exceptions/${encodeURIComponent(id)}`, {
+        schema: NoContent,
+      }),
+
     /** Ends the session of the current access token. */
     logout: () => request('POST', '/auth/logout', { schema: NoContent }),
   };

@@ -14,6 +14,8 @@ Open the queue for today; check the doctor's sessions; turn on the waiting-room 
 - Record vitals if asked (weight is required for children under 12).
 
 ## Bookings by phone
+To check when a doctor is free, open **Availability**, choose the doctor, clinic and consultation type, and pick a date under **Slots on a day**. Crossed-out times are past or taken. Schedules and leave are set by the doctor or clinic admin.
+
 Use **Book for patient**; the patient gets a WhatsApp/SMS confirmation. You can overbook within the clinic's limit.
 
 ## Billing

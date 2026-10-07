@@ -2,7 +2,9 @@
 
 ## Setup checklist
 - [ ] Clinic details, timings, branding and sender settings (WhatsApp number, SMS sender ID, email).
-- [ ] Booking rules: horizon, same-day cutoff, auto/manual confirm, cancel window, max bookings, no-show limit, follow-up window and fee.
+- [ ] **Clinics and consultation types:** on the dashboard, under **Clinics and consultations**, add each place the doctor consults (name and address), then each consultation type with its mode (in person, video or audio call), minutes per slot, fee and optional follow-up fee. Tick *Patients pay when booking* for online consults. Deactivate a clinic or type you stop using; past bookings keep it.
+- [ ] **Doctor schedules:** open **Availability**, choose the doctor, clinic and consultation type, and set the weekly sessions (see the Doctor Guide). Add clinic holidays there too (type *Clinic holiday*); a holiday closes the clinic for every doctor. Use **Slots on a day** to check what patients will see.
+- [ ] Booking rules: horizon and same-day cutoff (under **Clinics and consultations → Booking rules**; defaults 30 days and 60 minutes), auto/manual confirm, cancel window, max bookings, no-show limit, follow-up window and fee.
 - [ ] Price list and consultation fees; pay-at-booking for online consults (required) and in-person (optional).
 - [ ] **Cashfree:** connect the clinic's Cashfree merchant account, choose payment methods, link expiry, test a payment.
 - [ ] **UHID numbering:** under **Clinic settings**, set the prefix (for example `EK`) and the next number (for example 10001); the next patient registered gets EK10001. If you import patients, they keep their existing UHIDs and new numbers skip any already in use.
