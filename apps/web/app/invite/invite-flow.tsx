@@ -37,6 +37,11 @@ export function InviteFlow({ apiBaseUrl }: { apiBaseUrl: string }) {
   const router = useRouter();
   const token = useRef<string | null>(null);
   const [locale, setLocale] = useState<Locale>('en');
+
+  // Screen readers and spell-checkers follow the page language.
+  useEffect(() => {
+    document.documentElement.lang = locale;
+  }, [locale]);
   const [step, setStep] = useState<Step>({ kind: 'loading' });
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -265,7 +270,7 @@ export function InviteFlow({ apiBaseUrl }: { apiBaseUrl: string }) {
               <div className="rounded-xl bg-muted px-4 py-3">
                 <p className="text-xs text-muted-foreground">{t('invite.manualKey')}</p>
                 <p
-                  className="key mt-1 break-all font-mono text-base font-semibold tracking-wider tabular"
+                  className="key mt-1 select-all break-all text-center font-mono text-base font-semibold tracking-wider tabular"
                   data-testid="manual-key"
                 >
                   {groupKey(step.secret)}

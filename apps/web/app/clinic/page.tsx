@@ -77,7 +77,7 @@ function PatientSearch() {
 
   return (
     <>
-      <PageHeader title={<span id="patients-title">{t('dashboard.searchPatients')}</span>} />
+      <PageHeader titleId="patients-title" title={t('dashboard.searchPatients')} />
       <section aria-labelledby="patients-title" className="surface p-4 sm:p-6">
         <form
           className="search flex flex-col gap-3 sm:flex-row sm:items-center"

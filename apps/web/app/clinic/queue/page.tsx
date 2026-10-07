@@ -159,7 +159,8 @@ function Queue({ me }: { me: MeResponse }) {
   return (
     <section aria-labelledby="queue-title" className="space-y-5">
       <PageHeader
-        title={<span id="queue-title">{t('queue.title')}</span>}
+        titleId="queue-title"
+        title={t('queue.title')}
         sub={
           <Link href="/clinic" className="underline-offset-4 hover:text-foreground hover:underline">
             {t('availability.back')}

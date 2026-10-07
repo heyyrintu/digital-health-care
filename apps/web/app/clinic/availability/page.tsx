@@ -99,7 +99,8 @@ function Availability({ me }: { me: MeResponse }) {
   return (
     <section aria-labelledby="availability-title" className="space-y-6">
       <PageHeader
-        title={<span id="availability-title">{t('availability.title')}</span>}
+        titleId="availability-title"
+        title={t('availability.title')}
         actions={
           <Link href="/clinic" className={buttonVariants({ variant: 'ghost' })}>
             <ArrowLeft aria-hidden />

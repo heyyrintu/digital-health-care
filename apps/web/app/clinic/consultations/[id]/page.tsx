@@ -236,7 +236,7 @@ function ConsultationScreen({ me }: { me: MeResponse }) {
       </section>
 
       <div className="grid gap-6 lg:grid-cols-[minmax(300px,380px)_minmax(0,1fr)] lg:items-start">
-        <aside className="surface min-w-0 p-5 sm:p-6 lg:sticky lg:top-6">
+        <aside className="surface min-w-0 p-5 sm:p-6 lg:sticky lg:top-20">
           <h2 className="font-display text-lg font-bold">{t('chart.title')}</h2>
           {chart ? (
             <ChartPanel chart={chart} editable={me.role === 'doctor'} onChange={setChart} />

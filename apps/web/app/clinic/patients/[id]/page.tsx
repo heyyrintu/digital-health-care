@@ -117,7 +117,10 @@ function PatientView({ role }: { role: string }) {
         {back}
         <Surface className="p-4 sm:p-6">
           {error ? (
-            <p role="alert" className="alert text-sm text-destructive">
+            <p
+              role="alert"
+              className="alert rounded-xl bg-danger-soft px-4 py-3 text-sm text-destructive"
+            >
               {error}
             </p>
           ) : (
@@ -142,7 +145,8 @@ function PatientView({ role }: { role: string }) {
       <section aria-labelledby="patient-title">
         {back}
         <PageHeader
-          title={<span id="patient-title">{patient.name}</span>}
+          titleId="patient-title"
+          title={patient.name}
           sub={
             <>
               <span

@@ -61,6 +61,11 @@ export function SessionProvider({
   const [endedReason, setEndedReason] = useState<SignOutReason | null>(null);
   const [locale, setLocale] = useState<Locale>('en');
 
+  // Screen readers and spell-checkers follow the page language.
+  useEffect(() => {
+    document.documentElement.lang = locale;
+  }, [locale]);
+
   const api = useMemo(
     () => createApiClient({ baseUrl: apiBaseUrl, getAccessToken: () => accessToken.current }),
     [apiBaseUrl],

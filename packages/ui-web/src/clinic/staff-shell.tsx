@@ -167,7 +167,7 @@ export function StaffShell({
         <div
           className={cn(
             'mt-3 shrink-0 border-t border-sidebar-border pt-4',
-            collapsed ? 'flex justify-center' : 'rounded-2xl bg-sidebar-accent/45 p-3',
+            collapsed ? 'flex flex-col items-center gap-2' : 'rounded-2xl bg-sidebar-accent/45 p-3',
           )}
         >
           <div className="flex min-w-0 items-center gap-3">
@@ -185,7 +185,19 @@ export function StaffShell({
               </div>
             )}
           </div>
-          {!collapsed && (
+          {collapsed ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+              onClick={onSignOut}
+              aria-label={t('session.signOut')}
+              title={t('session.signOut')}
+            >
+              <LogOut />
+            </Button>
+          ) : (
             <Button
               type="button"
               variant="ghost"

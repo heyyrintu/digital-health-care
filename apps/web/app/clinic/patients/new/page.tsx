@@ -113,7 +113,8 @@ function RegisterForm({ tagging }: { tagging: boolean }) {
         </Link>
       </p>
       <PageHeader
-        title={<span id="register-title">{t('patient.registerTitle')}</span>}
+        titleId="register-title"
+        title={t('patient.registerTitle')}
         sub={nextUhid ? t('patient.uhidNext', { uhid: nextUhid }) : undefined}
       />
 

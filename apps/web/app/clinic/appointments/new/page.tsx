@@ -183,7 +183,8 @@ function Book({ me }: { me: MeResponse }) {
   return (
     <section aria-labelledby="book-title" className="mx-auto max-w-3xl space-y-5">
       <PageHeader
-        title={<span id="book-title">{current ? t('book.rescheduleTitle') : t('book.title')}</span>}
+        titleId="book-title"
+        title={current ? t('book.rescheduleTitle') : t('book.title')}
         sub={
           <Link
             href="/clinic/queue"
