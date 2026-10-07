@@ -516,7 +516,35 @@ describe('tenant isolation', () => {
         }),
       ),
     ).rejects.toThrow();
-    // Even the owner role cannot give a prescription another patient than its visit's.
+    // A temporary table named like the real one cannot stand in for it.
+    await expect(
+      withTenant(h.services.db, b, async (tx) => {
+        await tx.$executeRawUnsafe(
+          'CREATE TEMP TABLE appointments (id uuid, organisation_id uuid, patient_id uuid, doctor_user_id uuid) ON COMMIT DROP',
+        );
+        await tx.$executeRawUnsafe(
+          `INSERT INTO appointments VALUES ('${id}', '${b}', '${clinics.a.patients[0]!.id}', '${clinics.a.doctor.userId}')`,
+        );
+        return tx.prescription.create({
+          data: {
+            organisationId: b,
+            appointmentId: id,
+            patientId: clinics.a.patients[0]!.id,
+            doctorUserId: clinics.a.doctor.userId,
+            language: 'en',
+            version: 2,
+          },
+        });
+      }),
+    ).rejects.toThrow();
+    // A visit with a prescription keeps its patient and doctor.
+    await expect(
+      h.owner.appointment.update({
+        where: { id },
+        data: { patientId: clinics.a.patients[1]!.id },
+      }),
+    ).rejects.toThrow();
+
     await expect(
       h.owner.prescription.update({
         where: { id: rx.id },

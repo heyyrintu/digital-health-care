@@ -27,11 +27,13 @@ type SaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'stale' | 'error';
 
 /** The consultation screen (PRD §6.1): patient context beside this visit's record. */
 export default function ConsultationPage() {
-  return <ClinicShell>{(me) => <ConsultationScreen me={me} />}</ClinicShell>;
+  const { id } = useParams<{ id: string }>();
+  // Keyed by visit: moving to another visit starts afresh, so a pending or running save
+  // keeps the refs (lines, revision) of the visit it was made on.
+  return <ClinicShell>{(me) => <ConsultationScreen key={id} id={id} me={me} />}</ClinicShell>;
 }
 
-function ConsultationScreen({ me }: { me: MeResponse }) {
-  const { id } = useParams<{ id: string }>();
+function ConsultationScreen({ id, me }: { id: string; me: MeResponse }) {
   const { api, locale, signOut, t } = useSession();
   const [view, setView] = useState<ConsultationView | null>(null);
   const [chart, setChart] = useState<PatientChart | null>(null);
@@ -155,8 +157,7 @@ function ConsultationScreen({ me }: { me: MeResponse }) {
       timer.current = undefined;
       void saveRef.current();
     },
-    // Also when moving to another visit, before its load replaces the pending edit.
-    [load],
+    [],
   );
 
   // Warn before leaving with unsaved notes.
@@ -261,7 +262,7 @@ function ConsultationScreen({ me }: { me: MeResponse }) {
             />
           </section>
           <section className="card" data-testid="prescription">
-            <PrescriptionCard appointmentId={a.id} patientId={a.patient.id} />
+            <PrescriptionCard key={a.id} appointmentId={a.id} patientId={a.patient.id} />
           </section>
         </div>
       </div>

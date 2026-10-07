@@ -231,8 +231,8 @@ export function PrescriptionCard({
       timer.current = undefined;
       void saveRef.current();
     },
-    // Also when moving to another visit, before its load replaces the pending edit.
-    [load],
+    // Mounted once per visit (the page keys it by appointment), so this is the only flush.
+    [],
   );
 
   // Warn before leaving with lines not yet saved (same as the notes).

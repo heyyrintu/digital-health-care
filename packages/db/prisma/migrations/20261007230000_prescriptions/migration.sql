@@ -170,17 +170,19 @@ CREATE POLICY tenant_isolation ON prescription_templates TO dhc_app
 -- A row must belong to the same organisation as the row it points at. Foreign keys do not
 -- see RLS, so without this a tenant-scoped insert could reference another clinic's
 -- appointment or prescription by ID. A prescription's patient and doctor must also be
--- the appointment's, which pins them to the organisation through the appointment.
-CREATE FUNCTION prescriptions_same_tenant() RETURNS trigger LANGUAGE plpgsql AS $$
+-- the appointment's, which pins them to the organisation through the appointment. Tables
+-- are schema-qualified with a fixed search_path so a temporary table cannot stand in.
+CREATE FUNCTION prescriptions_same_tenant() RETURNS trigger LANGUAGE plpgsql
+  SET search_path = pg_catalog, public, pg_temp AS $$
 BEGIN
   IF NOT EXISTS (
-    SELECT 1 FROM appointments a
+    SELECT 1 FROM public.appointments a
     WHERE a.id = NEW.appointment_id
       AND a.organisation_id = NEW.organisation_id
       AND a.patient_id = NEW.patient_id
       AND a.doctor_user_id = NEW.doctor_user_id
   ) THEN
-    RAISE EXCEPTION 'prescription does not match its appointment' USING ERRCODE = '23503';
+    RAISE EXCEPTION 'prescription does not match its appointment' USING ERRCODE = '23514';
   END IF;
   RETURN NEW;
 END $$;
@@ -188,16 +190,33 @@ CREATE TRIGGER prescriptions_same_tenant
   BEFORE INSERT OR UPDATE OF organisation_id, appointment_id, patient_id, doctor_user_id
   ON prescriptions FOR EACH ROW EXECUTE FUNCTION prescriptions_same_tenant();
 
-CREATE FUNCTION prescription_items_same_tenant() RETURNS trigger LANGUAGE plpgsql AS $$
+CREATE FUNCTION prescription_items_same_tenant() RETURNS trigger LANGUAGE plpgsql
+  SET search_path = pg_catalog, public, pg_temp AS $$
 BEGIN
   IF NOT EXISTS (
-    SELECT 1 FROM prescriptions p
+    SELECT 1 FROM public.prescriptions p
     WHERE p.id = NEW.prescription_id AND p.organisation_id = NEW.organisation_id
   ) THEN
-    RAISE EXCEPTION 'prescription line does not match its prescription' USING ERRCODE = '23503';
+    RAISE EXCEPTION 'prescription line does not match its prescription' USING ERRCODE = '23514';
   END IF;
   RETURN NEW;
 END $$;
 CREATE TRIGGER prescription_items_same_tenant
   BEFORE INSERT OR UPDATE OF organisation_id, prescription_id
   ON prescription_items FOR EACH ROW EXECUTE FUNCTION prescription_items_same_tenant();
+
+-- The other side of the same rule: a visit with a prescription keeps its organisation,
+-- patient and doctor (rescheduling makes a new appointment instead).
+CREATE FUNCTION appointments_keep_prescriptions() RETURNS trigger LANGUAGE plpgsql
+  SET search_path = pg_catalog, public, pg_temp AS $$
+BEGIN
+  IF (NEW.organisation_id, NEW.patient_id, NEW.doctor_user_id)
+       IS DISTINCT FROM (OLD.organisation_id, OLD.patient_id, OLD.doctor_user_id)
+     AND EXISTS (SELECT 1 FROM public.prescriptions p WHERE p.appointment_id = OLD.id) THEN
+    RAISE EXCEPTION 'appointment has a prescription' USING ERRCODE = '23514';
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER appointments_keep_prescriptions
+  BEFORE UPDATE OF organisation_id, patient_id, doctor_user_id
+  ON appointments FOR EACH ROW EXECUTE FUNCTION appointments_keep_prescriptions();
