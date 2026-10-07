@@ -2,9 +2,18 @@
 
 import { ApiError } from '@dhc/api-client';
 import { Tag, TagList, UhidSettings } from '@dhc/contracts';
+import { Button, Input } from '@dhc/ui-web';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { TagChip } from './patient-bits';
 import { useSession } from './session-provider';
+
+const H3 = 'mb-3 mt-7 text-xs font-bold uppercase tracking-wide text-muted-foreground';
+const ROW = 'flex flex-wrap items-center gap-x-3 gap-y-1 py-3';
+const PILL = 'rounded-full bg-muted px-2.5 py-0.5 text-xs font-semibold text-muted-foreground';
+const FORM = 'mt-4 grid items-end gap-3 sm:grid-cols-2';
+const FIELD = 'space-y-1.5';
+const LABEL = 'block text-sm font-medium';
+const ALERT = 'mt-3 rounded-xl bg-danger-soft px-4 py-3 text-sm font-medium text-destructive';
 
 /** Clinic admin: UHID numbering and the patient tags staff can assign (PRD §5.4). */
 export function SettingsCard() {
@@ -101,20 +110,24 @@ export function SettingsCard() {
     });
 
   return (
-    <section aria-labelledby="settings-title" className="card">
-      <h2 id="settings-title">{t('settings.title')}</h2>
+    <section aria-labelledby="settings-title" className="surface p-4 sm:p-6">
+      <h2 id="settings-title" className="font-display text-lg font-bold">
+        {t('settings.title')}
+      </h2>
       {error && (
-        <p role="alert" className="alert">
+        <p role="alert" className={ALERT}>
           {error}
         </p>
       )}
 
-      <h3>{t('settings.uhidTitle')}</h3>
+      <h3 className={H3}>{t('settings.uhidTitle')}</h3>
       {uhid && (
-        <form className="inline-form" onSubmit={saveUhid} aria-describedby="uhid-preview">
-          <div>
-            <label htmlFor="uhid-prefix">{t('settings.uhidPrefix')}</label>
-            <input
+        <form className={FORM} onSubmit={saveUhid} aria-describedby="uhid-preview">
+          <div className={FIELD}>
+            <label className={LABEL} htmlFor="uhid-prefix">
+              {t('settings.uhidPrefix')}
+            </label>
+            <Input
               id="uhid-prefix"
               name="prefix"
               defaultValue={uhid.prefix}
@@ -123,9 +136,11 @@ export function SettingsCard() {
               autoCapitalize="characters"
             />
           </div>
-          <div>
-            <label htmlFor="uhid-next">{t('settings.uhidNext')}</label>
-            <input
+          <div className={FIELD}>
+            <label className={LABEL} htmlFor="uhid-next">
+              {t('settings.uhidNext')}
+            </label>
+            <Input
               id="uhid-next"
               name="nextNumber"
               type="number"
@@ -135,68 +150,90 @@ export function SettingsCard() {
               defaultValue={uhid.nextNumber}
             />
           </div>
-          <button type="submit" disabled={busy}>
+          <Button type="submit" disabled={busy} className="sm:col-span-2 sm:justify-self-start">
             {t('common.save')}
-          </button>
+          </Button>
         </form>
       )}
       {uhid && (
-        <p id="uhid-preview" className="hint" data-testid="uhid-preview">
+        <p
+          id="uhid-preview"
+          className="mt-3 text-sm text-muted-foreground"
+          data-testid="uhid-preview"
+        >
           {t('settings.uhidPreview', { uhid: uhid.nextUhid })}
         </p>
       )}
       {uhidError && (
-        <p role="alert" className="alert">
+        <p role="alert" className={ALERT}>
           {uhidError}
         </p>
       )}
 
-      <h3>{t('settings.tagsTitle')}</h3>
+      <h3 className={H3}>{t('settings.tagsTitle')}</h3>
       {tags && tags.length === 0 && (
-        <p>
+        <p className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
           {t('settings.noTags')}{' '}
-          <button type="button" className="secondary" disabled={busy} onClick={addDefaults}>
+          <Button type="button" variant="outline" disabled={busy} onClick={addDefaults}>
             {t('settings.addDefaults')}
-          </button>
+          </Button>
         </p>
       )}
       {tags && tags.length > 0 && (
-        <ul className="tag-list">
+        <ul className="divide-y divide-border/70">
           {tags.map((tag) => (
-            <li key={tag.id} data-testid={`tag-${tag.name}`}>
+            <li key={tag.id} data-testid={`tag-${tag.name}`} className={ROW}>
               <TagChip tag={tag} />
-              {tag.sortToTop && <span className="hint">{t('settings.sortsTop')}</span>}
-              {tag.archived && <span className="pill">{t('settings.archived')}</span>}
-              <button
+              {tag.sortToTop && (
+                <span className="text-sm text-muted-foreground">{t('settings.sortsTop')}</span>
+              )}
+              {tag.archived && <span className={PILL}>{t('settings.archived')}</span>}
+              <Button
                 type="button"
-                className="secondary"
+                variant="outline"
+                className="ml-auto"
                 disabled={busy}
                 onClick={() => void setArchived(tag, !tag.archived)}
               >
                 {tag.archived ? t('settings.restore') : t('settings.archive')}
-              </button>
+              </Button>
             </li>
           ))}
         </ul>
       )}
-      <form className="inline-form" onSubmit={addTag}>
-        <div>
-          <label htmlFor="tag-name">{t('settings.tagName')}</label>
-          <input id="tag-name" name="name" required maxLength={40} />
+      <form className={FORM} onSubmit={addTag}>
+        <div className={FIELD}>
+          <label className={LABEL} htmlFor="tag-name">
+            {t('settings.tagName')}
+          </label>
+          <Input id="tag-name" name="name" required maxLength={40} />
         </div>
-        <div className="narrow-field">
-          <label htmlFor="tag-colour">{t('settings.tagColour')}</label>
-          <input id="tag-colour" name="colour" type="color" defaultValue="#475569" />
+        <div className={FIELD}>
+          <label className={LABEL} htmlFor="tag-colour">
+            {t('settings.tagColour')}
+          </label>
+          <Input
+            id="tag-colour"
+            name="colour"
+            type="color"
+            defaultValue="#475569"
+            className="w-20 cursor-pointer p-1"
+          />
         </div>
-        <label className="checkbox">
-          <input type="checkbox" name="sortToTop" /> {t('settings.tagSortTop')}
+        <label className="flex min-h-11 items-center gap-2 text-sm sm:col-span-2">
+          <input
+            type="checkbox"
+            name="sortToTop"
+            className="size-4 accent-[var(--color-primary)]"
+          />{' '}
+          {t('settings.tagSortTop')}
         </label>
-        <button type="submit" disabled={busy}>
+        <Button type="submit" disabled={busy} className="sm:col-span-2 sm:justify-self-start">
           {t('settings.addTag')}
-        </button>
+        </Button>
       </form>
       {tagError && (
-        <p role="alert" className="alert">
+        <p role="alert" className={ALERT}>
           {tagError}
         </p>
       )}

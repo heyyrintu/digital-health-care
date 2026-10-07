@@ -8,6 +8,7 @@ import {
   type Clinic,
   type DisplayScreen,
 } from '@dhc/contracts';
+import { Button, Input, NativeSelect } from '@dhc/ui-web';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useSession } from './session-provider';
 
@@ -87,61 +88,82 @@ export function ScreensCard() {
   }
 
   return (
-    <section aria-labelledby="screens-title" className="card">
-      <h2 id="screens-title">{t('screens.title')}</h2>
-      {screens && screens.length === 0 && <p>{t('screens.none')}</p>}
+    <section aria-labelledby="screens-title" className="surface p-4 sm:p-6">
+      <h2 id="screens-title" className="font-display text-lg font-bold">
+        {t('screens.title')}
+      </h2>
+      {screens && screens.length === 0 && (
+        <p className="mt-3 text-sm text-muted-foreground">{t('screens.none')}</p>
+      )}
       {screens && screens.length > 0 && (
-        <ul className="tag-list">
+        <ul className="mt-2 divide-y divide-border/70">
           {screens.map((s) => (
-            <li key={s.id} data-testid={`screen-${s.label}`}>
+            <li
+              key={s.id}
+              data-testid={`screen-${s.label}`}
+              className="flex flex-wrap items-center gap-x-3 gap-y-1 py-3"
+            >
               <strong>{s.label}</strong>
-              <span className="hint">{s.clinicName}</span>
-              <button
+              <span className="text-sm text-muted-foreground">{s.clinicName}</span>
+              <Button
                 type="button"
-                className="secondary"
+                variant="outline"
+                className="ml-auto"
                 disabled={busy}
                 onClick={() => void revoke(s)}
               >
                 {t('screens.revoke')}
-              </button>
+              </Button>
             </li>
           ))}
         </ul>
       )}
       {created && (
-        <div className="notice" role="status">
+        <div className="mt-4 space-y-3 rounded-xl bg-info-soft p-4 text-sm" role="status">
           <p>{t('screens.linkHelp')}</p>
-          <p className="link-box">
-            <code data-testid="screen-link">{created.link}</code>{' '}
-            <button type="button" className="secondary" onClick={() => void copy()}>
+          <p className="flex flex-wrap items-center gap-3">
+            <code
+              data-testid="screen-link"
+              className="min-w-0 flex-1 break-all rounded-lg bg-card px-3 py-2 font-mono text-xs"
+            >
+              {created.link}
+            </code>{' '}
+            <Button type="button" variant="outline" onClick={() => void copy()}>
               {copied ? t('screens.copied') : t('screens.copy')}
-            </button>
+            </Button>
           </p>
         </div>
       )}
       {clinics.length > 0 && (
-        <form className="inline-form" onSubmit={add}>
-          <div>
-            <label htmlFor="screen-label">{t('screens.label')}</label>
-            <input id="screen-label" name="label" required maxLength={60} />
+        <form className="mt-4 grid items-end gap-3 sm:grid-cols-2" onSubmit={add}>
+          <div className="space-y-1.5">
+            <label className="block text-sm font-medium" htmlFor="screen-label">
+              {t('screens.label')}
+            </label>
+            <Input id="screen-label" name="label" required maxLength={60} />
           </div>
-          <div>
-            <label htmlFor="screen-clinic">{t('screens.clinic')}</label>
-            <select id="screen-clinic" name="clinicId" defaultValue={clinics[0]?.id}>
+          <div className="space-y-1.5">
+            <label className="block text-sm font-medium" htmlFor="screen-clinic">
+              {t('screens.clinic')}
+            </label>
+            <NativeSelect id="screen-clinic" name="clinicId" defaultValue={clinics[0]?.id}>
               {clinics.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </div>
-          <button type="submit" disabled={busy}>
+          <Button type="submit" disabled={busy} className="sm:col-span-2 sm:justify-self-start">
             {t('screens.add')}
-          </button>
+          </Button>
         </form>
       )}
       {error && (
-        <p role="alert" className="alert">
+        <p
+          role="alert"
+          className="mt-3 rounded-xl bg-danger-soft px-4 py-3 text-sm font-medium text-destructive"
+        >
           {error}
         </p>
       )}
