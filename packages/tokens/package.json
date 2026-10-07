@@ -2,10 +2,11 @@
   "name": "@dhc/tokens",
   "version": "0.0.0",
   "private": true,
-  "description": "Design tokens shared by web and mobile: colours, type scale, spacing, radii.",
+  "description": "Design tokens shared by web and mobile: the theme (colours, fonts, radius) and spacing and type scales.",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./theme.css": "./src/theme.css"
   },
   "scripts": {
     "lint": "eslint .",
