@@ -1,0 +1,96 @@
+/*
+ * @dhc/ui-web styles. Import after the theme in the app's Tailwind entry:
+ *   @import '@dhc/tokens/theme.css';
+ *   @import '@dhc/ui-web/styles.css';
+ * It makes Tailwind scan these components and adds the demo's helper classes as utilities,
+ * so they sit in the utilities layer and take variants (`md:surface`, `dark:glass`).
+ */
+@import 'tw-animate-css';
+
+@source './';
+
+/* The one-time-code input's blinking caret (`animate-caret-blink`). */
+@theme {
+  --animate-caret-blink: caret-blink 1.25s ease-out infinite;
+  @keyframes caret-blink {
+    0%,
+    70%,
+    100% {
+      opacity: 1;
+    }
+    20%,
+    50% {
+      opacity: 0;
+    }
+  }
+}
+
+/* Card surface: white, softly rounded, soft shadow. */
+@utility surface {
+  background: var(--color-card);
+  border: 1px solid color-mix(in oklab, var(--color-border) 65%, transparent);
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-soft);
+}
+
+/* Frosted bar for sticky headers. */
+@utility glass {
+  background: color-mix(in oklab, var(--color-background) 84%, transparent);
+  border-color: color-mix(in oklab, var(--color-border) 62%, transparent);
+  backdrop-filter: blur(20px) saturate(1.35);
+}
+
+@utility bg-hero {
+  background: var(--gradient-hero);
+}
+
+@utility bg-brand {
+  background: var(--gradient-primary);
+  color: var(--color-primary-foreground);
+}
+
+/* Numbers that line up in columns (tokens, times, amounts). */
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@utility scrollbar-none {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Room for the iPhone home indicator under bottom bars. */
+@utility safe-bottom {
+  padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+}
+
+@utility skeleton-shimmer {
+  background: linear-gradient(
+    100deg,
+    var(--color-muted) 20%,
+    var(--color-accent) 45%,
+    var(--color-muted) 70%
+  );
+  background-size: 240% 100%;
+  animation: shimmer 1.6s infinite linear;
+}
+
+/* The waiting-room screen's "now serving" token. */
+@utility token-pulse {
+  animation: token-pulse 2.8s ease-in-out infinite;
+}
+
+@keyframes shimmer {
+  to {
+    background-position-x: -240%;
+  }
+}
+
+@keyframes token-pulse {
+  50% {
+    transform: scale(1.025);
+    opacity: 0.92;
+  }
+}

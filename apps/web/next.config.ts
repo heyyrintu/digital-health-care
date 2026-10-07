@@ -22,6 +22,7 @@ const nextConfig: NextConfig = {
     '@dhc/domain',
     '@dhc/i18n',
     '@dhc/tokens',
+    '@dhc/ui-web',
   ],
   async headers() {
     return [

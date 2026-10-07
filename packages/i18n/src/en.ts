@@ -401,6 +401,19 @@ export const en = {
   'vitals.saved': 'Vitals saved',
   'vitals.recordedBy': 'Recorded by {name}, {time}',
   'vitals.childWeight': 'Weight is needed today for children under 12.',
+  // Design system components (@dhc/ui-web).
+  'ui.close': 'Close',
+  'ui.collapseSidebar': 'Collapse sidebar',
+  'ui.expandSidebar': 'Expand sidebar',
+  'ui.mainNav': 'Main navigation',
+  'ui.searchPlaceholder': 'Search pages',
+  'ui.noResults': 'No results found.',
+  'ui.pages': 'Pages',
+  'ui.empty': 'Nothing here yet.',
+  'ui.by': 'by {name}',
+  'ui.morning': 'Morning',
+  'ui.afternoon': 'Afternoon',
+  'ui.evening': 'Evening',
 } as const;
 
 export type MessageKey = keyof typeof en;

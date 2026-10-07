@@ -18,6 +18,7 @@
     "@dhc/domain": "workspace:*",
     "@dhc/i18n": "workspace:*",
     "@dhc/tokens": "workspace:*",
+    "@dhc/ui-web": "workspace:*",
     "@fontsource-variable/figtree": "^5.3.0",
     "@fontsource-variable/manrope": "^5.3.0",
     "@fontsource-variable/noto-sans-devanagari": "^5.3.0",

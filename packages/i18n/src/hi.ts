@@ -405,4 +405,17 @@ export const hi: Record<MessageKey, string> = {
   'vitals.saved': 'वाइटल्स सेव हो गए',
   'vitals.recordedBy': '{name} ने दर्ज किया, {time}',
   'vitals.childWeight': '12 साल से कम उम्र के बच्चों का आज का वज़न ज़रूरी है।',
+  // Design system components (@dhc/ui-web).
+  'ui.close': 'बंद करें',
+  'ui.collapseSidebar': 'साइडबार छोटा करें',
+  'ui.expandSidebar': 'साइडबार बड़ा करें',
+  'ui.mainNav': 'मुख्य नेविगेशन',
+  'ui.searchPlaceholder': 'पेज खोजें',
+  'ui.noResults': 'कोई नतीजा नहीं मिला।',
+  'ui.pages': 'पेज',
+  'ui.empty': 'अभी यहाँ कुछ नहीं है।',
+  'ui.by': '{name} द्वारा',
+  'ui.morning': 'सुबह',
+  'ui.afternoon': 'दोपहर',
+  'ui.evening': 'शाम',
 };

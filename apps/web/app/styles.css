@@ -12,5 +12,6 @@
 @import 'tailwindcss/theme.css' layer(theme);
 @import 'tailwindcss/utilities.css' layer(utilities);
 @import '@dhc/tokens/theme.css';
+@import '@dhc/ui-web/styles.css';
 
 @import './globals.css' layer(legacy);
