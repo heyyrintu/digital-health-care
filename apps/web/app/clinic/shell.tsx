@@ -8,6 +8,7 @@ import {
   IndianRupee,
   ListOrdered,
   ScrollText,
+  Pill,
   UserPlus,
   Users,
 } from 'lucide-react';
@@ -62,7 +63,10 @@ export function ClinicShell({ children }: { children: (me: MeResponse) => ReactN
               ]
             : []),
           ...(me.role === 'clinic_admin'
-            ? [{ href: '/clinic/audit', label: t('dashboard.auditLog'), icon: ScrollText }]
+            ? [
+                { href: '/clinic/audit', label: t('dashboard.auditLog'), icon: ScrollText },
+                { href: '/clinic/medicines', label: t('dashboard.medicines'), icon: Pill },
+              ]
             : []),
           ...(me.role === 'doctor'
             ? [

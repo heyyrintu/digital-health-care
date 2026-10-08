@@ -12,6 +12,7 @@
 - [ ] **Waiting-room screens:** under **Waiting-room screens**, enter a name (for example *Reception TV*), choose the clinic and **Create screen link**. Open the link on the TV's browser; it is shown only once, so copy it straight away. The screen shows token numbers only. **Revoke** stops a link working (for example if it was shared by mistake), then create a new one.
 - [ ] Chart model (shared chart or own patients only).
 - [ ] Staff accounts: on the dashboard, under **Staff → Invite staff**, enter their email or mobile number, name and role, then **Create invite link**. Share the link with them directly (it works once and expires in 72 hours). They open it, choose a password and add an authenticator app, and then appear in your staff list. Someone who already has a staff account at another clinic confirms with their current password and authenticator code instead of creating new ones. **Pending invites** shows links not yet used; **Revoke** cancels one. Creating a new invite for the same person and role replaces the old link.
+- [ ] **Medicines:** under **Medicines → Medicine list**, search the reference list (read-only) and add the products your doctors prescribe that are missing, with their molecules and strengths. **Edit** changes the clinic's own medicines; **Deactivate** hides one from doctors' search (prescriptions keep it). *Show inactive* finds them again.
 - [ ] Message templates (English and Hindi) and approval status.
 - [ ] Import from the previous system (dry run first).
 
@@ -21,7 +22,11 @@
 - **Collections** (in the menu): a day's payments by mode (cash, UPI, card) and by doctor, each with its receipt, and the visits still due. Reconciliation mismatches from Cashfree come with online payments.
 - Delivery log for failed messages.
 - Data-rights requests and merge requests.
-- Free-text medicines waiting to be added to the master.
+- **Medicines → Approval queue** (in the menu): the names doctors typed because they were not in the medicine list, most used first, with how many prescriptions and doctors used each (never patients). For each one choose:
+  - **Add as new medicine**: the form opens with the typed name; fill in the generic name, composition, form and usual route, and add each molecule with its strength (mg per tablet, capsule or drop, or per ml; *Not in mg* for creams and IU). Without molecules the safety checks cannot see the medicine and the doctor gets a warning.
+  - **Same as a listed medicine**: search the list and choose **Link to …** when the name is a brand or spelling of a medicine already listed (for example *crocin* → Paracetamol 500).
+  - **Reject**, with a reason, when it is not a medicine (an appliance or a test). Doctors can still type it.
+  After approval, doctors searching the typed name find the medicine. Prescriptions already written are not changed. **Decisions** lists what was decided, by whom and when; **Undo** puts a name back in the queue (a medicine it added stays in the list).
 
 ## Lost phone or authenticator
 If a staff member loses their phone or authenticator app, open **Staff** on the dashboard and choose **Reset sign-in** next to their name. This signs them out everywhere and clears their password and authenticator; you get a new link (valid 72 hours) to give them directly. They open it, choose a new password and set up the authenticator again — their role stays the same. You cannot reset your own sign-in (ask another clinic admin), and someone who also works at another clinic needs platform support: ask them to contact support, who will call them back on their registered number and ask you (or the other clinic's admin) to confirm before sending a new link. Their reset shows in your audit log as `support.authenticator.reset`.
