@@ -97,7 +97,7 @@ export function StaffShell({
     <div className="flex min-h-screen bg-background font-sans text-foreground">
       <aside
         className={cn(
-          'sticky top-0 hidden h-screen shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-300 md:flex',
+          'sticky top-0 hidden h-screen shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground transition-[width] duration-300 md:flex print:!hidden',
           collapsed ? 'w-[76px] p-3' : 'w-64 p-4',
         )}
       >
@@ -218,7 +218,7 @@ export function StaffShell({
       </aside>
 
       <div className="min-w-0 flex-1">
-        <header className="glass sticky top-0 z-30 hidden h-16 grid-cols-[minmax(0,1fr)_auto] items-center gap-4 border-b px-5 md:grid">
+        <header className="glass sticky top-0 z-30 hidden h-16 print:!hidden grid-cols-[minmax(0,1fr)_auto] items-center gap-4 border-b px-5 md:grid">
           <button
             type="button"
             onClick={() => setSearchOpen(true)}
@@ -233,7 +233,7 @@ export function StaffShell({
           <div className="flex shrink-0 items-center gap-2">{headerEnd}</div>
         </header>
 
-        <div className="glass sticky top-0 z-30 flex items-center gap-2 border-b px-3 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] md:hidden">
+        <div className="glass sticky top-0 z-30 flex items-center gap-2 border-b px-3 py-2 pt-[max(0.5rem,env(safe-area-inset-top))] md:hidden print:!hidden">
           <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-primary font-bold text-primary-foreground">
             {brand.letter}
           </span>
@@ -263,7 +263,7 @@ export function StaffShell({
         </div>
         <nav
           aria-label={t('ui.mainNav')}
-          className="flex gap-2 overflow-x-auto border-b bg-background/80 p-2 md:hidden"
+          className="flex gap-2 overflow-x-auto border-b bg-background/80 p-2 md:hidden print:!hidden"
         >
           {nav
             .filter((item) => !tabHrefs.has(item.href))
@@ -287,7 +287,7 @@ export function StaffShell({
 
         <main
           className={cn(
-            'mx-auto max-w-[1500px] p-4 md:p-6 xl:p-8',
+            'mx-auto max-w-[1500px] p-4 md:p-6 xl:p-8 print:!p-0',
             bottomTabs?.length && 'pb-28 md:pb-6',
           )}
         >
@@ -297,7 +297,7 @@ export function StaffShell({
         {bottomTabs && bottomTabs.length > 0 && (
           <nav
             aria-label={t('ui.tabBar')}
-            className="safe-bottom fixed inset-x-0 bottom-0 z-40 grid border-t bg-background shadow-sheet md:hidden"
+            className="safe-bottom fixed inset-x-0 bottom-0 z-40 grid border-t bg-background shadow-sheet md:hidden print:!hidden"
             style={{ gridTemplateColumns: `repeat(${bottomTabs.length}, minmax(0, 1fr))` }}
           >
             {bottomTabs.map((tab) => {

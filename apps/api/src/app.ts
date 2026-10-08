@@ -11,6 +11,7 @@ import { inviteRoutes } from './modules/invites/routes';
 import { patientRoutes } from './modules/patients/routes';
 import { clinicalRoutes } from './modules/clinical/routes';
 import { prescribingRoutes } from './modules/prescribing/routes';
+import { billingRoutes } from './modules/billing/routes';
 import { queueRoutes } from './modules/queue/routes';
 import { schedulingRoutes } from './modules/scheduling/routes';
 import { staffRoutes } from './modules/staff/routes';
@@ -83,6 +84,7 @@ export function buildApp({
     app.register(queueRoutes, { prefix: '/v1', services });
     app.register(clinicalRoutes, { prefix: '/v1', services });
     app.register(prescribingRoutes, { prefix: '/v1', services });
+    app.register(billingRoutes, { prefix: '/v1', services });
     app.register(staffRoutes, { prefix: '/v1', services });
     app.register(auditRoutes, { prefix: '/v1', services });
     app.addHook('onClose', async () => services.db.$disconnect());

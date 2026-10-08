@@ -21,9 +21,11 @@ To book, open the patient's page and choose **Book appointment** (or **Appointme
 On the **Queue**: **Reschedule** moves a booking to another slot (the old one shows as Rescheduled); **Cancel appointment** asks for the reason; **Mark no-show** appears once the slot time has passed.
 
 ## Billing
-- Create the bill (consultation + items, discount).
-- **Send payment link** (WhatsApp, SMS fallback) or record a **counter payment** (cash, clinic UPI QR, card machine).
-- Receipts are sent automatically when paid. Refunds need a reason.
+- On the **Queue**, choose **Bill** on a patient who has arrived. Pick the consultation fee (or the follow-up fee, or none), add items from the price list with their quantity, and, if you give a discount, its reason (a discount always needs one). The total updates as you go; **Save bill**. Prices come from the clinic's fees and price list, so you never type an amount on the bill.
+- **Record payment:** choose Cash, UPI or Card, check the amount (it starts at the balance; a part payment is fine) and, for UPI or card, type the reference from the slip if you have it. Each payment gets a receipt number. Once a bill has a payment its lines and discount cannot change.
+- **Receipt** opens a printable receipt (A5); **Print receipt** prints it without the menus.
+- The queue card shows the bill total and whether it is due, partly paid or paid. **Collections** (in the menu) shows the day's payments by mode and doctor and the visits still due.
+- Coming with online payments: **Send payment link** (WhatsApp, SMS fallback), automatic receipts when paid, and refunds with a reason.
 
 ## When things change
 - Doctor running late → **Broadcast delay**.

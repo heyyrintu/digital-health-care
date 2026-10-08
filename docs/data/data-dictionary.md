@@ -4,7 +4,7 @@
 
 Conventions for every table: `id` (UUID), `organisationId` (except platform-level User/Device), `createdAt`, `updatedAt`, `deletedAt` where soft delete applies. Files are stored by S3 key, never by public URL. Fields marked *(encrypted)* use field-level encryption. Row-level security filters every query by `organisationId` (ADR 0014). Database columns are snake_case (`organisation_id`); this document uses the camelCase field names.
 
-**Implemented so far:** Organisation, User, Membership, StaffInvite, Session, OtpChallenge and AuditLog (Phase 0); Patient, UhidSettings, Tag and PatientTag (patient register); Clinic, ConsultationType, BookingRules, AvailabilityVersion and AvailabilityException (availability); Appointment and AppointmentStatusHistory (appointments); DisplayScreen (queue) — see `packages/db/prisma/schema.prisma`. Everything else below is the target design.
+**Implemented so far:** Organisation, User, Membership, StaffInvite, Session, OtpChallenge and AuditLog (Phase 0); Patient, UhidSettings, Tag and PatientTag (patient register); Clinic, ConsultationType, BookingRules, AvailabilityVersion and AvailabilityException (availability); Appointment and AppointmentStatusHistory (appointments); DisplayScreen (queue); PriceListItem, Bill, BillItem, Payment and ReceiptSettings (billing and counter payments) — see `packages/db/prisma/schema.prisma`. Everything else below is the target design.
 
 ## Platform and identity
 
@@ -91,14 +91,14 @@ Conventions for every table: `id` (UUID), `organisationId` (except platform-leve
 
 | Entity | Purpose | Key fields |
 |---|---|---|
-| PriceListItem | Chargeable item | organisationId, name, amount, category, active |
-| Bill / BillItem | Charges for a visit | Bill: appointmentId, patientId, total, discount, status · BillItem: billId, priceListItemId?, description, amount |
+| PriceListItem | Chargeable item (built) | organisationId, name (unique per organisation), pricePaise (> 0), active (deactivated, never deleted) · planned: category |
+| Bill / BillItem | Charges for a visit (built) | Bill: appointmentId (one bill per visit), patientId and doctorUserId (the visit's, enforced by trigger), subtotalPaise, discountPaise, discountReason (required with a discount), totalPaise (= subtotal − discount), paidPaise, status (due\|partly_paid\|paid; follows paidPaise, checked by the database), revision, createdByUserId · BillItem: billId, kind (consultation\|follow_up\|item), priceListItemId (items only), name and unitPaise (snapshots at billing), quantity (1–99), amountPaise (= unit × quantity), sortOrder; fixed once the bill has a payment · planned statuses: link_sent, refund_pending, refunded |
 | PaymentGatewayAccount | Cashfree account per organisation | organisationId, provider (cashfree), mode (sandbox\|production), keyRef (secret store, encrypted), kycStatus, methodsEnabled |
-| Payment | Payment attempt | billId, method (cash\|upi\|card\|netbanking\|wallet\|counter_upi\|counter_card), channel (link\|in_app\|web\|counter), gateway, gatewayOrderId, gatewayPaymentId, paymentLinkId, amount, gatewayFee, status, paidAt, settledAt |
+| Payment | Payment (built for the counter: id chosen by the client so retries record once, billId, mode cash\|upi\|card, amountPaise, reference, receiptNumber unique per organisation, receivedByUserId, receivedAt; append-only) · planned for Cashfree | billId, method (cash\|upi\|card\|netbanking\|wallet\|counter_upi\|counter_card), channel (link\|in_app\|web\|counter), gateway, gatewayOrderId, gatewayPaymentId, paymentLinkId, amount, gatewayFee, status, paidAt, settledAt |
 | PaymentLink | Cashfree link | billId, gatewayLinkId, expiresAt, status, sentVia |
 | Refund | Refund | paymentId, amount, reason, gatewayRefundId, status, requestedBy |
 | Settlement | Cashfree settlement | organisationId, gatewaySettlementId, date, gross, fees, net, matchedAt |
-| Receipt | Numbered receipt | billId, receiptNumber, pdfKey, issuedAt |
+| Receipt | Numbered receipt | Built as Payment.receiptNumber, numbered by ReceiptSettings (organisationId, prefix default `R`, nextNumber; advanced under a row lock) · planned: pdfKey, issuedAt |
 
 ## Messaging
 
