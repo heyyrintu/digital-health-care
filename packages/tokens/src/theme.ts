@@ -51,7 +51,7 @@ const light = {
   ai: 'oklch(0.5 0.2 295)',
   'ai-soft': 'oklch(0.95 0.04 295)',
   /** WhatsApp messages. */
-  wa: 'oklch(0.52 0.13 150)',
+  wa: 'oklch(0.5 0.13 150)',
   'wa-soft': 'oklch(0.93 0.07 140)',
   border: 'oklch(0.895 0.008 180)',
   input: 'oklch(0.875 0.01 180)',

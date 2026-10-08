@@ -53,7 +53,7 @@ export function ModeTag({ mode }: { mode: ConsultationMode }) {
 export function TagChip({ name, colour }: { name: string; colour: string }) {
   return (
     <span
-      className="inline-flex items-center gap-1.5 rounded-full border-[1.5px] border-(--tag) bg-card px-2 py-0.5 text-[11px] font-bold text-foreground"
+      className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border-[1.5px] border-(--tag) bg-card px-2 py-0.5 text-[11px] font-bold text-foreground"
       style={{ '--tag': colour } as CSSProperties}
     >
       <span className="h-1.5 w-1.5 rounded-full bg-(--tag)" aria-hidden />
