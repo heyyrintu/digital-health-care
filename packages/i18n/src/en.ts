@@ -457,6 +457,22 @@ export const en = {
   'rx.readOnly':
     'Only the visit’s doctor can write the prescription, once the patient has checked in.',
   'rx.saved': 'Saved',
+  // Design system components (@dhc/ui-web).
+  'ui.close': 'Close',
+  'ui.collapseSidebar': 'Collapse sidebar',
+  'ui.expandSidebar': 'Expand sidebar',
+  'ui.mainNav': 'Main navigation',
+  'ui.tabBar': 'Quick tabs',
+  'ui.commandMenu': 'Command menu',
+  'ui.searchPlaceholder': 'Search pages',
+  'ui.jumpTo': 'Jump to a page',
+  'ui.noResults': 'No results found.',
+  'ui.pages': 'Pages',
+  'ui.empty': 'Nothing here yet.',
+  'ui.by': 'by {name}',
+  'ui.morning': 'Morning',
+  'ui.afternoon': 'Afternoon',
+  'ui.evening': 'Evening',
 } as const;
 
 export type MessageKey = keyof typeof en;
