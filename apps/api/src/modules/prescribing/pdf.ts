@@ -1,5 +1,6 @@
 import type { ConsultationMode, DoseStep, Gender, Language } from '@dhc/contracts';
 import { t, type MessageKey } from '@dhc/i18n';
+import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import PDFDocument from 'pdfkit';
 import QRCode from 'qrcode';
@@ -8,7 +9,8 @@ import QRCode from 'qrcode';
 export const PDF_TEMPLATE_VERSION = 'rx-1';
 
 const require = createRequire(import.meta.url);
-const font = (pkg: string, file: string) => require.resolve(`${pkg}/files/${file}`);
+// Read once: every document registers the fonts again (pdfkit parses them per document).
+const font = (pkg: string, file: string) => readFileSync(require.resolve(`${pkg}/files/${file}`));
 // One family split into its Latin and Devanagari subsets: the same metrics keep mixed
 // English and Hindi on one baseline.
 const NOTO = '@fontsource/noto-sans-devanagari';

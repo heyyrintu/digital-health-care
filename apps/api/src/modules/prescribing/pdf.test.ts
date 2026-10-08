@@ -80,7 +80,9 @@ describe('dates on the PDF', () => {
   });
 });
 
-describe('renderPrescriptionPdf', () => {
+// Shaping Hindi is CPU-heavy (about 0.7 s per document here); a busy CI runner running
+// every package's tests at once can take several times longer than the 5 s default.
+describe('renderPrescriptionPdf', { timeout: 30_000 }, () => {
   it('renders the same bytes for the same prescription, so its hash can be checked', async () => {
     const a = await renderPrescriptionPdf(doc());
     const b = await renderPrescriptionPdf(doc());
