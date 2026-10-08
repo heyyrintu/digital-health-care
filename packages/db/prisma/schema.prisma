@@ -94,6 +94,39 @@ enum PregnancyStatus {
   breastfeeding
 }
 
+/// Where a medicine comes from: the platform's reference master (the licensed drug
+/// database; a synthetic sample in development) or added by the clinic.
+enum MedicineSource {
+  reference
+  clinic
+}
+
+enum MedicineRoute {
+  oral
+  topical
+  inhaled
+  eye
+  ear
+  nasal
+  injection
+  other
+}
+
+enum DoseTiming {
+  after_food
+  before_food
+  with_food
+  empty_stomach
+  bedtime
+}
+
+/// Drafts only for now; signing, amendment and voiding arrive with the signing slice.
+enum PrescriptionStatus {
+  draft
+  signed
+  void
+}
+
 enum MembershipStatus {
   /// Created by a staff invite; becomes active when the invite is completed.
   invited
@@ -129,6 +162,10 @@ model Organisation {
   medications            CurrentMedication[]
   vitals                 Vitals[]
   consultations          Consultation[]
+  medicines              Medicine[]
+  prescriptions          Prescription[]
+  prescriptionItems      PrescriptionItem[]
+  prescriptionTemplates  PrescriptionTemplate[]
 
   @@map("organisations")
 }
@@ -475,6 +512,7 @@ model Appointment {
   history          AppointmentStatusHistory[]
   vitals           Vitals?
   consultation     Consultation?
+  prescriptions    Prescription[]
 
   @@unique([doctorUserId, clinicId, date, tokenNumber])
   @@index([organisationId, date])
@@ -634,6 +672,105 @@ model Consultation {
 
   @@index([patientId])
   @@map("consultations")
+}
+
+/// A molecule from the reference drug data (platform-wide, read-only to clinics). The
+/// safety engine reads molecules and classes; drug facts come from the licensed database.
+model DrugMolecule {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @unique
+  drugClass String?  @map("drug_class")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@map("drug_molecules")
+}
+
+/// A medicine doctors can prescribe (PRD §6.4). `organisationId` is null for the
+/// platform's reference master and set for medicines a clinic adds.
+model Medicine {
+  id             String         @id @default(uuid()) @db.Uuid
+  organisationId String?        @map("organisation_id") @db.Uuid
+  name           String
+  genericName    String         @map("generic_name")
+  composition    String
+  form           String
+  moleculeIds    String[]       @map("molecule_ids") @db.Uuid
+  defaultRoute   MedicineRoute  @default(oral) @map("default_route")
+  source         MedicineSource
+  active         Boolean        @default(true)
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organisation Organisation? @relation(fields: [organisationId], references: [id], onDelete: Restrict)
+
+  @@index([organisationId])
+  @@map("medicines")
+}
+
+/// A visit's prescription. One draft per visit; amendments will add versions.
+/// `revision` guards autosave like consultation notes.
+model Prescription {
+  id             String             @id @default(uuid()) @db.Uuid
+  organisationId String             @map("organisation_id") @db.Uuid
+  appointmentId  String             @map("appointment_id") @db.Uuid
+  patientId      String             @map("patient_id") @db.Uuid
+  doctorUserId   String             @map("doctor_user_id") @db.Uuid
+  version        Int                @default(1)
+  status         PrescriptionStatus @default(draft)
+  language       Language           @default(en)
+  revision       Int                @default(1)
+  createdAt      DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organisation Organisation       @relation(fields: [organisationId], references: [id])
+  appointment  Appointment        @relation(fields: [appointmentId], references: [id])
+  items        PrescriptionItem[]
+
+  @@unique([appointmentId, version])
+  @@index([patientId])
+  @@map("prescriptions")
+}
+
+/// One medicine line. Name and composition are snapshots, so the printed prescription
+/// never changes if the master does. `steps` holds dose, frequency and duration, one
+/// entry per step of a tapering course. Remarks are generated unless the doctor edited them.
+model PrescriptionItem {
+  id             String         @id @db.Uuid
+  organisationId String         @map("organisation_id") @db.Uuid
+  prescriptionId String         @map("prescription_id") @db.Uuid
+  medicineId     String?        @map("medicine_id") @db.Uuid
+  name           String
+  composition    String?
+  form           String?
+  route          MedicineRoute?
+  timing         DoseTiming?
+  steps          Json
+  quantity       String?
+  instructions   String?
+  remarks        String
+  remarksEdited  Boolean        @default(false) @map("remarks_edited")
+  sortOrder      Int            @map("sort_order")
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+  prescription Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Cascade)
+
+  @@index([prescriptionId])
+  @@map("prescription_items")
+}
+
+/// A doctor's saved set of lines (PRD §6.4 "save as template").
+model PrescriptionTemplate {
+  id             String   @id @default(uuid()) @db.Uuid
+  organisationId String   @map("organisation_id") @db.Uuid
+  doctorUserId   String   @map("doctor_user_id") @db.Uuid
+  name           String
+  items          Json
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+
+  @@unique([organisationId, doctorUserId, name])
+  @@map("prescription_templates")
 }
 
 model AuditLog {

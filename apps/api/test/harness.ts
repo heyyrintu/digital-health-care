@@ -52,7 +52,7 @@ export type Harness = ReturnType<typeof createHarness>;
 
 export async function resetDatabase(owner: Db) {
   await owner.$executeRawUnsafe(
-    'TRUNCATE audit_logs, consultations, vitals, allergies, medical_conditions, current_medications, display_screens, appointment_status_history, appointments, availability_exceptions, availability_versions, booking_rules, consultation_types, clinics, staff_invites, sessions, otp_challenges, memberships, patient_tags, tags, uhid_settings, patients, users, organisations CASCADE',
+    'TRUNCATE audit_logs, prescription_templates, prescription_items, prescriptions, medicines, drug_molecules, consultations, vitals, allergies, medical_conditions, current_medications, display_screens, appointment_status_history, appointments, availability_exceptions, availability_versions, booking_rules, consultation_types, clinics, staff_invites, sessions, otp_challenges, memberships, patient_tags, tags, uhid_settings, patients, users, organisations CASCADE',
   );
 }
 

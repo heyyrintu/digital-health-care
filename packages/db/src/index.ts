@@ -15,3 +15,4 @@ export {
   OrganisationStatus,
   UserStatus,
 } from './generated/prisma/enums.ts';
+export { seedSampleMedicines } from './sample-medicines.ts';

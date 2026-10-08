@@ -1109,3 +1109,118 @@ button.tab .count {
 .notes > .link-button {
   justify-self: start;
 }
+
+/* Prescription ---------------------------------------------------------------------- */
+
+.rx-body {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+  display: grid;
+  gap: var(--space-3);
+}
+
+.rx-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: end;
+}
+
+.rx-tools > div,
+.rx-template-pick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: end;
+}
+
+.rx-tools > div > label {
+  width: 100%;
+  margin: 0;
+}
+
+.rx-lines {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: var(--space-3);
+  counter-reset: rx;
+}
+
+.rx-line {
+  border: 1px solid var(--color-neutral-300);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  display: grid;
+  gap: var(--space-2);
+  counter-increment: rx;
+}
+
+.rx-name {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.rx-name::before {
+  content: counter(rx) '. ';
+  font-weight: 700;
+}
+
+.rx-step {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: var(--space-2);
+  align-items: end;
+}
+
+.rx-step > .link-button {
+  grid-column: 1 / -1;
+  justify-self: start;
+}
+
+@media (max-width: 600px) {
+  .rx-step {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+.rx-step > div,
+.rx-remarks,
+.rx-search {
+  display: grid;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.rx-step > .hint {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.rx-step input,
+.rx-step select,
+.rx-search input {
+  width: 100%;
+  min-width: 0;
+}
+
+.rx-remarks .summary {
+  margin: 0;
+}
+
+.rx-remarks > .link-button,
+.rx-line > .link-button {
+  justify-self: start;
+}
+
+.rx-search .pick-list button {
+  width: 100%;
+  text-align: left;
+}
+
+.rx-save-template {
+  margin-top: var(--space-4);
+}
