@@ -7,14 +7,18 @@ import { buttonVariants, Input, Label, PageHeader, Surface } from '@dhc/ui-web';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useSession } from '../session-provider';
-import { ClinicShell } from '../shell';
+import { ClinicShell, NotAllowed } from '../shell';
 
 const H2 = 'font-display text-lg font-bold';
 const TH = 'py-2 text-left text-xs font-semibold text-muted-foreground';
 
 /** One day's counter collections by mode and doctor, and what is still due (PRD §5.6). */
 export default function CollectionsPage() {
-  return <ClinicShell>{() => <CollectionsScreen />}</ClinicShell>;
+  return (
+    <ClinicShell>
+      {(me) => (me.role === 'patient' ? <NotAllowed /> : <CollectionsScreen />)}
+    </ClinicShell>
+  );
 }
 
 function CollectionsScreen() {
@@ -26,6 +30,7 @@ function CollectionsScreen() {
   useEffect(() => {
     let current = true;
     setError(null);
+    setReport(null);
     api
       .request('GET', '/collections', { schema: CollectionsReport, query: { date } })
       .then((r) => current && setReport(r))

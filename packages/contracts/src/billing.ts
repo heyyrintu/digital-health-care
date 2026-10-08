@@ -1,5 +1,8 @@
 import { z } from 'zod';
 
+/** Most price-list lines one bill may carry. */
+export const MAX_BILL_ITEMS = 30;
+
 /** Whole paise, up to ₹1,00,000. */
 const Paise = z.number().int().min(0).max(10_000_000);
 
@@ -121,7 +124,7 @@ export const SaveBillBody = z
           quantity: z.number().int().min(1).max(99),
         }),
       )
-      .max(30),
+      .max(MAX_BILL_ITEMS),
     discountPaise: Paise.default(0),
     discountReason: z.string().trim().min(1).max(200).nullable().default(null),
   })

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { billStatus, billTotals, formatReceiptNumber } from './billing';
+import { BillTooLargeError, billStatus, billTotals, formatReceiptNumber } from './billing';
 
 describe('billTotals', () => {
   it('adds the lines and takes off the discount', () => {
@@ -25,6 +25,9 @@ describe('billTotals', () => {
     expect(() => billTotals([{ unitPaise: 100, quantity: 0 }])).toThrow(/quantity/);
     expect(() => billTotals([{ unitPaise: 100, quantity: 100 }])).toThrow(/quantity/);
     expect(() => billTotals([{ unitPaise: 100, quantity: 1.5 }])).toThrow(/quantity/);
+    // Thirty lines at the largest price and quantity would overflow the database.
+    const huge = Array.from({ length: 30 }, () => ({ unitPaise: 10_000_000, quantity: 99 }));
+    expect(() => billTotals(huge)).toThrow(BillTooLargeError);
   });
 });
 

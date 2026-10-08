@@ -88,3 +88,13 @@ export const canRegister = (role: string) =>
 
 /** Roles that may assign tags (PRD §3.2: clinic admins configure, others assign). */
 export const canTag = (role: string) => role === 'front_desk' || role === 'doctor';
+
+/** What a patient session sees on a staff-only page. */
+export function NotAllowed() {
+  const { t } = useSession();
+  return (
+    <p className="rounded-xl bg-muted p-4 text-sm text-muted-foreground">
+      {t('common.notAllowed')}
+    </p>
+  );
+}

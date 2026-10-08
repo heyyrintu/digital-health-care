@@ -134,6 +134,8 @@ interface Operation {
   response?: z.ZodType;
   /** Success status; defaults to 200. 204 has no body. */
   status?: 200 | 201 | 204;
+  /** For a 201 that a retry answers with 200 and the same body: what that 200 means. */
+  replay?: string;
 }
 
 /** Every endpoint, in one list. Field detail always comes from the Zod schemas. */
@@ -716,6 +718,7 @@ const operations: Operation[] = [
     body: RecordPaymentBody,
     response: Payment,
     status: 201,
+    replay: 'The payment was already recorded under this ID',
   },
   {
     method: 'get',
@@ -866,6 +869,14 @@ export function buildOpenApiDocument(options: { version: string; serverUrl?: str
                 description: status === 201 ? 'Created' : 'OK',
                 content: { 'application/json': { schema: toSchema(op.response) } },
               },
+        ...(op.replay && op.response
+          ? {
+              '200': {
+                description: op.replay,
+                content: { 'application/json': { schema: toSchema(op.response) } },
+              },
+            }
+          : {}),
         default: errorResponse,
       },
     };

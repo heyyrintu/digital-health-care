@@ -5,6 +5,7 @@ import {
   AppointmentDetail,
   Bill,
   BillView,
+  MAX_BILL_ITEMS,
   Payment,
   PriceList,
   type PaymentMode,
@@ -28,7 +29,7 @@ import { useParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
 import { AgeGender } from '../../../patient-bits';
 import { useSession } from '../../../session-provider';
-import { ClinicShell } from '../../../shell';
+import { ClinicShell, NotAllowed } from '../../../shell';
 
 type Consultation = SaveBillBody['consultation'];
 interface Draft {
@@ -49,7 +50,11 @@ const NOTICE = 'rounded-xl bg-info-soft px-4 py-3 text-sm text-info';
 /** A visit's bill and its counter payments (PRD §5.6): front desk and doctors. */
 export default function BillPage() {
   const { id } = useParams<{ id: string }>();
-  return <ClinicShell>{() => <BillScreen key={id} id={id} />}</ClinicShell>;
+  return (
+    <ClinicShell>
+      {(me) => (me.role === 'patient' ? <NotAllowed /> : <BillScreen key={id} id={id} />)}
+    </ClinicShell>
+  );
 }
 
 function draftOf(bill: Bill | null): Draft {
@@ -333,7 +338,8 @@ function BillScreen({ id }: { id: string }) {
                   {prices.length === 0 ? (
                     <p className="text-sm text-muted-foreground">{t('billing.noPriceList')}</p>
                   ) : (
-                    available.length > 0 && (
+                    available.length > 0 &&
+                    draft.items.length < MAX_BILL_ITEMS && (
                       <div className="w-full space-y-1.5 sm:w-80">
                         <Label htmlFor="bill-add-item" className={LABEL}>
                           {t('billing.addFromList')}
@@ -402,7 +408,10 @@ function BillScreen({ id }: { id: string }) {
                 <Button
                   type="submit"
                   disabled={
-                    busy || stale || (draft.consultation === 'none' && draft.items.length === 0)
+                    busy ||
+                    stale ||
+                    preview === null ||
+                    (draft.consultation === 'none' && draft.items.length === 0)
                   }
                 >
                   {t('billing.save')}
@@ -516,9 +525,10 @@ function Payments({
           reference: mode === 'cash' || !reference ? null : reference,
         },
       });
+      // Only once the screen shows it: if the reload fails, a retry is still this payment.
+      await reload();
       setPaymentId(crypto.randomUUID());
       form.reset();
-      await reload();
       setNotice(t('billing.paymentSaved', { number: payment.receiptNumber }));
     });
   }

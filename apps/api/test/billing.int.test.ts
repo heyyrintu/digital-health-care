@@ -298,6 +298,7 @@ describe('payments and receipts', () => {
     expect([200, 409]).toContain(save.statusCode);
     const view = BillView.parse((await call('GET', `/appointments/${id}/bill`, desk)).json());
     expect(view.bill!.paidPaise).toBe(10000);
+    expect(view.bill!.paidPaise + view.bill!.balancePaise).toBe(view.bill!.totalPaise);
   });
 
   it('records a retried payment once', async () => {
@@ -349,6 +350,11 @@ describe('payments and receipts', () => {
     await expect(h.owner.billItem.deleteMany({ where: { billId: bill.id } })).rejects.toThrow(
       /can no longer change/,
     );
+    // Nor can a line be moved off it onto an unpaid bill.
+    const other = Bill.parse((await saveBill(await visit('checked_in', 1), {})).json());
+    await expect(
+      h.owner.billItem.updateMany({ where: { billId: bill.id }, data: { billId: other.id } }),
+    ).rejects.toThrow(/can no longer change/);
   });
 });
 

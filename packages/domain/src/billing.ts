@@ -3,12 +3,22 @@ import type { Paise } from './money';
 /** Most of one item a bill line may carry. */
 export const MAX_LINE_QUANTITY = 99;
 
+/** Most a bill may come to before any discount: ₹1 crore, well inside the database's 32-bit amounts. */
+export const MAX_BILL_PAISE = 1_000_000_000;
+
 export type BillStatus = 'due' | 'partly_paid' | 'paid';
 
 export interface BillTotals {
   subtotal: Paise;
   discount: Paise;
   total: Paise;
+}
+
+/** The lines come to more than {@link MAX_BILL_PAISE}. */
+export class BillTooLargeError extends Error {
+  constructor() {
+    super('A bill cannot come to more than ₹1,00,00,000');
+  }
 }
 
 /**
@@ -32,6 +42,9 @@ export function billTotals(
       throw new Error(`A quantity must be a whole number from 1 to ${MAX_LINE_QUANTITY}`);
     }
     subtotal += line.unitPaise * line.quantity;
+  }
+  if (subtotal > MAX_BILL_PAISE) {
+    throw new BillTooLargeError();
   }
   if (!Number.isSafeInteger(discountPaise) || discountPaise < 0 || discountPaise > subtotal) {
     throw new Error('A discount must be between nothing and the whole bill');

@@ -9,12 +9,16 @@ import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { useSession } from '../../session-provider';
-import { ClinicShell } from '../../shell';
+import { ClinicShell, NotAllowed } from '../../shell';
 
 /** A payment's receipt (PRD §5.6), laid out for A5 printing; the staff frame hides in print. */
 export default function ReceiptPage() {
   const { id } = useParams<{ id: string }>();
-  return <ClinicShell>{() => <ReceiptScreen key={id} id={id} />}</ClinicShell>;
+  return (
+    <ClinicShell>
+      {(me) => (me.role === 'patient' ? <NotAllowed /> : <ReceiptScreen key={id} id={id} />)}
+    </ClinicShell>
+  );
 }
 
 function ReceiptScreen({ id }: { id: string }) {
@@ -23,13 +27,19 @@ function ReceiptScreen({ id }: { id: string }) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let current = true;
+    setError(null);
     api
       .request('GET', `/payments/${encodeURIComponent(id)}/receipt`, { schema: Receipt })
-      .then(setReceipt)
+      .then((r) => current && setReceipt(r))
       .catch((e: unknown) => {
+        if (!current) return;
         if (e instanceof ApiError && e.status === 401) return void signOut('expired');
         setError(e instanceof ApiError ? e.message : t('error.network'));
       });
+    return () => {
+      current = false;
+    };
   }, [api, id, signOut, t]);
 
   const money = (paise: number) => formatInr(paise, locale);
@@ -79,6 +89,8 @@ function ReceiptScreen({ id }: { id: string }) {
                 </h1>
               </div>
               <p className="tabular text-right text-sm text-muted-foreground">
+                {t('receipt.received')}
+                <br />
                 {formatIstDateTime(receipt.payment.receivedAt, locale)}
               </p>
             </header>

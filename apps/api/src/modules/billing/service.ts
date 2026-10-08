@@ -13,7 +13,13 @@ import type {
   UpdatePriceListItemBody,
 } from '@dhc/contracts';
 import { Prisma, withAuth, withTenant, type Tx } from '@dhc/db';
-import { billStatus, billTotals, formatReceiptNumber, istDateKey } from '@dhc/domain';
+import {
+  BillTooLargeError,
+  billStatus,
+  billTotals,
+  formatReceiptNumber,
+  istDateKey,
+} from '@dhc/domain';
 import type { FastifyRequest } from 'fastify';
 import { AppError } from '../../errors';
 import type { Services } from '../../services';
@@ -171,7 +177,8 @@ export class BillingService {
       let totals;
       try {
         totals = billTotals(lines, body.discountPaise);
-      } catch {
+      } catch (e) {
+        if (e instanceof BillTooLargeError) throw invalid('items', e.message);
         throw invalid('discountPaise', 'The discount cannot be more than the bill.');
       }
       const figures = {

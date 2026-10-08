@@ -61,19 +61,19 @@ export function PriceListCard() {
           pricePaise: rupeesToPaise(Number(data.get('price'))),
         },
       });
-      form.reset();
       await load();
+      form.reset();
     });
   }
 
   const update = (item: PriceListItem, body: { pricePaise?: number; active?: boolean }) =>
     run(async () => {
       await api.request('PATCH', `/price-list/${item.id}`, { schema: PriceListItem, body });
+      await load();
       if (body.pricePaise !== undefined) {
         setRepricing(null);
         setNotice(t('billing.priceSaved'));
       }
-      await load();
     });
 
   return (
@@ -129,6 +129,7 @@ export function PriceListCard() {
                       name="price"
                       type="number"
                       min={0.01}
+                      max={100000}
                       step="0.01"
                       required
                       defaultValue={item.pricePaise / 100}
@@ -155,7 +156,15 @@ export function PriceListCard() {
           <label className={LABEL} htmlFor="price-amount">
             {t('billing.itemPrice')}
           </label>
-          <Input id="price-amount" name="price" type="number" min={0.01} step="0.01" required />
+          <Input
+            id="price-amount"
+            name="price"
+            type="number"
+            min={0.01}
+            max={100000}
+            step="0.01"
+            required
+          />
         </div>
         <Button type="submit" disabled={busy} className="sm:col-span-2 sm:justify-self-start">
           {t('billing.addItem')}

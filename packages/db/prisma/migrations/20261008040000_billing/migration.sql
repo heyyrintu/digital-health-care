@@ -220,10 +220,12 @@ CREATE TRIGGER bills_same_tenant
 -- are fixed once the bill has a payment (receipts must keep matching the bill).
 CREATE FUNCTION bill_items_guard() RETURNS trigger LANGUAGE plpgsql
   SET search_path = pg_catalog, public, pg_temp AS $$
-DECLARE
-  row_bill uuid := CASE WHEN TG_OP = 'DELETE' THEN OLD.bill_id ELSE NEW.bill_id END;
 BEGIN
-  IF EXISTS (SELECT 1 FROM public.bills b WHERE b.id = row_bill AND b.paid_paise > 0) THEN
+  -- Both sides of a change: a line can neither join nor leave a paid bill.
+  IF EXISTS (
+    SELECT 1 FROM public.bills b
+    WHERE b.paid_paise > 0 AND b.id IN (OLD.bill_id, NEW.bill_id)
+  ) THEN
     RAISE EXCEPTION 'bill has a payment and can no longer change' USING ERRCODE = '23514';
   END IF;
   IF TG_OP = 'DELETE' THEN
