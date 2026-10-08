@@ -38,8 +38,8 @@ const fromDbDate = (date: Date) => date.toISOString().slice(0, 10);
 const toDbDate = (date: string) => new Date(`${date}T00:00:00.000Z`);
 const num = (d: Prisma.Decimal | null) => (d === null ? null : Number(d));
 
-/** The doctor writes notes from arrival until the visit is over (PRD §6.1). */
-const NOTE_STATUSES: AppointmentStatus[] = ['checked_in', 'in_consultation', 'completed'];
+/** The doctor writes notes and the prescription from arrival until the visit is over (PRD §6.1). */
+export const NOTE_STATUSES: AppointmentStatus[] = ['checked_in', 'in_consultation', 'completed'];
 /** Vitals can be taken any time before or during the visit, not for visits that did not happen. */
 const VITALS_STATUSES: AppointmentStatus[] = [
   'pending',
@@ -48,6 +48,17 @@ const VITALS_STATUSES: AppointmentStatus[] = [
   'in_consultation',
   'completed',
 ];
+
+/**
+ * Row lock on the visit, so a save and a status change of the same visit happen one after
+ * the other. RLS still applies: another organisation's visit is not found.
+ */
+export async function lockVisit(tx: Tx, id: string) {
+  await tx.$queryRaw`SELECT id FROM appointments WHERE id = ${id}::uuid FOR UPDATE`;
+  const row = await tx.appointment.findUnique({ where: { id } });
+  if (!row) throw NOT_FOUND();
+  return row;
+}
 
 const AUDIT_NAMES: Record<ChartKind, string> = {
   allergies: 'allergy',
@@ -255,7 +266,7 @@ export class ClinicalService {
     body: VitalsBody,
   ): Promise<Vitals> {
     return withTenant(this.s.db, actor.organisationId, async (tx) => {
-      const appointment = await this.lockAppointment(tx, appointmentId);
+      const appointment = await lockVisit(tx, appointmentId);
       if (!VITALS_STATUSES.includes(appointment.status)) {
         throw new AppError(
           409,
@@ -327,7 +338,7 @@ export class ClinicalService {
     body: SaveConsultationBody,
   ): Promise<ConsultationRecord> {
     return withTenant(this.s.db, actor.organisationId, async (tx) => {
-      const appointment = await this.lockAppointment(tx, appointmentId);
+      const appointment = await lockVisit(tx, appointmentId);
       if (appointment.doctorUserId !== actor.userId) {
         throw new AppError(403, 'FORBIDDEN', 'Only the visit’s doctor can write these notes.');
       }
@@ -475,14 +486,6 @@ export class ClinicalService {
       'CONFLICT',
       'The prescription for this visit is signed, so the record can no longer change.',
     );
-  }
-
-  /** Row lock so a save and a status change of the same visit happen one after the other. */
-  private async lockAppointment(tx: Tx, id: string) {
-    await tx.$queryRaw`SELECT id FROM appointments WHERE id = ${id}::uuid FOR UPDATE`;
-    const row = await tx.appointment.findUnique({ where: { id } });
-    if (!row) throw NOT_FOUND();
-    return row;
   }
 
   private audit(

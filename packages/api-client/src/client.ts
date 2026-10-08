@@ -120,6 +120,12 @@ export function createApiClient(options: ApiClientOptions) {
         { schema: NoContent, body: { reason } },
       ),
 
+    /** Doctor: delete one of their prescription templates. */
+    deletePrescriptionTemplate: (id: string) =>
+      request('DELETE', `/prescription-templates/${encodeURIComponent(id)}`, {
+        schema: NoContent,
+      }),
+
     /** Ends the session of the current access token. */
     logout: () => request('POST', '/auth/logout', { schema: NoContent }),
   };
