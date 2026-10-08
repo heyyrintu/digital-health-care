@@ -332,7 +332,10 @@ export function StaffShell({
         <DialogContent className="overflow-hidden p-0 sm:max-w-xl">
           <DialogTitle className="sr-only">{t('ui.jumpTo')}</DialogTitle>
           <Command>
-            <CommandInput placeholder={t('ui.searchPlaceholder')} />
+            <CommandInput
+              placeholder={t('ui.searchPlaceholder')}
+              aria-label={t('ui.searchPlaceholder')}
+            />
             <CommandList>
               <CommandEmpty>{t('ui.noResults')}</CommandEmpty>
               <CommandGroup heading={t('ui.pages')}>

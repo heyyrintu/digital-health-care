@@ -49,6 +49,7 @@ describe('themeColors', () => {
       ['destructive', 'danger-soft'],
       ['success', 'success-soft'],
       ['info', 'info-soft'],
+      ['wa', 'wa-soft'],
       ['primary', 'accent'],
       ['sidebar-foreground', 'sidebar'],
       ['sidebar-primary-foreground', 'sidebar-primary'],

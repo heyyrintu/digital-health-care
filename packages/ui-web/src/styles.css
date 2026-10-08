@@ -4,8 +4,9 @@
  *   @import '@dhc/ui-web/styles.css';
  * It makes Tailwind scan these components and adds the demo's helper classes as utilities,
  * so they sit in the utilities layer and take variants (`md:surface`, `dark:glass`).
- * They read the theme's own variables (`--card`, not Tailwind's `--color-card` alias): the
- * alias is resolved once on :root, so it would keep light values under a nested `.dark`.
+ * They read the theme's own variables (`--card`, not Tailwind's `--color-card` alias).
+ * Tailwind's utilities inline the alias, but the `--color-card` variable itself is computed
+ * on :root, so custom CSS reading it would keep light values under a nested `.dark`.
  */
 @import 'tw-animate-css';
 
