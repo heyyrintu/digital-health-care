@@ -174,3 +174,10 @@ CREATE TRIGGER appointments_keep_children
 CREATE TRIGGER medicines_keep_children
   BEFORE UPDATE OF organisation_id ON medicines
   FOR EACH ROW EXECUTE FUNCTION same_tenant_keep_children('prescription_items', 'medicine_id');
+
+-- Only the triggers above may run these functions. Creating a trigger needs EXECUTE on its
+-- function (firing one does not), so without this a clinic could attach the owner-run
+-- check to a temporary table of its own, choose the arguments, and probe other clinics'
+-- rows through which inserts fail.
+REVOKE EXECUTE ON FUNCTION same_tenant_reference() FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION same_tenant_keep_children() FROM PUBLIC;

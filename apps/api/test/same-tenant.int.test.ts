@@ -433,6 +433,26 @@ describe('a clinic B row cannot point at a clinic A row', () => {
     ).resolves.toMatchObject(move);
   });
 
+  it('a clinic cannot attach the check to a table of its own to probe other clinics', async () => {
+    // The check runs as its owner; on a temporary table a clinic controls the arguments.
+    await expect(
+      asB(async (tx) => {
+        await tx.$executeRawUnsafe('CREATE TEMP TABLE probe (organisation_id uuid, ref uuid)');
+        await tx.$executeRawUnsafe(
+          `CREATE TRIGGER probe BEFORE INSERT ON probe FOR EACH ROW EXECUTE FUNCTION public.same_tenant_reference('patients', 'ref')`,
+        );
+      }),
+    ).rejects.toThrow(/permission denied for function (public\.)?same_tenant_reference/);
+    await expect(
+      asB(async (tx) => {
+        await tx.$executeRawUnsafe('CREATE TEMP TABLE probe (organisation_id uuid, id uuid)');
+        await tx.$executeRawUnsafe(
+          `CREATE TRIGGER probe BEFORE UPDATE ON probe FOR EACH ROW EXECUTE FUNCTION public.same_tenant_keep_children('patients', 'id')`,
+        );
+      }),
+    ).rejects.toThrow(/permission denied for function (public\.)?same_tenant_keep_children/);
+  });
+
   describe('a concurrent move and a new reference cannot both commit', () => {
     const KEEPS = /is still referenced by \w+\.\w+; it keeps its organisation/;
     const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
