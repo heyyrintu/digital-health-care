@@ -64,6 +64,12 @@ export class PrescribingService {
             { name: { contains: q, mode: 'insensitive' } },
             { genericName: { contains: q, mode: 'insensitive' } },
             { composition: { contains: q, mode: 'insensitive' } },
+            // The names doctors typed before the clinic admin mapped them to this medicine.
+            {
+              requests: {
+                some: { decision: 'approved', name: { contains: q, mode: 'insensitive' } },
+              },
+            },
           ],
         },
         orderBy: [{ name: 'asc' }],
