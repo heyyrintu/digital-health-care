@@ -2,6 +2,7 @@
 
 import type { SafetyAlert, SafetySummary } from '@dhc/contracts';
 import type { MessageKey } from '@dhc/i18n';
+import { Button, Chip, cn, Input, Label } from '@dhc/ui-web';
 import { useState } from 'react';
 import { useSession } from '../session-provider';
 
@@ -52,20 +53,20 @@ export function SafetyBanner({
   const { t } = useSession();
   if (!safety) return null;
   return (
-    <div className="safety-banner" data-testid="safety-banner" aria-live="polite">
+    <div className="space-y-1" data-testid="safety-banner" aria-live="polite">
       {checking ? (
-        <p className="hint">{t('safety.checking')}</p>
+        <p className={hint}>{t('safety.checking')}</p>
       ) : safety.openBlocks === 0 && safety.openWarnings === 0 ? (
-        safety.alerts.length === 0 && <p className="hint">{t('safety.clear')}</p>
+        safety.alerts.length === 0 && <p className={hint}>{t('safety.clear')}</p>
       ) : (
         <>
           {safety.openBlocks > 0 && (
-            <p className="safety-count block">
+            <p className={cn(count, tone.block)}>
               {t('safety.openBlocks', { count: safety.openBlocks })}
             </p>
           )}
           {safety.openWarnings > 0 && (
-            <p className="safety-count warn">
+            <p className={cn(count, tone.warn)}>
               {t('safety.openWarnings', { count: safety.openWarnings })}
             </p>
           )}
@@ -87,7 +88,7 @@ export function LineAlerts({
 }) {
   if (alerts.length === 0) return null;
   return (
-    <ul className="safety-alerts" data-testid="safety-alerts">
+    <ul className="m-0 list-none space-y-2 p-0" data-testid="safety-alerts">
       {alerts.map((a) => (
         <AlertRow key={a.key} alert={a} canAct={canAct} onAct={onAct} />
       ))}
@@ -128,31 +129,41 @@ function AlertRow({
   }
 
   return (
-    <li className={`safety-alert ${alert.severity}`} data-rule={alert.ruleId}>
-      <p>
+    <li
+      className={cn(
+        'space-y-1.5 rounded-xl border-l-4 px-3.5 py-2.5 text-sm',
+        tone[alert.severity],
+      )}
+      data-rule={alert.ruleId}
+    >
+      <p className="m-0">
         <strong>{t(`safety.severity.${alert.severity}`)}:</strong> {alertText(alert, t)}
-        {alert.unverified && <span className="pill">{t('safety.unverified')}</span>}
+        {alert.unverified && (
+          <Chip className="ml-2 bg-card text-foreground">{t('safety.unverified')}</Chip>
+        )}
       </p>
       {alert.params.note && alert.ruleId !== 'SR-09' && (
         // Notes come from the reference drug data, which is in English.
-        <p className="hint" lang="en">
+        <p className={detail} lang="en">
           {String(alert.params.note)}
         </p>
       )}
       {alert.action === 'acknowledged' || alert.action === 'overridden' ? (
-        <p className="hint">
+        <p className={detail}>
           {t(`safety.${alert.action}`)}
           {alert.reason ? `: ${alert.reason}` : ''}
         </p>
       ) : alert.severity === 'block' && !alert.overridable ? (
-        <p className="hint">{t('safety.mustChange')}</p>
+        <p className={detail}>{t('safety.mustChange')}</p>
       ) : null}
       {action && canAct && (
-        <div className="inline-form">
+        <div className="flex flex-wrap items-end gap-2">
           {needsReason && (
-            <div>
-              <label htmlFor={reasonId}>{t('safety.reason')}</label>
-              <input
+            <div className="min-w-0 flex-1 space-y-1.5 sm:max-w-sm">
+              <Label htmlFor={reasonId} className="block text-sm font-semibold">
+                {t('safety.reason')}
+              </Label>
+              <Input
                 id={reasonId}
                 value={reason}
                 maxLength={300}
@@ -163,17 +174,34 @@ function AlertRow({
                 }}
               />
               {missing && !reason.trim() && (
-                <p role="alert" className="hint">
+                <p role="alert" className={cn(detail, 'font-semibold')}>
                   {t('safety.reasonNeeded')}
                 </p>
               )}
             </div>
           )}
-          <button type="button" className="secondary" disabled={busy} onClick={() => void submit()}>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={busy}
+            onClick={() => void submit()}
+          >
             {t(action === 'acknowledge' ? 'safety.acknowledge' : 'safety.override')}
-          </button>
+          </Button>
         </div>
       )}
     </li>
   );
 }
+
+const hint = 'm-0 text-sm text-muted-foreground';
+/** Detail inside an alert keeps the alert's colour, whose contrast the tokens are tested for. */
+const detail = 'm-0 text-sm';
+const count = 'm-0 rounded-xl border-l-4 px-3.5 py-2 text-sm font-semibold';
+/** Red for a block, amber for a warning, blue for information; the text stays readable on each. */
+const tone = {
+  block: 'border-destructive bg-danger-soft text-destructive',
+  warn: 'border-warning bg-warning-soft text-warning-foreground',
+  info: 'border-info bg-info-soft text-info',
+} as const;

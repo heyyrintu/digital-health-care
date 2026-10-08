@@ -1,16 +1,18 @@
-import { toCssVariables } from '@dhc/tokens';
+import '@fontsource-variable/figtree';
+import '@fontsource-variable/manrope';
+import '@fontsource-variable/noto-sans-devanagari';
+import { themeStylesheet, toCssVariables } from '@dhc/tokens';
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
-import './globals.css';
+import './styles.css';
 
 export const metadata: Metadata = {
   title: { default: 'Digital Healthcare Platform', template: '%s · Digital Healthcare Platform' },
   description: 'Book appointments, consult your doctor and keep your health records in one place.',
 };
 
-const rootCss = `:root{${Object.entries(toCssVariables())
-  .map(([name, value]) => `${name}:${value}`)
-  .join(';')}}`;
+// Theme values (light on :root, dark on .dark) plus the legacy tokens globals.css still reads.
+const rootCss = themeStylesheet(toCssVariables());
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (

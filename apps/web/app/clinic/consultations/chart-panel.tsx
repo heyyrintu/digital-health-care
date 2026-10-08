@@ -8,6 +8,8 @@ import {
   type ChartSource,
   type PatientChart,
 } from '@dhc/contracts';
+import { Button, Input, Label, cn } from '@dhc/ui-web';
+import { Plus, TriangleAlert } from 'lucide-react';
 import { useState, type FormEvent, type ReactNode } from 'react';
 import type { MessageKey } from '@dhc/i18n';
 import { useSession } from '../session-provider';
@@ -51,7 +53,7 @@ export function ChartPanel({
     label: (
       <>
         {c.name}
-        {c.icd10Code && <span className="hint"> {c.icd10Code}</span>}
+        {c.icd10Code && <span className="tabular text-muted-foreground"> {c.icd10Code}</span>}
       </>
     ),
   }));
@@ -61,13 +63,13 @@ export function ChartPanel({
     label: (
       <>
         {m.name}
-        {m.dose && <span className="hint"> · {m.dose}</span>}
+        {m.dose && <span className="text-muted-foreground"> · {m.dose}</span>}
       </>
     ),
   }));
 
   return (
-    <div className="chart" aria-label={t('chart.title')}>
+    <div className="mt-1 divide-y divide-border" aria-label={t('chart.title')}>
       <ChartSection
         kind="allergies"
         title="chart.allergies"
@@ -96,16 +98,19 @@ export function ChartPanel({
         editable={editable}
         onChange={onChange}
       />
-      <section>
-        <h3>{t('chart.recentVisits')}</h3>
+      <section className="py-4 last:pb-0">
+        <h3 className={sectionHeading}>{t('chart.recentVisits')}</h3>
         {chart.recentVisits.length === 0 ? (
-          <p className="hint">{t('chart.noVisits')}</p>
+          <p className={emptyText}>{t('chart.noVisits')}</p>
         ) : (
-          <ul className="chart-list" data-testid="recent-visits">
+          <ul className="mt-2 space-y-2" data-testid="recent-visits">
             {chart.recentVisits.map((v) => (
-              <li key={v.appointmentId}>
-                <strong>{v.date}</strong>
-                {v.doctorName && <span className="hint"> · {v.doctorName}</span>}
+              <li
+                key={v.appointmentId}
+                className="rounded-xl border border-border px-3 py-2.5 text-sm [overflow-wrap:anywhere]"
+              >
+                <strong className="tabular">{v.date}</strong>
+                {v.doctorName && <span className="text-muted-foreground"> · {v.doctorName}</span>}
                 <br />
                 {v.diagnoses.map((d) => d.label).join(', ') || v.chiefComplaint}
               </li>
@@ -206,40 +211,71 @@ function ChartSection({
   };
 
   return (
-    <section data-testid={`chart-${kind}`}>
-      <div className="card-header">
-        <h3>{t(title)}</h3>
+    <section data-testid={`chart-${kind}`} className="py-4 first:pt-3">
+      <div className="flex min-h-11 items-center justify-between gap-2">
+        <h3 className={sectionHeading}>{t(title)}</h3>
         {editable && !adding && (
-          <button type="button" className="link-button" onClick={() => setAdding(true)}>
+          <Button
+            type="button"
+            variant="link"
+            className="-mr-2 px-2"
+            onClick={() => setAdding(true)}
+          >
+            <Plus aria-hidden />
             {t('chart.add')}
-          </button>
+          </Button>
         )}
       </div>
       {entries.length === 0 ? (
-        <p className="hint">{t(empty)}</p>
+        <p className={emptyText}>{t(empty)}</p>
       ) : (
-        <ul className={`chart-list${danger ? ' danger' : ''}`}>
+        <ul className="space-y-2">
           {entries.map((e) => (
-            <li key={e.id}>
-              {e.label}
-              {e.source === 'patient' && <span className="pill">{t('chart.unverified')}</span>}
-              {editable && removing !== e.id && (
-                <button type="button" className="link-button" onClick={() => setRemoving(e.id)}>
-                  {t('chart.remove')}
-                </button>
+            <li
+              key={e.id}
+              className={cn(
+                'rounded-xl px-3 py-2 text-sm [overflow-wrap:anywhere]',
+                danger ? 'bg-danger-soft text-destructive' : 'bg-muted/60',
               )}
-              {removing === e.id && (
-                <form className="inline-form" onSubmit={(ev) => remove(ev, e.id)}>
-                  <div>
-                    <label htmlFor={`remove-${e.id}`}>{t('chart.removeReason')}</label>
-                    <input id={`remove-${e.id}`} name="reason" required maxLength={300} />
-                  </div>
-                  <button type="submit" disabled={busy}>
+            >
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                {danger && <TriangleAlert aria-hidden className="size-4 shrink-0" />}
+                <span className="min-w-0">{e.label}</span>
+                {e.source === 'patient' && (
+                  <span className="inline-flex items-center rounded-full bg-warning-soft px-2 py-0.5 text-[11px] font-semibold text-warning-foreground">
+                    {t('chart.unverified')}
+                  </span>
+                )}
+                {editable && removing !== e.id && (
+                  <Button
+                    type="button"
+                    variant="link"
+                    className="ml-auto h-auto min-h-11 px-1 text-xs text-muted-foreground"
+                    onClick={() => setRemoving(e.id)}
+                  >
                     {t('chart.remove')}
-                  </button>
-                  <button type="button" className="secondary" onClick={() => setRemoving(null)}>
-                    {t('common.cancel')}
-                  </button>
+                  </Button>
+                )}
+              </div>
+              {removing === e.id && (
+                <form
+                  className="mt-2 space-y-2 border-t border-border/70 pt-3 text-foreground"
+                  onSubmit={(ev) => remove(ev, e.id)}
+                >
+                  <div className="space-y-1.5">
+                    <Label htmlFor={`remove-${e.id}`} className="block text-sm font-semibold">
+                      {t('chart.removeReason')}
+                    </Label>
+                    <Input id={`remove-${e.id}`} name="reason" required maxLength={300} />
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button type="submit" variant="destructive" disabled={busy}>
+                      {t('chart.remove')}
+                    </Button>
+                    <Button type="button" variant="outline" onClick={() => setRemoving(null)}>
+                      {t('common.cancel')}
+                    </Button>
+                  </div>
                 </form>
               )}
             </li>
@@ -247,31 +283,47 @@ function ChartSection({
         </ul>
       )}
       {adding && (
-        <form className="chart-add" onSubmit={add}>
+        <form
+          className="mt-3 space-y-3 rounded-xl border border-dashed border-border p-3"
+          onSubmit={add}
+        >
           {FIELDS[kind].map((f) => (
-            <div key={f.name}>
-              <label htmlFor={`${kind}-${f.name}`}>{t(f.label)}</label>
-              <input id={`${kind}-${f.name}`} name={f.name} required={f.required} maxLength={200} />
+            <div key={f.name} className="space-y-1.5">
+              <Label htmlFor={`${kind}-${f.name}`} className="block text-sm font-semibold">
+                {t(f.label)}
+              </Label>
+              <Input id={`${kind}-${f.name}`} name={f.name} required={f.required} maxLength={200} />
             </div>
           ))}
-          <label className="check">
-            <input type="checkbox" name="patientReported" /> {t('chart.patientReported')}
+          <label className="flex min-h-11 cursor-pointer items-center gap-2.5 text-sm">
+            <input
+              type="checkbox"
+              name="patientReported"
+              className="size-4 shrink-0 accent-primary"
+            />{' '}
+            {t('chart.patientReported')}
           </label>
-          <div className="confirm-actions">
-            <button type="submit" disabled={busy}>
+          <div className="confirm-actions flex flex-wrap gap-2">
+            <Button type="submit" disabled={busy}>
               {t('chart.add')}
-            </button>
-            <button type="button" className="secondary" onClick={() => setAdding(false)}>
+            </Button>
+            <Button type="button" variant="outline" onClick={() => setAdding(false)}>
               {t('common.cancel')}
-            </button>
+            </Button>
           </div>
         </form>
       )}
       {error && (
-        <p role="alert" className="alert">
+        <p
+          role="alert"
+          className="mt-2 rounded-xl bg-danger-soft px-3 py-2 text-sm font-medium text-destructive"
+        >
           {error}
         </p>
       )}
     </section>
   );
 }
+
+const sectionHeading = 'text-[11px] font-bold uppercase tracking-wide text-muted-foreground';
+const emptyText = 'text-sm text-muted-foreground';

@@ -25,7 +25,8 @@ pnpm workspaces + Turborepo ([ADR 0001](docs/adr/0001-one-typescript-monorepo.md
 | `packages/domain`     | Shared business rules (UHID, IST dates, money in paise)                                                                                                                                                            |
 | `packages/safety`     | Safety rule catalogue SR-01–SR-22 and alert types — draft, needs clinical sign-off                                                                                                                                 |
 | `packages/i18n`       | English and Hindi strings                                                                                                                                                                                          |
-| `packages/tokens`     | Design tokens (colours, spacing, type) for web and mobile                                                                                                                                                          |
+| `packages/tokens`     | Design system theme (colours light and dark, fonts, radius) for Tailwind on web and as hex for mobile, plus spacing and type scales                                                                                |
+| `packages/ui-web`     | Design system components for web: shadcn/ui primitives and clinic components (staff shell, status chips, slot picker) from the approved demo                                                                       |
 | `packages/config`     | Shared TypeScript and ESLint configuration                                                                                                                                                                         |
 
 ## Getting started

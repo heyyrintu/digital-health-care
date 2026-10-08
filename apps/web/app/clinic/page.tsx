@@ -2,6 +2,8 @@
 
 import { ApiError } from '@dhc/api-client';
 import { PatientListResponse, TagList, type PatientSummary, type Tag } from '@dhc/contracts';
+import { Button, Input, NativeSelect, PageHeader } from '@dhc/ui-web';
+import { Search } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { AgeGender, TagChip } from './patient-bits';
@@ -9,7 +11,7 @@ import { useSession } from './session-provider';
 import { PracticeCard } from './practice-card';
 import { ScreensCard } from './screens-card';
 import { SettingsCard } from './settings-card';
-import { ClinicShell, canRegister } from './shell';
+import { ClinicShell } from './shell';
 import { StaffCard } from './staff-card';
 
 /** Signed-in staff home: patient search and registration; admins also manage staff and settings. */
@@ -18,20 +20,24 @@ export default function ClinicDashboard() {
     <ClinicShell>
       {(me) =>
         me.role === 'patient' ? null : (
-          <>
-            <PatientSearch role={me.role} />
-            {me.role === 'clinic_admin' && <StaffCard currentUserId={me.user.id} />}
-            {me.role === 'clinic_admin' && <PracticeCard />}
-            {me.role === 'clinic_admin' && <ScreensCard />}
-            {me.role === 'clinic_admin' && <SettingsCard />}
-          </>
+          <div className="space-y-6">
+            <PatientSearch />
+            {me.role === 'clinic_admin' && (
+              <div className="grid items-start gap-6 xl:grid-cols-2">
+                <StaffCard currentUserId={me.user.id} />
+                <PracticeCard />
+                <ScreensCard />
+                <SettingsCard />
+              </div>
+            )}
+          </div>
         )
       }
     </ClinicShell>
   );
 }
 
-function PatientSearch({ role }: { role: string }) {
+function PatientSearch() {
   const { api, signOut, t } = useSession();
   const [patients, setPatients] = useState<PatientSummary[] | null>(null);
   const [tags, setTags] = useState<Tag[]>([]);
@@ -70,99 +76,123 @@ function PatientSearch({ role }: { role: string }) {
   }
 
   return (
-    <section aria-labelledby="patients-title" className="card">
-      <div className="card-header">
-        <h1 id="patients-title">{t('dashboard.searchPatients')}</h1>
-        <div className="header-actions">
-          <Link className="button-link secondary" href="/clinic/queue">
-            {t('dashboard.queue')}
-          </Link>
-          <Link className="button-link secondary" href="/clinic/availability">
-            {t('dashboard.availability')}
-          </Link>
-          {canRegister(role) && (
-            <Link className="button-link" href="/clinic/patients/new">
-              {t('dashboard.registerPatient')}
-            </Link>
+    <>
+      <PageHeader titleId="patients-title" title={t('dashboard.searchPatients')} />
+      <section aria-labelledby="patients-title" className="surface p-4 sm:p-6">
+        <form
+          className="search flex flex-col gap-3 sm:flex-row sm:items-center"
+          onSubmit={submit}
+          role="search"
+        >
+          <label htmlFor="q" className="sr-only">
+            {t('dashboard.searchPatients')}
+          </label>
+          <div className="relative min-w-0 flex-1">
+            <Search
+              className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden
+            />
+            <Input
+              id="q"
+              name="q"
+              type="search"
+              className="pl-10"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder={t('dashboard.searchHint')}
+            />
+          </div>
+          {tags.length > 0 && (
+            <>
+              <label htmlFor="tag-filter" className="sr-only">
+                {t('dashboard.filterTag')}
+              </label>
+              <NativeSelect
+                id="tag-filter"
+                className="sm:w-48"
+                value={tagId}
+                onChange={(e) => {
+                  setTagId(e.target.value);
+                  void search(q.trim(), e.target.value);
+                }}
+              >
+                <option value="">{t('dashboard.allTags')}</option>
+                {tags.map((tag) => (
+                  <option key={tag.id} value={tag.id}>
+                    {tag.name}
+                  </option>
+                ))}
+              </NativeSelect>
+            </>
           )}
-        </div>
-      </div>
-      <form className="search" onSubmit={submit} role="search">
-        <label htmlFor="q" className="visually-hidden">
-          {t('dashboard.searchPatients')}
-        </label>
-        <input
-          id="q"
-          name="q"
-          type="search"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder={t('dashboard.searchHint')}
-        />
-        {tags.length > 0 && (
-          <>
-            <label htmlFor="tag-filter" className="visually-hidden">
-              {t('dashboard.filterTag')}
-            </label>
-            <select
-              id="tag-filter"
-              value={tagId}
-              onChange={(e) => {
-                setTagId(e.target.value);
-                void search(q.trim(), e.target.value);
-              }}
-            >
-              <option value="">{t('dashboard.allTags')}</option>
-              {tags.map((tag) => (
-                <option key={tag.id} value={tag.id}>
-                  {tag.name}
-                </option>
-              ))}
-            </select>
-          </>
+          <Button type="submit">{t('common.search')}</Button>
+        </form>
+        {error && (
+          <p
+            role="alert"
+            className="mt-4 rounded-xl bg-danger-soft px-4 py-3 text-sm font-medium text-destructive"
+          >
+            {error}
+          </p>
         )}
-        <button type="submit">{t('common.search')}</button>
-      </form>
-      {error && (
-        <p role="alert" className="alert">
-          {error}
-        </p>
-      )}
-      {patients && patients.length === 0 && <p>{t('dashboard.noPatients')}</p>}
-      {patients && patients.length > 0 && (
-        <table className="patients">
-          <thead>
-            <tr>
-              <th scope="col">{t('patient.uhid')}</th>
-              <th scope="col">{t('patient.name')}</th>
-              <th scope="col">
-                {t('patient.age')} · {t('patient.gender')}
-              </th>
-              <th scope="col">{t('patient.phone')}</th>
-              <th scope="col">{t('patient.tags')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {patients.map((p) => (
-              <tr key={p.id}>
-                <td>{p.uhid}</td>
-                <td>
-                  <Link href={`/clinic/patients/${p.id}`}>{p.name}</Link>
-                </td>
-                <td>
-                  <AgeGender patient={p} />
-                </td>
-                <td>{p.phone ?? '—'}</td>
-                <td className="tags">
-                  {p.tags.map((tag) => (
-                    <TagChip key={tag.id} tag={tag} />
-                  ))}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
-    </section>
+        {patients && patients.length === 0 && (
+          <p className="mt-6 text-sm text-muted-foreground">{t('dashboard.noPatients')}</p>
+        )}
+        {patients && patients.length > 0 && (
+          <div className="-mx-4 mt-5 overflow-x-auto sm:mx-0">
+            <table className="patients w-full min-w-[640px] text-sm">
+              <thead>
+                <tr className="border-b border-border text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  <th scope="col" className="px-4 py-3">
+                    {t('patient.uhid')}
+                  </th>
+                  <th scope="col" className="px-4 py-3">
+                    {t('patient.name')}
+                  </th>
+                  <th scope="col" className="px-4 py-3">
+                    {t('patient.age')} · {t('patient.gender')}
+                  </th>
+                  <th scope="col" className="px-4 py-3">
+                    {t('patient.phone')}
+                  </th>
+                  <th scope="col" className="px-4 py-3">
+                    {t('patient.tags')}
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {patients.map((p) => (
+                  <tr
+                    key={p.id}
+                    className="border-b border-border/70 transition-colors last:border-0 hover:bg-accent/60"
+                  >
+                    <td className="tabular px-4 py-3 text-muted-foreground">{p.uhid}</td>
+                    <td className="px-4 py-3">
+                      <Link
+                        href={`/clinic/patients/${p.id}`}
+                        className="inline-flex min-h-11 items-center font-semibold text-foreground hover:text-primary hover:underline"
+                      >
+                        {p.name}
+                      </Link>
+                    </td>
+                    <td className="px-4 py-3">
+                      <AgeGender patient={p} />
+                    </td>
+                    <td className="tabular px-4 py-3">{p.phone ?? '—'}</td>
+                    <td className="tags px-4 py-3">
+                      <span className="flex flex-wrap gap-1.5">
+                        {p.tags.map((tag) => (
+                          <TagChip key={tag.id} tag={tag} />
+                        ))}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </>
   );
 }

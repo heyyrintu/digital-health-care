@@ -504,6 +504,22 @@ export const en = {
   'safety.SR-19': '{molecule} is on List B: online only at a follow-up visit.',
   'safety.SR-20': 'Missing: {fields}.',
   'safety.SR-22': 'Not in the medicine list, so safety checks are limited.',
+  // Design system components (@dhc/ui-web).
+  'ui.close': 'Close',
+  'ui.collapseSidebar': 'Collapse sidebar',
+  'ui.expandSidebar': 'Expand sidebar',
+  'ui.mainNav': 'Main navigation',
+  'ui.tabBar': 'Quick tabs',
+  'ui.commandMenu': 'Command menu',
+  'ui.searchPlaceholder': 'Search pages',
+  'ui.jumpTo': 'Jump to a page',
+  'ui.noResults': 'No results found.',
+  'ui.pages': 'Pages',
+  'ui.empty': 'Nothing here yet.',
+  'ui.by': 'by {name}',
+  'ui.morning': 'Morning',
+  'ui.afternoon': 'Afternoon',
+  'ui.evening': 'Evening',
 } as const;
 
 export type MessageKey = keyof typeof en;

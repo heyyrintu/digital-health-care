@@ -13,7 +13,7 @@ export const metadata: Metadata = {
 
 export default function InvitePage() {
   return (
-    <main className="shell narrow">
+    <main className="flex min-h-dvh items-start justify-center bg-hero px-4 py-10 sm:items-center sm:py-16">
       <InviteFlow apiBaseUrl={publicApiBaseUrl()} />
     </main>
   );

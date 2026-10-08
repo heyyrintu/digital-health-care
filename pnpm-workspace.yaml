@@ -5,3 +5,14 @@ packages:
 # Keep React Native tooling on the version Expo SDK 57 ships with.
 overrides:
   '@react-native/metro-config': 0.86.3
+
+# react-day-picker imports React's types without declaring them, so it got whichever
+# @types/react was hoisted (the mobile app's Expo pin) and clashed with ui-web's.
+# Declaring the peer links it to the copy of the package that uses it.
+packageExtensions:
+  react-day-picker:
+    peerDependencies:
+      '@types/react': '*'
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
