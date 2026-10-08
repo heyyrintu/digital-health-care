@@ -9,6 +9,7 @@ import type {
   PrescriptionItem,
 } from '@dhc/contracts';
 import { dosageRemarks } from '@dhc/domain';
+import type { ReactNode } from 'react';
 import { useSession } from '../session-provider';
 
 const TIMINGS: DoseTiming[] = [
@@ -44,6 +45,7 @@ export function RxLine({
   editable,
   onChange,
   onRemove,
+  alerts,
 }: {
   item: PrescriptionItem;
   index: number;
@@ -51,6 +53,8 @@ export function RxLine({
   editable: boolean;
   onChange(item: PrescriptionItem): void;
   onRemove(): void;
+  /** The safety engine's alerts for this line. */
+  alerts?: ReactNode;
 }) {
   const { t } = useSession();
   const set = (patch: Partial<PrescriptionItem>) => onChange({ ...item, ...patch });
@@ -78,6 +82,7 @@ export function RxLine({
           </button>
         )}
       </div>
+      {alerts}
 
       {item.steps.map((step, i) => (
         <div className="rx-step" key={i}>

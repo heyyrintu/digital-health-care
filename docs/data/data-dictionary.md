@@ -65,13 +65,18 @@ Conventions for every table: `id` (UUID), `organisationId` (except platform-leve
 
 | Entity | Purpose | Key fields |
 |---|---|---|
-| DrugMolecule | Licensed drug data (built: name, drugClass; platform-wide, read-only to clinics) | name, drugClass · planned: interactionRefs, pregnancySafety, lactationSafety, maxDailyDose, paediatricDoseRange, geriatricCaution, renalAdjustment, hepaticCaution, weightBased, telemedicineList |
-| Medicine | Medicine in the master (built) | organisationId (null = platform reference master; clinics read it but cannot change it), name, genericName, composition, form, moleculeIds, defaultRoute, source (reference\|clinic), active (inactive medicines are hidden and cannot be prescribed) · planned: brand mapping, scheduleTag |
+| DrugMolecule | Reference drug data (built; platform-wide, read-only to clinics; the licensed database in production, a synthetic sample in development) | name, drugClass, pregnancy and lactation (caution\|contraindicated), pregnancyOverridable, weightBased, childMin/MaxMgPerKgDay, childDoseOverridable, maxDailyMg (from 12 years), maxDoseOverridable, olderAdultCaution, renalAdjustment, hepaticCaution, telemedicineList (o\|a\|b\|prohibited) |
+| DrugInteraction | Interacting pair (built) | moleculeAId < moleculeBId, severity (contraindicated\|major\|moderate\|minor), overridable, note |
+| DrugCrossSensitivity | Allergy class that warns for another class (built) | allergyClass, drugClass, note |
+| DrugConditionRule | Molecule or class to take care with in a condition (built) | moleculeId or drugClass, conditionCodes (ICD-10 prefixes), conditionTerms, note |
+| DrugDatabase | The loaded reference data (built, one row) | version, loadedAt |
+| MedicineIngredient | A molecule in a medicine (built; follows the medicine's visibility) | medicineId, moleculeId, strengthMg and per (unit\|ml), null when unknown |
+| Medicine | Medicine in the master (built) | organisationId (null = platform reference master; clinics read it but cannot change it), name, genericName, composition, form, ingredients (MedicineIngredient), defaultRoute, source (reference\|clinic), active (inactive medicines are hidden and cannot be prescribed) · planned: brand mapping, scheduleTag |
 | PrescriptionTemplate | Saved prescription (built) | organisationId, doctorUserId, name (unique per doctor within the organisation), items (JSON lines without IDs) · planned: advice, tests |
 | Prescription | Prescription document (built) | appointmentId, patientId, doctorUserId, version, status (draft\|signed\|void), language, revision · planned: consultationId, prescriptionNumber (prefix + sequence), previousVersionId, statuses published\|amended, signatureMethod, signedAt, pdfKey, pdfHash, templateVersion, verificationCode, voidReason |
 | PrescriptionItem | Medicine line (built) | id (client-chosen UUID), prescriptionId, medicineId?, name, composition, form (snapshots), route, timing, steps (JSON: dose, frequency, durationValue, durationUnit; several for tapering), quantity, instructions, remarks (generated unless remarksEdited), sortOrder |
 | PrescriptionTest | Test on prescription | prescriptionId, testOrderId |
-| SafetyAlert | Alert and action | prescriptionId, itemId, checkType, severity (block\|warn\|info), message, action (accepted\|changed\|overridden), overrideReason, doctorId, at |
+| SafetyAlert | The safety log: an alert and the doctor's answer (built; never deleted) | prescriptionId, key (rule, line, subject), ruleId, itemId, severity (block\|warn\|info), overridable, message, params, firstShownAt, lastShownAt, resolvedAt, action (acknowledged\|overridden\|changed), reason, actionByUserId, actionAt, drugDatabaseVersion |
 
 ## Orders and documents
 

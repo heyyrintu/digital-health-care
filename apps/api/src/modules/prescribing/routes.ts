@@ -7,6 +7,8 @@ import {
   PrescriptionTemplate,
   PrescriptionTemplateList,
   PrescriptionView,
+  SafetyActionBody,
+  SafetySummary,
   SavePrescriptionBody,
   SaveTemplateBody,
 } from '@dhc/contracts';
@@ -18,7 +20,7 @@ import { PrescribingService } from './service';
 
 const IdParams = z.object({ id: z.uuid() });
 
-/** The prescription builder (PRD §6.4, §3.2): doctors only. */
+/** The prescription builder and its safety checks (PRD §6.4, §6.5, §3.2): doctors only. */
 export const prescribingRoutes: FastifyPluginAsync<{ services: Services }> = async (
   app,
   { services },
@@ -40,6 +42,12 @@ export const prescribingRoutes: FastifyPluginAsync<{ services: Services }> = asy
     const { id } = IdParams.parse(request.params);
     const body = SavePrescriptionBody.parse(request.body);
     return Prescription.parse(await prescribing.save(request, authOf(request), id, body));
+  });
+
+  app.post('/appointments/:id/prescription/safety-actions', doctor, async (request) => {
+    const { id } = IdParams.parse(request.params);
+    const body = SafetyActionBody.parse(request.body);
+    return SafetySummary.parse(await prescribing.act(request, authOf(request), id, body));
   });
 
   app.get('/patients/:id/last-prescription', doctor, async (request) => {

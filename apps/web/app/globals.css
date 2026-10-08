@@ -1224,3 +1224,60 @@ button.tab .count {
 .rx-save-template {
   margin-top: var(--space-4);
 }
+
+/* Safety alerts (PRD §6.5): red blocks, amber warnings, blue notes. */
+.safety-banner {
+  margin-bottom: var(--space-3);
+}
+
+.safety-banner p {
+  margin: 0;
+}
+
+.safety-count {
+  font-weight: 600;
+}
+
+.safety-count.block {
+  color: var(--color-severity-block);
+}
+
+.safety-count.warn {
+  color: var(--color-severity-warn);
+}
+
+.safety-alerts {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.safety-alert {
+  border-left: 4px solid var(--color-severity-info);
+  background: #eff6ff;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  display: grid;
+  gap: var(--space-1);
+  overflow-wrap: anywhere;
+}
+
+.safety-alert.block {
+  border-left-color: var(--color-severity-block);
+  background: #fef2f2;
+}
+
+.safety-alert.warn {
+  border-left-color: var(--color-severity-warn);
+  background: #fffbeb;
+}
+
+.safety-alert p {
+  margin: 0;
+}
+
+.safety-alert .pill {
+  margin-left: var(--space-2);
+}

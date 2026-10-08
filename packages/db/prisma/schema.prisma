@@ -101,6 +101,49 @@ enum MedicineSource {
   clinic
 }
 
+/// Reference drug data for the safety engine (docs/safety). Null means no data.
+enum DrugRisk {
+  caution
+  contraindicated
+}
+
+/// Telemedicine Practice Guidelines lists: O (any consultation), A (video first consult),
+/// B (follow-up only) and prohibited online.
+enum TelemedicineList {
+  o
+  a
+  b
+  prohibited
+}
+
+enum InteractionSeverity {
+  contraindicated
+  major
+  moderate
+  minor
+}
+
+/// What a medicine ingredient's strength is per: one dose unit (tablet, capsule, sachet,
+/// drop, puff) or one ml of a liquid.
+enum StrengthPer {
+  unit
+  ml
+}
+
+enum SafetySeverity {
+  block
+  warn
+  info
+}
+
+/// What the doctor did with an alert (PRD §6.5): acknowledged a warning, overrode a block
+/// the database allows, or changed the prescription so it no longer fires.
+enum SafetyAlertAction {
+  acknowledged
+  overridden
+  changed
+}
+
 enum MedicineRoute {
   oral
   topical
@@ -166,6 +209,7 @@ model Organisation {
   prescriptions          Prescription[]
   prescriptionItems      PrescriptionItem[]
   prescriptionTemplates  PrescriptionTemplate[]
+  safetyAlerts           SafetyAlert[]
 
   @@map("organisations")
 }
@@ -677,12 +721,100 @@ model Consultation {
 /// A molecule from the reference drug data (platform-wide, read-only to clinics). The
 /// safety engine reads molecules and classes; drug facts come from the licensed database.
 model DrugMolecule {
-  id        String   @id @default(uuid()) @db.Uuid
-  name      String   @unique
-  drugClass String?  @map("drug_class")
-  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  id                   String            @id @default(uuid()) @db.Uuid
+  name                 String            @unique
+  drugClass            String?           @map("drug_class")
+  pregnancy            DrugRisk?
+  /// Whether a pregnancy contraindication may be overridden with a reason (SR-10).
+  pregnancyOverridable Boolean           @default(false) @map("pregnancy_overridable")
+  lactation            DrugRisk?
+  /// Dosed by weight in children; needs today's weight under 12 (SR-12).
+  weightBased          Boolean           @default(false) @map("weight_based")
+  childMinMgPerKgDay   Decimal?          @map("child_min_mg_per_kg_day") @db.Decimal(8, 2)
+  childMaxMgPerKgDay   Decimal?          @map("child_max_mg_per_kg_day") @db.Decimal(8, 2)
+  childDoseOverridable Boolean           @default(true) @map("child_dose_overridable")
+  /// Adult (12 and over) maximum per day, across all lines (SR-14).
+  maxDailyMg           Decimal?          @map("max_daily_mg") @db.Decimal(10, 2)
+  maxDoseOverridable   Boolean           @default(true) @map("max_dose_overridable")
+  olderAdultCaution    Boolean           @default(false) @map("older_adult_caution")
+  renalAdjustment      Boolean           @default(false) @map("renal_adjustment")
+  hepaticCaution       Boolean           @default(false) @map("hepatic_caution")
+  telemedicineList     TelemedicineList? @map("telemedicine_list")
+  createdAt            DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  ingredients    MedicineIngredient[]
+  interactionsA  DrugInteraction[]    @relation("InteractionA")
+  interactionsB  DrugInteraction[]    @relation("InteractionB")
+  conditionRules DrugConditionRule[]
 
   @@map("drug_molecules")
+}
+
+/// A pair of molecules that interact (SR-04 to SR-06). Stored once, with A's ID before B's.
+model DrugInteraction {
+  id          String              @id @default(uuid()) @db.Uuid
+  moleculeAId String              @map("molecule_a_id") @db.Uuid
+  moleculeBId String              @map("molecule_b_id") @db.Uuid
+  severity    InteractionSeverity
+  /// For contraindicated pairs: whether the database allows an override with a reason.
+  overridable Boolean             @default(false)
+  note        String?
+
+  moleculeA DrugMolecule @relation("InteractionA", fields: [moleculeAId], references: [id], onDelete: Restrict)
+  moleculeB DrugMolecule @relation("InteractionB", fields: [moleculeBId], references: [id], onDelete: Restrict)
+
+  @@unique([moleculeAId, moleculeBId])
+  @@index([moleculeBId])
+  @@map("drug_interactions")
+}
+
+/// An allergy to one drug class that warns for another (SR-03), e.g. penicillin → cephalosporin.
+model DrugCrossSensitivity {
+  allergyClass String  @map("allergy_class")
+  drugClass    String  @map("drug_class")
+  note         String?
+
+  @@id([allergyClass, drugClass])
+  @@map("drug_cross_sensitivities")
+}
+
+/// A molecule or a whole class that needs care with a condition (SR-09), e.g. an NSAID
+/// with chronic kidney disease. A condition matches an ICD-10 code prefix or a term in its name.
+model DrugConditionRule {
+  id             String   @id @default(uuid()) @db.Uuid
+  moleculeId     String?  @map("molecule_id") @db.Uuid
+  drugClass      String?  @map("drug_class")
+  conditionCodes String[] @map("condition_codes")
+  conditionTerms String[] @map("condition_terms")
+  note           String
+
+  molecule DrugMolecule? @relation(fields: [moleculeId], references: [id], onDelete: Restrict)
+
+  @@map("drug_condition_rules")
+}
+
+/// The loaded reference drug data (one row). Overrides record its version.
+model DrugDatabase {
+  id       Int      @id @default(1) @db.SmallInt
+  version  String
+  loadedAt DateTime @default(now()) @map("loaded_at") @db.Timestamptz(3)
+
+  @@map("drug_database")
+}
+
+/// A molecule in a medicine, with its strength when known (null for creams and the like).
+model MedicineIngredient {
+  medicineId String       @map("medicine_id") @db.Uuid
+  moleculeId String       @map("molecule_id") @db.Uuid
+  strengthMg Decimal?     @map("strength_mg") @db.Decimal(10, 3)
+  per        StrengthPer?
+
+  medicine Medicine     @relation(fields: [medicineId], references: [id], onDelete: Cascade)
+  molecule DrugMolecule @relation(fields: [moleculeId], references: [id], onDelete: Restrict)
+
+  @@id([medicineId, moleculeId])
+  @@index([moleculeId])
+  @@map("medicine_ingredients")
 }
 
 /// A medicine doctors can prescribe (PRD §6.4). `organisationId` is null for the
@@ -694,13 +826,13 @@ model Medicine {
   genericName    String         @map("generic_name")
   composition    String
   form           String
-  moleculeIds    String[]       @map("molecule_ids") @db.Uuid
   defaultRoute   MedicineRoute  @default(oral) @map("default_route")
   source         MedicineSource
   active         Boolean        @default(true)
   createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  organisation Organisation? @relation(fields: [organisationId], references: [id], onDelete: Restrict)
+  organisation Organisation?        @relation(fields: [organisationId], references: [id], onDelete: Restrict)
+  ingredients  MedicineIngredient[]
 
   @@index([organisationId])
   @@map("medicines")
@@ -724,6 +856,7 @@ model Prescription {
   organisation Organisation       @relation(fields: [organisationId], references: [id])
   appointment  Appointment        @relation(fields: [appointmentId], references: [id])
   items        PrescriptionItem[]
+  safetyAlerts SafetyAlert[]
 
   @@unique([appointmentId, version])
   @@index([patientId])
@@ -771,6 +904,36 @@ model PrescriptionTemplate {
 
   @@unique([organisationId, doctorUserId, name])
   @@map("prescription_templates")
+}
+
+/// An alert the safety engine raised on a prescription, and what the doctor did with it
+/// (PRD §6.5). One row per alert key; `resolvedAt` is set while the alert no longer fires.
+model SafetyAlert {
+  id                  String             @id @default(uuid()) @db.Uuid
+  organisationId      String             @map("organisation_id") @db.Uuid
+  prescriptionId      String             @map("prescription_id") @db.Uuid
+  /// Rule, line and subject (e.g. the other molecule), so a different problem is a new alert.
+  key                 String
+  ruleId              String             @map("rule_id")
+  itemId              String?            @map("item_id") @db.Uuid
+  severity            SafetySeverity
+  overridable         Boolean
+  message             String
+  params              Json
+  firstShownAt        DateTime           @map("first_shown_at") @db.Timestamptz(3)
+  lastShownAt         DateTime           @map("last_shown_at") @db.Timestamptz(3)
+  resolvedAt          DateTime?          @map("resolved_at") @db.Timestamptz(3)
+  action              SafetyAlertAction?
+  reason              String?
+  actionByUserId      String?            @map("action_by_user_id") @db.Uuid
+  actionAt            DateTime?          @map("action_at") @db.Timestamptz(3)
+  drugDatabaseVersion String             @map("drug_database_version")
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+  prescription Prescription @relation(fields: [prescriptionId], references: [id], onDelete: Restrict)
+
+  @@unique([prescriptionId, key])
+  @@map("safety_alerts")
 }
 
 model AuditLog {

@@ -8,6 +8,7 @@ import {
   PrescriptionTemplate,
   PrescriptionTemplateList,
   PrescriptionView,
+  SafetySummary,
   type Language,
   type Medicine,
   type PrescriptionItem,
@@ -16,6 +17,7 @@ import {
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { useSession } from '../session-provider';
 import { remarksOf, RxLine } from './rx-line';
+import { LineAlerts, SafetyBanner, type SafetyAct } from './safety-alerts';
 
 const AUTOSAVE_MS = 1200;
 /** The most lines a prescription can hold (the API limit). */
@@ -85,7 +87,8 @@ const withNewIds = (items: TemplateItem[]): PrescriptionItem[] =>
 
 /**
  * The prescription builder on the consultation screen (PRD §6.4). Lines autosave like
- * the notes; signing, safety checks and the PDF come in later slices.
+ * the notes, and the server runs the safety engine (PRD §6.5) on every save; its alerts
+ * show on each line. Signing and the PDF come in a later slice.
  */
 export function PrescriptionCard({
   appointmentId,
@@ -105,6 +108,7 @@ export function PrescriptionCard({
   const [matches, setMatches] = useState<Medicine[] | null>(null);
   const [templates, setTemplates] = useState<PrescriptionTemplate[]>([]);
   const [templateId, setTemplateId] = useState('');
+  const [safety, setSafety] = useState<SafetySummary | null>(null);
 
   const latest = useRef({ items, language });
   const revision = useRef(0);
@@ -131,6 +135,7 @@ export function PrescriptionCard({
         schema: PrescriptionView,
       });
       setView(v);
+      setSafety(v.prescription?.safety ?? null);
       const next = v.prescription?.items ?? [];
       const lang = v.prescription?.language ?? v.defaultLanguage;
       setItems(next);
@@ -185,6 +190,7 @@ export function PrescriptionCard({
         body: { language: lang, items: lines, revision: revision.current },
       });
       revision.current = saved.revision;
+      setSafety(saved.safety);
       setError(null);
       setState(edits.current === editsAtStart ? 'saved' : 'dirty');
     } catch (e) {
@@ -242,6 +248,23 @@ export function PrescriptionCard({
     window.addEventListener('beforeunload', warn);
     return () => window.removeEventListener('beforeunload', warn);
   }, [state]);
+
+  /** The doctor's answer to an alert; the server returns the updated check. */
+  const act: SafetyAct = async (key, action, reason) => {
+    try {
+      setSafety(
+        await api.request('POST', `/appointments/${appointmentId}/prescription/safety-actions`, {
+          schema: SafetySummary,
+          body: { key, action, reason },
+        }),
+      );
+      setError(null);
+      return true;
+    } catch (e) {
+      fail(e);
+      return false;
+    }
+  };
 
   /** Adds lines after the latest ones, within the limit the API accepts. */
   const append = (lines: PrescriptionItem[]) => {
@@ -333,6 +356,10 @@ export function PrescriptionCard({
   }
 
   const editable = view.canEdit && state !== 'stale';
+  // Alerts belong to the last saved lines: while changes wait to save, they may be out of date.
+  const checking = state === 'dirty' || state === 'saving';
+  const alertsFor = (itemId: string | null) =>
+    safety?.alerts.filter((a) => a.itemId === itemId) ?? [];
   const status =
     state === 'saving'
       ? t('consult.saving')
@@ -365,6 +392,8 @@ export function PrescriptionCard({
         </p>
       )}
       {notice && <p className="notice">{notice}</p>}
+      {items.length > 0 && <SafetyBanner safety={safety} checking={checking} />}
+      <LineAlerts alerts={alertsFor(null)} canAct={editable && !checking} onAct={act} />
 
       <fieldset className="rx-body" disabled={!editable}>
         <div className="rx-tools">
@@ -430,6 +459,13 @@ export function PrescriptionCard({
                 editable={editable}
                 onChange={(next) => edit(items.map((x) => (x.id === next.id ? next : x)))}
                 onRemove={() => edit(items.filter((x) => x.id !== item.id))}
+                alerts={
+                  <LineAlerts
+                    alerts={alertsFor(item.id)}
+                    canAct={editable && !checking}
+                    onAct={act}
+                  />
+                }
               />
             ))}
           </ol>

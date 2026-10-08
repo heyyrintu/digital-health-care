@@ -44,6 +44,9 @@ importers:
       '@dhc/domain':
         specifier: workspace:*
         version: link:../../packages/domain
+      '@dhc/safety':
+        specifier: workspace:*
+        version: link:../../packages/safety
       '@fastify/cors':
         specifier: ^11.3.0
         version: 11.3.0
@@ -315,6 +318,10 @@ importers:
         version: link:../config
 
   packages/safety:
+    dependencies:
+      '@dhc/domain':
+        specifier: workspace:*
+        version: link:../domain
     devDependencies:
       '@dhc/config':
         specifier: workspace:*

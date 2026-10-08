@@ -19,6 +19,7 @@
     "@dhc/contracts": "workspace:*",
     "@dhc/db": "workspace:*",
     "@dhc/domain": "workspace:*",
+    "@dhc/safety": "workspace:*",
     "@fastify/cors": "^11.3.0",
     "@fastify/rate-limit": "^11.2.0",
     "@prisma/adapter-pg": "7.10.0",
