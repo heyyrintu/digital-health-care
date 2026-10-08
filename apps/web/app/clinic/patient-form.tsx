@@ -12,8 +12,8 @@ import { Button, Input, Label, NativeSelect } from '@dhc/ui-web';
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { useSession } from './session-provider';
 
-const field = 'field grid min-w-0 content-start gap-1.5';
-const wideField = `${field} wide sm:col-span-2`;
+const field = 'grid min-w-0 content-start gap-1.5';
+const wideField = `${field} sm:col-span-2`;
 
 /** Demographic fields shared by registration and editing. */
 export function PatientForm({
@@ -193,7 +193,7 @@ function GuardianPicker({
   }
 
   return (
-    <fieldset className="field wide guardian m-0 grid min-w-0 gap-3 rounded-xl border border-border p-4 pt-2 sm:col-span-2">
+    <fieldset className="m-0 grid min-w-0 gap-3 rounded-xl border border-border p-4 pt-2 sm:col-span-2">
       <legend className="px-1 text-sm font-semibold">{t('patient.guardian')}</legend>
       <p className="hint text-sm text-muted-foreground">{t('patient.guardianHint')}</p>
       {value ? (
@@ -214,7 +214,7 @@ function GuardianPicker({
         </p>
       ) : (
         <>
-          <div className="search grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto]">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto]">
             <Label htmlFor="guardian-q" className="sr-only">
               {t('patient.guardianSearch')}
             </Label>

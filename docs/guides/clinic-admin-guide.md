@@ -16,6 +16,8 @@
 - [ ] Import from the previous system (dry run first).
 
 ## Daily and weekly
+- **Clinic at a glance** (top of the dashboard): appointments, completed visits, cancellations, no-shows with their rate, new patients, prescriptions signed and money collected for today, the last 7 or the last 30 days, with a row per day.
+- **Audit log** (in the menu): who did what and when, newest first. Filter by area (sign-in, staff, patients, appointments, chart views, notes, vitals, prescriptions, bills, payments, receipts), by staff member and by dates, and use **Load more** for older entries. Records are shown by ID; patient names never appear in the log.
 - **Collections** (in the menu): a day's payments by mode (cash, UPI, card) and by doctor, each with its receipt, and the visits still due. Reconciliation mismatches from Cashfree come with online payments.
 - Delivery log for failed messages.
 - Data-rights requests and merge requests.
@@ -25,4 +27,4 @@
 If a staff member loses their phone or authenticator app, open **Staff** on the dashboard and choose **Reset sign-in** next to their name. This signs them out everywhere and clears their password and authenticator; you get a new link (valid 72 hours) to give them directly. They open it, choose a new password and set up the authenticator again — their role stays the same. You cannot reset your own sign-in (ask another clinic admin), and someone who also works at another clinic needs platform support: ask them to contact support, who will call them back on their registered number and ask you (or the other clinic's admin) to confirm before sending a new link. Their reset shows in your audit log as `support.authenticator.reset`.
 
 ## Security
-Remove staff accounts the same day someone leaves. For a lost staff phone, use **Staff → Reset sign-in**, which ends all their staff sessions (signing out a single device is not available yet). Review the audit log monthly.
+Remove staff accounts the same day someone leaves. For a lost staff phone, use **Staff → Reset sign-in**, which ends all their staff sessions (signing out a single device is not available yet). Review the audit log (in the menu) monthly.

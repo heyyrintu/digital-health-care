@@ -2,8 +2,8 @@
  * Design tokens shared by web (CSS variables) and mobile (NativeWind theme).
  *
  * The design system's theme lives in `./theme` (semantic colours, fonts, radius). The scales
- * below are the earlier placeholders: the web screens' `globals.css` and the mobile shell still
- * read them, and they go once those move to the theme.
+ * below are the earlier placeholders: the mobile shell still reads them, and the web page still
+ * emits them as CSS variables; they go once the mobile app moves to the theme.
  */
 export * from './theme';
 

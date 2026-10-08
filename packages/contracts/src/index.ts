@@ -3,6 +3,7 @@ export * from './audit';
 export * from './billing';
 export * from './auth';
 export * from './consultations';
+export * from './dashboard';
 export * from './errors';
 export * from './health';
 export * from './invites';

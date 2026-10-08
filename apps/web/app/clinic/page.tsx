@@ -6,6 +6,7 @@ import { Button, Input, NativeSelect, PageHeader } from '@dhc/ui-web';
 import { Search } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { ClinicFigures } from './clinic-figures';
 import { AgeGender, TagChip } from './patient-bits';
 import { useSession } from './session-provider';
 import { PracticeCard } from './practice-card';
@@ -22,6 +23,7 @@ export default function ClinicDashboard() {
       {(me) =>
         me.role === 'patient' ? null : (
           <div className="space-y-6">
+            {me.role === 'clinic_admin' && <ClinicFigures />}
             <PatientSearch />
             {me.role === 'clinic_admin' && (
               <div className="grid items-start gap-6 xl:grid-cols-2">
@@ -82,7 +84,7 @@ function PatientSearch() {
       <PageHeader titleId="patients-title" title={t('dashboard.searchPatients')} />
       <section aria-labelledby="patients-title" className="surface p-4 sm:p-6">
         <form
-          className="search flex flex-col gap-3 sm:flex-row sm:items-center"
+          className="flex flex-col gap-3 sm:flex-row sm:items-center"
           onSubmit={submit}
           role="search"
         >
@@ -181,7 +183,7 @@ function PatientSearch() {
                       <AgeGender patient={p} />
                     </td>
                     <td className="tabular px-4 py-3">{p.phone ?? '—'}</td>
-                    <td className="tags px-4 py-3">
+                    <td className="px-4 py-3">
                       <span className="flex flex-wrap gap-1.5">
                         {p.tags.map((tag) => (
                           <TagChip key={tag.id} tag={tag} />

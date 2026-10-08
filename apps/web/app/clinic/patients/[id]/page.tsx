@@ -227,7 +227,7 @@ function PatientView({ role }: { role: string }) {
               busy={busy}
               onSubmit={saveDetails}
             >
-              <div className="field wide sm:col-span-2">
+              <div className="sm:col-span-2">
                 <Button type="button" variant="outline" onClick={() => setEditing(false)}>
                   {t('common.cancel')}
                 </Button>

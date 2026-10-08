@@ -7,6 +7,7 @@ import {
   FileSignature,
   IndianRupee,
   ListOrdered,
+  ScrollText,
   UserPlus,
   Users,
 } from 'lucide-react';
@@ -59,6 +60,9 @@ export function ClinicShell({ children }: { children: (me: MeResponse) => ReactN
                   icon: UserPlus,
                 },
               ]
+            : []),
+          ...(me.role === 'clinic_admin'
+            ? [{ href: '/clinic/audit', label: t('dashboard.auditLog'), icon: ScrollText }]
             : []),
           ...(me.role === 'doctor'
             ? [
