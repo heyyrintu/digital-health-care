@@ -227,7 +227,7 @@ Implemented in Phase 1 (`apps/api/src/modules/billing`). Cashfree payment links,
 - **Fixed after the first payment:** once a bill has a payment its lines and discount cannot change (409), and the database refuses changes to its lines too. Later price-list changes never touch existing bills.
 - **Payments** are cash, UPI or card, between ₹0.01 and the balance and at most ₹1,00,000 each (400 above either; 409 when nothing is due). `reference` is kept for UPI and card. The `id` is made by the client and kept until the payment succeeds: repeating it with the same bill, mode and amount returns the recorded payment with 200; anything else with that `id` is 409. Each payment gets the organisation's next receipt number (`R00001`, …), taken under a row lock so simultaneous payments never share one. Payments are append-only. Status follows the amount collected: `due`, `partly_paid`, `paid` (a fully discounted bill is `paid`).
 - **Receipts** show the bill's lines and totals, this payment, what was paid up to and including it, and the balance left after it. **Collections** total a day's payments (by IST time received) by mode and by doctor, and list that day's visits whose bills still have a balance.
-- **Queue cards** carry `bill: {totalPaise, paidPaise, status} | null`.
+- **Queue cards** carry `bill: {totalPaise, paidPaise, status} | null` and `prescription: {id, number, version, status: signed|void} | null` (the visit's newest signed or voided version, for printing with `GET /prescriptions/{id}/pdf`; no clinical content).
 - **Audit:** `price_list.created` (item ID and price) and `price_list.updated` (item ID, the fields changed and the new price when repriced), `bill.saved` (bill and visit IDs, revision, line count, total and discount), `payment.recorded` (bill ID, mode, amount, receipt number) and `receipt.viewed` (payment ID, receipt number). Never patient names.
 
 ## 3i. Signing, amendments and the QR check
@@ -242,7 +242,7 @@ Implemented in Phase 1 (`prescribing/signing.ts`, `doctors/`, PRD §6.6, §9.1, 
 | Sign | `POST /appointments/{id}/prescription/sign` `{revision, pin}` → the signed prescription | The visit's doctor |
 | Amend | `POST /appointments/{id}/prescription/amend` `{reason}` → 201, the new draft version | The visit's doctor |
 | Void | `POST /appointments/{id}/prescription/void` `{reason, pin}` → the voided prescription | The visit's doctor |
-| PDF | `GET /prescriptions/{id}/pdf` → the signed PDF, or after voiding the copy stamped VOID | Doctor, front desk |
+| PDF | `GET /prescriptions/{id}/pdf` → the signed PDF, or after voiding the copy stamped VOID (front desk: **Print prescription** on the queue card, from the appointment's `prescription`) | Doctor, front desk |
 | QR check | `POST /verify` `{code}` → `{status: genuine\|superseded\|void, number, version, latestVersion, signedAt, supersededAt, voidedAt, signatureMethod, doctor, clinicName, patient: {initials, ageYears, gender}, medicines}` | Public (30 per minute per address) |
 
 - **Prescription pad:** registration number, council and qualifications are required, and the prefix (1–8 letters or digits, stored in capitals) is unique in the organisation (409 `rxPrefix: taken`). The platform team verifies the registration with the support command `support-verify-doctor` (runbook `doctor-verification.md`); changing the registration number or council sends the profile back to pending. Paper size is A5 or A4.
@@ -255,7 +255,7 @@ Implemented in Phase 1 (`prescribing/signing.ts`, `doctors/`, PRD §6.6, §9.1, 
 - **Immutability:** database triggers refuse any change to a signed version except becoming superseded or void (which touch only those fields), and any change to its lines or safety log. A locked visit record stays locked.
 - **QR check:** the code goes in the body, not the URL, so it stays out of logs; it is looked up by its hash. The answer shows initials, never the patient's name.
 - **Audit:** `prescription.previewed`, `prescription.signed` (version, number, PDF hash, signature method, template and drug data versions), `prescription.amendment_started`, `prescription.voided`, `prescription.pdf_viewed`, `doctor.profile_saved`, `doctor.signing_pin_set`, `doctor.signing_pin_locked`, `support.doctor.verified` (ticket and operator). Never medicine names or reasons beyond what is listed.
-- **Not built yet:** delivery to the patient (app, WhatsApp, SMS link, email, ABDM) and notifying the patient of amendments and voiding (with messaging); the cloud DSC provider and PAdES signatures embedded in the PDF; biometric approval on the phone apps; a front-desk print button (the endpoint is ready); the platform console for verification.
+- **Not built yet:** delivery to the patient (app, WhatsApp, SMS link, email, ABDM) and notifying the patient of amendments and voiding (with messaging); the cloud DSC provider and PAdES signatures embedded in the PDF; biometric approval on the phone apps; the platform console for verification.
 
 ## 3j. Dashboard figures and audit log
 

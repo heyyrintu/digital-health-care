@@ -45,6 +45,13 @@ const include = {
   consultationType: { select: { name: true, mode: true } },
   rescheduledTo: { select: { id: true } },
   bill: { select: { totalPaise: true, paidPaise: true, status: true } },
+  // The current signed version, for the front desk to print.
+  prescriptions: {
+    where: { status: { in: ['signed', 'void'] as ('signed' | 'void')[] } },
+    orderBy: { version: 'desc' },
+    take: 1,
+    select: { id: true, number: true, version: true, status: true },
+  },
 } as const;
 type AppointmentRow = Prisma.AppointmentGetPayload<{ include: typeof include }>;
 
@@ -477,6 +484,12 @@ export class AppointmentService {
       completedAt: r.completedAt?.toISOString() ?? null,
       createdAt: r.createdAt.toISOString(),
       bill: r.bill,
+      prescription: this.prescriptionOut(r.prescriptions[0]),
     };
+  }
+
+  private prescriptionOut(p: AppointmentRow['prescriptions'][number] | undefined) {
+    if (!p || !p.number || (p.status !== 'signed' && p.status !== 'void')) return null;
+    return { id: p.id, number: p.number, version: p.version, status: p.status };
   }
 }

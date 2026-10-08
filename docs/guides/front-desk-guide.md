@@ -20,6 +20,9 @@ To book, open the patient's page and choose **Book appointment** (or **Appointme
 
 On the **Queue**: **Reschedule** moves a booking to another slot (the old one shows as Rescheduled); **Cancel appointment** asks for the reason; **Mark no-show** appears once the slot time has passed.
 
+## Printing the prescription
+Once the doctor signs, the patient's card on the **Queue** shows **Print prescription** with its number (for example *Print prescription SG-00042*). It opens the signed PDF in a new tab; print it from there. If the doctor amends it, the button prints the newest signed version. If the doctor voids it, the button reads *Prescription … (void)* and opens the copy stamped VOID: do not hand that one over. You see only the number, never the prescription's contents, on the card.
+
 ## Billing
 - On the **Queue**, choose **Bill** on a patient who has arrived. Pick the consultation fee (or the follow-up fee, or none), add items from the price list with their quantity, and, if you give a discount, its reason (a discount always needs one). The total updates as you go; **Save bill**. Prices come from the clinic's fees and price list, so you never type an amount on the bill.
 - **Record payment:** choose Cash, UPI or Card, check the amount (it starts at the balance; a part payment is fine) and, for UPI or card, type the reference from the slip if you have it. Each payment gets a receipt number. Once a bill has a payment its lines and discount cannot change.

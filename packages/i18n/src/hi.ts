@@ -461,6 +461,8 @@ export const hi: Record<MessageKey, string> = {
   'rx.readOnly': 'पर्चा केवल इस विज़िट के डॉक्टर लिख सकते हैं, मरीज़ के चेक-इन के बाद।',
   'rx.saved': 'सेव हो गया',
   // Billing and counter payments (PRD §5.6).
+  'action.printPrescription': 'पर्चा {number} प्रिंट करें',
+  'action.printVoidPrescription': 'पर्चा {number} (रद्द)',
   'action.bill': 'बिल',
   'dashboard.collections': 'कलेक्शन',
   'billing.priceListTitle': 'रेट लिस्ट',

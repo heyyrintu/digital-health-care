@@ -458,6 +458,8 @@ export const en = {
     'Only the visit’s doctor can write the prescription, once the patient has checked in.',
   'rx.saved': 'Saved',
   // Billing and counter payments (PRD §5.6).
+  'action.printPrescription': 'Print prescription {number}',
+  'action.printVoidPrescription': 'Prescription {number} (void)',
   'action.bill': 'Bill',
   'dashboard.collections': 'Collections',
   'billing.priceListTitle': 'Price list',

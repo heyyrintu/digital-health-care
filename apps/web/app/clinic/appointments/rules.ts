@@ -55,3 +55,7 @@ export const canBill = (a: Appointment, role: string) =>
   ((role === 'front_desk' || role === 'doctor') &&
     ['checked_in', 'in_consultation', 'completed'].includes(a.status)) ||
   (role === 'clinic_admin' && a.bill !== null);
+
+/** Front desk and doctors print the visit's signed prescription (after voiding, the VOID copy). */
+export const canPrintPrescription = (a: Appointment, role: string) =>
+  (role === 'front_desk' || role === 'doctor') && a.prescription !== null;
