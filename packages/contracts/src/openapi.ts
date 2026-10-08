@@ -63,6 +63,14 @@ import {
   SafetySummary,
   SavePrescriptionBody,
   SaveTemplateBody,
+  AmendPrescriptionBody,
+  DoctorProfile,
+  PrescriptionCheck,
+  SaveDoctorProfileBody,
+  SetSigningPinBody,
+  SignPrescriptionBody,
+  VerifyPrescriptionBody,
+  VoidPrescriptionBody,
 } from './prescriptions';
 import {
   AcceptInviteBody,
@@ -136,6 +144,8 @@ interface Operation {
   response?: z.ZodType;
   /** Success status; defaults to 200. 204 has no body. */
   status?: 200 | 201 | 204;
+  /** The response is a PDF file instead of JSON. */
+  pdf?: boolean;
   /** For a 201 that a retry answers with 200 and the same body: what that 200 means. */
   replay?: string;
 }
@@ -645,6 +655,82 @@ const operations: Operation[] = [
   },
   {
     method: 'get',
+    path: '/appointments/{id}/prescription/preview',
+    operationId: 'previewPrescriptionPdf',
+    summary: 'The draft as a PDF marked PREVIEW, before signing (doctor)',
+    pathParams: ['id'],
+    pdf: true,
+  },
+  {
+    method: 'post',
+    path: '/appointments/{id}/prescription/sign',
+    operationId: 'signPrescription',
+    summary: 'Sign the draft with the signing PIN: re-checked, rendered, signed and locked',
+    pathParams: ['id'],
+    body: SignPrescriptionBody,
+    response: Prescription,
+  },
+  {
+    method: 'post',
+    path: '/appointments/{id}/prescription/amend',
+    operationId: 'amendPrescription',
+    summary: 'Start the next version of a signed prescription, with a reason (the visit’s doctor)',
+    pathParams: ['id'],
+    body: AmendPrescriptionBody,
+    response: Prescription,
+    status: 201,
+  },
+  {
+    method: 'post',
+    path: '/appointments/{id}/prescription/void',
+    operationId: 'voidPrescription',
+    summary: 'Void the signed prescription with a reason and the signing PIN',
+    pathParams: ['id'],
+    body: VoidPrescriptionBody,
+    response: Prescription,
+  },
+  {
+    method: 'get',
+    path: '/prescriptions/{id}/pdf',
+    operationId: 'getPrescriptionPdf',
+    summary: 'A signed version’s PDF (the copy marked VOID once voided); doctor or front desk',
+    pathParams: ['id'],
+    pdf: true,
+  },
+  {
+    method: 'post',
+    path: '/verify',
+    operationId: 'verifyPrescription',
+    summary: 'Check a prescription from its QR code: Genuine, Superseded or Void',
+    public: true,
+    body: VerifyPrescriptionBody,
+    response: PrescriptionCheck,
+  },
+  {
+    method: 'get',
+    path: '/doctor-profile',
+    operationId: 'getDoctorProfile',
+    summary: 'The signed-in doctor’s prescription pad and signing details',
+    response: DoctorProfile,
+  },
+  {
+    method: 'put',
+    path: '/doctor-profile',
+    operationId: 'saveDoctorProfile',
+    summary: 'Save registration, qualifications, prefix and paper size (doctor)',
+    body: SaveDoctorProfileBody,
+    response: DoctorProfile,
+  },
+  {
+    method: 'put',
+    path: '/doctor-profile/signing-pin',
+    operationId: 'setSigningPin',
+    summary: 'Set or change the signing PIN, confirmed with the account password',
+    body: SetSigningPinBody,
+    status: 204,
+  },
+  {
+    method: 'get',
     path: '/patients/{id}/last-prescription',
     operationId: 'getLastPrescription',
     summary: 'The patient’s most recent earlier prescription, for Repeat last (doctor)',
@@ -873,8 +959,12 @@ export function buildOpenApiDocument(options: { version: string; serverUrl?: str
           }
         : {}),
       responses: {
-        [String(status)]:
-          status === 204 || !op.response
+        [String(status)]: op.pdf
+          ? {
+              description: 'PDF',
+              content: { 'application/pdf': { schema: { type: 'string', format: 'binary' } } },
+            }
+          : status === 204 || !op.response
             ? { description: 'No content' }
             : {
                 description: status === 201 ? 'Created' : 'OK',

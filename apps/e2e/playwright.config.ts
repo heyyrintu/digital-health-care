@@ -1,4 +1,6 @@
 import { defineConfig, devices } from '@playwright/test';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 /**
  * Browser tests against the *built* API and web app (run `pnpm build` first), on their
@@ -44,6 +46,9 @@ export default defineConfig({
         FIELD_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'),
         WEB_BASE_URL: WEB_URL,
         OTP_DELIVERY: 'disabled',
+        // Prescriptions are signed with the test key and stored in a throwaway folder.
+        SIGNER: 'test_key',
+        FILE_STORE_DIR: join(tmpdir(), 'dhc-e2e-files'),
         // All browser traffic comes from one address here.
         SIGN_IN_RATE_LIMIT: '100000',
       },

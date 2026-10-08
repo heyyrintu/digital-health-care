@@ -62,6 +62,34 @@ describe('createApiClient', () => {
   });
 });
 
+describe('requestFile', () => {
+  it('returns the file, and API errors as ApiError', async () => {
+    const pdf = new Response(new Uint8Array([37, 80, 68, 70]), {
+      status: 200,
+      headers: { 'content-type': 'application/pdf' },
+    });
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(pdf)
+      .mockResolvedValueOnce(
+        json(404, { error: { code: 'NOT_FOUND', message: 'Not found.', requestId: 'r1' } }),
+      );
+    const client = createApiClient({
+      baseUrl: 'https://api.test/v1',
+      getAccessToken: () => 'tok',
+      fetch,
+    });
+    const blob = await client.requestFile('GET', '/prescriptions/x/pdf');
+    expect(new TextDecoder().decode(await blob.arrayBuffer())).toBe('%PDF');
+    const [, init] = fetch.mock.calls[0] as [string, RequestInit];
+    expect((init.headers as Record<string, string>).authorization).toBe('Bearer tok');
+    await expect(client.requestFile('GET', '/prescriptions/y/pdf')).rejects.toMatchObject({
+      status: 404,
+      code: 'NOT_FOUND',
+    });
+  });
+});
+
 describe('invite calls', () => {
   it('posts the token in the body, never in the URL', async () => {
     const fetch = vi.fn(async () =>

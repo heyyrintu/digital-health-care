@@ -68,8 +68,31 @@ export function createApiClient(options: ApiClientOptions) {
     return schema.parse(payload);
   }
 
+  /** A file response (a PDF); errors come back as the usual JSON error shape. */
+  async function requestFile(
+    method: 'GET' | 'POST',
+    path: string,
+    { body, signal }: { body?: unknown; signal?: AbortSignal } = {},
+  ): Promise<Blob> {
+    const headers: Record<string, string> = { accept: 'application/pdf, application/json' };
+    if (body !== undefined) headers['content-type'] = 'application/json';
+    const token = await options.getAccessToken?.();
+    if (token) headers.authorization = `Bearer ${token}`;
+    const response = await fetchImpl(buildUrl(baseUrl, path, undefined), {
+      method,
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal,
+    });
+    if (!response.ok) {
+      throw toApiError(response, await response.json().catch(() => undefined));
+    }
+    return response.blob();
+  }
+
   return {
     request,
+    requestFile,
     getHealth: (signal?: AbortSignal) =>
       request('GET', '/health', { schema: HealthResponse, signal }),
 
@@ -126,6 +149,9 @@ export function createApiClient(options: ApiClientOptions) {
         schema: NoContent,
       }),
 
+    /** Doctor: set or change the signing PIN, confirmed with the account password. */
+    setSigningPin: (password: string, pin: string) =>
+      request('PUT', '/doctor-profile/signing-pin', { schema: NoContent, body: { password, pin } }),
     /** Ends the session of the current access token. */
     logout: () => request('POST', '/auth/logout', { schema: NoContent }),
   };

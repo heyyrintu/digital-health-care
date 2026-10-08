@@ -163,11 +163,25 @@ enum DoseTiming {
   bedtime
 }
 
-/// Drafts only for now; signing, amendment and voiding arrive with the signing slice.
+/// A draft is edited until signed. A signed version is immutable: an amendment signs a new
+/// version and supersedes it; voiding withdraws it.
 enum PrescriptionStatus {
   draft
   signed
+  superseded
   void
+}
+
+/// Set by the platform team after checking the registration (PRD §9.1); only verified
+/// doctors can sign.
+enum DoctorVerification {
+  pending
+  verified
+}
+
+enum PaperSize {
+  a4
+  a5
 }
 
 /// Phase 1 bill states (PRD §5.6). Link sent, refund pending and refunded arrive with
@@ -236,6 +250,8 @@ model Organisation {
   payments               Payment[]
   receiptSettings        ReceiptSettings?
   safetyAlerts           SafetyAlert[]
+  doctorProfiles         DoctorProfile[]
+  verifications          PrescriptionVerification[]
 
   @@map("organisations")
 }
@@ -882,14 +898,90 @@ model Prescription {
   createdAt      DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt      DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  organisation Organisation       @relation(fields: [organisationId], references: [id])
-  appointment  Appointment        @relation(fields: [appointmentId], references: [id])
+  /// The version this one corrects, and why (an amendment).
+  amendsPrescriptionId String?    @unique @map("amends_prescription_id") @db.Uuid
+  amendmentReason      String?    @map("amendment_reason")
+  /// The doctor's prefix and a running number, given at the first signing; amendments keep it.
+  number               String?
+  signedAt             DateTime?  @map("signed_at") @db.Timestamptz(3)
+  /// Storage key of the signed PDF (never a public URL) and its SHA-256, hex.
+  pdfFileKey           String?    @map("pdf_file_key")
+  pdfSha256            String?    @map("pdf_sha256")
+  /// Layout version of the PDF, so an old prescription can be explained later.
+  templateVersion      String?    @map("template_version")
+  paperSize            PaperSize? @map("paper_size")
+  /// `test_key` (development and staging) or `cloud_dsc` (ADR 0008).
+  signatureMethod      String?    @map("signature_method")
+  /// The signature over the PDF's SHA-256, base64, and the certificate that made it.
+  signature            String?
+  signerCertificate    String?    @map("signer_certificate")
+  /// Printed in the QR; the public lookup stores only its hash.
+  verificationCode     String?    @unique @map("verification_code")
+  supersededAt         DateTime?  @map("superseded_at") @db.Timestamptz(3)
+  voidedAt             DateTime?  @map("voided_at") @db.Timestamptz(3)
+  voidedByUserId       String?    @map("voided_by_user_id") @db.Uuid
+  voidReason           String?    @map("void_reason")
+  /// A copy of the signed PDF marked VOID; the signed file itself is kept unchanged.
+  voidPdfFileKey       String?    @map("void_pdf_file_key")
+
+  organisation Organisation              @relation(fields: [organisationId], references: [id])
+  appointment  Appointment               @relation(fields: [appointmentId], references: [id])
+  amends       Prescription?             @relation("Amendment", fields: [amendsPrescriptionId], references: [id], onDelete: Restrict)
+  amendedBy    Prescription?             @relation("Amendment")
   items        PrescriptionItem[]
   safetyAlerts SafetyAlert[]
+  verification PrescriptionVerification?
 
   @@unique([appointmentId, version])
+  @@unique([organisationId, number, version])
   @@index([patientId])
   @@map("prescriptions")
+}
+
+/// Public lookup for the QR on a signed prescription (PRD §9.4). Readable by the sign-in
+/// role so the verification page works without a session; holds no clinical data.
+model PrescriptionVerification {
+  codeHash       String   @id @map("code_hash")
+  organisationId String   @map("organisation_id") @db.Uuid
+  prescriptionId String   @unique @map("prescription_id") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+  prescription Prescription @relation(fields: [prescriptionId], references: [id])
+
+  @@map("prescription_verifications")
+}
+
+/// A doctor's details for the prescription pad and signing (PRD §9.1), per organisation.
+model DoctorProfile {
+  id                 String             @id @default(uuid()) @db.Uuid
+  organisationId     String             @map("organisation_id") @db.Uuid
+  userId             String             @map("user_id") @db.Uuid
+  registrationNumber String?            @map("registration_number")
+  council            String?
+  qualifications     String?
+  specialty          String?
+  /// Starts the doctor's prescription numbers, e.g. SG-00042. Unique in the organisation.
+  rxPrefix           String?            @map("rx_prefix")
+  /// The last number given; the next signing takes the one after.
+  rxSequence         Int                @default(0) @map("rx_sequence")
+  paperSize          PaperSize          @default(a5) @map("paper_size")
+  verification       DoctorVerification @default(pending)
+  verifiedAt         DateTime?          @map("verified_at") @db.Timestamptz(3)
+  /// The platform operator who checked the registration, and the support ticket.
+  verifiedBy         String?            @map("verified_by")
+  /// scrypt hash of the PIN that approves each signature on the web.
+  signingPinHash     String?            @map("signing_pin_hash")
+  pinFailedCount     Int                @default(0) @map("pin_failed_count")
+  pinLockedUntil     DateTime?          @map("pin_locked_until") @db.Timestamptz(3)
+  createdAt          DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+
+  @@unique([organisationId, userId])
+  @@unique([organisationId, rxPrefix])
+  @@map("doctor_profiles")
 }
 
 /// One medicine line. Name and composition are snapshots, so the printed prescription

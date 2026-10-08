@@ -161,7 +161,7 @@ Implemented in Phase 1 (`apps/api/src/modules/clinical`). Prescriptions, the saf
 
 ## 3f. Prescription builder
 
-Implemented in Phase 1 (`apps/api/src/modules/prescribing`), with the safety engine (§3g). Signing, the PDF and versions follow in the next slice.
+Implemented in Phase 1 (`apps/api/src/modules/prescribing`), with the safety engine (§3g) and signing (§3i).
 
 | Action | Endpoint | Who |
 |---|---|---|
@@ -174,7 +174,7 @@ Implemented in Phase 1 (`apps/api/src/modules/prescribing`), with the safety eng
 - **Medicine master:** the platform's reference list (`organisation_id` null; the licensed drug database in production, a synthetic sample of generic products in development and tests) plus medicines the clinic adds. Row-level security shows each clinic the reference list and its own; separate write policies let it insert and update only its own, so a reference medicine can never be changed or taken over. Inactive medicines are left out of search and rejected on save (400).
 - **Lines:** each has a client-chosen `id` (a random UUID, so edits keep it), `medicineId` (null for free text, shown as "not in the medicine list"), a snapshot of `name`, `composition` and `form`, `route`, `timing`, `steps[{dose, frequency, durationValue, durationUnit}]` (more than one step is a tapering course), `quantity`, `instructions` and `remarks`. Medicine IDs must be active and visible to the clinic (400 otherwise); line IDs must be unique; a step with a duration needs its unit.
 - **Remarks:** unless `remarksEdited` is true, the server writes them from the steps, timing and route in the prescription's `language` (English or Hindi) with `dosageRemarks` from `@dhc/domain`, which the web app also uses for the live preview. Frequencies understood: slot patterns (`1-0-1`, with an optional fourth bedtime slot; when any amount is not 1, such as `2-0-2` or `½-0-½`, each slot is written with its own amount — "2 tablets after breakfast and 2 tablets after dinner"; a measured dose such as `500 mg` is repeated, "2 × 500 mg"), `OD`, `BD`, `TDS`, `QID`, `HS`, `SOS`/`PRN`, `STAT`, weekly, monthly and alternate days; anything else is printed as written.
-- **Saving** follows the notes rules: only the visit's doctor, once the patient has checked in, with a matching `revision` (409 `revision: stale` otherwise); a signed prescription or locked consultation gives 409. A save replaces the draft's lines. `defaultLanguage` is the patient's language.
+- **Saving** follows the notes rules: only the visit's doctor, once the patient has checked in, with a matching `revision` (409 `revision: stale` otherwise); a signed prescription or locked consultation gives 409 `PRESCRIPTION_LOCKED` (an amendment draft stays writable). A save replaces the draft's lines. `defaultLanguage` is the patient's language. The view also returns `signingMissing` (what stops the visit's doctor signing apart from the safety alerts: `profile`, `verification`, `pin`, `service`), `canAmend` and `versions` (every version, newest first).
 - **Repeat last** returns the patient's most recent prescription with lines (any doctor in the organisation) from a visit that started before `before` (the visit being written; 404 if it is not this patient's), or from any visit when `before` is omitted. Lines come without IDs; the client adds new ones.
 - **Audit:** `prescription.viewed` and `prescription.last_viewed` record entity IDs only (the appointment, or the patient); `prescription.saved` adds the revision and line count; `prescription_template.saved|deleted` record the template ID, with the line count on `saved`. Never medicine names or remarks.
 
@@ -198,7 +198,7 @@ The rules are SR-01 to SR-22 in `docs/safety/safety-rule-catalogue.md`, implemen
   - `acknowledge` works only on a warning; it needs a reason when `reasonRequired` is set.
   - `override` works only on a block the drug data allows overriding (`overridable`), and always needs a reason.
   - Anything else is 400. An alert that no longer fires is 409 `key: resolved`.
-  - `openBlocks` counts blocks not overridden; signing will stay disabled while it is above 0. `openWarnings` counts warnings not acknowledged.
+  - `openBlocks` counts blocks not overridden and `openWarnings` warnings not acknowledged; signing is refused while either is above 0 (§3i).
 - **Safety log** (`safety_alerts`):
   - One row per prescription and alert key, with first and last shown times and the drug data version.
   - When an alert stops firing it is resolved, and recorded as `changed` if the doctor had not answered it. If it fires again it reopens.
@@ -230,6 +230,33 @@ Implemented in Phase 1 (`apps/api/src/modules/billing`). Cashfree payment links,
 - **Queue cards** carry `bill: {totalPaise, paidPaise, status} | null`.
 - **Audit:** `price_list.created` (item ID and price) and `price_list.updated` (item ID, the fields changed and the new price when repriced), `bill.saved` (bill and visit IDs, revision, line count, total and discount), `payment.recorded` (bill ID, mode, amount, receipt number) and `receipt.viewed` (payment ID, receipt number). Never patient names.
 
+## 3i. Signing, amendments and the QR check
+
+Implemented in Phase 1 (`prescribing/signing.ts`, `doctors/`, PRD §6.6, §9.1, §9.4).
+
+| Action | Endpoint | Who |
+|---|---|---|
+| Prescription pad | `GET /doctor-profile`; `PUT /doctor-profile` `{registrationNumber, council, qualifications, specialty, rxPrefix, paperSize}` | Doctor (own) |
+| Signing PIN | `PUT /doctor-profile/signing-pin` `{password, pin}` → 204 | Doctor (own) |
+| Preview | `GET /appointments/{id}/prescription/preview` → PDF marked PREVIEW (no number, signature or QR) | Doctor |
+| Sign | `POST /appointments/{id}/prescription/sign` `{revision, pin}` → the signed prescription | The visit's doctor |
+| Amend | `POST /appointments/{id}/prescription/amend` `{reason}` → 201, the new draft version | The visit's doctor |
+| Void | `POST /appointments/{id}/prescription/void` `{reason, pin}` → the voided prescription | The visit's doctor |
+| PDF | `GET /prescriptions/{id}/pdf` → the signed PDF, or after voiding the copy stamped VOID | Doctor, front desk |
+| QR check | `POST /verify` `{code}` → `{status: genuine\|superseded\|void, number, version, latestVersion, signedAt, supersededAt, voidedAt, signatureMethod, doctor, clinicName, patient: {initials, ageYears, gender}, medicines}` | Public (30 per minute per address) |
+
+- **Prescription pad:** registration number, council and qualifications are required, and the prefix (1–8 letters or digits, stored in capitals) is unique in the organisation (409 `rxPrefix: taken`). The platform team verifies the registration with the support command `support-verify-doctor` (runbook `doctor-verification.md`); changing the registration number or council sends the profile back to pending. Paper size is A5 or A4.
+- **PIN:** six digits, set with the account password (400 `password: wrong`). It is hashed with scrypt after a server-keyed HMAC, so a database copy alone cannot be guessed offline. Five wrong PINs in a row pause signing and voiding for 15 minutes (429 `pin: locked`); a wrong PIN is 400 `pin: wrong`; no PIN is 422 `pin: unset`. PIN-checked requests share the sign-in rate limit per address.
+- **Signing**, in order: the PIN (in its own transaction, so a wrong attempt counts); then under the visit lock the draft must have lines and the `revision` on screen (409 `revision: stale`); the doctor must be verified (403 `DOCTOR_NOT_VERIFIED`) with a complete pad (422 `profile: incomplete`); the safety check runs again and any open block or unanswered warning is 422 `SAFETY_BLOCK` with the counts. Then the number (the doctor's prefix and next running number, e.g. `SG-00042`; an amendment keeps its number), a random 24-character verification code, the PDF, its SHA-256 signed by the signer, and the file stored by key. The visit record (notes and vitals) locks. Without a signer the server answers 503 `SIGNING_UNAVAILABLE`.
+- **Signer:** behind an adapter (ADR 0008). Until the cloud Class 3 DSC provider is chosen, `SIGNER=test_key` signs with an Ed25519 key derived from the server secret; the PDF, the record (`signatureMethod: test_key`) and the QR page all say it is not legally valid, and the setting is refused in production. The default is `disabled`.
+- **PDF** (template `rx-1`, pdfkit): A5 or A4, black and white, labels in the prescription's language with Hindi shaped properly. It prints the doctor (name, qualifications, specialty, registration and council), the clinic, the patient (name, age, gender, UHID), the date, number and version, the consultation mode, the amendment reason, vitals, complaints, diagnoses, allergies, each medicine (name, generic in capitals, every step's dose, frequency and duration, remarks, instructions, quantity), tests, advice, follow-up, the signature block with the certificate, the QR with its link, and a disclaimer. Private notes are never printed. The same input renders the same bytes. Files are stored under a key, never a public URL (`FILE_STORE_DIR` until object storage), written once and never overwritten; a file that no longer matches its hash is refused.
+- **Amendments:** a new draft version copying the lines (new line IDs), with the reason, writable after the visit record has locked. The signed version stays genuine until the amendment is signed, which marks it superseded.
+- **Voiding:** only the newest signed version, with a reason and the PIN; not while an amendment draft is open (409). The signed file is kept unchanged; a copy with a notice page and every page stamped VOID is what the PDF endpoint returns from then on.
+- **Immutability:** database triggers refuse any change to a signed version except becoming superseded or void (which touch only those fields), and any change to its lines or safety log. A locked visit record stays locked.
+- **QR check:** the code goes in the body, not the URL, so it stays out of logs; it is looked up by its hash. The answer shows initials, never the patient's name.
+- **Audit:** `prescription.previewed`, `prescription.signed` (version, number, PDF hash, signature method, template and drug data versions), `prescription.amendment_started`, `prescription.voided`, `prescription.pdf_viewed`, `doctor.profile_saved`, `doctor.signing_pin_set`, `doctor.signing_pin_locked`, `support.doctor.verified` (ticket and operator). Never medicine names or reasons beyond what is listed.
+- **Not built yet:** delivery to the patient (app, WhatsApp, SMS link, email, ABDM) and notifying the patient of amendments and voiding (with messaging); the cloud DSC provider and PAdES signatures embedded in the PDF; biometric approval on the phone apps; a front-desk print button (the endpoint is ready); the platform console for verification.
+
 ## 4. Endpoint catalogue (by module)
 
 | Module | Main resources and actions |
@@ -239,7 +266,7 @@ Implemented in Phase 1 (`apps/api/src/modules/billing`). Cashfree payment links,
 | scheduling | `/availability/versions` (built), `/availability/exceptions` (built), `/slots?doctorId&clinicId&consultationTypeId&date&channel` (built), `/appointments` (book, walk-in, list, confirm, check-in, start, complete, cancel, no-show, reschedule; built), `/queue?date` (built), `/display-screens` (built), `/display/board` (built) |
 | patients | `/patients` (search by phone, name or UHID, filter by tag; register; built), `/patients/{id}` (demographics and family, each view audited; edit; built), `/patients/duplicate-check` (built), `/patients/{id}/tags` (built), `/patients/{id}/chart` and `/patients/{id}/allergies\|conditions\|medications` (built), `/patients/{id}/consents`, `/patients/merge-requests` |
 | clinical | `/appointments/{id}/consultation` (built), `/appointments/{id}/vitals` (built), `/scribe/sessions`, `/assessments/forms`, `/assessments`, `/patients/{id}/ask-ai` |
-| prescribing | `/medicines` (search; built), `/prescription-templates` (built), `/appointments/{id}/prescription` (draft and lines; built), `/patients/{id}/last-prescription` (built), `/appointments/{id}/prescription/safety-actions` (built), `/prescriptions` (`/sign`, `/amend`, `/void`, `/pdf`), `/verify/{code}` (public) |
+| prescribing | `/medicines` (search; built), `/prescription-templates` (built), `/appointments/{id}/prescription` (draft and lines; built), `/patients/{id}/last-prescription` (built), `/appointments/{id}/prescription/safety-actions` (built), `/appointments/{id}/prescription/preview\|sign\|amend\|void` (built), `/prescriptions/{id}/pdf` (built), `/verify` (public; built), `/doctor-profile` (built) |
 | orders | `/test-orders`, `/test-orders/{id}/results`, `/referrals`, `/attachments` |
 | billing | `/price-list` (built), `/appointments/{id}/bill` (built), `/bills/{id}/payments` (counter payments; built), `/payments/{id}/receipt` (built), `/collections` (built), `/bills/{id}/payment-link`, `/bills/{id}/checkout-session`, `/refunds`, `/reports/reconciliation` |
 | messaging | `/message-templates`, `/notifications`, `/inbox/threads`, `/inbox/threads/{id}/reply`, `/opt-ins`, `/delivery-log` |
@@ -259,6 +286,7 @@ Implemented in Phase 1 (`apps/api/src/modules/billing`). Cashfree payment links,
 | `SCRIBE_DRAFT_PENDING` | Signing with unaccepted AI sections | Jump to draft sections |
 | `DOCTOR_NOT_VERIFIED` | Unverified doctor tries to sign | Show onboarding status |
 | `PRESCRIPTION_LOCKED` | Edit after signing | Offer amendment |
+| `SIGNING_UNAVAILABLE` | No signing service on this server (503) | Explain; signing waits |
 | `PAYMENT_PENDING` | Online consult without confirmed payment | Resume Cashfree checkout |
 | `CONSENT_REQUIRED` | Scribe or ABDM action without consent | Start consent flow |
 
