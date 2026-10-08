@@ -179,6 +179,11 @@ enum DoctorVerification {
   verified
 }
 
+enum MedicineDecision {
+  approved
+  rejected
+}
+
 enum PaperSize {
   a4
   a5
@@ -251,6 +256,7 @@ model Organisation {
   receiptSettings        ReceiptSettings?
   safetyAlerts           SafetyAlert[]
   doctorProfiles         DoctorProfile[]
+  medicineRequests       MedicineRequest[]
   verifications          PrescriptionVerification[]
 
   @@map("organisations")
@@ -848,6 +854,30 @@ model DrugDatabase {
 }
 
 /// A molecule in a medicine, with its strength when known (null for creams and the like).
+/// The clinic admin's decision on a medicine doctors typed as free text (PRD §9.2): added
+/// to the master or mapped to an existing medicine, or rejected. The queue itself is worked
+/// out from the prescriptions; names without a decision are waiting.
+model MedicineRequest {
+  id              String           @id @default(uuid()) @db.Uuid
+  organisationId  String           @map("organisation_id") @db.Uuid
+  /// Lower case with single spaces: the same medicine typed differently is one entry.
+  nameKey         String           @map("name_key")
+  name            String
+  decision        MedicineDecision
+  /// The medicine it was added as or mapped to (approved only).
+  medicineId      String?          @map("medicine_id") @db.Uuid
+  reason          String?
+  decidedByUserId String           @map("decided_by_user_id") @db.Uuid
+  decidedAt       DateTime         @default(now()) @map("decided_at") @db.Timestamptz(3)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+  medicine     Medicine?    @relation(fields: [medicineId], references: [id], onDelete: Restrict)
+
+  @@unique([organisationId, nameKey])
+  @@index([medicineId])
+  @@map("medicine_requests")
+}
+
 model MedicineIngredient {
   medicineId String       @map("medicine_id") @db.Uuid
   moleculeId String       @map("molecule_id") @db.Uuid
@@ -878,6 +908,7 @@ model Medicine {
 
   organisation Organisation?        @relation(fields: [organisationId], references: [id], onDelete: Restrict)
   ingredients  MedicineIngredient[]
+  requests     MedicineRequest[]
 
   @@index([organisationId])
   @@map("medicines")
