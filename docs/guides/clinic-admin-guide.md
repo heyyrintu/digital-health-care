@@ -5,7 +5,7 @@
 - [ ] **Clinics and consultation types:** on the dashboard, under **Clinics and consultations**, add each place the doctor consults (name and address), then each consultation type with its mode (in person, video or audio call), minutes per slot, fee and optional follow-up fee. Tick *Patients pay when booking* for online consults. Deactivate a clinic or type you stop using; past bookings keep it.
 - [ ] **Doctor schedules:** open **Availability**, choose the doctor, clinic and consultation type, and set the weekly sessions (see the Doctor Guide). Add clinic holidays there too (type *Clinic holiday*); a holiday closes the clinic for every doctor. Use **Slots on a day** to check what patients will see.
 - [ ] Booking rules: horizon and same-day cutoff and how many extra patients staff may overbook per doctor per day (under **Clinics and consultations → Booking rules**; defaults 30 days, 60 minutes and 2), auto/manual confirm, cancel window, max bookings, no-show limit, follow-up window and fee.
-- [ ] Price list and consultation fees; pay-at-booking for online consults (required) and in-person (optional).
+- [ ] **Price list:** on the dashboard, under **Price list**, add each item billed besides the consultation (for example *Dressing*, ₹150). **Change price** affects new bills only; bills already made keep their price. Deactivate an item you stop charging for. Pay-at-booking for online consults (required) and in-person (optional) is planned with Cashfree in phase 3.
 - [ ] **Cashfree:** connect the clinic's Cashfree merchant account, choose payment methods, link expiry, test a payment.
 - [ ] **UHID numbering:** under **Clinic settings**, set the prefix (for example `EK`) and the next number (for example 10001); the next patient registered gets EK10001. If you import patients, they keep their existing UHIDs and new numbers skip any already in use.
 - [ ] **Tags:** choose **Add the default tags** (Emergency, Priority, 2nd opinion, VIP, Insurance, Complaint), then add your own with a colour. Tick *Show these patients first in the queue* for urgent tags. Archive a tag you no longer use; it stays on the patients who have it.
@@ -16,7 +16,7 @@
 - [ ] Import from the previous system (dry run first).
 
 ## Daily and weekly
-- Collections and outstanding dues; reconciliation mismatches from Cashfree.
+- **Collections** (in the menu): a day's payments by mode (cash, UPI, card) and by doctor, each with its receipt, and the visits still due. Reconciliation mismatches from Cashfree come with online payments.
 - Delivery log for failed messages.
 - Data-rights requests and merge requests.
 - Free-text medicines waiting to be added to the master.

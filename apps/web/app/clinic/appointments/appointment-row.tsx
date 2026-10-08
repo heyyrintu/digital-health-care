@@ -2,11 +2,12 @@
 
 import type { Appointment, AppointmentAction } from '@dhc/contracts';
 import { Button, buttonVariants, cn, Input, Label, ModeTag, StatusChip } from '@dhc/ui-web';
+import { formatInr } from '@dhc/domain';
 import Link from 'next/link';
 import { useState, type FormEvent } from 'react';
 import { AgeGender, TagChip } from '../patient-bits';
 import { useSession } from '../session-provider';
-import { actionsFor, canConsult, canRecordVitals, canReschedule } from './rules';
+import { actionsFor, canBill, canConsult, canRecordVitals, canReschedule } from './rules';
 
 const minutesSince = (iso: string | null, now: Date) =>
   iso ? Math.max(0, Math.floor((now.getTime() - Date.parse(iso)) / 60_000)) : 0;
@@ -30,7 +31,7 @@ export function AppointmentRow({
   busy: boolean;
   onAct(a: Appointment, action: AppointmentAction, reason?: string): Promise<void>;
 }) {
-  const { t } = useSession();
+  const { locale, t } = useSession();
   const [cancelling, setCancelling] = useState(false);
   const actions = actionsFor(a, me, today, now);
 
@@ -110,6 +111,23 @@ export function AppointmentRow({
               {t('queue.awaiting')}
             </span>
           )}
+          {a.bill && (
+            <span
+              data-testid="bill-chip"
+              className={cn(
+                pill,
+                'tabular',
+                a.bill.status === 'paid'
+                  ? 'bg-success-soft text-success'
+                  : 'bg-warning-soft text-warning-foreground',
+              )}
+            >
+              {t('billing.chip', {
+                amount: formatInr(a.bill.totalPaise, locale),
+                status: t(`billing.status.${a.bill.status}`),
+              })}
+            </span>
+          )}
           {a.overbook && (
             <span className={cn(pill, 'bg-warning-soft text-warning-foreground')}>
               {t('appointments.overbookBadge')}
@@ -172,6 +190,14 @@ export function AppointmentRow({
             href={`/clinic/appointments/${a.id}/vitals`}
           >
             {t('action.vitals')}
+          </Link>
+        )}
+        {canBill(a, me.role) && (
+          <Link
+            className={buttonVariants({ variant: 'outline', size: 'sm', className: small })}
+            href={`/clinic/appointments/${a.id}/bill`}
+          >
+            {t('action.bill')}
           </Link>
         )}
         {canReschedule(a, me.role) && (

@@ -35,6 +35,20 @@ import {
   VitalsBody,
   VitalsResponse,
 } from './consultations';
+import {
+  Bill,
+  BillView,
+  CollectionsQuery,
+  CollectionsReport,
+  CreatePriceListItemBody,
+  Payment,
+  PriceList,
+  PriceListItem,
+  Receipt,
+  RecordPaymentBody,
+  SaveBillBody,
+  UpdatePriceListItemBody,
+} from './billing';
 import { ErrorResponse } from './errors';
 import {
   LastPrescription,
@@ -132,6 +146,8 @@ interface Operation {
   status?: 200 | 201 | 204;
   /** The response is a PDF file instead of JSON. */
   pdf?: boolean;
+  /** For a 201 that a retry answers with 200 and the same body: what that 200 means. */
+  replay?: string;
 }
 
 /** Every endpoint, in one list. Field detail always comes from the Zod schemas. */
@@ -748,6 +764,77 @@ const operations: Operation[] = [
   },
   {
     method: 'get',
+    path: '/price-list',
+    operationId: 'listPriceList',
+    summary: 'The clinic’s price list, active and inactive (staff)',
+    response: PriceList,
+  },
+  {
+    method: 'post',
+    path: '/price-list',
+    operationId: 'createPriceListItem',
+    summary: 'Add a chargeable item (clinic admin)',
+    body: CreatePriceListItemBody,
+    response: PriceListItem,
+    status: 201,
+  },
+  {
+    method: 'patch',
+    path: '/price-list/{id}',
+    operationId: 'updatePriceListItem',
+    summary: 'Rename, reprice or deactivate an item; bills keep the old price (clinic admin)',
+    pathParams: ['id'],
+    body: UpdatePriceListItemBody,
+    response: PriceListItem,
+  },
+  {
+    method: 'get',
+    path: '/appointments/{id}/bill',
+    operationId: 'getBill',
+    summary: 'A visit’s bill with its payments, and the fees it can use (staff)',
+    pathParams: ['id'],
+    response: BillView,
+  },
+  {
+    method: 'put',
+    path: '/appointments/{id}/bill',
+    operationId: 'saveBill',
+    summary:
+      'Create or replace the visit’s bill; the server prices every line; fixed after the first payment (front desk, doctor)',
+    pathParams: ['id'],
+    body: SaveBillBody,
+    response: Bill,
+  },
+  {
+    method: 'post',
+    path: '/bills/{id}/payments',
+    operationId: 'recordPayment',
+    summary:
+      'Record a counter payment (cash, UPI, card) with its receipt number; repeating the same payment ID returns it (front desk, doctor)',
+    pathParams: ['id'],
+    body: RecordPaymentBody,
+    response: Payment,
+    status: 201,
+    replay: 'The payment was already recorded under this ID',
+  },
+  {
+    method: 'get',
+    path: '/payments/{id}/receipt',
+    operationId: 'getReceipt',
+    summary: 'A payment’s receipt, for printing (staff)',
+    pathParams: ['id'],
+    response: Receipt,
+  },
+  {
+    method: 'get',
+    path: '/collections',
+    operationId: 'getCollections',
+    summary: 'A day’s collections by mode and doctor, with the visits still due (staff)',
+    query: CollectionsQuery,
+    response: CollectionsReport,
+  },
+  {
+    method: 'get',
     path: '/queue',
     operationId: 'getQueue',
     summary: 'A day’s queue grouped by tab: My OPD, Booked, Completed, Closed (staff)',
@@ -883,6 +970,14 @@ export function buildOpenApiDocument(options: { version: string; serverUrl?: str
                 description: status === 201 ? 'Created' : 'OK',
                 content: { 'application/json': { schema: toSchema(op.response) } },
               },
+        ...(op.replay && op.response
+          ? {
+              '200': {
+                description: op.replay,
+                content: { 'application/json': { schema: toSchema(op.response) } },
+              },
+            }
+          : {}),
         default: errorResponse,
       },
     };
