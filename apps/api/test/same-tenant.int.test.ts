@@ -361,4 +361,75 @@ describe('a clinic B row cannot point at a clinic A row', () => {
       }),
     ).rejects.toThrow(MISMATCH);
   });
+
+  it('a referenced row keeps its organisation while anything points at it', async () => {
+    const KEEPS = /is still referenced by \w+\.\w+; it keeps its organisation/;
+    const orgA = clinics.a.org.id;
+    const orgB = clinics.b.org.id;
+    // One child per parent table, all in clinic B.
+    await h.owner.displayScreen.create({
+      data: {
+        organisationId: orgB,
+        clinicId: b.clinicId,
+        label: 'Lobby',
+        tokenHash: randomUUID(),
+        createdByUserId: doctorB,
+      },
+    });
+    await h.owner.patientTag.create({
+      data: {
+        organisationId: orgB,
+        patientId: b.patientId,
+        tagId: b.tagId,
+        addedByUserId: doctorB,
+      },
+    });
+    await h.owner.appointmentStatusHistory.create({
+      data: {
+        organisationId: orgB,
+        appointmentId: b.appointmentId,
+        toStatus: 'checked_in',
+        actorUserId: doctorB,
+        at: new Date(),
+      },
+    });
+    await h.owner.prescriptionItem.create({
+      data: {
+        id: randomUUID(),
+        organisationId: orgB,
+        prescriptionId: b.prescriptionId,
+        medicineId: b.medicineId,
+        name: 'X',
+        steps: [],
+        remarks: '',
+        sortOrder: 0,
+      },
+    });
+    const move = { organisationId: orgA };
+    // Even the owner role cannot move them to clinic A and strand the children in B.
+    await expect(h.owner.clinic.update({ where: { id: b.clinicId }, data: move })).rejects.toThrow(
+      KEEPS,
+    );
+    await expect(
+      h.owner.consultationType.update({ where: { id: b.typeId }, data: move }),
+    ).rejects.toThrow(KEEPS);
+    await expect(
+      h.owner.patient.update({ where: { id: b.patientId }, data: move }),
+    ).rejects.toThrow(KEEPS);
+    await expect(h.owner.tag.update({ where: { id: b.tagId }, data: move })).rejects.toThrow(KEEPS);
+    // A visit also points at its own clinic, patient and type, which stay in B; either
+    // refusal will do (triggers fire in name order).
+    await expect(
+      h.owner.appointment.update({ where: { id: b.appointmentId }, data: move }),
+    ).rejects.toThrow(new RegExp(`${KEEPS.source}|${MISMATCH.source}`));
+    await expect(
+      h.owner.medicine.update({ where: { id: b.medicineId }, data: move }),
+    ).rejects.toThrow(KEEPS);
+
+    // A row nothing points at can still move.
+    const spare = await h.owner.clinic.create({ data: { organisationId: orgB, name: 'Spare' } });
+    await expect(
+      h.owner.clinic.update({ where: { id: spare.id }, data: move }),
+    ).resolves.toMatchObject(move);
+  });
 });

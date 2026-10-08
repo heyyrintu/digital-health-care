@@ -112,3 +112,58 @@ CREATE TRIGGER consultations_patient_same_tenant
 CREATE TRIGGER prescription_items_medicine_same_tenant
   BEFORE INSERT OR UPDATE OF organisation_id, medicine_id ON prescription_items
   FOR EACH ROW EXECUTE FUNCTION same_tenant_reference('medicines', 'medicine_id', 'shared');
+
+-- The other side of the same rule: a referenced row keeps its organisation while anything
+-- still points at it, so moving a clinic, patient or visit cannot leave its children in
+-- the old one. (Like appointments_keep_prescriptions in the prescriptions migration; a row
+-- nothing references may still move, where row-level security allows.)
+-- Trigger arguments are (child table, child column) pairs that reference this table's id.
+CREATE FUNCTION same_tenant_keep_children() RETURNS trigger LANGUAGE plpgsql
+  SET search_path = pg_catalog, public, pg_temp AS $$
+DECLARE
+  i int := 0;
+  found boolean;
+BEGIN
+  IF NEW.organisation_id IS NOT DISTINCT FROM OLD.organisation_id THEN
+    RETURN NEW;
+  END IF;
+  WHILE i < TG_NARGS LOOP
+    EXECUTE format('SELECT EXISTS (SELECT 1 FROM public.%I c WHERE c.%I = $1)',
+      TG_ARGV[i], TG_ARGV[i + 1]) INTO found USING OLD.id;
+    IF found THEN
+      RAISE EXCEPTION '% row is still referenced by %.%; it keeps its organisation',
+        TG_TABLE_NAME, TG_ARGV[i], TG_ARGV[i + 1] USING ERRCODE = '23514';
+    END IF;
+    i := i + 2;
+  END LOOP;
+  RETURN NEW;
+END $$;
+
+CREATE TRIGGER patients_keep_children
+  BEFORE UPDATE OF organisation_id ON patients
+  FOR EACH ROW EXECUTE FUNCTION same_tenant_keep_children(
+    'patients', 'guardian_patient_id', 'patient_tags', 'patient_id',
+    'appointments', 'patient_id', 'allergies', 'patient_id',
+    'medical_conditions', 'patient_id', 'current_medications', 'patient_id',
+    'vitals', 'patient_id', 'consultations', 'patient_id', 'prescriptions', 'patient_id');
+CREATE TRIGGER tags_keep_children
+  BEFORE UPDATE OF organisation_id ON tags
+  FOR EACH ROW EXECUTE FUNCTION same_tenant_keep_children('patient_tags', 'tag_id');
+CREATE TRIGGER clinics_keep_children
+  BEFORE UPDATE OF organisation_id ON clinics
+  FOR EACH ROW EXECUTE FUNCTION same_tenant_keep_children(
+    'availability_versions', 'clinic_id', 'availability_exceptions', 'clinic_id',
+    'appointments', 'clinic_id', 'display_screens', 'clinic_id');
+CREATE TRIGGER consultation_types_keep_children
+  BEFORE UPDATE OF organisation_id ON consultation_types
+  FOR EACH ROW EXECUTE FUNCTION same_tenant_keep_children(
+    'availability_versions', 'consultation_type_id',
+    'availability_exceptions', 'consultation_type_id', 'appointments', 'consultation_type_id');
+CREATE TRIGGER appointments_keep_children
+  BEFORE UPDATE OF organisation_id ON appointments
+  FOR EACH ROW EXECUTE FUNCTION same_tenant_keep_children(
+    'appointments', 'rescheduled_from_id', 'appointment_status_history', 'appointment_id',
+    'vitals', 'appointment_id', 'consultations', 'appointment_id');
+CREATE TRIGGER medicines_keep_children
+  BEFORE UPDATE OF organisation_id ON medicines
+  FOR EACH ROW EXECUTE FUNCTION same_tenant_keep_children('prescription_items', 'medicine_id');
