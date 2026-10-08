@@ -102,6 +102,8 @@ export function PriceListCard() {
                   type="button"
                   variant="outline"
                   disabled={busy}
+                  aria-expanded={repricing === item.id}
+                  aria-controls={`reprice-form-${item.id}`}
                   onClick={() => setRepricing(repricing === item.id ? null : item.id)}
                 >
                   {t('billing.reprice')}
@@ -117,6 +119,7 @@ export function PriceListCard() {
               </span>
               {repricing === item.id && (
                 <form
+                  id={`reprice-form-${item.id}`}
                   className="flex w-full flex-wrap items-end gap-3"
                   onSubmit={(e) => {
                     e.preventDefault();
