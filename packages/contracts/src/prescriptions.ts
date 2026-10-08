@@ -89,6 +89,57 @@ export type TemplateItem = z.infer<typeof TemplateItem>;
 export const PrescriptionItem = z.object({ id: z.uuid(), ...lineFields });
 export type PrescriptionItem = z.infer<typeof PrescriptionItem>;
 
+// ---- Safety engine (PRD §6.5) ---------------------------------------------------------
+
+/** One alert from the safety engine, with what the doctor has done about it. */
+export const SafetyAlert = z.object({
+  /** Rule, line and subject: the same problem keeps its key, a different one gets a new key. */
+  key: z.string(),
+  /** A rule from docs/safety/safety-rule-catalogue.md, e.g. `SR-05`. */
+  ruleId: z.string().regex(/^SR-\d{2}$/),
+  severity: z.enum(['block', 'warn', 'info']),
+  /** The line it is about; null for the whole prescription. */
+  itemId: z.uuid().nullable(),
+  /** A block the drug database allows overriding with a reason. */
+  overridable: z.boolean(),
+  /** Acknowledging (a warning) or overriding (a block) needs a typed reason. */
+  reasonRequired: z.boolean(),
+  /** Based on a patient-reported allergy, condition or medicine not yet verified (SR-21). */
+  unverified: z.boolean(),
+  /** Names and numbers for the screen's own wording (medicine, molecule, allergy…). */
+  params: z.record(z.string(), z.union([z.string(), z.number()])),
+  /** English, as stored in the safety log. */
+  message: z.string(),
+  action: z.enum(['acknowledged', 'overridden']).nullable(),
+  reason: z.string().nullable(),
+  actionAt: z.iso.datetime().nullable(),
+});
+export type SafetyAlert = z.infer<typeof SafetyAlert>;
+
+export const SafetySummary = z.object({
+  alerts: z.array(SafetyAlert),
+  /** The reference drug data the checks used. */
+  drugDatabaseVersion: z.string(),
+  /** Blocks not overridden; signing stays disabled while any remain. */
+  openBlocks: z.number().int().min(0),
+  /** Warnings not yet acknowledged. */
+  openWarnings: z.number().int().min(0),
+});
+export type SafetySummary = z.infer<typeof SafetySummary>;
+
+export const SafetyActionBody = z
+  .object({
+    key: z.string().min(1).max(300),
+    /** `acknowledge` a warning, or `override` a block the database allows overriding. */
+    action: z.enum(['acknowledge', 'override']),
+    reason: z.string().trim().max(300).nullable(),
+  })
+  .refine((b) => b.action !== 'override' || (b.reason ?? '') !== '', {
+    message: 'An override needs a reason.',
+    path: ['reason'],
+  });
+export type SafetyActionBody = z.infer<typeof SafetyActionBody>;
+
 export const Prescription = z.object({
   id: z.uuid(),
   status: z.enum(['draft', 'signed', 'void']),
@@ -97,6 +148,8 @@ export const Prescription = z.object({
   /** Increases on every save; send it back so a stale tab cannot overwrite newer lines. */
   revision: z.number().int().positive(),
   updatedAt: z.iso.datetime(),
+  /** The server's safety check of these lines (it runs on every save). */
+  safety: SafetySummary,
 });
 export type Prescription = z.infer<typeof Prescription>;
 

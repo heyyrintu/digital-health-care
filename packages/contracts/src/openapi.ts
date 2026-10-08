@@ -59,6 +59,8 @@ import {
   PrescriptionTemplate,
   PrescriptionTemplateList,
   PrescriptionView,
+  SafetyActionBody,
+  SafetySummary,
   SavePrescriptionBody,
   SaveTemplateBody,
 } from './prescriptions';
@@ -631,6 +633,15 @@ const operations: Operation[] = [
     pathParams: ['id'],
     body: SavePrescriptionBody,
     response: Prescription,
+  },
+  {
+    method: 'post',
+    path: '/appointments/{id}/prescription/safety-actions',
+    operationId: 'actOnSafetyAlert',
+    summary: 'Acknowledge a safety warning or override an overridable block (the visit’s doctor)',
+    pathParams: ['id'],
+    body: SafetyActionBody,
+    response: SafetySummary,
   },
   {
     method: 'get',

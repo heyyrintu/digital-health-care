@@ -161,13 +161,14 @@ Implemented in Phase 1 (`apps/api/src/modules/clinical`). Prescriptions, the saf
 
 ## 3f. Prescription builder
 
-Implemented in Phase 1 (`apps/api/src/modules/prescribing`). The safety engine, signing, the PDF and versions follow in the next slices.
+Implemented in Phase 1 (`apps/api/src/modules/prescribing`), with the safety engine (§3g). Signing, the PDF and versions follow in the next slice.
 
 | Action | Endpoint | Who |
 |---|---|---|
 | Medicine search | `GET /medicines?q` (2+ characters; name, generic name or composition; up to 20) | Doctor |
 | Draft | `GET /appointments/{id}/prescription` → `{prescription, defaultLanguage, canEdit}`; `PUT /appointments/{id}/prescription` `{language, items, revision}` | Doctor (writing: the visit's doctor) |
 | Repeat last | `GET /patients/{id}/last-prescription?before={appointmentId}` → `{last: {appointmentId, date, doctorName, items} \| null}` | Doctor |
+| Safety answers | `POST /appointments/{id}/prescription/safety-actions` `{key, action: acknowledge\|override, reason}` → the updated safety summary | The visit's doctor |
 | Templates | `GET /prescription-templates` (own); `POST /prescription-templates` `{name, items}` → 201 (same name replaces); `DELETE /prescription-templates/{id}` → 204 | Doctor |
 
 - **Medicine master:** the platform's reference list (`organisation_id` null; the licensed drug database in production, a synthetic sample of generic products in development and tests) plus medicines the clinic adds. Row-level security shows each clinic the reference list and its own; separate write policies let it insert and update only its own, so a reference medicine can never be changed or taken over. Inactive medicines are left out of search and rejected on save (400).
@@ -177,7 +178,40 @@ Implemented in Phase 1 (`apps/api/src/modules/prescribing`). The safety engine, 
 - **Repeat last** returns the patient's most recent prescription with lines (any doctor in the organisation) from a visit that started before `before` (the visit being written; 404 if it is not this patient's), or from any visit when `before` is omitted. Lines come without IDs; the client adds new ones.
 - **Audit:** `prescription.viewed` and `prescription.last_viewed` record entity IDs only (the appointment, or the patient); `prescription.saved` adds the revision and line count; `prescription_template.saved|deleted` record the template ID, with the line count on `saved`. Never medicine names or remarks.
 
-## 3g. Billing and counter payments
+## 3g. Safety engine
+
+The rules are SR-01 to SR-22 in `docs/safety/safety-rule-catalogue.md`, implemented as a pure function, `checkPrescription`, in `@dhc/safety`; the API module is `prescribing/safety.ts`. Drug facts come from the reference drug data tables, never from code: molecule facts, interactions, cross-sensitivities, drug–condition rules, and medicine ingredients with strengths. The licensed database import and clinical sign-off are still pending, so for now development and tests use a synthetic sample that is illustrative only.
+
+- **When it runs:** on every save of a draft, and again when a draft is opened (the chart may have changed: a new allergy, today's weight). The result is returned as `safety` on the prescription: `{alerts, drugDatabaseVersion, openBlocks, openWarnings}`. The server's result is final.
+- **Inputs:**
+  - The patient's active allergies, conditions and current medicines. Free text is matched to molecules and classes by whole words.
+  - Age at the visit date.
+  - Today's weight and pregnancy status from this visit's vitals.
+  - The consultation type's mode.
+  - Whether the same doctor has an earlier completed visit with the patient (the follow-up condition for SR-19).
+  - Each line's ingredients and steps. Daily doses are worked out from the dose, the frequency and the ingredient strength; as-needed, weekly, monthly and free-text frequencies have no daily total.
+- **An alert:** `{key, ruleId, severity (block|warn|info), itemId, overridable, reasonRequired, unverified, params, message, action, reason, actionAt}`.
+  - `key` is the rule, the line and the subject (for example the other molecule, or the exact daily amount for SR-13 and SR-14), so the same problem keeps its answer across saves and a different one (a higher dose) needs a new answer.
+  - `params` carries names and numbers for the screen's own wording in English or Hindi; `message` is English, for the log.
+  - `unverified` marks alerts based on patient-reported chart entries (SR-21).
+- **Answers:**
+  - `acknowledge` works only on a warning; it needs a reason when `reasonRequired` is set.
+  - `override` works only on a block the drug data allows overriding (`overridable`), and always needs a reason.
+  - Anything else is 400. An alert that no longer fires is 409 `key: resolved`.
+  - `openBlocks` counts blocks not overridden; signing will stay disabled while it is above 0. `openWarnings` counts warnings not acknowledged.
+- **Safety log** (`safety_alerts`):
+  - One row per prescription and alert key, with first and last shown times and the drug data version.
+  - When an alert stops firing it is resolved, and recorded as `changed` if the doctor had not answered it. If it fires again it reopens.
+  - Rows are never deleted; row-level security applies per organisation, and a trigger keeps each row on a prescription of the same organisation.
+- **Audit:**
+  - `prescription.safety_acknowledged` and `prescription.safety_overridden` record the alert ID, the rule and the drug data version, never the reason text.
+  - `prescription.saved` adds the open block and warning counts.
+- **Not built yet:**
+  - Clinic tuning of visibility for SR-06, SR-08 and SR-15.
+  - The monthly alert review.
+  - Kidney checks from eGFR (only recorded conditions are used today).
+
+## 3h. Billing and counter payments
 
 Implemented in Phase 1 (`apps/api/src/modules/billing`). Cashfree payment links, online checkout, refunds and reconciliation follow in Phase 3 (§6.10 of the build plan).
 
@@ -205,7 +239,7 @@ Implemented in Phase 1 (`apps/api/src/modules/billing`). Cashfree payment links,
 | scheduling | `/availability/versions` (built), `/availability/exceptions` (built), `/slots?doctorId&clinicId&consultationTypeId&date&channel` (built), `/appointments` (book, walk-in, list, confirm, check-in, start, complete, cancel, no-show, reschedule; built), `/queue?date` (built), `/display-screens` (built), `/display/board` (built) |
 | patients | `/patients` (search by phone, name or UHID, filter by tag; register; built), `/patients/{id}` (demographics and family, each view audited; edit; built), `/patients/duplicate-check` (built), `/patients/{id}/tags` (built), `/patients/{id}/chart` and `/patients/{id}/allergies\|conditions\|medications` (built), `/patients/{id}/consents`, `/patients/merge-requests` |
 | clinical | `/appointments/{id}/consultation` (built), `/appointments/{id}/vitals` (built), `/scribe/sessions`, `/assessments/forms`, `/assessments`, `/patients/{id}/ask-ai` |
-| prescribing | `/medicines` (search; built), `/prescription-templates` (built), `/appointments/{id}/prescription` (draft and lines; built), `/patients/{id}/last-prescription` (built), `/prescriptions` ( `/safety-check`, `/sign`, `/amend`, `/void`, `/pdf`), `/verify/{code}` (public) |
+| prescribing | `/medicines` (search; built), `/prescription-templates` (built), `/appointments/{id}/prescription` (draft and lines; built), `/patients/{id}/last-prescription` (built), `/appointments/{id}/prescription/safety-actions` (built), `/prescriptions` (`/sign`, `/amend`, `/void`, `/pdf`), `/verify/{code}` (public) |
 | orders | `/test-orders`, `/test-orders/{id}/results`, `/referrals`, `/attachments` |
 | billing | `/price-list` (built), `/appointments/{id}/bill` (built), `/bills/{id}/payments` (counter payments; built), `/payments/{id}/receipt` (built), `/collections` (built), `/bills/{id}/payment-link`, `/bills/{id}/checkout-session`, `/refunds`, `/reports/reconciliation` |
 | messaging | `/message-templates`, `/notifications`, `/inbox/threads`, `/inbox/threads/{id}/reply`, `/opt-ins`, `/delivery-log` |

@@ -48,6 +48,40 @@ All alerts and actions are stored in `SafetyAlert` and appear in the audit log.
 - Every override records doctor, reason, time and the database version used.
 - Monthly alert review: alerts shown vs accepted vs overridden, to tune non-critical visibility and reduce alert fatigue.
 
+## How the engine reads the inputs (for clinical sign-off)
+The engine is `checkPrescription` in `packages/safety`, and the test pack is `packages/safety/src/engine.test.ts`. These choices are the engine's, not the licensed database's. Each needs the clinical advisor's confirmation:
+
+- **Chart text:**
+  - Allergies and current medicines are free text, matched by whole words (case-insensitive, plural allowed). An allergy matches a molecule or a class: "Penicillin" or "Penicillins" matches the Penicillin class. A current medicine matches molecules by name only: "Warfarin 5 mg" matches warfarin, but a class such as "NSAID" alone is not matched.
+  - Only active chart entries are used. Patient-reported entries are checked like any other, and their alerts are labelled unverified (SR-21).
+- **Conditions:**
+  - Kidney disease is ICD-10 N17–N19 or a name with *kidney*, *renal* or *CKD*.
+  - Liver disease is B15–B19 or K70–K77, or a name with *liver*, *hepatic*, *hepatitis* or *cirrhosis*.
+  - Drug–condition rules (SR-09) carry their own codes and terms.
+- **Age bands:**
+  - Children are under 12 for SR-12 and SR-13.
+  - The maximum daily dose (SR-14) applies from 12, and also when the date of birth is unknown.
+  - Older adults are 65 and over (SR-15).
+- **Weight and pregnancy:** both come only from this visit's vitals.
+- **Daily dose:**
+  - It is worked out from the dose, the frequency and the ingredient's strength (per tablet, capsule, sachet, drop or puff, or per ml).
+  - Slot amounts other than 1 count tablets ("2-0-1" is 3 tablets); for a measured dose they multiply it.
+  - For a tapering course the highest step counts.
+  - The same molecule is summed across lines.
+  - As-needed (SOS/PRN), weekly, monthly and free-text frequencies, and creams, have no daily total, so SR-13 and SR-14 do not fire for them. Alternate-day doses count the amount on a dosing day.
+- **Interactions and duplicates (SR-04 to SR-08):**
+  - They are checked between lines, and between each line and current medicines.
+  - Molecules within one combination product are not checked against each other.
+- **Breastfeeding:** a lactation contraindication is a warning (SR-11), since SR-10 covers pregnancy only.
+- **Telemedicine:**
+  - Audio and video consultations are online.
+  - A follow-up (SR-19) means the same doctor has an earlier completed visit with the patient.
+- **Completeness (SR-20):** every step needs a dose and a frequency, and a duration unless the frequency is STAT.
+- **Limited checks (SR-22):** this warning also fires for a medicine in the master that has no ingredients recorded.
+- **Answers to alerts:**
+  - An alert keeps its answer while the same problem fires. The key is the rule, the line and the subject; for SR-13 and SR-14 the subject includes the exact daily amount in mg, so any change of dose needs a new answer.
+  - An alert that stops firing is logged as `changed`.
+
 ## Test pack (minimum cases per rule)
 Each rule needs at least one positive case (fires) and one negative case (does not fire), using synthetic personas. The negative case is the same persona with the trigger removed: no allergy, a different molecule, weight recorded, a dose within range, an in-person consultation, a complete line.
 
