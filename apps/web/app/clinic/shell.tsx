@@ -2,7 +2,7 @@
 
 import type { MeResponse } from '@dhc/contracts';
 import { Badge, StaffShell, type NavItem } from '@dhc/ui-web';
-import { CalendarClock, ListOrdered, UserPlus, Users } from 'lucide-react';
+import { CalendarClock, IndianRupee, ListOrdered, UserPlus, Users } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, type ReactNode } from 'react';
@@ -43,6 +43,7 @@ export function ClinicShell({ children }: { children: (me: MeResponse) => ReactN
           { href: '/clinic', label: t('dashboard.searchPatients'), icon: Users, exact: true },
           { href: '/clinic/queue', label: t('dashboard.queue'), icon: ListOrdered },
           { href: '/clinic/availability', label: t('dashboard.availability'), icon: CalendarClock },
+          { href: '/clinic/collections', label: t('dashboard.collections'), icon: IndianRupee },
           ...(canRegister(me.role)
             ? [
                 {
@@ -72,7 +73,7 @@ export function ClinicShell({ children }: { children: (me: MeResponse) => ReactN
         </>
       }
     >
-      <p data-testid="signed-in-as" className="mb-4 text-xs text-muted-foreground">
+      <p data-testid="signed-in-as" className="mb-4 text-xs text-muted-foreground print:hidden">
         {t('session.signedInAs', { name })} ·{' '}
         {me.role === 'patient' ? me.role : t(`role.${me.role}`)}
       </p>

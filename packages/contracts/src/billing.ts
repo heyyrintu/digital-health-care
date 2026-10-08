@@ -148,6 +148,7 @@ export type RecordPaymentBody = z.infer<typeof RecordPaymentBody>;
 
 export const Receipt = z.object({
   payment: Payment,
+  appointmentId: z.uuid(),
   organisationName: z.string(),
   patient: z.object({ name: z.string(), uhid: z.string() }),
   doctorName: z.string().nullable(),

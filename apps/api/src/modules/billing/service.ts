@@ -152,6 +152,8 @@ export class BillingService {
       if (!BILLABLE_STATUSES.includes(appointment.status)) {
         throw new AppError(409, 'CONFLICT', 'A visit can be billed once the patient has arrived.');
       }
+      // Takes turns with payments on this bill, so a payment recorded meanwhile is seen.
+      await tx.$queryRaw`SELECT id FROM bills WHERE appointment_id = ${appointmentId}::uuid FOR UPDATE`;
       const existing = await tx.bill.findUnique({ where: { appointmentId } });
       if (existing && existing.paidPaise > 0) {
         throw new AppError(409, 'CONFLICT', 'This bill has a payment and can no longer change.');
@@ -331,6 +333,7 @@ export class BillingService {
     const paidToDate = bill.payments.slice(0, upTo + 1).reduce((sum, p) => sum + p.amountPaise, 0);
     return {
       payment: this.paymentOut(payment, names),
+      appointmentId: bill.appointmentId,
       organisationName: organisation.name,
       patient: bill.appointment.patient,
       doctorName: names.get(bill.doctorUserId) ?? null,

@@ -9,6 +9,7 @@ import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { AgeGender, TagChip } from './patient-bits';
 import { useSession } from './session-provider';
 import { PracticeCard } from './practice-card';
+import { PriceListCard } from './price-list-card';
 import { ScreensCard } from './screens-card';
 import { SettingsCard } from './settings-card';
 import { ClinicShell } from './shell';
@@ -26,6 +27,7 @@ export default function ClinicDashboard() {
               <div className="grid items-start gap-6 xl:grid-cols-2">
                 <StaffCard currentUserId={me.user.id} />
                 <PracticeCard />
+                <PriceListCard />
                 <ScreensCard />
                 <SettingsCard />
               </div>

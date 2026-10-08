@@ -177,6 +177,25 @@ Implemented in Phase 1 (`apps/api/src/modules/prescribing`). The safety engine, 
 - **Repeat last** returns the patient's most recent prescription with lines (any doctor in the organisation) from a visit that started before `before` (the visit being written; 404 if it is not this patient's), or from any visit when `before` is omitted. Lines come without IDs; the client adds new ones.
 - **Audit:** `prescription.viewed` and `prescription.last_viewed` record entity IDs only (the appointment, or the patient); `prescription.saved` adds the revision and line count; `prescription_template.saved|deleted` record the template ID, with the line count on `saved`. Never medicine names or remarks.
 
+## 3g. Billing and counter payments
+
+Implemented in Phase 1 (`apps/api/src/modules/billing`). Cashfree payment links, online checkout, refunds and reconciliation follow in Phase 3 (§6.10 of the build plan).
+
+| Action | Endpoint | Who |
+|---|---|---|
+| Price list | `GET /price-list` (active and inactive); `POST /price-list` `{name, pricePaise}` → 201; `PATCH /price-list/{id}` `{name?, pricePaise?, active?}` | Read: all staff. Write: clinic admin |
+| Bill | `GET /appointments/{id}/bill` → `{bill, consultationTypeName, feePaise, followUpFeePaise, canEdit, canPay}`; `PUT /appointments/{id}/bill` `{revision, consultation, items, discountPaise, discountReason}` | Read: all staff. Write: front desk, doctor |
+| Counter payment | `POST /bills/{id}/payments` `{id, mode, amountPaise, reference}` → 201 (200 when the same `id` was already recorded) | Front desk, doctor |
+| Receipt | `GET /payments/{id}/receipt` | All staff |
+| Collections | `GET /collections?date` (IST day; today by default) | All staff |
+
+- **One bill per visit**, for visits whose patient has arrived (checked in, in consultation or completed; 409 otherwise). The client says *what* to charge, never how much: `consultation` is `consultation` (the type's fee), `follow_up` (its follow-up fee; 400 if it has none) or `none`; `items` are `{priceListItemId, quantity}` (1–99, each item once, active and on this clinic's list; 400 otherwise). The server prices every line, snapshots the name and price, and stores `subtotalPaise`, `discountPaise`, `totalPaise` with `billTotals` from `@dhc/domain` (the web preview uses the same function). A discount needs `discountReason` and cannot exceed the subtotal. Saves follow the notes rules: matching `revision` (0 for a new bill; 409 `revision: stale` otherwise).
+- **Fixed after the first payment:** once a bill has a payment its lines and discount cannot change (409), and the database refuses changes to its lines too. Later price-list changes never touch existing bills.
+- **Payments** are cash, UPI or card, between ₹0.01 and the balance (400 above it; 409 when nothing is due). `reference` is kept for UPI and card. The `id` is made by the client and kept until the payment succeeds: repeating it with the same bill, mode and amount returns the recorded payment with 200; anything else with that `id` is 409. Each payment gets the organisation's next receipt number (`R00001`, …), taken under a row lock so simultaneous payments never share one. Payments are append-only. Status follows the amount collected: `due`, `partly_paid`, `paid` (a fully discounted bill is `paid`).
+- **Receipts** show the bill's lines and totals, this payment, what was paid up to and including it, and the balance left after it. **Collections** total a day's payments (by IST time received) by mode and by doctor, and list that day's visits whose bills still have a balance.
+- **Queue cards** carry `bill: {totalPaise, paidPaise, status} | null`.
+- **Audit:** `price_list.created|updated` (item ID and price), `bill.saved` (bill and visit IDs, revision, line count, total and discount), `payment.recorded` (bill ID, mode, amount, receipt number) and `receipt.viewed` (payment ID, receipt number). Never patient names.
+
 ## 4. Endpoint catalogue (by module)
 
 | Module | Main resources and actions |
@@ -188,7 +207,7 @@ Implemented in Phase 1 (`apps/api/src/modules/prescribing`). The safety engine, 
 | clinical | `/appointments/{id}/consultation` (built), `/appointments/{id}/vitals` (built), `/scribe/sessions`, `/assessments/forms`, `/assessments`, `/patients/{id}/ask-ai` |
 | prescribing | `/medicines` (search; built), `/prescription-templates` (built), `/appointments/{id}/prescription` (draft and lines; built), `/patients/{id}/last-prescription` (built), `/prescriptions` ( `/safety-check`, `/sign`, `/amend`, `/void`, `/pdf`), `/verify/{code}` (public) |
 | orders | `/test-orders`, `/test-orders/{id}/results`, `/referrals`, `/attachments` |
-| billing | `/price-list`, `/bills`, `/bills/{id}/payment-link`, `/bills/{id}/checkout-session`, `/bills/{id}/counter-payment`, `/refunds`, `/receipts/{id}`, `/reports/collections`, `/reports/reconciliation` |
+| billing | `/price-list` (built), `/appointments/{id}/bill` (built), `/bills/{id}/payments` (counter payments; built), `/payments/{id}/receipt` (built), `/collections` (built), `/bills/{id}/payment-link`, `/bills/{id}/checkout-session`, `/refunds`, `/reports/reconciliation` |
 | messaging | `/message-templates`, `/notifications`, `/inbox/threads`, `/inbox/threads/{id}/reply`, `/opt-ins`, `/delivery-log` |
 | abdm | `/abha/create`, `/abha/link`, `/abha/{patientId}`, `/scan-share/qr`, `/care-contexts`, `/consents` (request, list, revoke), `/external-records` |
 | platform | `/platform/organisations`, `/platform/doctors/{id}/verify`, `/platform/usage`, `/imports` (upload, map, dry-run, run) |

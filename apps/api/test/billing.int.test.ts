@@ -286,6 +286,20 @@ describe('payments and receipts', () => {
     expect((await call('GET', `/payments/${upi.id}/receipt`, adminB)).statusCode).toBe(404);
   });
 
+  it('ends a simultaneous save and payment cleanly', async () => {
+    const id = await visit();
+    const bill = Bill.parse((await saveBill(id, {})).json());
+    const [save, payment] = await Promise.all([
+      saveBill(id, { revision: bill.revision, consultation: 'follow_up' }),
+      pay(bill.id, 10000),
+    ]);
+    expect(payment.statusCode).toBe(201);
+    // Whichever went first, the save either landed before the payment or was refused.
+    expect([200, 409]).toContain(save.statusCode);
+    const view = BillView.parse((await call('GET', `/appointments/${id}/bill`, desk)).json());
+    expect(view.bill!.paidPaise).toBe(10000);
+  });
+
   it('records a retried payment once', async () => {
     const id = await visit();
     const bill = Bill.parse((await saveBill(id, {})).json());
