@@ -510,7 +510,14 @@ export function PrescriptionCard({
                 </li>
               ))}
               {matches?.length === 0 && (
-                <li className="px-3 py-2.5 text-sm text-muted-foreground">{t('rx.noMatches')}</li>
+                <li
+                  role="option"
+                  aria-selected={false}
+                  aria-disabled
+                  className="px-3 py-2.5 text-sm text-muted-foreground"
+                >
+                  {t('rx.noMatches')}
+                </li>
               )}
               <li>
                 <Button
