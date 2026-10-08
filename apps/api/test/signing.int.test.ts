@@ -334,6 +334,19 @@ describe('signing', () => {
     const second = await visit();
     const draft2 = await saved(second, [await line('Paracetamol 650')]);
     expect((await signed(second, draft2.revision)).number).toBe('SD-00002');
+    // Once printed, a prefix cannot pass to another doctor, whose numbers would repeat.
+    await call('PUT', '/doctor-profile', doctorA, { ...profileBody, rxPrefix: 'SG' });
+    const other = await addStaff(h, clinics.a.org.id, 'doctor', 'doctor2@clinic-a.test');
+    const reuse = await call(
+      'PUT',
+      '/doctor-profile',
+      await staffLogin(h, 'clinic-a', other),
+      profileBody,
+    );
+    expect(reuse.statusCode).toBe(409);
+    expect(reuse.json().error.fields).toEqual({ rxPrefix: 'taken' });
+    // Its own doctor may go back to it; the numbers carry on.
+    expect((await call('PUT', '/doctor-profile', doctorA, profileBody)).statusCode).toBe(200);
   });
 
   it('is immutable in the database itself once signed', async () => {

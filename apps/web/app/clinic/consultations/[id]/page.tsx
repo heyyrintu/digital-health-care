@@ -299,7 +299,12 @@ function ConsultationScreen({ id, me }: { id: string; me: MeResponse }) {
           </Surface>
           <Surface className="p-5 sm:p-6">
             <section data-testid="prescription">
-              <PrescriptionCard key={a.id} appointmentId={a.id} patientId={a.patient.id} />
+              <PrescriptionCard
+                key={a.id}
+                appointmentId={a.id}
+                patientId={a.patient.id}
+                onSignedChange={() => void load()}
+              />
             </section>
           </Surface>
         </div>

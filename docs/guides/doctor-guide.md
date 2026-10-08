@@ -5,8 +5,8 @@ For doctors using the Clinic app (phone, iPad, Android) or the web dashboard.
 ## Getting started
 1. Open the invite link from your clinic admin, set a password and add an authenticator app. You are signed in when you finish. If you already work at another clinic on the platform, confirm with your current password and authenticator code instead.
    Later, sign in on the web at `/clinic/login` with your clinic ID, email or mobile, password and the 6-digit code from the app. The web dashboard signs you out after 15 minutes without activity.
-2. Complete onboarding: registration details, HPR ID, DSC setup with a test signature, availability, fees, prescription pad and Google review link.
-3. You can write notes immediately; you can sign prescriptions once the platform team has verified your registration.
+2. Open **Prescription pad** in the menu: enter your registration number, medical council, qualifications, specialty, the prefix for your prescription numbers (for example SG gives SG-00001, SG-00002…) and the paper size (A5 or A4). Then set a 6-digit **signing PIN**, confirmed with your account password. Still to come in onboarding: HPR ID, DSC setup with a test signature, and the Google review link.
+3. You can write notes immediately; you can sign prescriptions once the platform team has verified your registration (the pad shows *Waiting for verification* until then). If you change your registration number or council, it needs verifying again.
 
 **Lost your phone?** Ask your clinic admin to reset your sign-in. They will give you a new link to set a new password and authenticator. If you work at more than one clinic, contact platform support instead: a clinic admin cannot reset you, and support will call you back on your registered number before sending a link.
 
@@ -33,18 +33,22 @@ Available now on the web: open **Consultation** from a checked-in patient's row 
   - **Blue (Note):** for information only.
   - Alerts based on what the patient told the clinic are labelled *Patient-reported, not verified*.
   - While your changes are saving the card shows *Checking the changes…*; answer alerts once it has saved.
-  - Your answers are kept with the prescription; if the dose or medicine changes, a new alert may need a new answer. Signing is planned for a later update.
+  - Your answers are kept with the prescription; if the dose or medicine changes, a new alert may need a new answer.
+- **Signing:** below the lines. **Preview PDF** shows the prescription as it will print, marked PREVIEW. **Sign prescription** asks for your signing PIN; the server checks everything again and then signs. Signing waits while changes are saving, while any red alert is not changed or overridden or any amber one is not acknowledged, and until your pad is complete and verified (the card says what is missing). Five wrong PINs in a row pause signing for 15 minutes.
+  - Once signed, the prescription and the visit's notes and vitals are locked. The card shows the number and version, **Open PDF** and the **Verification page** (what the QR shows a pharmacist).
+  - Until the cloud DSC is connected, signatures use a test key and the PDF says *Test signature: not legally valid*.
 
-When safety checks and signing arrive, the full flow will be:
+The full flow, with what is still to come:
 1. Check allergies (red banner), conditions and recent visits.
 2. Optional: **Start scribe**. Ambient mode asks the patient for consent first. On stop, review each Draft section and accept, edit or discard.
 3. Add diagnosis, plan, tests (e.g. MRI knee, right), advice and follow-up date (book it in one tap).
 4. Build the prescription: search medicines, use templates or **Repeat last**. Dosage remarks are written for you in English or Hindi; edit if needed.
 5. Resolve the **Safety** panel: red items block signing (a few can be overridden with a typed reason, where the rule allows it); amber need acknowledgement (some need a reason).
-6. **Sign** with Face ID / fingerprint (or PIN on web). The prescription locks and goes to the patient automatically.
+6. **Sign** with your PIN on the web (Face ID or fingerprint in the apps, later). The prescription locks; sending it to the patient automatically comes with messaging.
 
 ## After signing
-- Wrong detail? Use **Amend** (creates version 2 with a reason) or **Void**. Never re-issue manually.
+- Wrong detail? Use **Amend** with a reason: it starts version 2 with the same lines for you to correct and sign; version 1 stays valid until then and its QR shows *Superseded* afterwards. Or **Void** with a reason and your PIN: the PDF is stamped VOID and the QR shows *Void*. Finish or sign an open amendment before voiding. Never re-issue manually.
+- **Versions** on the card lists every version with its status and PDF.
 - Refer, send attachments (exercise sheets), or send a payment link from the patient sheet.
 
 ## Ask AI

@@ -68,6 +68,25 @@ export class DoctorProfileService {
   ): Promise<DoctorProfile> {
     return withTenant(this.s.db, actor.organisationId, async (tx) => {
       const existing = await findProfile(tx, actor);
+      // Numbers run per doctor, so a prefix another doctor has printed could repeat theirs.
+      if (existing?.rxPrefix !== body.rxPrefix) {
+        const used = await tx.prescription.count({
+          where: {
+            number: { startsWith: `${body.rxPrefix}-` },
+            doctorUserId: { not: actor.userId },
+          },
+        });
+        if (used > 0) {
+          throw new AppError(
+            409,
+            'CONFLICT',
+            'That prefix is already on another doctor’s prescriptions.',
+            {
+              rxPrefix: 'taken',
+            },
+          );
+        }
+      }
       const reverify =
         existing?.verification === 'verified' &&
         (existing.registrationNumber !== body.registrationNumber ||

@@ -2,7 +2,7 @@
 
 import type { MeResponse } from '@dhc/contracts';
 import { Badge, StaffShell, type NavItem } from '@dhc/ui-web';
-import { CalendarClock, ListOrdered, UserPlus, Users } from 'lucide-react';
+import { CalendarClock, FileSignature, ListOrdered, UserPlus, Users } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, type ReactNode } from 'react';
@@ -49,6 +49,15 @@ export function ClinicShell({ children }: { children: (me: MeResponse) => ReactN
                   href: '/clinic/patients/new',
                   label: t('dashboard.registerPatient'),
                   icon: UserPlus,
+                },
+              ]
+            : []),
+          ...(me.role === 'doctor'
+            ? [
+                {
+                  href: '/clinic/profile',
+                  label: t('dashboard.prescriptionPad'),
+                  icon: FileSignature,
                 },
               ]
             : []),

@@ -20,6 +20,7 @@ import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { useSession } from '../session-provider';
 import { remarksOf, RxLine } from './rx-line';
 import { LineAlerts, SafetyBanner, type SafetyAct } from './safety-alerts';
+import { SignPanel } from './sign-panel';
 
 const AUTOSAVE_MS = 1200;
 /** The most lines a prescription can hold (the API limit). */
@@ -90,14 +91,17 @@ const withNewIds = (items: TemplateItem[]): PrescriptionItem[] =>
 /**
  * The prescription builder on the consultation screen (PRD §6.4). Lines autosave like
  * the notes, and the server runs the safety engine (PRD §6.5) on every save; its alerts
- * show on each line. Signing and the PDF come in a later slice.
+ * show on each line. Signing, amendments and voiding are in the sign panel (PRD §6.6).
  */
 export function PrescriptionCard({
   appointmentId,
   patientId,
+  onSignedChange,
 }: {
   appointmentId: string;
   patientId: string;
+  /** Signing locks the visit record; the page reloads it. */
+  onSignedChange?(): void;
 }) {
   const { api, signOut, t } = useSession();
   const [view, setView] = useState<PrescriptionView | null>(null);
@@ -381,6 +385,29 @@ export function PrescriptionCard({
           ? t('rx.saved')
           : '';
 
+  const draft = (view.prescription?.status ?? 'draft') === 'draft';
+  const blocked = checking
+    ? t('sign.blocked.saving')
+    : items.length === 0
+      ? t('sign.blocked.empty')
+      : safety && (safety.openBlocks > 0 || safety.openWarnings > 0)
+        ? t('sign.blocked.safety')
+        : null;
+  const signPanel = (
+    <SignPanel
+      appointmentId={appointmentId}
+      view={view}
+      prescription={view.prescription}
+      revision={revision.current}
+      blocked={blocked}
+      onChanged={() => {
+        void load();
+        onSignedChange?.();
+      }}
+      onError={fail}
+    />
+  );
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
@@ -409,7 +436,8 @@ export function PrescriptionCard({
           {status}
         </p>
       </div>
-      {!view.canEdit && <p className={noticeBox}>{t('rx.readOnly')}</p>}
+      {!view.canEdit && draft && <p className={noticeBox}>{t('rx.readOnly')}</p>}
+      {!draft && signPanel}
       {state === 'stale' && (
         <p role="alert" className={cn(alertBox, 'flex flex-wrap items-center gap-x-2')}>
           {t('rx.stale')}{' '}
@@ -579,6 +607,8 @@ export function PrescriptionCard({
           )}
         </div>
       </fieldset>
+
+      {draft && signPanel}
 
       {editable && items.length > 0 && (
         <form
