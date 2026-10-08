@@ -223,7 +223,8 @@ export function themeHex(mode: ThemeMode): Record<ThemeColor, string> {
 
 /**
  * The stylesheet the web app puts in <head>: light values on `:root`, dark ones on `.dark`.
- * `extra` adds variables to `:root` (the legacy tokens, until every screen uses the theme).
+ * `extra` adds variables to `:root` (the earlier token scales, until the mobile app moves to
+ * the theme).
  */
 export function themeStylesheet(extra: Record<string, string> = {}): string {
   const block = (vars: Record<string, string>) =>

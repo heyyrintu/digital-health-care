@@ -11,7 +11,8 @@ export const metadata: Metadata = {
   description: 'Book appointments, consult your doctor and keep your health records in one place.',
 };
 
-// Theme values (light on :root, dark on .dark) plus the legacy tokens globals.css still reads.
+// Theme values (light on :root, dark on .dark) plus the earlier token scales, which stay
+// until the mobile app moves to the theme.
 const rootCss = themeStylesheet(toCssVariables());
 
 export default function RootLayout({ children }: { children: ReactNode }) {

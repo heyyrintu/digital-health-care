@@ -257,6 +257,20 @@ Implemented in Phase 1 (`prescribing/signing.ts`, `doctors/`, PRD §6.6, §9.1, 
 - **Audit:** `prescription.previewed`, `prescription.signed` (version, number, PDF hash, signature method, template and drug data versions), `prescription.amendment_started`, `prescription.voided`, `prescription.pdf_viewed`, `doctor.profile_saved`, `doctor.signing_pin_set`, `doctor.signing_pin_locked`, `support.doctor.verified` (ticket and operator). Never medicine names or reasons beyond what is listed.
 - **Not built yet:** delivery to the patient (app, WhatsApp, SMS link, email, ABDM) and notifying the patient of amendments and voiding (with messaging); the cloud DSC provider and PAdES signatures embedded in the PDF; biometric approval on the phone apps; a front-desk print button (the endpoint is ready); the platform console for verification.
 
+## 3j. Dashboard figures and audit log
+
+Implemented in Phase 1 (`apps/api/src/modules/reports`, `audit/`, PRD §9.2). Clinic admin only.
+
+| Action | Endpoint | Who |
+|---|---|---|
+| Figures | `GET /dashboard?from&to` (IST days, inclusive; default the seven days ending today; at most 92 days) → `{from, to, newPatients, appointments, completed, cancelled, noShows, noShowRate, prescriptions, collectionsPaise, byDay}` | Clinic admin |
+| Audit log | `GET /audit-log?limit&cursor&action&actorUserId&from&to` → `{data, nextCursor}`, newest first | Clinic admin |
+
+- **Figures:** visits count by their date and leave out those moved to another slot (`rescheduled`); `completed`, `cancelled` and `noShows` are visits with that status. `noShowRate` is no-shows over completed plus no-shows, and null when there are none. `newPatients` counts registrations, `prescriptions` counts first signings (amendments and voided prescriptions are left out) and `collectionsPaise` sums payments received, each by IST time within the range. `byDay` has a row for every day, zeros included. A reversed or longer range is 400 `from: invalid`. Counts are made in the database through row-level security, with the organisation also named in every query.
+- **Audit log filters** combine with AND: `action` is an action or its start (`bill.saved`, `prescription.`; lowercase letters, dots and underscores), `actorUserId` one person, and `from`/`to` IST days. The cursor keeps the filters' order.
+- **Names:** `actorName` is the staff member's name (or email) when the actor holds a staff role in this organisation; it is null for patients, platform support and system entries, so a patient's name never appears. Records are given by type and ID only.
+- **Not built yet:** message cost (with messaging, phase 3) and exports.
+
 ## 4. Endpoint catalogue (by module)
 
 | Module | Main resources and actions |
@@ -272,7 +286,8 @@ Implemented in Phase 1 (`prescribing/signing.ts`, `doctors/`, PRD §6.6, §9.1, 
 | messaging | `/message-templates`, `/notifications`, `/inbox/threads`, `/inbox/threads/{id}/reply`, `/opt-ins`, `/delivery-log` |
 | abdm | `/abha/create`, `/abha/link`, `/abha/{patientId}`, `/scan-share/qr`, `/care-contexts`, `/consents` (request, list, revoke), `/external-records` |
 | platform | `/platform/organisations`, `/platform/doctors/{id}/verify`, `/platform/usage`, `/imports` (upload, map, dry-run, run) |
-| audit | `/audit-log` (built, clinic admin; filters to come), `/data-rights-requests` |
+| audit | `/audit-log` (built, clinic admin, with filters), `/data-rights-requests` |
+| reports | `/dashboard` (built, clinic admin) |
 | files | `/uploads/presign` → client uploads to S3 → `/uploads/{id}/complete` (malware scan before visible) |
 | webhooks | `/webhooks/cashfree`, `/webhooks/whatsapp`, `/webhooks/sms`, `/webhooks/abdm` (see `webhooks.md`) |
 

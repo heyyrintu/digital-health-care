@@ -7,7 +7,7 @@ import {
   CreateAppointmentBody,
   RescheduleAppointmentBody,
 } from './appointments';
-import { AuditListResponse } from './audit';
+import { AuditListResponse, AuditQuery } from './audit';
 import {
   LoginBody,
   LoginResponse,
@@ -49,6 +49,7 @@ import {
   SaveBillBody,
   UpdatePriceListItemBody,
 } from './billing';
+import { DashboardQuery, DashboardReport } from './dashboard';
 import { ErrorResponse } from './errors';
 import {
   LastPrescription,
@@ -85,7 +86,6 @@ import {
   StaffMemberList,
 } from './invites';
 import { HealthResponse } from './health';
-import { CursorQuery } from './pagination';
 import {
   CreatePatientBody,
   DuplicateCheckBody,
@@ -920,9 +920,19 @@ const operations: Operation[] = [
     method: 'get',
     path: '/audit-log',
     operationId: 'listAuditLog',
-    summary: 'Audit log (clinic admin)',
-    query: CursorQuery,
+    summary:
+      'Audit log, newest first, filtered by action, staff member and IST dates (clinic admin)',
+    query: AuditQuery,
     response: AuditListResponse,
+  },
+  {
+    method: 'get',
+    path: '/dashboard',
+    operationId: 'getDashboard',
+    summary:
+      'Clinic figures for a range of IST days: visits, no-shows, new patients, prescriptions and collections (clinic admin)',
+    query: DashboardQuery,
+    response: DashboardReport,
   },
 ];
 
