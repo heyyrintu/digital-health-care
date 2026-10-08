@@ -32,7 +32,7 @@ CREATE TABLE "bills" (
     "discount_reason" TEXT,
     "total_paise" INTEGER NOT NULL,
     "paid_paise" INTEGER NOT NULL DEFAULT 0,
-    "status" "BillStatus" NOT NULL DEFAULT 'due',
+    "status" "BillStatus" NOT NULL,
     "revision" INTEGER NOT NULL DEFAULT 1,
     "created_by_user_id" UUID NOT NULL,
     "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,

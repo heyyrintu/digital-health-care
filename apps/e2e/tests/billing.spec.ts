@@ -121,6 +121,7 @@ test.describe('billing', () => {
         doctorUserId: doctor.id,
         subtotalPaise: 80000,
         totalPaise: 80000,
+        status: 'due',
         createdByUserId: doctor.id,
         items: {
           create: {

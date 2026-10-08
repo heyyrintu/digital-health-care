@@ -831,7 +831,8 @@ model Bill {
   discountReason  String?    @map("discount_reason")
   totalPaise      Int        @map("total_paise")
   paidPaise       Int        @default(0) @map("paid_paise")
-  status          BillStatus @default(due)
+  /// Set from the amounts with billStatus(); no default, since a ₹0 bill is already paid.
+  status          BillStatus
   /// Guards against two people editing the same bill (0 is "no bill yet").
   revision        Int        @default(1)
   createdByUserId String     @map("created_by_user_id") @db.Uuid

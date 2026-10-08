@@ -4,7 +4,7 @@ import { ApiError } from '@dhc/api-client';
 import { PriceList, PriceListItem } from '@dhc/contracts';
 import { formatInr, rupeesToPaise } from '@dhc/domain';
 import { Button, Input } from '@dhc/ui-web';
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { useSession } from './session-provider';
 
 const ROW = 'flex flex-wrap items-center gap-x-3 gap-y-2 py-3';
@@ -20,8 +20,12 @@ export function PriceListCard() {
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
+  // Only the latest request may set the list, so a slow first load cannot hide an addition.
+  const latest = useRef(0);
   const load = useCallback(async () => {
-    setItems((await api.request('GET', '/price-list', { schema: PriceList })).data);
+    const request = ++latest.current;
+    const list = await api.request('GET', '/price-list', { schema: PriceList });
+    if (request === latest.current) setItems(list.data);
   }, [api]);
 
   const fail = useCallback(
