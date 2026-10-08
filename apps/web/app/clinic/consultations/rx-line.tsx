@@ -11,6 +11,7 @@ import type {
 import { dosageRemarks } from '@dhc/domain';
 import { Button, Chip, cn, Input, Label, NativeSelect, Textarea } from '@dhc/ui-web';
 import { Plus } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { useSession } from '../session-provider';
 
 const TIMINGS: DoseTiming[] = [
@@ -46,6 +47,7 @@ export function RxLine({
   editable,
   onChange,
   onRemove,
+  alerts,
 }: {
   item: PrescriptionItem;
   index: number;
@@ -53,6 +55,8 @@ export function RxLine({
   editable: boolean;
   onChange(item: PrescriptionItem): void;
   onRemove(): void;
+  /** The safety engine's alerts for this line. */
+  alerts?: ReactNode;
 }) {
   const { t } = useSession();
   const set = (patch: Partial<PrescriptionItem>) => onChange({ ...item, ...patch });
@@ -88,6 +92,7 @@ export function RxLine({
           </Button>
         )}
       </div>
+      {alerts}
 
       {item.steps.map((step, i) => (
         <div className={stepGrid} key={i}>

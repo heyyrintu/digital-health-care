@@ -7,6 +7,8 @@ import {
   type PrescriptionTemplate,
   type PrescriptionView,
   type Role,
+  type SafetyActionBody,
+  type SafetySummary,
   type SavePrescriptionBody,
   type SaveTemplateBody,
 } from '@dhc/contracts';
@@ -18,6 +20,7 @@ import { AppError } from '../../errors';
 import type { Services } from '../../services';
 import { writeAudit } from '../audit/write';
 import { lockVisit, NOTE_STATUSES } from '../clinical/service';
+import { checkAndRecord, summarise, type SafetyVisit } from './safety';
 
 interface Actor {
   userId: string;
@@ -53,11 +56,6 @@ const itemOut = (row: ItemRow) => ({
 
 const withoutId = ({ id: _id, ...line }: ReturnType<typeof itemOut>) => line;
 
-/**
- * The prescription builder (PRD §6.4): medicine search, a visit's draft lines with
- * dosage remarks, templates and "repeat last". Doctors only; only the visit's doctor
- * writes. Signing, the safety engine and the PDF follow in later slices.
- */
 /** Medicines must be active and in the master this clinic can see (the platform's or its own). */
 async function checkMedicines(tx: Tx, items: { medicineId: string | null }[]): Promise<void> {
   const ids = [...new Set(items.flatMap((i) => (i.medicineId ? [i.medicineId] : [])))];
@@ -66,6 +64,12 @@ async function checkMedicines(tx: Tx, items: { medicineId: string | null }[]): P
   if (found !== ids.length) throw invalid('items', 'A medicine is not in the list.');
 }
 
+/**
+ * The prescription builder (PRD §6.4): medicine search, a visit's draft lines with
+ * dosage remarks, templates and "repeat last", checked by the safety engine (PRD §6.5)
+ * on every save. Doctors only; only the visit's doctor writes. Signing and the PDF follow
+ * in a later slice.
+ */
 export class PrescribingService {
   constructor(private readonly s: Services) {}
 
@@ -108,8 +112,15 @@ export class PrescribingService {
       if (!appointment) throw NOT_FOUND();
       const row = await this.current(tx, appointmentId);
       await this.audit(tx, request, actor, 'prescription.viewed', appointmentId);
+      // The chart may have changed since the last save (a new allergy, today's weight), so
+      // a draft is checked again on opening.
+      // Only the visit's doctor writes to the safety log; others see the check without it.
+      // Writing takes the visit lock, like a save, so two openings cannot race.
+      const persist = row?.status === 'draft' && appointment.doctorUserId === actor.userId;
+      if (persist) await lockVisit(tx, appointmentId);
+      const safety = row ? await this.safety(tx, actor, appointment, row, persist) : null;
       return {
-        prescription: row ? this.out(row) : null,
+        prescription: row && safety ? this.out(row, safety) : null,
         defaultLanguage: appointment.patient.language,
         canEdit:
           appointment.doctorUserId === actor.userId &&
@@ -134,30 +145,7 @@ export class PrescribingService {
     if (new Set(ids).size !== ids.length) throw invalid('items', 'Each line needs its own ID.');
 
     return withTenant(this.s.db, actor.organisationId, async (tx) => {
-      const appointment = await lockVisit(tx, appointmentId);
-      if (appointment.doctorUserId !== actor.userId) {
-        throw new AppError(
-          403,
-          'FORBIDDEN',
-          'Only the visit’s doctor can write this prescription.',
-        );
-      }
-      if (!NOTE_STATUSES.includes(appointment.status)) {
-        throw new AppError(
-          409,
-          'CONFLICT',
-          'A prescription can be written once the patient has checked in.',
-        );
-      }
-      const consultation = await tx.consultation.findUnique({ where: { appointmentId } });
-      const existing = await this.current(tx, appointmentId);
-      if (consultation?.lockedAt || (existing && existing.status !== 'draft')) {
-        throw new AppError(
-          409,
-          'CONFLICT',
-          'This prescription is signed and can no longer change.',
-        );
-      }
+      const { appointment, existing } = await this.writable(tx, actor, appointmentId);
       if ((existing?.revision ?? 0) !== body.revision) {
         throw new AppError(
           409,
@@ -206,11 +194,59 @@ export class PrescribingService {
         }
         throw error;
       }
+      const saved = (await this.current(tx, appointmentId))!;
+      const safety = await this.safety(tx, actor, appointment, saved, true);
       await this.audit(tx, request, actor, 'prescription.saved', appointmentId, {
         revision: prescription.revision,
         lines: body.items.length,
+        openBlocks: safety.openBlocks,
+        openWarnings: safety.openWarnings,
       });
-      return this.out((await this.current(tx, appointmentId))!);
+      return this.out(saved, safety);
+    });
+  }
+
+  /**
+   * Records the doctor's answer to an alert that is firing now: `acknowledge` a warning
+   * (with a reason when the rule needs one) or `override` a block the drug database
+   * allows overriding (always with a reason). Blocks it does not allow must be fixed.
+   */
+  async act(
+    request: FastifyRequest,
+    actor: Actor,
+    appointmentId: string,
+    body: SafetyActionBody,
+  ): Promise<SafetySummary> {
+    return withTenant(this.s.db, actor.organisationId, async (tx) => {
+      const { appointment, existing } = await this.writable(tx, actor, appointmentId);
+      if (!existing) throw NOT_FOUND();
+      const { findings, summary } = await this.check(tx, actor, appointment, existing, true);
+      const finding = findings.find((f) => f.key === body.key);
+      if (!finding) {
+        throw new AppError(409, 'CONFLICT', 'This alert no longer applies.', { key: 'resolved' });
+      }
+      const reason = body.reason?.trim() || null;
+      if (body.action === 'acknowledge' && finding.severity !== 'warn') {
+        throw invalid('action', 'Only warnings are acknowledged.');
+      }
+      if (body.action === 'override' && !(finding.severity === 'block' && finding.overridable)) {
+        throw invalid('action', 'This alert cannot be overridden; change the prescription.');
+      }
+      if ((finding.reasonRequired || body.action === 'override') && !reason) {
+        throw invalid('reason', 'Give a reason.');
+      }
+      const action = body.action === 'acknowledge' ? 'acknowledged' : 'overridden';
+      const row = await tx.safetyAlert.update({
+        where: { prescriptionId_key: { prescriptionId: existing.id, key: body.key } },
+        data: { action, reason, actionByUserId: actor.userId, actionAt: this.s.now() },
+      });
+      await this.audit(tx, request, actor, `prescription.safety_${action}`, appointmentId, {
+        alertId: row.id,
+        ruleId: finding.ruleId,
+        drugDatabaseVersion: row.drugDatabaseVersion,
+      });
+      const rows = await tx.safetyAlert.findMany({ where: { prescriptionId: existing.id } });
+      return summarise(findings, new Map(rows.map((r) => [r.key, r])), summary.drugDatabaseVersion);
     });
   }
 
@@ -336,6 +372,49 @@ export class PrescribingService {
 
   // ---- Helpers ----------------------------------------------------------------------
 
+  /** The visit, locked, if the actor may write its prescription now; and its draft. */
+  private async writable(tx: Tx, actor: Actor, appointmentId: string) {
+    const appointment = await lockVisit(tx, appointmentId);
+    if (appointment.doctorUserId !== actor.userId) {
+      throw new AppError(403, 'FORBIDDEN', 'Only the visit’s doctor can write this prescription.');
+    }
+    if (!NOTE_STATUSES.includes(appointment.status)) {
+      throw new AppError(
+        409,
+        'CONFLICT',
+        'A prescription can be written once the patient has checked in.',
+      );
+    }
+    const consultation = await tx.consultation.findUnique({ where: { appointmentId } });
+    const existing = await this.current(tx, appointmentId);
+    if (consultation?.lockedAt || (existing && existing.status !== 'draft')) {
+      throw new AppError(409, 'CONFLICT', 'This prescription is signed and can no longer change.');
+    }
+    return { appointment, existing };
+  }
+
+  private check(tx: Tx, actor: Actor, visit: SafetyVisit, row: PrescriptionRow, persist: boolean) {
+    return checkAndRecord(tx, {
+      visit,
+      prescriptionId: row.id,
+      organisationId: actor.organisationId,
+      actorUserId: actor.userId,
+      items: row.items,
+      persist,
+      now: this.s.now(),
+    });
+  }
+
+  private async safety(
+    tx: Tx,
+    actor: Actor,
+    visit: SafetyVisit,
+    row: PrescriptionRow,
+    persist: boolean,
+  ): Promise<SafetySummary> {
+    return (await this.check(tx, actor, visit, row, persist)).summary;
+  }
+
   private current(tx: Tx, appointmentId: string): Promise<PrescriptionRow | null> {
     return tx.prescription.findFirst({
       where: { appointmentId },
@@ -344,7 +423,7 @@ export class PrescribingService {
     });
   }
 
-  private out(row: PrescriptionRow): Prescription {
+  private out(row: PrescriptionRow, safety: SafetySummary): Prescription {
     return {
       id: row.id,
       status: row.status,
@@ -352,6 +431,7 @@ export class PrescribingService {
       items: row.items.map(itemOut),
       revision: row.revision,
       updatedAt: row.updatedAt.toISOString(),
+      safety,
     };
   }
 

@@ -2,7 +2,7 @@
   "name": "@dhc/safety",
   "version": "0.0.0",
   "private": true,
-  "description": "Prescription safety rule catalogue and engine types (rules: docs/safety/safety-rule-catalogue.md).",
+  "description": "Prescription safety rule catalogue and engine (rules: docs/safety/safety-rule-catalogue.md).",
   "type": "module",
   "exports": {
     ".": "./src/index.ts"
@@ -14,5 +14,8 @@
   },
   "devDependencies": {
     "@dhc/config": "workspace:*"
+  },
+  "dependencies": {
+    "@dhc/domain": "workspace:*"
   }
 }
