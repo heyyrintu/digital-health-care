@@ -426,6 +426,39 @@ describe('a clinic B row cannot point at a clinic A row', () => {
       h.owner.medicine.update({ where: { id: b.medicineId }, data: move }),
     ).rejects.toThrow(KEEPS);
 
+    // A price list entry under a bill line (billing migration).
+    const priceItem = await h.owner.priceListItem.create({
+      data: { organisationId: orgB, name: 'Dressing', pricePaise: 10000 },
+    });
+    const bill = await h.owner.bill.create({
+      data: {
+        organisationId: orgB,
+        appointmentId: b.appointmentId,
+        patientId: b.patientId,
+        doctorUserId: doctorB,
+        subtotalPaise: 10000,
+        totalPaise: 10000,
+        status: 'due',
+        createdByUserId: doctorB,
+      },
+    });
+    await h.owner.billItem.create({
+      data: {
+        organisationId: orgB,
+        billId: bill.id,
+        kind: 'item',
+        priceListItemId: priceItem.id,
+        name: 'Dressing',
+        unitPaise: 10000,
+        quantity: 1,
+        amountPaise: 10000,
+        sortOrder: 0,
+      },
+    });
+    await expect(
+      h.owner.priceListItem.update({ where: { id: priceItem.id }, data: move }),
+    ).rejects.toThrow(KEEPS);
+
     // A row nothing points at can still move.
     const spare = await h.owner.clinic.create({ data: { organisationId: orgB, name: 'Spare' } });
     await expect(

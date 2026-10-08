@@ -1,7 +1,12 @@
 /**
  * Design tokens shared by web (CSS variables) and mobile (NativeWind theme).
- * Placeholder values until the designer delivers the production design system.
+ *
+ * The design system's theme lives in `./theme` (semantic colours, fonts, radius). The scales
+ * below are the earlier placeholders: the web screens' `globals.css` and the mobile shell still
+ * read them, and they go once those move to the theme.
  */
+export * from './theme';
+
 export const colors = {
   brand: { 50: '#ecfdf9', 100: '#cff7ee', 500: '#0f9b8e', 600: '#0b7f75', 700: '#0a655e' },
   neutral: {

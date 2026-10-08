@@ -4,7 +4,7 @@
 
 Conventions for every table: `id` (UUID), `organisationId` (except platform-level User/Device), `createdAt`, `updatedAt`, `deletedAt` where soft delete applies. Files are stored by S3 key, never by public URL. Fields marked *(encrypted)* use field-level encryption. Row-level security filters every query by `organisationId` (ADR 0014). Database columns are snake_case (`organisation_id`); this document uses the camelCase field names.
 
-**Implemented so far:** Organisation, User, Membership, StaffInvite, Session, OtpChallenge and AuditLog (Phase 0); Patient, UhidSettings, Tag and PatientTag (patient register); Clinic, ConsultationType, BookingRules, AvailabilityVersion and AvailabilityException (availability); Appointment and AppointmentStatusHistory (appointments); DisplayScreen (queue) — see `packages/db/prisma/schema.prisma`. Everything else below is the target design.
+**Implemented so far:** Organisation, User, Membership, StaffInvite, Session, OtpChallenge and AuditLog (Phase 0); Patient, UhidSettings, Tag and PatientTag (patient register); Clinic, ConsultationType, BookingRules, AvailabilityVersion and AvailabilityException (availability); Appointment and AppointmentStatusHistory (appointments); DisplayScreen (queue); PriceListItem, Bill, BillItem, Payment and ReceiptSettings (billing and counter payments) — see `packages/db/prisma/schema.prisma`. Everything else below is the target design.
 
 ## Platform and identity
 
@@ -20,7 +20,7 @@ Conventions for every table: `id` (UUID), `organisationId` (except platform-leve
 | OtpChallenge | Patient sign-in code | phone, organisationId, codeHash (HMAC), attempts, expiresAt, consumedAt |
 | Device | Registered device | userId, platform, model, pushToken, biometricKeyId, lastSeenAt, revokedAt |
 | StaffMember | Staff profile in an organisation (role lives on Membership) | userId, organisationId, assignedDoctorIds |
-| Doctor | Doctor profile | userId, organisationId, name, qualifications, specialty, registrationNumber, council, hprId, rxNumberPrefix, signingProviderRef |
+| DoctorProfile | A doctor's prescription pad and signing details, per organisation (built) | organisationId, userId (unique together), registrationNumber, council, qualifications, specialty, rxPrefix (1–8 capitals or digits, unique per organisation), rxSequence (last number given), paperSize (a4\|a5), verification (pending\|verified; changing the registration number or council resets it), verifiedAt, verifiedBy (operator and ticket), signingPinHash (scrypt of a server-keyed digest of the PIN), pinFailedCount, pinLockedUntil · planned: hprId, signingProviderRef |
 | DoctorClinic | Doctor practises at clinic | doctorId, clinicId, active, consultationTypeIds |
 | DoctorOnboarding | Onboarding state | doctorId, status (invited\|pending_verification\|verified\|active\|suspended), registrationDocKey, verifiedBy, verifiedAt, checklist (JSON) |
 
@@ -65,13 +65,19 @@ Conventions for every table: `id` (UUID), `organisationId` (except platform-leve
 
 | Entity | Purpose | Key fields |
 |---|---|---|
-| DrugMolecule | Licensed drug data (built: name, drugClass; platform-wide, read-only to clinics) | name, drugClass · planned: interactionRefs, pregnancySafety, lactationSafety, maxDailyDose, paediatricDoseRange, geriatricCaution, renalAdjustment, hepaticCaution, weightBased, telemedicineList |
-| Medicine | Medicine in the master (built) | organisationId (null = platform reference master; clinics read it but cannot change it), name, genericName, composition, form, moleculeIds, defaultRoute, source (reference\|clinic), active (inactive medicines are hidden and cannot be prescribed) · planned: brand mapping, scheduleTag |
+| DrugMolecule | Reference drug data (built; platform-wide, read-only to clinics; the licensed database in production, a synthetic sample in development) | name, drugClass, pregnancy (caution\|contraindicated), lactation (caution\|contraindicated), pregnancyOverridable, weightBased, childMinMgPerKgDay, childMaxMgPerKgDay, childDoseOverridable, maxDailyMg (from 12 years), maxDoseOverridable, olderAdultCaution, renalAdjustment, hepaticCaution, telemedicineList (o\|a\|b\|prohibited) |
+| DrugInteraction | Interacting pair (built) | moleculeAId < moleculeBId, severity (contraindicated\|major\|moderate\|minor), overridable, note |
+| DrugCrossSensitivity | Allergy class that warns for another class (built) | allergyClass, drugClass, note |
+| DrugConditionRule | Molecule or class to take care with in a condition (built) | moleculeId or drugClass, conditionCodes (ICD-10 prefixes), conditionTerms, note |
+| DrugDatabase | The loaded reference data (built, one row) | version, loadedAt |
+| MedicineIngredient | A molecule in a medicine (built; follows the medicine's visibility) | medicineId, moleculeId, strengthMg and per (unit\|ml), null when unknown |
+| Medicine | Medicine in the master (built) | organisationId (null = platform reference master; clinics read it but cannot change it), name, genericName, composition, form, ingredients (MedicineIngredient), defaultRoute, source (reference\|clinic), active (inactive medicines are hidden and cannot be prescribed) · planned: brand mapping, scheduleTag |
 | PrescriptionTemplate | Saved prescription (built) | organisationId, doctorUserId, name (unique per doctor within the organisation), items (JSON lines without IDs) · planned: advice, tests |
-| Prescription | Prescription document (built) | appointmentId, patientId, doctorUserId, version, status (draft\|signed\|void), language, revision · planned: consultationId, prescriptionNumber (prefix + sequence), previousVersionId, statuses published\|amended, signatureMethod, signedAt, pdfKey, pdfHash, templateVersion, verificationCode, voidReason |
+| Prescription | Prescription document, one row per version (built; immutable once signed, enforced by database triggers) | appointmentId, patientId, doctorUserId, version (1, then one more per amendment), status (draft\|signed\|superseded\|void), language, revision, amendsPrescriptionId + amendmentReason (amendments), number (doctor's prefix + running number, kept by amendments), signedAt, pdfFileKey + pdfSha256 (the signed file by storage key, and its hash), templateVersion, paperSize, signatureMethod (test_key\|cloud_dsc), signature (over the PDF's SHA-256), signerCertificate, verificationCode (printed in the QR), supersededAt, voidedAt, voidedByUserId, voidReason, voidPdfFileKey (the copy stamped VOID; the signed file is kept) |
+| PrescriptionVerification | Public QR lookup (built; readable without a session, holds no clinical data) | codeHash (SHA-256 of the code), organisationId, prescriptionId |
 | PrescriptionItem | Medicine line (built) | id (client-chosen UUID), prescriptionId, medicineId?, name, composition, form (snapshots), route, timing, steps (JSON: dose, frequency, durationValue, durationUnit; several for tapering), quantity, instructions, remarks (generated unless remarksEdited), sortOrder |
 | PrescriptionTest | Test on prescription | prescriptionId, testOrderId |
-| SafetyAlert | Alert and action | prescriptionId, itemId, checkType, severity (block\|warn\|info), message, action (accepted\|changed\|overridden), overrideReason, doctorId, at |
+| SafetyAlert | The safety log: an alert and the doctor's answer (built; never deleted) | prescriptionId, key (rule, line, subject; unique per prescription), ruleId, itemId?, severity (block\|warn\|info), overridable, message, params, firstShownAt, lastShownAt, resolvedAt? (set while the alert no longer fires), action? (acknowledged\|overridden\|changed; null while unanswered), reason?, actionByUserId?, actionAt?, drugDatabaseVersion |
 
 ## Orders and documents
 
@@ -86,14 +92,14 @@ Conventions for every table: `id` (UUID), `organisationId` (except platform-leve
 
 | Entity | Purpose | Key fields |
 |---|---|---|
-| PriceListItem | Chargeable item | organisationId, name, amount, category, active |
-| Bill / BillItem | Charges for a visit | Bill: appointmentId, patientId, total, discount, status · BillItem: billId, priceListItemId?, description, amount |
+| PriceListItem | Chargeable item (built) | organisationId, name (unique per organisation), pricePaise (> 0), active (deactivated, never deleted) · planned: category |
+| Bill / BillItem | Charges for a visit (built) | Bill: appointmentId (one bill per visit), patientId and doctorUserId (the visit's, enforced by trigger), subtotalPaise, discountPaise, discountReason (required with a discount), totalPaise (= subtotal − discount), paidPaise, status (due\|partly_paid\|paid; follows paidPaise, checked by the database), revision, createdByUserId · BillItem: billId, kind (consultation\|follow_up\|item), priceListItemId (items only), name and unitPaise (snapshots at billing), quantity (1–99), amountPaise (= unit × quantity), sortOrder; fixed once the bill has a payment · planned statuses: link_sent, refund_pending, refunded |
 | PaymentGatewayAccount | Cashfree account per organisation | organisationId, provider (cashfree), mode (sandbox\|production), keyRef (secret store, encrypted), kycStatus, methodsEnabled |
-| Payment | Payment attempt | billId, method (cash\|upi\|card\|netbanking\|wallet\|counter_upi\|counter_card), channel (link\|in_app\|web\|counter), gateway, gatewayOrderId, gatewayPaymentId, paymentLinkId, amount, gatewayFee, status, paidAt, settledAt |
+| Payment | Payment (built for the counter: id chosen by the client so retries record once, billId, mode cash\|upi\|card, amountPaise, reference, receiptNumber unique per organisation, receivedByUserId, receivedAt; append-only) · planned for Cashfree | billId, method (cash\|upi\|card\|netbanking\|wallet\|counter_upi\|counter_card), channel (link\|in_app\|web\|counter), gateway, gatewayOrderId, gatewayPaymentId, paymentLinkId, amount, gatewayFee, status, paidAt, settledAt |
 | PaymentLink | Cashfree link | billId, gatewayLinkId, expiresAt, status, sentVia |
 | Refund | Refund | paymentId, amount, reason, gatewayRefundId, status, requestedBy |
 | Settlement | Cashfree settlement | organisationId, gatewaySettlementId, date, gross, fees, net, matchedAt |
-| Receipt | Numbered receipt | billId, receiptNumber, pdfKey, issuedAt |
+| Receipt | Numbered receipt | Built as Payment.receiptNumber, numbered by ReceiptSettings (organisationId, prefix default `R`, nextNumber; advanced under a row lock) · planned: pdfKey, issuedAt |
 
 ## Messaging
 

@@ -8,8 +8,12 @@ import {
   type PatientRef,
   type UpdatePatientBody,
 } from '@dhc/contracts';
+import { Button, Input, Label, NativeSelect } from '@dhc/ui-web';
 import { useState, type FormEvent, type ReactNode } from 'react';
 import { useSession } from './session-provider';
+
+const field = 'field grid min-w-0 content-start gap-1.5';
+const wideField = `${field} wide sm:col-span-2`;
 
 /** Demographic fields shared by registration and editing. */
 export function PatientForm({
@@ -55,10 +59,10 @@ export function PatientForm({
   const today = new Date().toISOString().slice(0, 10);
 
   return (
-    <form className="patient-form" onSubmit={submit}>
-      <div className="field wide">
-        <label htmlFor="name">{t('patient.name')}</label>
-        <input
+    <form className="patient-form grid grid-cols-1 gap-4 sm:grid-cols-2" onSubmit={submit}>
+      <div className={wideField}>
+        <Label htmlFor="name">{t('patient.name')}</Label>
+        <Input
           id="name"
           name="name"
           required
@@ -67,9 +71,9 @@ export function PatientForm({
           defaultValue={initial?.name}
         />
       </div>
-      <div className="field">
-        <label htmlFor="phone">{t('patient.phone')}</label>
-        <input
+      <div className={field}>
+        <Label htmlFor="phone">{t('patient.phone')}</Label>
+        <Input
           id="phone"
           name="phone"
           type="tel"
@@ -79,32 +83,32 @@ export function PatientForm({
           defaultValue={initial?.phone ?? ''}
         />
       </div>
-      <div className="field">
-        <label htmlFor="dob">{t('patient.dob')}</label>
-        <input id="dob" name="dob" type="date" max={today} defaultValue={initial?.dob ?? ''} />
+      <div className={field}>
+        <Label htmlFor="dob">{t('patient.dob')}</Label>
+        <Input id="dob" name="dob" type="date" max={today} defaultValue={initial?.dob ?? ''} />
       </div>
-      <div className="field">
-        <label htmlFor="gender">{t('patient.gender')}</label>
-        <select id="gender" name="gender" defaultValue={initial?.gender ?? ''}>
+      <div className={field}>
+        <Label htmlFor="gender">{t('patient.gender')}</Label>
+        <NativeSelect id="gender" name="gender" defaultValue={initial?.gender ?? ''}>
           <option value="">—</option>
           <option value="female">{t('gender.female')}</option>
           <option value="male">{t('gender.male')}</option>
           <option value="other">{t('gender.other')}</option>
-        </select>
+        </NativeSelect>
       </div>
-      <div className="field">
-        <label htmlFor="language">{t('patient.language')}</label>
-        <select id="language" name="language" defaultValue={initial?.language ?? 'en'}>
+      <div className={field}>
+        <Label htmlFor="language">{t('patient.language')}</Label>
+        <NativeSelect id="language" name="language" defaultValue={initial?.language ?? 'en'}>
           <option value="en">{t('language.en')}</option>
           <option value="hi">{t('language.hi')}</option>
-        </select>
+        </NativeSelect>
       </div>
 
       <GuardianPicker value={guardian} onChange={setGuardian} excludeId={initial?.id} />
 
-      <div className="field">
-        <label htmlFor="email">{t('patient.email')}</label>
-        <input
+      <div className={field}>
+        <Label htmlFor="email">{t('patient.email')}</Label>
+        <Input
           id="email"
           name="email"
           type="email"
@@ -112,33 +116,33 @@ export function PatientForm({
           defaultValue={initial?.email ?? ''}
         />
       </div>
-      <div className="field">
-        <label htmlFor="bloodGroup">{t('patient.bloodGroup')}</label>
-        <select id="bloodGroup" name="bloodGroup" defaultValue={initial?.bloodGroup ?? ''}>
+      <div className={field}>
+        <Label htmlFor="bloodGroup">{t('patient.bloodGroup')}</Label>
+        <NativeSelect id="bloodGroup" name="bloodGroup" defaultValue={initial?.bloodGroup ?? ''}>
           <option value="">—</option>
           {BLOOD_GROUPS.map((g) => (
             <option key={g} value={g}>
               {g}
             </option>
           ))}
-        </select>
+        </NativeSelect>
       </div>
-      <div className="field wide">
-        <label htmlFor="address">{t('patient.address')}</label>
-        <input id="address" name="address" maxLength={300} defaultValue={initial?.address ?? ''} />
+      <div className={wideField}>
+        <Label htmlFor="address">{t('patient.address')}</Label>
+        <Input id="address" name="address" maxLength={300} defaultValue={initial?.address ?? ''} />
       </div>
-      <div className="field">
-        <label htmlFor="emergencyContactName">{t('patient.emergencyName')}</label>
-        <input
+      <div className={field}>
+        <Label htmlFor="emergencyContactName">{t('patient.emergencyName')}</Label>
+        <Input
           id="emergencyContactName"
           name="emergencyContactName"
           maxLength={120}
           defaultValue={initial?.emergencyContactName ?? ''}
         />
       </div>
-      <div className="field">
-        <label htmlFor="emergencyContactPhone">{t('patient.emergencyPhone')}</label>
-        <input
+      <div className={field}>
+        <Label htmlFor="emergencyContactPhone">{t('patient.emergencyPhone')}</Label>
+        <Input
           id="emergencyContactPhone"
           name="emergencyContactPhone"
           type="tel"
@@ -149,10 +153,10 @@ export function PatientForm({
 
       {children}
 
-      <div className="field wide">
-        <button type="submit" disabled={busy}>
+      <div className={wideField}>
+        <Button type="submit" disabled={busy} className="w-full sm:w-auto sm:justify-self-start">
           {submitLabel}
-        </button>
+        </Button>
       </div>
     </form>
   );
@@ -189,23 +193,32 @@ function GuardianPicker({
   }
 
   return (
-    <fieldset className="field wide guardian">
-      <legend>{t('patient.guardian')}</legend>
-      <p className="hint">{t('patient.guardianHint')}</p>
+    <fieldset className="field wide guardian m-0 grid min-w-0 gap-3 rounded-xl border border-border p-4 pt-2 sm:col-span-2">
+      <legend className="px-1 text-sm font-semibold">{t('patient.guardian')}</legend>
+      <p className="hint text-sm text-muted-foreground">{t('patient.guardianHint')}</p>
       {value ? (
-        <p data-testid="guardian-selected">
-          <strong>{value.name}</strong> · {value.uhid}{' '}
-          <button type="button" className="secondary" onClick={() => onChange(null)}>
+        <p
+          data-testid="guardian-selected"
+          className="flex flex-wrap items-center gap-x-2 gap-y-2 rounded-xl bg-accent px-3 py-2 text-accent-foreground"
+        >
+          <strong>{value.name}</strong> · <span className="tabular">{value.uhid}</span>{' '}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="ml-auto min-h-11"
+            onClick={() => onChange(null)}
+          >
             {t('patient.guardianRemove')}
-          </button>
+          </Button>
         </p>
       ) : (
         <>
-          <div className="search">
-            <label htmlFor="guardian-q" className="visually-hidden">
+          <div className="search grid grid-cols-1 gap-2 sm:grid-cols-[1fr_auto]">
+            <Label htmlFor="guardian-q" className="sr-only">
               {t('patient.guardianSearch')}
-            </label>
-            <input
+            </Label>
+            <Input
               id="guardian-q"
               type="search"
               value={query}
@@ -219,20 +232,33 @@ function GuardianPicker({
               }}
               placeholder={t('dashboard.searchHint')}
             />
-            <button type="button" className="secondary" onClick={() => void find()}>
+            <Button type="button" variant="outline" onClick={() => void find()}>
               {t('patient.guardianSearch')}
-            </button>
+            </Button>
           </div>
-          {error && <p className="alert">{error}</p>}
-          {results && results.length === 0 && <p className="hint">{t('dashboard.noPatients')}</p>}
+          {error && (
+            <p className="alert rounded-xl bg-danger-soft px-3 py-2 text-sm text-destructive">
+              {error}
+            </p>
+          )}
+          {results && results.length === 0 && (
+            <p className="hint text-sm text-muted-foreground">{t('dashboard.noPatients')}</p>
+          )}
           {results && results.length > 0 && (
-            <ul className="pick-list">
+            <ul className="pick-list m-0 grid list-none gap-2 p-0">
               {results.map((p) => (
-                <li key={p.id}>
-                  {p.name} · {p.uhid}{' '}
-                  <button
+                <li
+                  key={p.id}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border px-3 py-2"
+                >
+                  <span className="min-w-0">
+                    {p.name} · <span className="tabular">{p.uhid}</span>
+                  </span>{' '}
+                  <Button
                     type="button"
-                    className="secondary"
+                    variant="outline"
+                    size="sm"
+                    className="min-h-11"
                     onClick={() => {
                       onChange({ id: p.id, uhid: p.uhid, name: p.name });
                       setResults(null);
@@ -240,7 +266,7 @@ function GuardianPicker({
                     }}
                   >
                     {t('patient.choose')}
-                  </button>
+                  </Button>
                 </li>
               ))}
             </ul>

@@ -89,14 +89,88 @@ export type TemplateItem = z.infer<typeof TemplateItem>;
 export const PrescriptionItem = z.object({ id: z.uuid(), ...lineFields });
 export type PrescriptionItem = z.infer<typeof PrescriptionItem>;
 
+// ---- Safety engine (PRD §6.5) ---------------------------------------------------------
+
+/** One alert from the safety engine, with what the doctor has done about it. */
+export const SafetyAlert = z.object({
+  /** Rule, line and subject: the same problem keeps its key, a different one gets a new key. */
+  key: z.string(),
+  /** A rule from docs/safety/safety-rule-catalogue.md, e.g. `SR-05`. */
+  ruleId: z.string().regex(/^SR-\d{2}$/),
+  severity: z.enum(['block', 'warn', 'info']),
+  /** The line it is about; null for the whole prescription. */
+  itemId: z.uuid().nullable(),
+  /** A block the drug database allows overriding with a reason. */
+  overridable: z.boolean(),
+  /** Acknowledging (a warning) or overriding (a block) needs a typed reason. */
+  reasonRequired: z.boolean(),
+  /** Based on a patient-reported allergy, condition or medicine not yet verified (SR-21). */
+  unverified: z.boolean(),
+  /** Names and numbers for the screen's own wording (medicine, molecule, allergy…). */
+  params: z.record(z.string(), z.union([z.string(), z.number()])),
+  /** English, as stored in the safety log. */
+  message: z.string(),
+  action: z.enum(['acknowledged', 'overridden']).nullable(),
+  reason: z.string().nullable(),
+  actionAt: z.iso.datetime().nullable(),
+});
+export type SafetyAlert = z.infer<typeof SafetyAlert>;
+
+export const SafetySummary = z.object({
+  alerts: z.array(SafetyAlert),
+  /** The reference drug data the checks used. */
+  drugDatabaseVersion: z.string(),
+  /** Blocks not overridden; signing stays disabled while any remain. */
+  openBlocks: z.number().int().min(0),
+  /** Warnings not yet acknowledged. */
+  openWarnings: z.number().int().min(0),
+});
+export type SafetySummary = z.infer<typeof SafetySummary>;
+
+export const SafetyActionBody = z
+  .object({
+    key: z.string().min(1).max(300),
+    /** `acknowledge` a warning, or `override` a block the database allows overriding. */
+    action: z.enum(['acknowledge', 'override']),
+    reason: z.string().trim().max(300).nullable(),
+  })
+  .refine((b) => b.action !== 'override' || (b.reason ?? '') !== '', {
+    message: 'An override needs a reason.',
+    path: ['reason'],
+  });
+export type SafetyActionBody = z.infer<typeof SafetyActionBody>;
+
+export const PrescriptionStatus = z.enum(['draft', 'signed', 'superseded', 'void']);
+export type PrescriptionStatus = z.infer<typeof PrescriptionStatus>;
+
+export const SignatureMethod = z.enum(['test_key', 'cloud_dsc']);
+export type SignatureMethod = z.infer<typeof SignatureMethod>;
+
 export const Prescription = z.object({
   id: z.uuid(),
-  status: z.enum(['draft', 'signed', 'void']),
+  /** A signed version is immutable; an amendment supersedes it, or it is voided. */
+  status: PrescriptionStatus,
+  /** 1, then 2 and on for each amendment. */
+  version: z.number().int().positive(),
+  /** Given at the first signing (the doctor's prefix and a running number); kept by amendments. */
+  number: z.string().nullable(),
+  /** Why this version corrects the previous one (amendments only). */
+  amendmentReason: z.string().nullable(),
+  signedAt: z.iso.datetime().nullable(),
+  /** `test_key` signatures are for development and staging only. */
+  signatureMethod: SignatureMethod.nullable(),
+  /** The page the QR opens: Genuine, Superseded or Void. */
+  verificationUrl: z.url().nullable(),
+  supersededAt: z.iso.datetime().nullable(),
+  voidedAt: z.iso.datetime().nullable(),
+  voidReason: z.string().nullable(),
   language: Language,
   items: z.array(PrescriptionItem),
   /** Increases on every save; send it back so a stale tab cannot overwrite newer lines. */
   revision: z.number().int().positive(),
   updatedAt: z.iso.datetime(),
+  /** The server's safety check of these lines (it runs on every save). */
+  safety: SafetySummary,
 });
 export type Prescription = z.infer<typeof Prescription>;
 
@@ -107,8 +181,118 @@ export const PrescriptionView = z.object({
   defaultLanguage: Language,
   /** True when the signed-in doctor may write it (their visit, checked in, not signed). */
   canEdit: z.boolean(),
+  /**
+   * For the visit's doctor: what still stops signing apart from the safety alerts (an
+   * incomplete profile, platform verification, the signing PIN, or no signing service).
+   */
+  signingMissing: z.array(z.enum(['profile', 'verification', 'pin', 'service'])),
+  /** The latest version is signed and the signed-in doctor may correct or void it. */
+  canAmend: z.boolean(),
+  /** Every version for this visit, newest first. */
+  versions: z.array(
+    z.object({
+      id: z.uuid(),
+      version: z.number().int().positive(),
+      status: PrescriptionStatus,
+      number: z.string().nullable(),
+      signedAt: z.iso.datetime().nullable(),
+    }),
+  ),
 });
 export type PrescriptionView = z.infer<typeof PrescriptionView>;
+
+// ---- Signing (PRD §6.6) -------------------------------------------------------------
+
+/** Six digits approve each signature on the web (biometrics on the phone apps, later). */
+const Pin = z.string().regex(/^\d{6}$/, 'Enter the 6-digit signing PIN.');
+
+export const SignPrescriptionBody = z.object({
+  /** The revision on screen, so the doctor signs exactly what they reviewed. */
+  revision: z.number().int().positive(),
+  pin: Pin,
+});
+export type SignPrescriptionBody = z.infer<typeof SignPrescriptionBody>;
+
+export const AmendPrescriptionBody = z.object({ reason: z.string().trim().min(1).max(300) });
+export type AmendPrescriptionBody = z.infer<typeof AmendPrescriptionBody>;
+
+export const VoidPrescriptionBody = z.object({
+  reason: z.string().trim().min(1).max(300),
+  pin: Pin,
+});
+export type VoidPrescriptionBody = z.infer<typeof VoidPrescriptionBody>;
+
+export const PaperSize = z.enum(['a4', 'a5']);
+export type PaperSize = z.infer<typeof PaperSize>;
+
+/** The doctor's details for the prescription pad and signing (PRD §9.1). */
+export const DoctorProfile = z.object({
+  registrationNumber: z.string().nullable(),
+  council: z.string().nullable(),
+  qualifications: z.string().nullable(),
+  specialty: z.string().nullable(),
+  rxPrefix: z.string().nullable(),
+  paperSize: PaperSize,
+  /** Checked by the platform team; changing the registration number or council resets it. */
+  verification: z.enum(['pending', 'verified']),
+  verifiedAt: z.iso.datetime().nullable(),
+  pinSet: z.boolean(),
+  /** Too many wrong PINs: signing waits until then. */
+  pinLockedUntil: z.iso.datetime().nullable(),
+});
+export type DoctorProfile = z.infer<typeof DoctorProfile>;
+
+const profileText = (max: number) => z.string().trim().min(1).max(max);
+
+export const SaveDoctorProfileBody = z.object({
+  registrationNumber: profileText(40),
+  council: profileText(120),
+  qualifications: profileText(200),
+  specialty: z.string().trim().max(120).nullable(),
+  rxPrefix: z
+    .string()
+    .trim()
+    .transform((v) => v.toUpperCase())
+    .pipe(z.string().regex(/^[A-Z0-9]{1,8}$/, 'Use 1 to 8 letters or digits.')),
+  paperSize: PaperSize,
+});
+export type SaveDoctorProfileBody = z.infer<typeof SaveDoctorProfileBody>;
+
+/** Setting or changing the PIN needs the account password. */
+export const SetSigningPinBody = z.object({ password: z.string().min(1).max(200), pin: Pin });
+export type SetSigningPinBody = z.infer<typeof SetSigningPinBody>;
+
+// ---- Public verification (PRD §9.4) -------------------------------------------------
+
+export const VerifyPrescriptionBody = z.object({ code: z.string().trim().min(10).max(40) });
+export type VerifyPrescriptionBody = z.infer<typeof VerifyPrescriptionBody>;
+
+/** What a pharmacist sees after scanning the QR: enough to match the paper, little more. */
+export const PrescriptionCheck = z.object({
+  status: z.enum(['genuine', 'superseded', 'void']),
+  number: z.string(),
+  version: z.number().int().positive(),
+  /** The newest signed version, when this one was superseded. */
+  latestVersion: z.number().int().positive().nullable(),
+  signedAt: z.iso.datetime(),
+  supersededAt: z.iso.datetime().nullable(),
+  voidedAt: z.iso.datetime().nullable(),
+  signatureMethod: SignatureMethod,
+  doctor: z.object({
+    name: z.string().nullable(),
+    qualifications: z.string().nullable(),
+    registrationNumber: z.string().nullable(),
+    council: z.string().nullable(),
+  }),
+  clinicName: z.string(),
+  patient: z.object({
+    initials: z.string(),
+    ageYears: z.number().int().nullable(),
+    gender: z.enum(['female', 'male', 'other']).nullable(),
+  }),
+  medicines: z.array(z.object({ name: z.string(), generic: z.string().nullable() })),
+});
+export type PrescriptionCheck = z.infer<typeof PrescriptionCheck>;
 
 export const SavePrescriptionBody = z.object({
   language: Language,

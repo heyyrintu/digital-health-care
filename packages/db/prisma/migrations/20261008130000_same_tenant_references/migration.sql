@@ -152,7 +152,8 @@ CREATE TRIGGER patients_keep_children
     'patients', 'guardian_patient_id', 'patient_tags', 'patient_id',
     'appointments', 'patient_id', 'allergies', 'patient_id',
     'medical_conditions', 'patient_id', 'current_medications', 'patient_id',
-    'vitals', 'patient_id', 'consultations', 'patient_id', 'prescriptions', 'patient_id');
+    'vitals', 'patient_id', 'consultations', 'patient_id', 'prescriptions', 'patient_id',
+    'bills', 'patient_id');
 CREATE TRIGGER tags_keep_children
   BEFORE UPDATE OF organisation_id ON tags
   FOR EACH ROW EXECUTE FUNCTION same_tenant_keep_children('patient_tags', 'tag_id');
@@ -174,6 +175,12 @@ CREATE TRIGGER appointments_keep_children
 CREATE TRIGGER medicines_keep_children
   BEFORE UPDATE OF organisation_id ON medicines
   FOR EACH ROW EXECUTE FUNCTION same_tenant_keep_children('prescription_items', 'medicine_id');
+-- Bills, payments, safety alerts and verifications check their own parents (billing,
+-- safety and signing migrations), and a billed or prescribed visit cannot move; a price
+-- list entry is the one parent those leave free to move under its bill lines.
+CREATE TRIGGER price_list_items_keep_children
+  BEFORE UPDATE OF organisation_id ON price_list_items
+  FOR EACH ROW EXECUTE FUNCTION same_tenant_keep_children('bill_items', 'price_list_item_id');
 
 -- Only the triggers above may run these functions. Creating a trigger needs EXECUTE on its
 -- function (firing one does not), so without this a clinic could attach the owner-run

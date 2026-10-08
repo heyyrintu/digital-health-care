@@ -10,10 +10,19 @@ import {
   type ConsultationMode,
 } from '@dhc/contracts';
 import { formatInr, rupeesToPaise } from '@dhc/domain';
+import { Button, Input, NativeSelect } from '@dhc/ui-web';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useSession } from './session-provider';
 
 const MODES: ConsultationMode[] = ['in_person', 'video', 'audio'];
+
+const H3 = 'mb-3 mt-7 text-xs font-bold uppercase tracking-wide text-muted-foreground';
+const ROW = 'flex flex-wrap items-center gap-x-3 gap-y-1 py-3';
+const PILL = 'rounded-full bg-accent px-2.5 py-0.5 text-xs font-semibold text-accent-foreground';
+const FORM = 'mt-4 grid items-end gap-3 sm:grid-cols-2';
+const FIELD = 'space-y-1.5';
+const LABEL = 'block text-sm font-medium';
+const ALERT = 'mt-3 rounded-xl bg-danger-soft px-4 py-3 text-sm font-medium text-destructive';
 
 /** Clinic admin: clinics, consultation types with fees, and booking rules (PRD §4.3). */
 export function PracticeCard() {
@@ -133,60 +142,67 @@ export function PracticeCard() {
 
   const alert = (section: string) =>
     errors[section] && (
-      <p role="alert" className="alert">
+      <p role="alert" className={ALERT}>
         {errors[section]}
       </p>
     );
 
   return (
-    <section aria-labelledby="practice-title" className="card">
-      <h2 id="practice-title">{t('practice.title')}</h2>
+    <section aria-labelledby="practice-title" className="surface p-4 sm:p-6">
+      <h2 id="practice-title" className="font-display text-lg font-bold">
+        {t('practice.title')}
+      </h2>
       {alert('load')}
 
-      <h3>{t('practice.clinicsTitle')}</h3>
+      <h3 className={H3}>{t('practice.clinicsTitle')}</h3>
       {clinics && clinics.length === 0 && <p>{t('practice.noClinics')}</p>}
       {clinics && clinics.length > 0 && (
-        <ul className="tag-list">
+        <ul className="divide-y divide-border/70">
           {clinics.map((c) => (
-            <li key={c.id} data-testid={`clinic-${c.name}`}>
+            <li key={c.id} data-testid={`clinic-${c.name}`} className={ROW}>
               <strong>{c.name}</strong>
-              {c.address && <span className="hint">{c.address}</span>}
-              {!c.active && <span className="pill">{t('practice.inactive')}</span>}
-              <button
+              {c.address && <span className="text-sm text-muted-foreground">{c.address}</span>}
+              {!c.active && <span className={PILL}>{t('practice.inactive')}</span>}
+              <Button
                 type="button"
-                className="secondary"
+                variant="outline"
+                className="ml-auto"
                 disabled={busy}
                 onClick={() => void setClinicActive(c, !c.active)}
               >
                 {c.active ? t('practice.deactivate') : t('practice.activate')}
-              </button>
+              </Button>
             </li>
           ))}
         </ul>
       )}
-      <form className="inline-form" onSubmit={addClinic}>
-        <div>
-          <label htmlFor="clinic-name">{t('practice.clinicName')}</label>
-          <input id="clinic-name" name="name" required maxLength={80} />
+      <form className={FORM} onSubmit={addClinic}>
+        <div className={FIELD}>
+          <label className={LABEL} htmlFor="clinic-name">
+            {t('practice.clinicName')}
+          </label>
+          <Input id="clinic-name" name="name" required maxLength={80} />
         </div>
-        <div>
-          <label htmlFor="clinic-address">{t('practice.clinicAddress')}</label>
-          <input id="clinic-address" name="address" maxLength={300} />
+        <div className={FIELD}>
+          <label className={LABEL} htmlFor="clinic-address">
+            {t('practice.clinicAddress')}
+          </label>
+          <Input id="clinic-address" name="address" maxLength={300} />
         </div>
-        <button type="submit" disabled={busy}>
+        <Button type="submit" disabled={busy} className="sm:col-span-2 sm:justify-self-start">
           {t('practice.addClinic')}
-        </button>
+        </Button>
       </form>
       {alert('clinics')}
 
-      <h3>{t('practice.typesTitle')}</h3>
+      <h3 className={H3}>{t('practice.typesTitle')}</h3>
       {types && types.length === 0 && <p>{t('practice.noTypes')}</p>}
       {types && types.length > 0 && (
-        <ul className="tag-list">
+        <ul className="divide-y divide-border/70">
           {types.map((ty) => (
-            <li key={ty.id} data-testid={`type-${ty.name}`}>
+            <li key={ty.id} data-testid={`type-${ty.name}`} className={ROW}>
               <strong>{ty.name}</strong>
-              <span className="hint">
+              <span className="text-sm text-muted-foreground">
                 {t('practice.typeSummary', {
                   mode: t(`mode.${ty.mode}`),
                   minutes: ty.defaultDurationMin,
@@ -195,38 +211,45 @@ export function PracticeCard() {
                 {ty.followUpFeePaise !== null &&
                   ` · ${t('practice.followUp', { fee: formatInr(ty.followUpFeePaise, locale) })}`}
               </span>
-              {ty.requiresPrepayment && <span className="pill">{t('practice.prepay')}</span>}
-              {!ty.active && <span className="pill">{t('practice.inactive')}</span>}
-              <button
+              {ty.requiresPrepayment && <span className={PILL}>{t('practice.prepay')}</span>}
+              {!ty.active && <span className={PILL}>{t('practice.inactive')}</span>}
+              <Button
                 type="button"
-                className="secondary"
+                variant="outline"
+                className="ml-auto"
                 disabled={busy}
                 onClick={() => void setTypeActive(ty, !ty.active)}
               >
                 {ty.active ? t('practice.deactivate') : t('practice.activate')}
-              </button>
+              </Button>
             </li>
           ))}
         </ul>
       )}
-      <form className="inline-form" onSubmit={addType}>
-        <div>
-          <label htmlFor="type-name">{t('practice.typeName')}</label>
-          <input id="type-name" name="name" required maxLength={60} />
+      <form className={FORM} onSubmit={addType}>
+        <div className={FIELD}>
+          <label className={LABEL} htmlFor="type-name">
+            {t('practice.typeName')}
+          </label>
+          <Input id="type-name" name="name" required maxLength={60} />
         </div>
-        <div>
-          <label htmlFor="type-mode">{t('practice.typeMode')}</label>
-          <select id="type-mode" name="mode" defaultValue="in_person">
+        <div className={FIELD}>
+          <label className={LABEL} htmlFor="type-mode">
+            {t('practice.typeMode')}
+          </label>
+          <NativeSelect id="type-mode" name="mode" defaultValue="in_person">
             {MODES.map((m) => (
               <option key={m} value={m}>
                 {t(`mode.${m}`)}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </div>
-        <div className="narrow-field">
-          <label htmlFor="type-duration">{t('practice.typeDuration')}</label>
-          <input
+        <div className={FIELD}>
+          <label className={LABEL} htmlFor="type-duration">
+            {t('practice.typeDuration')}
+          </label>
+          <Input
             id="type-duration"
             name="duration"
             type="number"
@@ -237,29 +260,36 @@ export function PracticeCard() {
             required
           />
         </div>
-        <div className="narrow-field">
-          <label htmlFor="type-fee">{t('practice.typeFee')}</label>
-          <input id="type-fee" name="fee" type="number" min={0} step="0.01" required />
+        <div className={FIELD}>
+          <label className={LABEL} htmlFor="type-fee">
+            {t('practice.typeFee')}
+          </label>
+          <Input id="type-fee" name="fee" type="number" min={0} step="0.01" required />
         </div>
-        <div className="narrow-field">
-          <label htmlFor="type-follow-up">{t('practice.typeFollowUpFee')}</label>
-          <input id="type-follow-up" name="followUpFee" type="number" min={0} step="0.01" />
+        <div className={FIELD}>
+          <label className={LABEL} htmlFor="type-follow-up">
+            {t('practice.typeFollowUpFee')}
+          </label>
+          <Input id="type-follow-up" name="followUpFee" type="number" min={0} step="0.01" />
         </div>
-        <label className="checkbox">
-          <input type="checkbox" name="prepay" /> {t('practice.typePrepay')}
+        <label className="flex min-h-11 items-center gap-2 text-sm sm:col-span-2">
+          <input type="checkbox" name="prepay" className="size-4 accent-primary" />{' '}
+          {t('practice.typePrepay')}
         </label>
-        <button type="submit" disabled={busy}>
+        <Button type="submit" disabled={busy} className="sm:col-span-2 sm:justify-self-start">
           {t('practice.addType')}
-        </button>
+        </Button>
       </form>
       {alert('types')}
 
-      <h3>{t('practice.rulesTitle')}</h3>
+      <h3 className={H3}>{t('practice.rulesTitle')}</h3>
       {rules && (
-        <form className="inline-form" onSubmit={saveRules}>
-          <div>
-            <label htmlFor="rules-horizon">{t('practice.horizon')}</label>
-            <input
+        <form className={FORM} onSubmit={saveRules}>
+          <div className={FIELD}>
+            <label className={LABEL} htmlFor="rules-horizon">
+              {t('practice.horizon')}
+            </label>
+            <Input
               id="rules-horizon"
               name="horizonDays"
               type="number"
@@ -269,9 +299,11 @@ export function PracticeCard() {
               defaultValue={rules.horizonDays}
             />
           </div>
-          <div>
-            <label htmlFor="rules-cutoff">{t('practice.cutoff')}</label>
-            <input
+          <div className={FIELD}>
+            <label className={LABEL} htmlFor="rules-cutoff">
+              {t('practice.cutoff')}
+            </label>
+            <Input
               id="rules-cutoff"
               name="cutoff"
               type="number"
@@ -281,9 +313,11 @@ export function PracticeCard() {
               defaultValue={rules.sameDayCutoffMinutes}
             />
           </div>
-          <div>
-            <label htmlFor="rules-overbook">{t('practice.overbook')}</label>
-            <input
+          <div className={FIELD}>
+            <label className={LABEL} htmlFor="rules-overbook">
+              {t('practice.overbook')}
+            </label>
+            <Input
               id="rules-overbook"
               name="overbook"
               type="number"
@@ -293,13 +327,13 @@ export function PracticeCard() {
               defaultValue={rules.overbookPerDay}
             />
           </div>
-          <button type="submit" disabled={busy}>
+          <Button type="submit" disabled={busy} className="sm:col-span-2 sm:justify-self-start">
             {t('common.save')}
-          </button>
+          </Button>
         </form>
       )}
       {notice && (
-        <p role="status" className="hint">
+        <p role="status" className="mt-3 text-sm font-medium text-success">
           {notice}
         </p>
       )}

@@ -35,6 +35,20 @@ import {
   VitalsBody,
   VitalsResponse,
 } from './consultations';
+import {
+  Bill,
+  BillView,
+  CollectionsQuery,
+  CollectionsReport,
+  CreatePriceListItemBody,
+  Payment,
+  PriceList,
+  PriceListItem,
+  Receipt,
+  RecordPaymentBody,
+  SaveBillBody,
+  UpdatePriceListItemBody,
+} from './billing';
 import { ErrorResponse } from './errors';
 import {
   LastPrescription,
@@ -45,8 +59,18 @@ import {
   PrescriptionTemplate,
   PrescriptionTemplateList,
   PrescriptionView,
+  SafetyActionBody,
+  SafetySummary,
   SavePrescriptionBody,
   SaveTemplateBody,
+  AmendPrescriptionBody,
+  DoctorProfile,
+  PrescriptionCheck,
+  SaveDoctorProfileBody,
+  SetSigningPinBody,
+  SignPrescriptionBody,
+  VerifyPrescriptionBody,
+  VoidPrescriptionBody,
 } from './prescriptions';
 import {
   AcceptInviteBody,
@@ -120,6 +144,10 @@ interface Operation {
   response?: z.ZodType;
   /** Success status; defaults to 200. 204 has no body. */
   status?: 200 | 201 | 204;
+  /** The response is a PDF file instead of JSON. */
+  pdf?: boolean;
+  /** For a 201 that a retry answers with 200 and the same body: what that 200 means. */
+  replay?: string;
 }
 
 /** Every endpoint, in one list. Field detail always comes from the Zod schemas. */
@@ -617,6 +645,91 @@ const operations: Operation[] = [
     response: Prescription,
   },
   {
+    method: 'post',
+    path: '/appointments/{id}/prescription/safety-actions',
+    operationId: 'actOnSafetyAlert',
+    summary: 'Acknowledge a safety warning or override an overridable block (the visit’s doctor)',
+    pathParams: ['id'],
+    body: SafetyActionBody,
+    response: SafetySummary,
+  },
+  {
+    method: 'get',
+    path: '/appointments/{id}/prescription/preview',
+    operationId: 'previewPrescriptionPdf',
+    summary: 'The draft as a PDF marked PREVIEW, before signing (doctor)',
+    pathParams: ['id'],
+    pdf: true,
+  },
+  {
+    method: 'post',
+    path: '/appointments/{id}/prescription/sign',
+    operationId: 'signPrescription',
+    summary: 'Sign the draft with the signing PIN: re-checked, rendered, signed and locked',
+    pathParams: ['id'],
+    body: SignPrescriptionBody,
+    response: Prescription,
+  },
+  {
+    method: 'post',
+    path: '/appointments/{id}/prescription/amend',
+    operationId: 'amendPrescription',
+    summary: 'Start the next version of a signed prescription, with a reason (the visit’s doctor)',
+    pathParams: ['id'],
+    body: AmendPrescriptionBody,
+    response: Prescription,
+    status: 201,
+  },
+  {
+    method: 'post',
+    path: '/appointments/{id}/prescription/void',
+    operationId: 'voidPrescription',
+    summary: 'Void the signed prescription with a reason and the signing PIN',
+    pathParams: ['id'],
+    body: VoidPrescriptionBody,
+    response: Prescription,
+  },
+  {
+    method: 'get',
+    path: '/prescriptions/{id}/pdf',
+    operationId: 'getPrescriptionPdf',
+    summary: 'A signed version’s PDF (the copy marked VOID once voided); doctor or front desk',
+    pathParams: ['id'],
+    pdf: true,
+  },
+  {
+    method: 'post',
+    path: '/verify',
+    operationId: 'verifyPrescription',
+    summary: 'Check a prescription from its QR code: Genuine, Superseded or Void',
+    public: true,
+    body: VerifyPrescriptionBody,
+    response: PrescriptionCheck,
+  },
+  {
+    method: 'get',
+    path: '/doctor-profile',
+    operationId: 'getDoctorProfile',
+    summary: 'The signed-in doctor’s prescription pad and signing details',
+    response: DoctorProfile,
+  },
+  {
+    method: 'put',
+    path: '/doctor-profile',
+    operationId: 'saveDoctorProfile',
+    summary: 'Save registration, qualifications, prefix and paper size (doctor)',
+    body: SaveDoctorProfileBody,
+    response: DoctorProfile,
+  },
+  {
+    method: 'put',
+    path: '/doctor-profile/signing-pin',
+    operationId: 'setSigningPin',
+    summary: 'Set or change the signing PIN, confirmed with the account password',
+    body: SetSigningPinBody,
+    status: 204,
+  },
+  {
     method: 'get',
     path: '/patients/{id}/last-prescription',
     operationId: 'getLastPrescription',
@@ -648,6 +761,77 @@ const operations: Operation[] = [
     summary: 'Delete one of your templates (doctor)',
     pathParams: ['id'],
     status: 204,
+  },
+  {
+    method: 'get',
+    path: '/price-list',
+    operationId: 'listPriceList',
+    summary: 'The clinic’s price list, active and inactive (staff)',
+    response: PriceList,
+  },
+  {
+    method: 'post',
+    path: '/price-list',
+    operationId: 'createPriceListItem',
+    summary: 'Add a chargeable item (clinic admin)',
+    body: CreatePriceListItemBody,
+    response: PriceListItem,
+    status: 201,
+  },
+  {
+    method: 'patch',
+    path: '/price-list/{id}',
+    operationId: 'updatePriceListItem',
+    summary: 'Rename, reprice or deactivate an item; bills keep the old price (clinic admin)',
+    pathParams: ['id'],
+    body: UpdatePriceListItemBody,
+    response: PriceListItem,
+  },
+  {
+    method: 'get',
+    path: '/appointments/{id}/bill',
+    operationId: 'getBill',
+    summary: 'A visit’s bill with its payments, and the fees it can use (staff)',
+    pathParams: ['id'],
+    response: BillView,
+  },
+  {
+    method: 'put',
+    path: '/appointments/{id}/bill',
+    operationId: 'saveBill',
+    summary:
+      'Create or replace the visit’s bill; the server prices every line; fixed after the first payment (front desk, doctor)',
+    pathParams: ['id'],
+    body: SaveBillBody,
+    response: Bill,
+  },
+  {
+    method: 'post',
+    path: '/bills/{id}/payments',
+    operationId: 'recordPayment',
+    summary:
+      'Record a counter payment (cash, UPI, card) with its receipt number; repeating the same payment ID returns it (front desk, doctor)',
+    pathParams: ['id'],
+    body: RecordPaymentBody,
+    response: Payment,
+    status: 201,
+    replay: 'The payment was already recorded under this ID',
+  },
+  {
+    method: 'get',
+    path: '/payments/{id}/receipt',
+    operationId: 'getReceipt',
+    summary: 'A payment’s receipt, for printing (staff)',
+    pathParams: ['id'],
+    response: Receipt,
+  },
+  {
+    method: 'get',
+    path: '/collections',
+    operationId: 'getCollections',
+    summary: 'A day’s collections by mode and doctor, with the visits still due (staff)',
+    query: CollectionsQuery,
+    response: CollectionsReport,
   },
   {
     method: 'get',
@@ -775,13 +959,25 @@ export function buildOpenApiDocument(options: { version: string; serverUrl?: str
           }
         : {}),
       responses: {
-        [String(status)]:
-          status === 204 || !op.response
+        [String(status)]: op.pdf
+          ? {
+              description: 'PDF',
+              content: { 'application/pdf': { schema: { type: 'string', format: 'binary' } } },
+            }
+          : status === 204 || !op.response
             ? { description: 'No content' }
             : {
                 description: status === 201 ? 'Created' : 'OK',
                 content: { 'application/json': { schema: toSchema(op.response) } },
               },
+        ...(op.replay && op.response
+          ? {
+              '200': {
+                description: op.replay,
+                content: { 'application/json': { schema: toSchema(op.response) } },
+              },
+            }
+          : {}),
         default: errorResponse,
       },
     };

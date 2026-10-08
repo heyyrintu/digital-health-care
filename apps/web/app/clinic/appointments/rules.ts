@@ -46,3 +46,12 @@ export const canRecordVitals = (a: Appointment, role: string, today: string) =>
   role === 'front_desk' &&
   a.date === today &&
   ['pending', 'confirmed', 'checked_in', 'in_consultation'].includes(a.status);
+
+/**
+ * The bill screen (PRD §5.6): front desk and doctors bill visits whose patient has
+ * arrived; clinic admins open a bill once one exists.
+ */
+export const canBill = (a: Appointment, role: string) =>
+  ((role === 'front_desk' || role === 'doctor') &&
+    ['checked_in', 'in_consultation', 'completed'].includes(a.status)) ||
+  (role === 'clinic_admin' && a.bill !== null);

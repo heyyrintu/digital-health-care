@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { BillSummary } from './billing';
 import { Gender } from './patients';
 import { ConsultationMode } from './scheduling';
 import { TagRef } from './tags';
@@ -67,6 +68,8 @@ export const Appointment = z.object({
   consultationStartedAt: z.iso.datetime().nullable(),
   completedAt: z.iso.datetime().nullable(),
   createdAt: z.iso.datetime(),
+  /** The visit's bill, once one is made. */
+  bill: BillSummary.nullable(),
 });
 export type Appointment = z.infer<typeof Appointment>;
 
