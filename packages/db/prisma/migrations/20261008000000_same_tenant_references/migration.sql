@@ -12,23 +12,30 @@
 -- A NULL reference is left to the column's own nullability. The lookup compares
 -- organisation_id explicitly, so it holds for the owner role too, not only under RLS. The
 -- table is schema-qualified with a fixed search_path so a temporary table cannot stand in.
-CREATE FUNCTION same_tenant_reference() RETURNS trigger LANGUAGE plpgsql
+--
+-- The referenced row is locked FOR SHARE until the writing transaction ends. That conflicts
+-- with the row lock a concurrent move of the parent takes, so a parent cannot change
+-- organisation between this check and the commit: whichever writes second waits, then
+-- sees the other's result (a moved parent fails this check; a new child fails the
+-- parent's same_tenant_keep_children). The function runs as its owner so it can lock
+-- platform rows (shared medicines) that row-level security would not let a clinic lock.
+CREATE FUNCTION same_tenant_reference() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER
   SET search_path = pg_catalog, public, pg_temp AS $$
 DECLARE
   ref_table text := TG_ARGV[0];
   ref_column text := TG_ARGV[1];
   allow_shared boolean := TG_NARGS > 2 AND TG_ARGV[2] = 'shared';
   ref_id uuid := to_jsonb(NEW) ->> ref_column;
-  ok boolean;
+  hit int;
 BEGIN
   IF ref_id IS NULL THEN
     RETURN NEW;
   END IF;
   EXECUTE format(
-    'SELECT EXISTS (SELECT 1 FROM public.%I r WHERE r.id = $1 AND (r.organisation_id = $2 OR ($3 AND r.organisation_id IS NULL)))',
+    'SELECT 1 FROM public.%I r WHERE r.id = $1 AND (r.organisation_id = $2 OR ($3 AND r.organisation_id IS NULL)) FOR SHARE',
     ref_table
-  ) INTO ok USING ref_id, NEW.organisation_id, allow_shared;
-  IF NOT ok THEN
+  ) INTO hit USING ref_id, NEW.organisation_id, allow_shared;
+  IF hit IS NULL THEN
     RAISE EXCEPTION '%.% does not match a % row in the same organisation',
       TG_TABLE_NAME, ref_column, ref_table USING ERRCODE = '23514';
   END IF;

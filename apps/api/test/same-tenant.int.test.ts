@@ -432,4 +432,93 @@ describe('a clinic B row cannot point at a clinic A row', () => {
       h.owner.clinic.update({ where: { id: spare.id }, data: move }),
     ).resolves.toMatchObject(move);
   });
+
+  describe('a concurrent move and a new reference cannot both commit', () => {
+    const KEEPS = /is still referenced by \w+\.\w+; it keeps its organisation/;
+    const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+    /** A promise to await inside a transaction, and the function that lets it finish. */
+    const latch = () => {
+      let open!: () => void;
+      const done = new Promise<void>((r) => (open = r));
+      return { done, open };
+    };
+    const allergy = (patientId: string) => ({
+      organisationId: clinics.b.org.id,
+      patientId,
+      substance: 'Sulfa',
+      source: 'doctor' as const,
+      recordedByUserId: doctorB,
+    });
+    /** 'waiting' while `p` is still blocked after a moment. */
+    const state = (p: Promise<unknown>) =>
+      Promise.race([
+        p.then(
+          () => 'done',
+          () => 'failed',
+        ),
+        sleep(300).then(() => 'waiting'),
+      ]);
+
+    it('a reference first: the move waits for it, then is refused', async () => {
+      // A medicine: unlike patients, its organisation is in no unique index, so only the
+      // trigger's lock (not the foreign key's) makes the move wait.
+      const medicine = await h.owner.medicine.create({
+        data: {
+          organisationId: clinics.b.org.id,
+          name: 'Race syrup',
+          genericName: 'Syrup',
+          composition: 'Syrup',
+          form: 'syrup',
+          source: 'clinic',
+        },
+      });
+      const inserted = latch();
+      const release = latch();
+      const child = asB(async (tx) => {
+        await tx.prescriptionItem.create({
+          data: {
+            id: randomUUID(),
+            organisationId: clinics.b.org.id,
+            prescriptionId: b.prescriptionId,
+            medicineId: medicine.id,
+            name: 'Race syrup',
+            steps: [],
+            remarks: '',
+            sortOrder: 0,
+          },
+        });
+        inserted.open();
+        await release.done;
+      });
+      await inserted.done;
+      const move = h.owner.medicine.update({
+        where: { id: medicine.id },
+        data: { organisationId: clinics.a.org.id },
+      });
+      expect(await state(move)).toBe('waiting');
+      release.open();
+      await child;
+      await expect(move).rejects.toThrow(KEEPS);
+    });
+
+    it('a move first: the reference waits for it, then is refused', async () => {
+      const patientId = clinics.b.patients[2]!.id;
+      const moved = latch();
+      const release = latch();
+      const moving = h.owner.$transaction(async (tx) => {
+        await tx.patient.update({
+          where: { id: patientId },
+          data: { organisationId: clinics.a.org.id },
+        });
+        moved.open();
+        await release.done;
+      });
+      await moved.done;
+      const child = asB((tx) => tx.allergy.create({ data: allergy(patientId) }));
+      expect(await state(child)).toBe('waiting');
+      release.open();
+      await moving;
+      await expect(child).rejects.toThrow(MISMATCH);
+    });
+  });
 });
