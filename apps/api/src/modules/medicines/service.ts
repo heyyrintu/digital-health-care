@@ -357,8 +357,14 @@ export class MedicineMasterService {
     return tx.medicine.findUniqueOrThrow({ where: { id: created.id }, include: withIngredients });
   }
 
-  /** The clinic's own medicine names are unique, ignoring case. */
+  /**
+   * The clinic's own medicine names are unique, ignoring case. The lock on the clinic and
+   * name lasts until the transaction ends, so two admins saving the same name at once
+   * cannot both pass the check.
+   */
   private async checkName(tx: Tx, actor: Actor, name: string, exceptId?: string) {
+    const key = `medicine-name:${actor.organisationId}:${name.trim().toLowerCase()}`;
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${key}))`;
     const clash = await tx.medicine.findFirst({
       where: {
         organisationId: actor.organisationId,

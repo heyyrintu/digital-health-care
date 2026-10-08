@@ -252,6 +252,20 @@ describe('medicine master', () => {
     expect(await h.owner.auditLog.count({ where: { action: 'medicine.created' } })).toBe(1);
   });
 
+  it('keeps names unique when two admins add the same name at once', async () => {
+    const body = await newMedicine({ name: 'Twin Tab' });
+    const codes = await Promise.all([
+      call('POST', '/medicine-master', adminA, body),
+      call('POST', '/medicine-master', adminA, { ...body, name: 'twin tab' }),
+    ]);
+    expect(codes.map((r) => r.statusCode).sort()).toEqual([201, 409]);
+    expect(
+      await h.owner.medicine.count({
+        where: { name: { equals: 'twin tab', mode: 'insensitive' } },
+      }),
+    ).toBe(1);
+  });
+
   it('checks a clinic medicine with ingredients fully; without them, SR-22 says checks are limited', async () => {
     const withIngredients = MasterMedicine.parse(
       (await call('POST', '/medicine-master', adminA, await newMedicine())).json(),
