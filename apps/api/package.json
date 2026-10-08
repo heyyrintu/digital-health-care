@@ -13,25 +13,33 @@
     "test": "vitest run",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "seed": "tsx --env-file-if-exists=../../.env src/scripts/seed.ts",
-    "support:reset-authenticator": "tsx --env-file-if-exists=../../.env src/scripts/support-reset-authenticator.ts"
+    "support:reset-authenticator": "tsx --env-file-if-exists=../../.env src/scripts/support-reset-authenticator.ts",
+    "support:verify-doctor": "tsx --env-file-if-exists=../../.env src/scripts/support-verify-doctor.ts"
   },
   "dependencies": {
     "@dhc/contracts": "workspace:*",
     "@dhc/db": "workspace:*",
     "@dhc/domain": "workspace:*",
+    "@dhc/i18n": "workspace:*",
     "@dhc/safety": "workspace:*",
     "@fastify/cors": "^11.3.0",
     "@fastify/rate-limit": "^11.2.0",
+    "@fontsource/noto-sans-devanagari": "5.2.8",
     "@prisma/adapter-pg": "7.10.0",
     "@prisma/client": "7.10.0",
     "fastify": "^5.12.5",
     "jose": "^6.2.12",
+    "pdf-lib": "1.17.1",
+    "pdfkit": "0.17.2",
     "pg": "^8.23.1",
+    "qrcode": "1.5.4",
     "zod": "^4.6.5"
   },
   "devDependencies": {
     "@dhc/config": "workspace:*",
     "@types/node": "^22.20.5",
+    "@types/pdfkit": "^0.17.6",
+    "@types/qrcode": "^1.5.6",
     "tsup": "^8.5.1",
     "tsx": "^4.23.15"
   }

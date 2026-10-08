@@ -1,18 +1,16 @@
 import {
-  DoseStep,
   TemplateItem,
   type LastPrescription,
   type Medicine,
   type Prescription,
   type PrescriptionTemplate,
   type PrescriptionView,
-  type Role,
   type SafetyActionBody,
   type SafetySummary,
   type SavePrescriptionBody,
   type SaveTemplateBody,
 } from '@dhc/contracts';
-import { Prisma, withAuth, withTenant, type Tx } from '@dhc/db';
+import { Prisma, withTenant, type Tx } from '@dhc/db';
 import { dosageRemarks } from '@dhc/domain';
 import type { FastifyRequest } from 'fastify';
 import { z } from 'zod';
@@ -20,39 +18,23 @@ import { AppError } from '../../errors';
 import type { Services } from '../../services';
 import { writeAudit } from '../audit/write';
 import { lockVisit, NOTE_STATUSES } from '../clinical/service';
+import { findProfile, signingGaps } from '../doctors/service';
 import { checkAndRecord, summarise, type SafetyVisit } from './safety';
+import {
+  auditVisit,
+  currentPrescription,
+  fromDbDate,
+  invalid,
+  itemOut,
+  NOT_FOUND,
+  prescriptionOut,
+  staffNames,
+  writableVisit,
+  type Actor,
+  type PrescriptionRow,
+} from './shared';
 
-interface Actor {
-  userId: string;
-  organisationId: string;
-  role: Role;
-}
-
-const NOT_FOUND = () => new AppError(404, 'NOT_FOUND', 'Not found.');
-const invalid = (field: string, message: string) =>
-  new AppError(400, 'VALIDATION_FAILED', message, { [field]: 'invalid' });
-const fromDbDate = (date: Date) => date.toISOString().slice(0, 10);
-
-const Steps = z.array(DoseStep);
 const TemplateItems = z.array(TemplateItem);
-
-type ItemRow = Prisma.PrescriptionItemGetPayload<object>;
-type PrescriptionRow = Prisma.PrescriptionGetPayload<{ include: { items: true } }>;
-
-const itemOut = (row: ItemRow) => ({
-  id: row.id,
-  medicineId: row.medicineId,
-  name: row.name,
-  composition: row.composition,
-  form: row.form,
-  route: row.route,
-  timing: row.timing,
-  steps: Steps.parse(row.steps),
-  quantity: row.quantity,
-  instructions: row.instructions,
-  remarks: row.remarks,
-  remarksEdited: row.remarksEdited,
-});
 
 const withoutId = ({ id: _id, ...line }: ReturnType<typeof itemOut>) => line;
 
@@ -110,8 +92,8 @@ export class PrescribingService {
         include: { patient: { select: { language: true } }, consultation: true },
       });
       if (!appointment) throw NOT_FOUND();
-      const row = await this.current(tx, appointmentId);
-      await this.audit(tx, request, actor, 'prescription.viewed', appointmentId);
+      const row = await currentPrescription(tx, appointmentId);
+      await auditVisit(tx, request, actor, 'prescription.viewed', appointmentId);
       // The chart may have changed since the last save (a new allergy, today's weight), so
       // a draft is checked again on opening.
       // Only the visit's doctor writes to the safety log; others see the check without it.
@@ -119,14 +101,29 @@ export class PrescribingService {
       const persist = row?.status === 'draft' && appointment.doctorUserId === actor.userId;
       if (persist) await lockVisit(tx, appointmentId);
       const safety = row ? await this.safety(tx, actor, appointment, row, persist) : null;
+      const ownVisit = appointment.doctorUserId === actor.userId;
+      const amending = row?.status === 'draft' && row.amendsPrescriptionId !== null;
+      const versions = await tx.prescription.findMany({
+        where: { appointmentId },
+        select: { id: true, version: true, status: true, number: true, signedAt: true },
+        orderBy: { version: 'desc' },
+      });
       return {
-        prescription: row && safety ? this.out(row, safety) : null,
+        prescription: row && safety ? prescriptionOut(row, safety, this.s.webBaseUrl) : null,
         defaultLanguage: appointment.patient.language,
         canEdit:
-          appointment.doctorUserId === actor.userId &&
+          ownVisit &&
           NOTE_STATUSES.includes(appointment.status) &&
-          !appointment.consultation?.lockedAt &&
+          (!appointment.consultation?.lockedAt || amending) &&
           (row?.status ?? 'draft') === 'draft',
+        signingMissing: ownVisit
+          ? signingGaps(await findProfile(tx, actor), this.s.signer !== null)
+          : [],
+        canAmend: ownVisit && row?.status === 'signed',
+        versions: versions.map((v) => ({
+          ...v,
+          signedAt: v.signedAt?.toISOString() ?? null,
+        })),
       };
     });
   }
@@ -145,7 +142,7 @@ export class PrescribingService {
     if (new Set(ids).size !== ids.length) throw invalid('items', 'Each line needs its own ID.');
 
     return withTenant(this.s.db, actor.organisationId, async (tx) => {
-      const { appointment, existing } = await this.writable(tx, actor, appointmentId);
+      const { appointment, existing } = await writableVisit(tx, actor, appointmentId);
       if ((existing?.revision ?? 0) !== body.revision) {
         throw new AppError(
           409,
@@ -194,15 +191,15 @@ export class PrescribingService {
         }
         throw error;
       }
-      const saved = (await this.current(tx, appointmentId))!;
+      const saved = (await currentPrescription(tx, appointmentId))!;
       const safety = await this.safety(tx, actor, appointment, saved, true);
-      await this.audit(tx, request, actor, 'prescription.saved', appointmentId, {
+      await auditVisit(tx, request, actor, 'prescription.saved', appointmentId, {
         revision: prescription.revision,
         lines: body.items.length,
         openBlocks: safety.openBlocks,
         openWarnings: safety.openWarnings,
       });
-      return this.out(saved, safety);
+      return prescriptionOut(saved, safety, this.s.webBaseUrl);
     });
   }
 
@@ -218,7 +215,7 @@ export class PrescribingService {
     body: SafetyActionBody,
   ): Promise<SafetySummary> {
     return withTenant(this.s.db, actor.organisationId, async (tx) => {
-      const { appointment, existing } = await this.writable(tx, actor, appointmentId);
+      const { appointment, existing } = await writableVisit(tx, actor, appointmentId);
       if (!existing) throw NOT_FOUND();
       const { findings, summary } = await this.check(tx, actor, appointment, existing, true);
       const finding = findings.find((f) => f.key === body.key);
@@ -240,7 +237,7 @@ export class PrescribingService {
         where: { prescriptionId_key: { prescriptionId: existing.id, key: body.key } },
         data: { action, reason, actionByUserId: actor.userId, actionAt: this.s.now() },
       });
-      await this.audit(tx, request, actor, `prescription.safety_${action}`, appointmentId, {
+      await auditVisit(tx, request, actor, `prescription.safety_${action}`, appointmentId, {
         alertId: row.id,
         ruleId: finding.ruleId,
         drugDatabaseVersion: row.drugDatabaseVersion,
@@ -300,7 +297,7 @@ export class PrescribingService {
       return found;
     });
     if (!row) return null;
-    const names = await this.names([row.doctorUserId]);
+    const names = await staffNames(this.s.db, [row.doctorUserId]);
     return {
       appointmentId: row.appointmentId,
       date: fromDbDate(row.appointment.date),
@@ -372,27 +369,6 @@ export class PrescribingService {
 
   // ---- Helpers ----------------------------------------------------------------------
 
-  /** The visit, locked, if the actor may write its prescription now; and its draft. */
-  private async writable(tx: Tx, actor: Actor, appointmentId: string) {
-    const appointment = await lockVisit(tx, appointmentId);
-    if (appointment.doctorUserId !== actor.userId) {
-      throw new AppError(403, 'FORBIDDEN', 'Only the visit’s doctor can write this prescription.');
-    }
-    if (!NOTE_STATUSES.includes(appointment.status)) {
-      throw new AppError(
-        409,
-        'CONFLICT',
-        'A prescription can be written once the patient has checked in.',
-      );
-    }
-    const consultation = await tx.consultation.findUnique({ where: { appointmentId } });
-    const existing = await this.current(tx, appointmentId);
-    if (consultation?.lockedAt || (existing && existing.status !== 'draft')) {
-      throw new AppError(409, 'CONFLICT', 'This prescription is signed and can no longer change.');
-    }
-    return { appointment, existing };
-  }
-
   private check(tx: Tx, actor: Actor, visit: SafetyVisit, row: PrescriptionRow, persist: boolean) {
     return checkAndRecord(tx, {
       visit,
@@ -415,26 +391,6 @@ export class PrescribingService {
     return (await this.check(tx, actor, visit, row, persist)).summary;
   }
 
-  private current(tx: Tx, appointmentId: string): Promise<PrescriptionRow | null> {
-    return tx.prescription.findFirst({
-      where: { appointmentId },
-      include: { items: { orderBy: { sortOrder: 'asc' } } },
-      orderBy: { version: 'desc' },
-    });
-  }
-
-  private out(row: PrescriptionRow, safety: SafetySummary): Prescription {
-    return {
-      id: row.id,
-      status: row.status,
-      language: row.language,
-      items: row.items.map(itemOut),
-      revision: row.revision,
-      updatedAt: row.updatedAt.toISOString(),
-      safety,
-    };
-  }
-
   private templateOut(row: Prisma.PrescriptionTemplateGetPayload<object>): PrescriptionTemplate {
     return {
       id: row.id,
@@ -442,33 +398,5 @@ export class PrescribingService {
       items: TemplateItems.parse(row.items),
       updatedAt: row.updatedAt.toISOString(),
     };
-  }
-
-  private audit(
-    tx: Tx,
-    request: FastifyRequest,
-    actor: Actor,
-    action: string,
-    appointmentId: string,
-    metadata?: Prisma.InputJsonValue,
-  ) {
-    return writeAudit(tx, request, {
-      action,
-      organisationId: actor.organisationId,
-      actorUserId: actor.userId,
-      entityType: 'appointment',
-      entityId: appointmentId,
-      metadata,
-    });
-  }
-
-  /** Display names of staff (users are platform-level, outside tenant RLS). */
-  private async names(userIds: string[]): Promise<Map<string, string | null>> {
-    const ids = [...new Set(userIds)];
-    if (ids.length === 0) return new Map();
-    const users = await withAuth(this.s.db, (tx) =>
-      tx.user.findMany({ where: { id: { in: ids } }, select: { id: true, displayName: true } }),
-    );
-    return new Map(users.map((u) => [u.id, u.displayName]));
   }
 }

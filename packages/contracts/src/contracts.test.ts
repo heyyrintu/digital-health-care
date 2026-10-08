@@ -66,7 +66,7 @@ describe('buildOpenApiDocument', () => {
     expect(doc.components.schemas.ErrorResponse).toMatchObject({ type: 'object' });
   });
 
-  it('marks only sign-in, health and waiting-room screen endpoints as public', () => {
+  it('marks only sign-in, health, waiting-room screen and QR check endpoints as public', () => {
     const publicOps = Object.entries(doc.paths).flatMap(([path, ops]) =>
       Object.entries(ops)
         .filter(([, op]) => Array.isArray((op as { security?: unknown[] }).security))
@@ -83,6 +83,7 @@ describe('buildOpenApiDocument', () => {
       'POST /auth/otp/verify',
       'POST /auth/refresh',
       'POST /display/board',
+      'POST /verify',
     ]);
   });
 

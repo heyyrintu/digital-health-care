@@ -1,9 +1,14 @@
 import type { TokenResponse } from '@dhc/contracts';
 import { createDb, type Db } from '@dhc/db';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { buildApp } from '../src/app';
 import { hashPassword } from '../src/auth/password';
 import { generateTotpSecret, totpAt } from '../src/auth/totp';
+import { LocalFileStore } from '../src/files';
 import { createServices, type Services } from '../src/services';
+import { TestKeySigner } from '../src/signing/signer';
 
 const JWT_SECRET = 'integration-test-secret-'.padEnd(48, 'x');
 const FIELD_ENCRYPTION_KEY = Buffer.alloc(32, 3).toString('base64');
@@ -33,6 +38,8 @@ export function createHarness() {
     {
       otpSender: { send: async (phone, code) => void sentCodes.push({ phone, code }) },
       now: clock.now,
+      signer: new TestKeySigner(JWT_SECRET),
+      files: new LocalFileStore(mkdtempSync(join(tmpdir(), 'dhc-files-'))),
     },
   );
   const app = buildApp({
@@ -52,7 +59,7 @@ export type Harness = ReturnType<typeof createHarness>;
 
 export async function resetDatabase(owner: Db) {
   await owner.$executeRawUnsafe(
-    'TRUNCATE audit_logs, safety_alerts, prescription_templates, prescription_items, prescriptions, medicine_ingredients, medicines, drug_condition_rules, drug_cross_sensitivities, drug_interactions, drug_database, drug_molecules, consultations, vitals, allergies, medical_conditions, current_medications, display_screens, appointment_status_history, appointments, availability_exceptions, availability_versions, booking_rules, consultation_types, clinics, staff_invites, sessions, otp_challenges, memberships, patient_tags, tags, uhid_settings, patients, users, organisations CASCADE',
+    'TRUNCATE audit_logs, prescription_verifications, doctor_profiles, safety_alerts, prescription_templates, prescription_items, prescriptions, medicine_ingredients, medicines, drug_condition_rules, drug_cross_sensitivities, drug_interactions, drug_database, drug_molecules, consultations, vitals, allergies, medical_conditions, current_medications, display_screens, appointment_status_history, appointments, availability_exceptions, availability_versions, booking_rules, consultation_types, clinics, staff_invites, sessions, otp_challenges, memberships, patient_tags, tags, uhid_settings, patients, users, organisations CASCADE',
   );
 }
 

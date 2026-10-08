@@ -3,6 +3,8 @@ import { createHmac, hkdfSync } from 'node:crypto';
 import { FieldCipher } from './auth/field-cipher';
 import { TokenService } from './auth/tokens';
 import type { Config } from './config';
+import { LocalFileStore, type FileStore } from './files';
+import { TestKeySigner, type PrescriptionSigner } from './signing/signer';
 
 /** Delivers patient sign-in codes. The SMS/WhatsApp provider plugs in here (decision O5). */
 export interface OtpSender {
@@ -16,20 +18,34 @@ export interface Services {
   otpSender: OtpSender;
   /** HMAC for OTP codes at rest, keyed separately from JWT signing. */
   hashOtp(challengeId: string, code: string): string;
-  /** Web app origin for links sent to people (staff invites). */
+  /**
+   * Keyed digest of a signing PIN before it is hashed: a six-digit PIN cannot be guessed
+   * offline from a database copy without the server secret.
+   */
+  pepperPin(userId: string, pin: string): string;
+  /** Web app origin for links sent to people (staff invites, prescription QR codes). */
   webBaseUrl: string;
+  /** Null when signing is not set up on this server: signing then answers 503. */
+  signer: PrescriptionSigner | null;
+  files: FileStore;
   now(): Date;
 }
 
 export function createServices(
   config: Config,
-  overrides: { otpSender?: OtpSender; now?: () => Date } = {},
+  overrides: {
+    otpSender?: OtpSender;
+    now?: () => Date;
+    signer?: PrescriptionSigner | null;
+    files?: FileStore;
+  } = {},
 ): Services {
   const { DATABASE_URL, JWT_SECRET, FIELD_ENCRYPTION_KEY } = config;
   if (!DATABASE_URL || !JWT_SECRET || !FIELD_ENCRYPTION_KEY) {
     throw new Error('DATABASE_URL, JWT_SECRET and FIELD_ENCRYPTION_KEY are required');
   }
   const otpKey = Buffer.from(hkdfSync('sha256', JWT_SECRET, 'dhc-otp', 'otp-code-hash', 32));
+  const pinKey = Buffer.from(hkdfSync('sha256', JWT_SECRET, 'dhc-pin', 'signing-pin', 32));
 
   const otpSender: OtpSender =
     overrides.otpSender ??
@@ -51,7 +67,16 @@ export function createServices(
     otpSender,
     hashOtp: (challengeId, code) =>
       createHmac('sha256', otpKey).update(`${challengeId}:${code}`).digest('base64url'),
+    pepperPin: (userId, pin) =>
+      createHmac('sha256', pinKey).update(`${userId}:${pin}`).digest('base64url'),
     webBaseUrl: config.WEB_BASE_URL.replace(/\/+$/, ''),
+    signer:
+      overrides.signer !== undefined
+        ? overrides.signer
+        : config.SIGNER === 'test_key'
+          ? new TestKeySigner(JWT_SECRET)
+          : null,
+    files: overrides.files ?? new LocalFileStore(config.FILE_STORE_DIR ?? '.data/files'),
     now: overrides.now ?? (() => new Date()),
   };
 }

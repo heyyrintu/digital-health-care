@@ -21,10 +21,21 @@ const Env = z
     SIGN_IN_RATE_LIMIT: z.coerce.number().int().min(1).max(100_000).default(10),
     /** Comma-separated browser origins allowed to call the API. Defaults to WEB_BASE_URL. */
     CORS_ORIGINS: z.string().optional(),
+    /**
+     * Prescription signing (ADR 0008). `test_key` signs with a key derived from JWT_SECRET,
+     * labelled not legally valid: development and staging only, until the cloud DSC provider.
+     */
+    SIGNER: z.enum(['test_key', 'disabled']).default('disabled'),
+    /** Directory for stored files (signed PDFs) until object storage is connected. */
+    FILE_STORE_DIR: z.string().default('.data/files'),
   })
   .refine((env) => !(env.NODE_ENV === 'production' && env.OTP_DELIVERY === 'log'), {
     message: 'OTP_DELIVERY=log is not allowed in production',
     path: ['OTP_DELIVERY'],
+  })
+  .refine((env) => !(env.NODE_ENV === 'production' && env.SIGNER === 'test_key'), {
+    message: 'SIGNER=test_key is not allowed in production',
+    path: ['SIGNER'],
   });
 
 export type Config = z.infer<typeof Env>;
