@@ -5,9 +5,17 @@ import { Button, buttonVariants, cn, Input, Label, ModeTag, StatusChip } from '@
 import { formatInr } from '@dhc/domain';
 import Link from 'next/link';
 import { useState, type FormEvent } from 'react';
+import { ApiError } from '@dhc/api-client';
 import { AgeGender, TagChip } from '../patient-bits';
 import { useSession } from '../session-provider';
-import { actionsFor, canBill, canConsult, canRecordVitals, canReschedule } from './rules';
+import {
+  actionsFor,
+  canBill,
+  canConsult,
+  canPrintPrescription,
+  canRecordVitals,
+  canReschedule,
+} from './rules';
 
 const minutesSince = (iso: string | null, now: Date) =>
   iso ? Math.max(0, Math.floor((now.getTime() - Date.parse(iso)) / 60_000)) : 0;
@@ -31,14 +39,32 @@ export function AppointmentRow({
   busy: boolean;
   onAct(a: Appointment, action: AppointmentAction, reason?: string): Promise<void>;
 }) {
-  const { locale, t } = useSession();
+  const { api, locale, signOut, t } = useSession();
   const [cancelling, setCancelling] = useState(false);
+  const [printError, setPrintError] = useState<string | null>(null);
   const actions = actionsFor(a, me, today, now);
 
   async function cancel(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const reason = String(new FormData(event.currentTarget).get('reason') ?? '').trim();
     await onAct(a, 'cancel', reason);
+  }
+
+  /** Opens the signed PDF in a new tab to print. The tab opens first, so it is not blocked. */
+  async function printPrescription(id: string) {
+    setPrintError(null);
+    const tab = window.open('', '_blank');
+    try {
+      const blob = await api.requestFile('GET', `/prescriptions/${id}/pdf`);
+      const url = URL.createObjectURL(blob);
+      if (tab) tab.location.href = url;
+      else window.location.href = url;
+      setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (e) {
+      tab?.close();
+      if (e instanceof ApiError && e.status === 401) return void signOut('expired');
+      setPrintError(e instanceof ApiError ? e.message : t('error.network'));
+    }
   }
 
   const closed = ['cancelled', 'no_show', 'rescheduled'].includes(a.status);
@@ -200,6 +226,19 @@ export function AppointmentRow({
             {t('action.bill')}
           </Link>
         )}
+        {canPrintPrescription(a, me.role) && a.prescription && (
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className={small}
+            onClick={() => void printPrescription(a.prescription!.id)}
+          >
+            {a.prescription.status === 'void'
+              ? t('action.printVoidPrescription', { number: a.prescription.number })
+              : t('action.printPrescription', { number: a.prescription.number })}
+          </Button>
+        )}
         {canReschedule(a, me.role) && (
           <Link
             className={buttonVariants({ variant: 'outline', size: 'sm', className: small })}
@@ -218,6 +257,11 @@ export function AppointmentRow({
           >
             {t('action.cancel')}
           </Button>
+        )}
+        {printError && (
+          <p role="alert" className="w-full text-xs font-medium text-destructive">
+            {printError}
+          </p>
         )}
       </div>
     </li>

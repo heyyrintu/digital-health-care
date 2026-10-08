@@ -70,6 +70,18 @@ export const Appointment = z.object({
   createdAt: z.iso.datetime(),
   /** The visit's bill, once one is made. */
   bill: BillSummary.nullable(),
+  /**
+   * The visit's current signed prescription (the newest signed or voided version), for
+   * printing at the front desk: no clinical content. Null until the doctor signs.
+   */
+  prescription: z
+    .object({
+      id: z.uuid(),
+      number: z.string(),
+      version: z.number().int().min(1),
+      status: z.enum(['signed', 'void']),
+    })
+    .nullable(),
 });
 export type Appointment = z.infer<typeof Appointment>;
 

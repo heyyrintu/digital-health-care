@@ -5,6 +5,7 @@
  * Drug facts come from the synthetic sample, which is illustrative, not clinical data.
  */
 import {
+  AppointmentDetail,
   DoctorProfile,
   Prescription,
   PrescriptionCheck,
@@ -143,6 +144,9 @@ const signed = async (id: string, revision: number) => {
   expect(res.statusCode, res.body).toBe(200);
   return Prescription.parse(res.json());
 };
+/** The visit's prescription as the queue card shows it (no clinical content). */
+const card = async (id: string, tokens = doctorA) =>
+  AppointmentDetail.parse((await call('GET', `/appointments/${id}`, tokens)).json()).prescription;
 const codeOf = (rx: Prescription) => rx.verificationUrl!.split('/verify/')[1]!;
 const verify = async (code: string) => {
   const res = await call('POST', '/verify', null, { code });
@@ -472,8 +476,11 @@ describe('amendments, voiding and the QR check', () => {
   it('amends into version 2; the QR shows Genuine and Superseded correctly', async () => {
     await readyToSign();
     const id = await visit();
-    const v1 = await signed(id, (await saved(id, [await line('Paracetamol 500')])).revision);
+    const first = await saved(id, [await line('Paracetamol 500')]);
+    expect(await card(id)).toBeNull();
+    const v1 = await signed(id, first.revision);
     expect(await verify(codeOf(v1))).toMatchObject({ status: 'genuine', number: 'SD-00001' });
+    expect(await card(id)).toEqual({ id: v1.id, number: 'SD-00001', version: 1, status: 'signed' });
 
     const amend = await call('POST', `/appointments/${id}/prescription/amend`, doctorA, {
       reason: 'Dose corrected',
@@ -485,6 +492,7 @@ describe('amendments, voiding and the QR check', () => {
     expect(draft.items[0]!.name).toBe(v1.items[0]!.name);
     // Until it is signed, version 1 stays genuine; the amendment is writable after the lock.
     expect((await verify(codeOf(v1))).status).toBe('genuine');
+    expect((await card(id))?.id).toBe(v1.id);
     expect((await view(id)).canEdit).toBe(true);
     const edited = await saved(
       id,
@@ -498,6 +506,7 @@ describe('amendments, voiding and the QR check', () => {
     );
     const v2 = await signed(id, edited.revision);
     expect(v2).toMatchObject({ status: 'signed', version: 2, number: 'SD-00001' });
+    expect(await card(id)).toEqual({ id: v2.id, number: 'SD-00001', version: 2, status: 'signed' });
 
     expect(await verify(codeOf(v1))).toMatchObject({
       status: 'superseded',
@@ -554,6 +563,7 @@ describe('amendments, voiding and the QR check', () => {
     expect(row.pdfSha256).toBe(createHash('sha256').update(original).digest('hex'));
 
     expect(await verify(codeOf(rx))).toMatchObject({ status: 'void' });
+    expect(await card(id)).toEqual({ id: rx.id, number: 'SD-00001', version: 1, status: 'void' });
     expect(
       (await call('POST', `/appointments/${id}/prescription/amend`, doctorA, { reason: 'x' }))
         .statusCode,
@@ -579,12 +589,19 @@ describe('amendments, voiding and the QR check', () => {
     ).toBe(404);
   });
 
-  it('lets the front desk print, not the clinic admin; other clinics get 404', async () => {
+  it('lets the front desk find and print it, not the clinic admin; other clinics get 404', async () => {
     await readyToSign();
     const id = await visit();
     const rx = await signed(id, (await saved(id, [await line('Paracetamol 500')])).revision);
     const desk = await addStaff(h, clinics.a.org.id, 'front_desk', 'desk@clinic-a.test');
     const deskTokens = await staffLogin(h, 'clinic-a', desk);
+    // The queue card gives the front desk what it needs to print, nothing clinical.
+    expect(await card(id, deskTokens)).toEqual({
+      id: rx.id,
+      number: 'SD-00001',
+      version: 1,
+      status: 'signed',
+    });
     expect((await call('GET', `/prescriptions/${rx.id}/pdf`, deskTokens)).statusCode).toBe(200);
     const admin = await staffLogin(h, 'clinic-a', clinics.a.admin);
     expect((await call('GET', `/prescriptions/${rx.id}/pdf`, admin)).statusCode).toBe(403);
