@@ -52,8 +52,9 @@ async function setUp(db: Db, clinic: Clinic) {
 }
 
 test.describe('signing', () => {
-  test('the doctor fills the pad, signs with the PIN, amends, and voids; the QR page follows', async ({
+  test('the doctor fills the pad, signs with the PIN, amends, and voids; the QR page follows; the front desk prints', async ({
     page,
+    browser,
     clinic,
     db,
   }) => {
@@ -116,6 +117,24 @@ test.describe('signing', () => {
     expect(response.headers()['content-type']).toBe('application/pdf');
     await (await tab).close();
 
+    // The front desk prints it from the queue card, in its own browser.
+    const desk = await (
+      await browser.newContext({ baseURL: test.info().project.use.baseURL })
+    ).newPage();
+    await setUpFromInvite(desk, clinic.inviteLink('front_desk'), 'desk synthetic passphrase');
+    await desk.goto('/clinic/queue');
+    const patient = await db.patient.findUniqueOrThrow({ where: { id: visit.patientId } });
+    const deskCard = desk.getByTestId(`appointment-${patient.uhid}`);
+    const deskPdf = desk.waitForResponse(
+      (r) => r.request().method() === 'GET' && /\/prescriptions\/[^/]+\/pdf$/.test(r.url()),
+    );
+    const deskTab = desk.waitForEvent('popup');
+    await deskCard.getByRole('button', { name: `Print prescription ${prefix}-00001` }).click();
+    const printed = await deskPdf;
+    expect(printed.status()).toBe(200);
+    expect(printed.headers()['content-type']).toBe('application/pdf');
+    await (await deskTab).close();
+
     // The QR page says Genuine, with initials only.
     const v1 = await db.prescription.findFirstOrThrow({
       where: { appointmentId: visit.id, version: 1 },
@@ -160,5 +179,11 @@ test.describe('signing', () => {
     expect(v2.status).toBe('void');
     await qr.goto(`/verify/${v2.verificationCode}`);
     await expect(qr.getByTestId('verify-status')).toHaveText('Void');
+
+    // The front desk's card now offers the copy stamped VOID.
+    await desk.reload();
+    await expect(
+      deskCard.getByRole('button', { name: `Prescription ${prefix}-00001 (void)` }),
+    ).toBeVisible();
   });
 });
