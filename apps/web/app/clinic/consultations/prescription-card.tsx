@@ -13,6 +13,8 @@ import {
   type PrescriptionItem,
   type TemplateItem,
 } from '@dhc/contracts';
+import { Button, Input, Label, NativeSelect, cn } from '@dhc/ui-web';
+import { Copy, Search } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import { useSession } from '../session-provider';
 import { remarksOf, RxLine } from './rx-line';
@@ -324,11 +326,13 @@ export function PrescriptionCard({
 
   if (!view) {
     return error ? (
-      <p role="alert" className="alert">
+      <p role="alert" className={alertBox}>
         {error}
       </p>
     ) : (
-      <p aria-live="polite">{t('common.loading')}</p>
+      <p aria-live="polite" className="text-sm text-muted-foreground">
+        {t('common.loading')}
+      </p>
     );
   }
 
@@ -343,84 +347,114 @@ export function PrescriptionCard({
           : '';
 
   return (
-    <div className="rx">
-      <div className="card-header">
-        <h2>{t('rx.title')}</h2>
-        <p className="hint save-status" aria-live="polite" data-testid="rx-save-status">
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+        <h2 className="font-display text-lg font-bold">{t('rx.title')}</h2>
+        <p
+          aria-live="polite"
+          data-testid="rx-save-status"
+          className={cn(
+            'inline-flex min-h-6 items-center gap-1.5 whitespace-nowrap text-xs font-medium text-muted-foreground',
+            state === 'error' && 'text-destructive',
+          )}
+        >
+          {status && (
+            <span
+              aria-hidden
+              className={cn(
+                'size-2 rounded-full',
+                state === 'saved'
+                  ? 'bg-success'
+                  : state === 'error'
+                    ? 'bg-destructive'
+                    : 'bg-warning',
+              )}
+            />
+          )}
           {status}
         </p>
       </div>
-      {!view.canEdit && <p className="notice">{t('rx.readOnly')}</p>}
+      {!view.canEdit && <p className={noticeBox}>{t('rx.readOnly')}</p>}
       {state === 'stale' && (
-        <p role="alert" className="alert">
+        <p role="alert" className={cn(alertBox, 'flex flex-wrap items-center gap-x-2')}>
           {t('rx.stale')}{' '}
-          <button type="button" className="link-button" onClick={() => void load()}>
+          <Button type="button" variant="link" className="px-1" onClick={() => void load()}>
             {t('consult.reload')}
-          </button>
+          </Button>
         </p>
       )}
       {error && state !== 'stale' && (
-        <p role="alert" className="alert">
+        <p role="alert" className={alertBox}>
           {error}
         </p>
       )}
-      {notice && <p className="notice">{notice}</p>}
+      {notice && <p className={noticeBox}>{notice}</p>}
 
-      <fieldset className="rx-body" disabled={!editable}>
-        <div className="rx-tools">
-          <div>
-            <label htmlFor="rx-language">{t('rx.language')}</label>
-            <select
+      <fieldset className="m-0 min-w-0 space-y-4 border-0 p-0" disabled={!editable}>
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="w-40 space-y-1.5">
+            <Label htmlFor="rx-language" className={fieldLabel}>
+              {t('rx.language')}
+            </Label>
+            <NativeSelect
               id="rx-language"
               value={language}
               onChange={(e) => edit(items, e.target.value as Language)}
             >
               <option value="en">English</option>
               <option value="hi">हिन्दी</option>
-            </select>
+            </NativeSelect>
           </div>
-          <button type="button" className="secondary" onClick={() => void repeatLast()}>
+          <Button type="button" variant="outline" onClick={() => void repeatLast()}>
+            <Copy aria-hidden />
             {t('rx.repeatLast')}
-          </button>
+          </Button>
           {templates.length > 0 && (
-            <div className="rx-template-pick">
-              <label htmlFor="rx-template">{t('rx.templates')}</label>
-              <select
-                id="rx-template"
-                value={templateId}
-                onChange={(e) => setTemplateId(e.target.value)}
-              >
-                <option value="">{t('rx.chooseTemplate')}</option>
-                {templates.map((x) => (
-                  <option key={x.id} value={x.id}>
-                    {x.name}
-                  </option>
-                ))}
-              </select>
-              <button
+            <div className="flex flex-wrap items-end gap-2">
+              <div className="w-full space-y-1.5 sm:w-56">
+                <Label htmlFor="rx-template" className={fieldLabel}>
+                  {t('rx.templates')}
+                </Label>
+                <NativeSelect
+                  id="rx-template"
+                  value={templateId}
+                  onChange={(e) => setTemplateId(e.target.value)}
+                >
+                  <option value="">{t('rx.chooseTemplate')}</option>
+                  {templates.map((x) => (
+                    <option key={x.id} value={x.id}>
+                      {x.name}
+                    </option>
+                  ))}
+                </NativeSelect>
+              </div>
+              <Button
                 type="button"
-                className="secondary"
+                variant="outline"
                 disabled={!templateId}
                 onClick={applyTemplate}
               >
                 {t('rx.applyTemplate')}
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
-                className="link-button"
+                variant="link"
+                className="text-destructive"
                 disabled={!templateId}
                 onClick={() => void deleteTemplate()}
               >
                 {t('rx.deleteTemplate')}
-              </button>
+              </Button>
             </div>
           )}
         </div>
 
         {items.length === 0 ? (
-          <p className="hint">{t('rx.empty')}</p>
+          <p className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted-foreground">
+            {t('rx.empty')}
+          </p>
         ) : (
-          <ol className="rx-lines">
+          <ol className="m-0 list-none space-y-3 p-0">
             {items.map((item, i) => (
               <RxLine
                 key={item.id}
@@ -435,40 +469,67 @@ export function PrescriptionCard({
           </ol>
         )}
 
-        <div className="rx-search">
-          <label htmlFor="rx-search">{t('rx.search')}</label>
-          <input
-            id="rx-search"
-            value={query}
-            autoComplete="off"
-            onChange={(e) => setQuery(e.target.value)}
-          />
+        <div className="space-y-2">
+          <Label htmlFor="rx-search" className={fieldLabel}>
+            {t('rx.search')}
+          </Label>
+          <div className="relative">
+            <Search
+              aria-hidden
+              className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
+            />
+            <Input
+              id="rx-search"
+              value={query}
+              autoComplete="off"
+              className="pl-10"
+              onChange={(e) => setQuery(e.target.value)}
+            />
+          </div>
           {query.trim().length >= 2 && (
-            <ul className="pick-list" role="listbox" aria-label={t('rx.search')}>
+            <ul
+              className="max-h-80 space-y-0.5 overflow-y-auto rounded-xl border border-border bg-card p-1 shadow-soft"
+              role="listbox"
+              aria-label={t('rx.search')}
+            >
               {matches?.map((m) => (
                 <li key={m.id}>
-                  <button
+                  <Button
                     type="button"
-                    className="secondary"
+                    variant="ghost"
+                    className={optionLook}
                     role="option"
                     aria-selected={false}
                     onClick={() => add(lineFromMedicine(m))}
                   >
-                    <strong>{m.name}</strong> <span className="hint">{m.composition}</span>
-                  </button>
+                    <span>
+                      <strong>{m.name}</strong>{' '}
+                      <span className="text-muted-foreground">{m.composition}</span>
+                    </span>
+                  </Button>
                 </li>
               ))}
-              {matches?.length === 0 && <li className="hint">{t('rx.noMatches')}</li>}
+              {matches?.length === 0 && (
+                <li
+                  role="option"
+                  aria-selected={false}
+                  aria-disabled
+                  className="px-3 py-2.5 text-sm text-muted-foreground"
+                >
+                  {t('rx.noMatches')}
+                </li>
+              )}
               <li>
-                <button
+                <Button
                   type="button"
-                  className="secondary"
+                  variant="ghost"
+                  className={cn(optionLook, 'text-muted-foreground')}
                   role="option"
                   aria-selected={false}
                   onClick={() => add(freeTextLine(query.trim().slice(0, 200)))}
                 >
-                  {t('rx.addFreeText', { text: query.trim() })}
-                </button>
+                  <span>{t('rx.addFreeText', { text: query.trim() })}</span>
+                </Button>
               </li>
             </ul>
           )}
@@ -476,14 +537,26 @@ export function PrescriptionCard({
       </fieldset>
 
       {editable && items.length > 0 && (
-        <form className="inline-form rx-save-template" onSubmit={(e) => void saveTemplate(e)}>
-          <div>
-            <label htmlFor="rx-template-name">{t('rx.templateName')}</label>
-            <input id="rx-template-name" name="templateName" required maxLength={80} />
+        <form
+          className="flex flex-wrap items-end gap-3 border-t border-border pt-4"
+          onSubmit={(e) => void saveTemplate(e)}
+        >
+          <div className="w-full space-y-1.5 sm:w-64">
+            <Label htmlFor="rx-template-name" className={fieldLabel}>
+              {t('rx.templateName')}
+            </Label>
+            <Input id="rx-template-name" name="templateName" required maxLength={80} />
           </div>
-          <button type="submit">{t('rx.saveTemplate')}</button>
+          <Button type="submit" variant="outline">
+            {t('rx.saveTemplate')}
+          </Button>
         </form>
       )}
     </div>
   );
 }
+
+const fieldLabel = 'block text-sm font-semibold';
+const alertBox = 'rounded-xl bg-danger-soft px-4 py-3 text-sm font-medium text-destructive';
+const noticeBox = 'rounded-xl bg-info-soft px-4 py-3 text-sm text-info';
+const optionLook = 'h-auto w-full justify-start whitespace-normal py-2.5 text-left font-normal';

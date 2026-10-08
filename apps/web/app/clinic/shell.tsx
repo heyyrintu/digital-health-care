@@ -1,7 +1,10 @@
 'use client';
 
 import type { MeResponse } from '@dhc/contracts';
-import { useRouter } from 'next/navigation';
+import { Badge, StaffShell, type NavItem } from '@dhc/ui-web';
+import { CalendarClock, ListOrdered, UserPlus, Users } from 'lucide-react';
+import Link from 'next/link';
+import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, type ReactNode } from 'react';
 import { LocaleToggle, useSession } from './session-provider';
 
@@ -13,6 +16,7 @@ import { LocaleToggle, useSession } from './session-provider';
 export function ClinicShell({ children }: { children: (me: MeResponse) => ReactNode }) {
   const { status, me, signOut, t } = useSession();
   const router = useRouter();
+  const pathname = usePathname();
 
   useEffect(() => {
     if (status === 'signedOut') router.replace('/clinic/login');
@@ -20,32 +24,60 @@ export function ClinicShell({ children }: { children: (me: MeResponse) => ReactN
 
   if (status !== 'signedIn' || !me) {
     return (
-      <main className="shell">
+      <main className="grid min-h-screen place-items-center bg-background p-4 font-sans text-muted-foreground">
         <p aria-live="polite">{t('common.loading')}</p>
       </main>
     );
   }
 
   const name = me.user.displayName ?? me.user.email ?? me.user.phone ?? '';
+  const roleLabel = me.role === 'patient' ? me.role : t(`role.${me.role}`);
+  const orgName = me.organisation.name;
+
+  // Mirrors the links the dashboard used to offer: every staff role sees the queue and
+  // availability; only roles that may register patients get the registration link.
+  const nav: NavItem[] =
+    me.role === 'patient'
+      ? []
+      : [
+          { href: '/clinic', label: t('dashboard.searchPatients'), icon: Users, exact: true },
+          { href: '/clinic/queue', label: t('dashboard.queue'), icon: ListOrdered },
+          { href: '/clinic/availability', label: t('dashboard.availability'), icon: CalendarClock },
+          ...(canRegister(me.role)
+            ? [
+                {
+                  href: '/clinic/patients/new',
+                  label: t('dashboard.registerPatient'),
+                  icon: UserPlus,
+                },
+              ]
+            : []),
+        ];
+
   return (
-    <main className="shell">
-      <header className="dashboard-header">
-        <div>
-          <p className="eyebrow">{me.organisation.name}</p>
-          <p data-testid="signed-in-as">
-            {t('session.signedInAs', { name })} ·{' '}
-            {me.role === 'patient' ? me.role : t(`role.${me.role}`)}
-          </p>
-        </div>
-        <div className="header-actions">
+    <StaffShell
+      brand={{ name: orgName, letter: orgName.charAt(0).toUpperCase() }}
+      user={{ name, detail: roleLabel }}
+      nav={nav}
+      currentPath={pathname ?? '/clinic'}
+      onNavigate={(href) => router.push(href)}
+      onSignOut={() => void signOut('user')}
+      Link={Link}
+      headerEnd={
+        <>
           <LocaleToggle />
-          <button type="button" className="secondary" onClick={() => void signOut('user')}>
-            {t('session.signOut')}
-          </button>
-        </div>
-      </header>
+          <Badge variant="secondary" className="hidden sm:inline-flex">
+            {roleLabel}
+          </Badge>
+        </>
+      }
+    >
+      <p data-testid="signed-in-as" className="mb-4 text-xs text-muted-foreground">
+        {t('session.signedInAs', { name })} ·{' '}
+        {me.role === 'patient' ? me.role : t(`role.${me.role}`)}
+      </p>
       {children(me)}
-    </main>
+    </StaffShell>
   );
 }
 

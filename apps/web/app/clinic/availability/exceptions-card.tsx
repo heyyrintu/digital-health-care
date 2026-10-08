@@ -6,6 +6,7 @@ import {
   AvailabilityExceptionList,
   type AvailabilityExceptionType,
 } from '@dhc/contracts';
+import { Button, cn, Input, Label, NativeSelect } from '@dhc/ui-web';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useSession } from '../session-provider';
 import type { Selection } from './selection';
@@ -92,29 +93,50 @@ export function ExceptionsCard({ selection }: { selection: Selection }) {
     : ['leave', 'extra_session'];
 
   return (
-    <section aria-labelledby="exceptions-title" className="card">
-      <h2 id="exceptions-title">{t('availability.exceptionsTitle')}</h2>
-      {items && items.length === 0 && <p>{t('availability.noExceptions')}</p>}
+    <section aria-labelledby="exceptions-title" className="surface space-y-5 p-5 sm:p-6">
+      <h2 id="exceptions-title" className="font-display text-lg font-bold">
+        {t('availability.exceptionsTitle')}
+      </h2>
+      {items && items.length === 0 && (
+        <p className="rounded-xl bg-muted p-4 text-sm text-muted-foreground">
+          {t('availability.noExceptions')}
+        </p>
+      )}
       {items && items.length > 0 && (
-        <ul className="tag-list" data-testid="exceptions">
+        <ul className="space-y-2" data-testid="exceptions">
           {items.map((e) => (
-            <li key={e.id}>
-              <strong>{t(`exception.${e.type}`)}</strong>
-              <span>
+            <li
+              key={e.id}
+              className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-border/60 bg-background/60 p-3"
+            >
+              <strong
+                className={cn(
+                  'inline-flex min-h-6 items-center rounded-full px-2.5 py-0.5 text-xs font-semibold',
+                  e.type === 'extra_session'
+                    ? 'bg-success-soft text-success'
+                    : e.type === 'holiday'
+                      ? 'bg-info-soft text-info'
+                      : 'bg-warning-soft text-warning-foreground',
+                )}
+              >
+                {t(`exception.${e.type}`)}
+              </strong>
+              <span className="min-w-0 flex-1 basis-48 text-sm">
                 {e.startDate === e.endDate ? e.startDate : `${e.startDate} – ${e.endDate}`} ·{' '}
                 {e.startTime ? `${e.startTime}–${e.endTime}` : t('availability.allDay')} ·{' '}
                 {clinicName(e.clinicId)}
                 {e.reason && ` · ${e.reason}`}
               </span>
               {canRemove(e) && (
-                <button
+                <Button
                   type="button"
-                  className="secondary"
+                  variant="outline"
+                  className="ml-auto"
                   disabled={busy}
                   onClick={() => void run(() => api.deleteAvailabilityException(e.id))}
                 >
                   {t('availability.remove')}
-                </button>
+                </Button>
               )}
             </li>
           ))}
@@ -122,10 +144,13 @@ export function ExceptionsCard({ selection }: { selection: Selection }) {
       )}
 
       {canEdit && (
-        <form className="inline-form" onSubmit={add}>
-          <div>
-            <label htmlFor="exception-type">{t('availability.exceptionType')}</label>
-            <select
+        <form
+          className="grid grid-cols-[repeat(auto-fit,minmax(9.5rem,1fr))] items-end gap-4 border-t border-border/60 pt-5"
+          onSubmit={add}
+        >
+          <div className="space-y-2">
+            <Label htmlFor="exception-type">{t('availability.exceptionType')}</Label>
+            <NativeSelect
               id="exception-type"
               value={kind}
               onChange={(e) => setKind(e.target.value as AvailabilityExceptionType)}
@@ -135,11 +160,11 @@ export function ExceptionsCard({ selection }: { selection: Selection }) {
                   {t(`exception.${k}`)}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
           </div>
-          <div>
-            <label htmlFor="exception-start">{t('availability.startDate')}</label>
-            <input
+          <div className="space-y-2">
+            <Label htmlFor="exception-start">{t('availability.startDate')}</Label>
+            <Input
               id="exception-start"
               type="date"
               min={today}
@@ -148,13 +173,13 @@ export function ExceptionsCard({ selection }: { selection: Selection }) {
               onChange={(e) => setStartDate(e.target.value)}
             />
           </div>
-          <div>
-            <label htmlFor="exception-end">{t('availability.endDate')}</label>
-            <input id="exception-end" name="endDate" type="date" min={startDate} />
+          <div className="space-y-2">
+            <Label htmlFor="exception-end">{t('availability.endDate')}</Label>
+            <Input id="exception-end" name="endDate" type="date" min={startDate} />
           </div>
-          <div>
-            <label htmlFor="exception-start-time">{t('availability.startTime')}</label>
-            <input
+          <div className="space-y-2">
+            <Label htmlFor="exception-start-time">{t('availability.startTime')}</Label>
+            <Input
               id="exception-start-time"
               name="startTime"
               type="time"
@@ -162,31 +187,38 @@ export function ExceptionsCard({ selection }: { selection: Selection }) {
               aria-describedby="exception-times-hint"
             />
           </div>
-          <div>
-            <label htmlFor="exception-end-time">{t('availability.endTime')}</label>
-            <input
+          <div className="space-y-2">
+            <Label htmlFor="exception-end-time">{t('availability.endTime')}</Label>
+            <Input
               id="exception-end-time"
               name="endTime"
               type="time"
               required={kind === 'extra_session'}
             />
           </div>
-          <div>
-            <label htmlFor="exception-reason">{t('availability.reason')}</label>
-            <input id="exception-reason" name="reason" maxLength={200} />
+          <div className="col-span-full space-y-2">
+            <Label htmlFor="exception-reason">{t('availability.reason')}</Label>
+            <Input id="exception-reason" name="reason" maxLength={200} />
           </div>
-          <button type="submit" disabled={busy}>
+          <Button
+            type="submit"
+            className="col-span-full sm:w-auto sm:justify-self-start"
+            disabled={busy}
+          >
             {t('availability.addException')}
-          </button>
+          </Button>
         </form>
       )}
       {canEdit && kind !== 'extra_session' && (
-        <p id="exception-times-hint" className="hint">
+        <p id="exception-times-hint" className="text-xs text-muted-foreground">
           {t('availability.timesHint')}
         </p>
       )}
       {error && (
-        <p role="alert" className="alert">
+        <p
+          role="alert"
+          className="rounded-xl bg-danger-soft p-4 text-sm font-medium text-destructive"
+        >
           {error}
         </p>
       )}

@@ -4,7 +4,21 @@
     "jsx": "preserve",
     "allowJs": false,
     "incremental": true,
-    "plugins": [{ "name": "next" }]
+    "plugins": [
+      {
+        "name": "next"
+      }
+    ],
+    // One copy of React's types for this app. Next and several libraries (lucide-react,
+    // input-otp, ...) import React's types without declaring them, so they would get the
+    // hoisted copy, which is the mobile app's Expo pin, and clash with ui-web's. Types only:
+    // the bundler still resolves react and react-dom from node_modules (no JS lives here).
+    "paths": {
+      "react": ["./node_modules/@types/react"],
+      "react/*": ["./node_modules/@types/react/*"],
+      "react-dom": ["./node_modules/@types/react-dom"],
+      "react-dom/*": ["./node_modules/@types/react-dom/*"]
+    }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
   "exclude": ["node_modules", ".next"]

@@ -1,17 +1,48 @@
 /*
- * Stylesheet entry. Layer order decides which rules win, whatever the selector:
- * theme < base < legacy < components < utilities.
- *
- * `legacy` is the hand-written CSS the current screens use (globals.css). Screens move to the
- * design system one by one; Tailwind utilities on a moved screen beat legacy element styles.
- * Tailwind's preflight reset (base) comes in when globals.css goes, so the screens that still
- * use it do not change.
+ * Stylesheet entry: Tailwind v4 with the design system theme (@dhc/tokens) and components
+ * (@dhc/ui-web). Screens style themselves with utilities and ui-web components; there is no
+ * hand-written page CSS.
  */
-@layer theme, base, legacy, components, utilities;
+@layer theme, base, components, utilities;
 
 @import 'tailwindcss/theme.css' layer(theme);
+@import 'tailwindcss/preflight.css' layer(base);
 @import 'tailwindcss/utilities.css' layer(utilities);
 @import '@dhc/tokens/theme.css';
 @import '@dhc/ui-web/styles.css';
 
-@import './globals.css' layer(legacy);
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.55;
+    min-width: 320px;
+    text-rendering: optimizeLegibility;
+  }
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    text-wrap: balance;
+  }
+  ::selection {
+    background: color-mix(in oklab, var(--primary) 25%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

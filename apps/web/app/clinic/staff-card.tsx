@@ -11,8 +11,11 @@ import {
 } from '@dhc/contracts';
 import { formatIstDateTime } from '@dhc/domain';
 import type { MessageKey } from '@dhc/i18n';
+import { Button, Input, NativeSelect } from '@dhc/ui-web';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useSession } from './session-provider';
+
+const H3 = 'mb-3 mt-7 text-xs font-bold uppercase tracking-wide text-muted-foreground';
 
 /**
  * Clinic admin: the active team (with confirm-then-reset), inviting new staff, and the
@@ -120,26 +123,35 @@ export function StaffCard({ currentUserId }: { currentUserId: string }) {
     m.displayName ?? m.identifier;
 
   return (
-    <section aria-labelledby="staff-title" className="card">
-      <h2 id="staff-title">{t('staff.title')}</h2>
+    <section aria-labelledby="staff-title" className="surface p-4 sm:p-6">
+      <h2 id="staff-title" className="font-display text-lg font-bold">
+        {t('staff.title')}
+      </h2>
       {error && (
-        <p role="alert" className="alert">
+        <p
+          role="alert"
+          className="mt-3 rounded-xl bg-danger-soft px-4 py-3 text-sm font-medium text-destructive"
+        >
           {error}
         </p>
       )}
 
       {members && (
-        <ul className="staff-list">
+        <ul className="mt-2 divide-y divide-border/70">
           {members.map((m) => (
-            <li key={m.userId} data-testid={`staff-${m.identifier}`}>
-              <div className="staff-row">
-                <div>
+            <li key={m.userId} data-testid={`staff-${m.identifier}`} className="py-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="min-w-0 space-y-0.5">
                   <strong>{nameOf(m)}</strong>
-                  {m.userId === currentUserId && <span className="pill">{t('staff.you')}</span>}
-                  <p className="hint">
+                  {m.userId === currentUserId && (
+                    <span className="ml-2 rounded-full bg-accent px-2.5 py-0.5 text-xs font-semibold text-accent-foreground">
+                      {t('staff.you')}
+                    </span>
+                  )}
+                  <p className="text-sm text-muted-foreground">
                     {m.identifier} · {m.roles.map((r) => t(`role.${r}`)).join(', ')}
                   </p>
-                  <p className="hint">
+                  <p className="text-sm text-muted-foreground">
                     {m.signInReady ? t('staff.signInReady') : t('staff.signInNotReady')}
                     {' · '}
                     {m.lastLoginAt
@@ -148,31 +160,31 @@ export function StaffCard({ currentUserId }: { currentUserId: string }) {
                   </p>
                 </div>
                 {m.userId !== currentUserId && confirming !== m.userId && (
-                  <button
-                    type="button"
-                    className="secondary"
-                    onClick={() => setConfirming(m.userId)}
-                  >
+                  <Button type="button" variant="outline" onClick={() => setConfirming(m.userId)}>
                     {t('staff.reset')}
-                  </button>
+                  </Button>
                 )}
               </div>
 
               {confirming === m.userId && (
-                <div className="confirm" role="group" aria-label={t('staff.reset')}>
+                <div
+                  className="confirm mt-3 space-y-3 rounded-xl bg-warning-soft p-4 text-sm text-warning-foreground"
+                  role="group"
+                  aria-label={t('staff.reset')}
+                >
                   <p>{t('staff.resetConfirm', { name: nameOf(m) })}</p>
-                  <div className="confirm-actions">
-                    <button
+                  <div className="flex flex-wrap gap-3">
+                    <Button
                       type="button"
-                      className="danger"
+                      variant="destructive"
                       disabled={busy}
                       onClick={() => void reset(m)}
                     >
                       {t('staff.resetDo')}
-                    </button>
-                    <button type="button" className="secondary" onClick={() => setConfirming(null)}>
+                    </Button>
+                    <Button type="button" variant="outline" onClick={() => setConfirming(null)}>
                       {t('common.cancel')}
-                    </button>
+                    </Button>
                   </div>
                 </div>
               )}
@@ -185,16 +197,20 @@ export function StaffCard({ currentUserId }: { currentUserId: string }) {
         </ul>
       )}
 
-      <h3 id="invite-title">{t('staff.inviteTitle')}</h3>
+      <h3 id="invite-title" className={H3}>
+        {t('staff.inviteTitle')}
+      </h3>
       <form
-        className="invite-form"
+        className="mt-4 grid items-end gap-3 sm:grid-cols-2 lg:grid-cols-3"
         aria-labelledby="invite-title"
         onSubmit={(e) => void invite(e)}
         noValidate
       >
-        <div>
-          <label htmlFor="invite-identifier">{t('login.identifier')}</label>
-          <input
+        <div className="space-y-1.5">
+          <label className="block text-sm font-medium" htmlFor="invite-identifier">
+            {t('login.identifier')}
+          </label>
+          <Input
             id="invite-identifier"
             name="identifier"
             required
@@ -203,53 +219,67 @@ export function StaffCard({ currentUserId }: { currentUserId: string }) {
             aria-describedby={fieldError ? 'invite-error' : undefined}
           />
         </div>
-        <div>
-          <label htmlFor="invite-name">{t('staff.inviteName')}</label>
-          <input id="invite-name" name="displayName" autoComplete="off" />
+        <div className="space-y-1.5">
+          <label className="block text-sm font-medium" htmlFor="invite-name">
+            {t('staff.inviteName')}
+          </label>
+          <Input id="invite-name" name="displayName" autoComplete="off" />
         </div>
-        <div>
-          <label htmlFor="invite-role">{t('staff.inviteRole')}</label>
-          <select id="invite-role" name="role" defaultValue="doctor">
+        <div className="space-y-1.5">
+          <label className="block text-sm font-medium" htmlFor="invite-role">
+            {t('staff.inviteRole')}
+          </label>
+          <NativeSelect id="invite-role" name="role" defaultValue="doctor">
             {STAFF_ROLES.map((role) => (
               <option key={role} value={role}>
                 {t(`role.${role}`)}
               </option>
             ))}
-          </select>
+          </NativeSelect>
         </div>
-        <button type="submit" disabled={busy}>
+        <Button
+          type="submit"
+          disabled={busy}
+          className="sm:col-span-2 sm:justify-self-start lg:col-span-3"
+        >
           {t('staff.inviteSend')}
-        </button>
+        </Button>
       </form>
       {fieldError && (
-        <p id="invite-error" role="alert" className="alert">
+        <p
+          id="invite-error"
+          role="alert"
+          className="mt-3 rounded-xl bg-danger-soft px-4 py-3 text-sm font-medium text-destructive"
+        >
           {fieldError}
         </p>
       )}
       {link?.key === 'invite' && <LinkNotice link={link} testId="invite-link" t={t} />}
 
-      <h3>{t('staff.pendingTitle')}</h3>
-      {pending && pending.length === 0 && <p className="hint">{t('staff.noPending')}</p>}
+      <h3 className={H3}>{t('staff.pendingTitle')}</h3>
+      {pending && pending.length === 0 && (
+        <p className="text-sm text-muted-foreground">{t('staff.noPending')}</p>
+      )}
       {pending && pending.length > 0 && (
-        <ul className="staff-list">
+        <ul className="mt-2 divide-y divide-border/70">
           {pending.map((i) => (
-            <li key={i.id} data-testid={`pending-${i.identifier}`}>
-              <div className="staff-row">
-                <div>
+            <li key={i.id} data-testid={`pending-${i.identifier}`} className="py-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="min-w-0 space-y-0.5">
                   <strong>{nameOf(i)}</strong>
-                  <p className="hint">
+                  <p className="text-sm text-muted-foreground">
                     {i.identifier} · {t(`role.${i.role}`)} ·{' '}
                     {t('staff.expires', { date: formatIstDateTime(i.expiresAt, locale) })}
                   </p>
                 </div>
-                <button
+                <Button
                   type="button"
-                  className="secondary"
+                  variant="outline"
                   disabled={busy}
                   onClick={() => void revoke(i)}
                 >
                   {t('staff.revoke')}
-                </button>
+                </Button>
               </div>
             </li>
           ))}
@@ -271,14 +301,14 @@ function LinkNotice({
 }) {
   const [copied, setCopied] = useState(false);
   return (
-    <div className="notice" role="status">
+    <div className="mt-3 space-y-3 rounded-xl bg-info-soft p-4 text-sm" role="status">
       <p>{t('staff.shareLink', { name: link.name })}</p>
-      <p className="key link" data-testid={testId}>
+      <p className="break-all rounded-lg bg-card px-3 py-2 font-mono text-xs" data-testid={testId}>
         {link.url}
       </p>
-      <button
+      <Button
         type="button"
-        className="secondary"
+        variant="outline"
         onClick={() =>
           void navigator.clipboard
             .writeText(link.url)
@@ -288,7 +318,7 @@ function LinkNotice({
         }
       >
         {copied ? t('staff.copied') : t('staff.copy')}
-      </button>
+      </Button>
     </div>
   );
 }
