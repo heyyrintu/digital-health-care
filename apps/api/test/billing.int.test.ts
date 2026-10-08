@@ -199,6 +199,26 @@ describe('bills', () => {
     // Clinic admins view but do not bill.
     expect(again).toMatchObject({ canEdit: false, canPay: false });
     expect((await saveBill(id, { revision: 1 }, admin)).statusCode).toBe(403);
+
+    // Editing keeps the lines already billed at their price; a new line takes today's.
+    const bandage = await item('Bandage', 2000);
+    const edited = Bill.parse(
+      (
+        await saveBill(id, {
+          revision: 1,
+          consultation: 'follow_up',
+          items: [
+            { priceListItemId: dressing.id, quantity: 3 },
+            { priceListItemId: bandage.id, quantity: 1 },
+          ],
+        })
+      ).json(),
+    );
+    expect(edited.lines.map((l) => [l.name, l.unitPaise, l.quantity])).toEqual([
+      ['In-person consultation', 40000, 1],
+      ['Dressing', 15000, 3],
+      ['Bandage', 2000, 1],
+    ]);
   });
 
   it('refuses visits not yet arrived, stale revisions, unknown items and too large discounts', async () => {

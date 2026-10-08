@@ -173,7 +173,8 @@ export class BillingService {
         );
       }
 
-      const lines = await this.price(tx, appointment.consultationTypeId, body);
+      const saved = existing ? await tx.billItem.findMany({ where: { billId: existing.id } }) : [];
+      const lines = await this.price(tx, appointment.consultationTypeId, body, saved);
       let totals;
       try {
         totals = billTotals(lines, body.discountPaise);
@@ -434,7 +435,16 @@ export class BillingService {
   // ---- Internals ---------------------------------------------------------------------
 
   /** The bill's lines, priced from the consultation type and the price list. */
-  private async price(tx: Tx, consultationTypeId: string, body: SaveBillBody) {
+  /**
+   * Prices a bill's lines. A line already on the bill keeps the name and price it was billed
+   * with; a new line takes today's fee or price-list price.
+   */
+  private async price(
+    tx: Tx,
+    consultationTypeId: string,
+    body: SaveBillBody,
+    saved: { kind: string; priceListItemId: string | null; name: string; unitPaise: number }[],
+  ) {
     const lines: {
       kind: 'consultation' | 'follow_up' | 'item';
       priceListItemId: string | null;
@@ -442,7 +452,16 @@ export class BillingService {
       unitPaise: number;
       quantity: number;
     }[] = [];
-    if (body.consultation !== 'none') {
+    const savedFee = saved.find((l) => l.kind === body.consultation);
+    if (savedFee) {
+      lines.push({
+        kind: body.consultation as 'consultation' | 'follow_up',
+        priceListItemId: null,
+        name: savedFee.name,
+        unitPaise: savedFee.unitPaise,
+        quantity: 1,
+      });
+    } else if (body.consultation !== 'none') {
       const type = await tx.consultationType.findUniqueOrThrow({
         where: { id: consultationTypeId },
       });
@@ -457,22 +476,26 @@ export class BillingService {
         quantity: 1,
       });
     }
-    if (body.items.length > 0) {
-      const found = await tx.priceListItem.findMany({
-        where: { id: { in: body.items.map((i) => i.priceListItemId) }, active: true },
+    const savedItems = new Map(
+      saved.filter((l) => l.priceListItemId).map((l) => [l.priceListItemId!, l]),
+    );
+    const added = body.items.filter((i) => !savedItems.has(i.priceListItemId));
+    const found = added.length
+      ? await tx.priceListItem.findMany({
+          where: { id: { in: added.map((i) => i.priceListItemId) }, active: true },
+        })
+      : [];
+    const byId = new Map(found.map((p) => [p.id, { name: p.name, unitPaise: p.pricePaise }]));
+    for (const item of body.items) {
+      const priced = savedItems.get(item.priceListItemId) ?? byId.get(item.priceListItemId);
+      if (!priced) throw invalid('items', 'An item is not on the price list.');
+      lines.push({
+        kind: 'item',
+        priceListItemId: item.priceListItemId,
+        name: priced.name,
+        unitPaise: priced.unitPaise,
+        quantity: item.quantity,
       });
-      const byId = new Map(found.map((p) => [p.id, p]));
-      for (const item of body.items) {
-        const priced = byId.get(item.priceListItemId);
-        if (!priced) throw invalid('items', 'An item is not on the price list.');
-        lines.push({
-          kind: 'item',
-          priceListItemId: priced.id,
-          name: priced.name,
-          unitPaise: priced.pricePaise,
-          quantity: item.quantity,
-        });
-      }
     }
     return lines;
   }

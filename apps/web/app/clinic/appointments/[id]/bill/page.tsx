@@ -26,7 +26,7 @@ import {
 import { ArrowLeft, Receipt as ReceiptIcon, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { AgeGender } from '../../../patient-bits';
 import { useSession } from '../../../session-provider';
 import { ClinicShell, NotAllowed } from '../../../shell';
@@ -80,6 +80,8 @@ function BillScreen({ id }: { id: string }) {
   const [stale, setStale] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Only the latest load may set the screen, so a slow reload cannot undo a newer one.
+  const latest = useRef(0);
 
   const fail = useCallback(
     (e: unknown) => {
@@ -91,6 +93,7 @@ function BillScreen({ id }: { id: string }) {
   );
 
   const load = useCallback(async () => {
+    const request = ++latest.current;
     setError(null);
     setStale(false);
     const path = `/appointments/${encodeURIComponent(id)}`;
@@ -99,6 +102,7 @@ function BillScreen({ id }: { id: string }) {
       api.request('GET', `${path}/bill`, { schema: BillView }),
       api.request('GET', '/price-list', { schema: PriceList }),
     ]);
+    if (request !== latest.current) return;
     setAppointment(a);
     setView(v);
     setPrices(p.data);
@@ -109,21 +113,33 @@ function BillScreen({ id }: { id: string }) {
     load().catch(fail);
   }, [load, fail]);
 
-  const priceOf = useMemo(() => new Map(prices.map((p) => [p.id, p])), [prices]);
-  const fee =
-    !view || draft.consultation === 'none'
-      ? null
-      : draft.consultation === 'follow_up'
-        ? view.followUpFeePaise
-        : view.feePaise;
+  // As the server prices them: a line already on the bill keeps its billed price, a new
+  // line takes today's fee or price-list price.
+  const priceOf = useMemo(() => {
+    const map = new Map(prices.map((p) => [p.id, { name: p.name, unitPaise: p.pricePaise }]));
+    for (const l of view?.bill?.lines ?? []) {
+      if (l.priceListItemId) map.set(l.priceListItemId, { name: l.name, unitPaise: l.unitPaise });
+    }
+    return map;
+  }, [prices, view]);
+  const feeOf = useCallback(
+    (kind: Consultation): number | null => {
+      if (!view || kind === 'none') return null;
+      const line = view.bill?.lines.find((l) => l.kind === kind);
+      if (line) return line.unitPaise;
+      return kind === 'follow_up' ? view.followUpFeePaise : view.feePaise;
+    },
+    [view],
+  );
+  const fee = feeOf(draft.consultation);
 
-  // The same sum the server makes; it re-prices every line when the bill is saved.
+  // The same sum the server makes when the bill is saved.
   const preview = useMemo(() => {
     const lines = [
       ...(fee === null ? [] : [{ unitPaise: fee, quantity: 1 }]),
       ...draft.items.flatMap((i) => {
         const p = priceOf.get(i.priceListItemId);
-        return p ? [{ unitPaise: p.pricePaise, quantity: i.quantity }] : [];
+        return p ? [{ unitPaise: p.unitPaise, quantity: i.quantity }] : [];
       }),
     ];
     const discount = draft.discount ? Math.round(Number(draft.discount) * 100) : 0;
@@ -149,8 +165,8 @@ function BillScreen({ id }: { id: string }) {
 
   function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const discountPaise = draft.discount ? rupeesToPaise(Number(draft.discount)) : 0;
     void run(async () => {
+      const discountPaise = draft.discount ? rupeesToPaise(Number(draft.discount)) : 0;
       await api.request('PUT', `/appointments/${encodeURIComponent(id)}/bill`, {
         schema: Bill,
         body: {
@@ -248,14 +264,16 @@ function BillScreen({ id }: { id: string }) {
                     [
                       [
                         'consultation',
-                        t('billing.consultationFee', { fee: formatInr(view.feePaise, locale) }),
+                        t('billing.consultationFee', {
+                          fee: formatInr(feeOf('consultation') ?? 0, locale),
+                        }),
                       ],
-                      ...(view.followUpFeePaise !== null
+                      ...(feeOf('follow_up') !== null
                         ? ([
                             [
                               'follow_up',
                               t('billing.followUpFee', {
-                                fee: formatInr(view.followUpFeePaise, locale),
+                                fee: formatInr(feeOf('follow_up') ?? 0, locale),
                               }),
                             ],
                           ] as const)
@@ -292,7 +310,7 @@ function BillScreen({ id }: { id: string }) {
                           >
                             <span className="min-w-0 flex-1 font-medium">{name}</span>
                             <span className="tabular text-sm text-muted-foreground">
-                              {p ? formatInr(p.pricePaise, locale) : ''} ×
+                              {p ? formatInr(p.unitPaise, locale) : ''} ×
                             </span>
                             <Input
                               type="number"
