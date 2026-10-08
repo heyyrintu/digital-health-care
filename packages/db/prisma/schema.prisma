@@ -127,6 +127,27 @@ enum PrescriptionStatus {
   void
 }
 
+/// Phase 1 bill states (PRD §5.6). Link sent, refund pending and refunded arrive with
+/// Cashfree in Phase 3.
+enum BillStatus {
+  due
+  partly_paid
+  paid
+}
+
+enum BillLineKind {
+  consultation
+  follow_up
+  item
+}
+
+/// Counter payments recorded by staff (PRD §5.6). Online modes arrive with Cashfree.
+enum PaymentMode {
+  cash
+  upi
+  card
+}
+
 enum MembershipStatus {
   /// Created by a staff invite; becomes active when the invite is completed.
   invited
@@ -166,6 +187,11 @@ model Organisation {
   prescriptions          Prescription[]
   prescriptionItems      PrescriptionItem[]
   prescriptionTemplates  PrescriptionTemplate[]
+  priceListItems         PriceListItem[]
+  bills                  Bill[]
+  billItems              BillItem[]
+  payments               Payment[]
+  receiptSettings        ReceiptSettings?
 
   @@map("organisations")
 }
@@ -513,6 +539,7 @@ model Appointment {
   vitals           Vitals?
   consultation     Consultation?
   prescriptions    Prescription[]
+  bill             Bill?
 
   @@unique([doctorUserId, clinicId, date, tokenNumber])
   @@index([organisationId, date])
@@ -771,6 +798,110 @@ model PrescriptionTemplate {
 
   @@unique([organisationId, doctorUserId, name])
   @@map("prescription_templates")
+}
+
+/// Chargeable services besides the consultation (PRD §5.6): dressing, injection, X-ray
+/// review. Never deleted, only deactivated, so old bills keep their meaning.
+model PriceListItem {
+  id             String   @id @default(uuid()) @db.Uuid
+  organisationId String   @map("organisation_id") @db.Uuid
+  name           String
+  pricePaise     Int      @map("price_paise")
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+  billItems    BillItem[]
+
+  @@unique([organisationId, name])
+  @@map("price_list_items")
+}
+
+/// One bill per visit (PRD §5.6). Every amount is set by the server; the lines can change
+/// until the first payment, then the bill is fixed.
+model Bill {
+  id              String     @id @default(uuid()) @db.Uuid
+  organisationId  String     @map("organisation_id") @db.Uuid
+  appointmentId   String     @unique @map("appointment_id") @db.Uuid
+  patientId       String     @map("patient_id") @db.Uuid
+  doctorUserId    String     @map("doctor_user_id") @db.Uuid
+  subtotalPaise   Int        @map("subtotal_paise")
+  discountPaise   Int        @default(0) @map("discount_paise")
+  discountReason  String?    @map("discount_reason")
+  totalPaise      Int        @map("total_paise")
+  paidPaise       Int        @default(0) @map("paid_paise")
+  status          BillStatus @default(due)
+  /// Guards against two people editing the same bill (0 is "no bill yet").
+  revision        Int        @default(1)
+  createdByUserId String     @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+  appointment  Appointment  @relation(fields: [appointmentId], references: [id], onDelete: Restrict)
+  items        BillItem[]
+  payments     Payment[]
+
+  @@index([organisationId, createdAt])
+  @@index([patientId])
+  @@map("bills")
+}
+
+model BillItem {
+  id              String       @id @default(uuid()) @db.Uuid
+  organisationId  String       @map("organisation_id") @db.Uuid
+  billId          String       @map("bill_id") @db.Uuid
+  kind            BillLineKind
+  priceListItemId String?      @map("price_list_item_id") @db.Uuid
+  /// The name and price at the time of billing; later price-list changes do not touch it.
+  name            String
+  unitPaise       Int          @map("unit_paise")
+  quantity        Int
+  amountPaise     Int          @map("amount_paise")
+  sortOrder       Int          @map("sort_order")
+
+  organisation  Organisation   @relation(fields: [organisationId], references: [id])
+  bill          Bill           @relation(fields: [billId], references: [id], onDelete: Cascade)
+  priceListItem PriceListItem? @relation(fields: [priceListItemId], references: [id], onDelete: Restrict)
+
+  @@index([billId])
+  @@map("bill_items")
+}
+
+/// A counter payment and its receipt. The ID comes from the client, so a retried
+/// request records the payment once.
+model Payment {
+  id               String      @id @db.Uuid
+  organisationId   String      @map("organisation_id") @db.Uuid
+  billId           String      @map("bill_id") @db.Uuid
+  mode             PaymentMode
+  amountPaise      Int         @map("amount_paise")
+  /// UPI transaction or card slip reference, as written on the slip.
+  reference        String?
+  receiptNumber    String      @map("receipt_number")
+  receivedByUserId String      @map("received_by_user_id") @db.Uuid
+  receivedAt       DateTime    @default(now()) @map("received_at") @db.Timestamptz(3)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+  bill         Bill         @relation(fields: [billId], references: [id], onDelete: Restrict)
+
+  @@unique([organisationId, receiptNumber])
+  @@index([organisationId, receivedAt])
+  @@index([billId])
+  @@map("payments")
+}
+
+/// Receipt numbering, one row per organisation, advanced inside the payment's transaction.
+model ReceiptSettings {
+  organisationId String   @id @map("organisation_id") @db.Uuid
+  prefix         String   @default("R")
+  nextNumber     Int      @default(1) @map("next_number")
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+
+  @@map("receipt_settings")
 }
 
 model AuditLog {

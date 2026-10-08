@@ -44,6 +44,7 @@ const include = {
   clinic: { select: { name: true } },
   consultationType: { select: { name: true, mode: true } },
   rescheduledTo: { select: { id: true } },
+  bill: { select: { totalPaise: true, paidPaise: true, status: true } },
 } as const;
 type AppointmentRow = Prisma.AppointmentGetPayload<{ include: typeof include }>;
 
@@ -475,6 +476,7 @@ export class AppointmentService {
       consultationStartedAt: r.consultationStartedAt?.toISOString() ?? null,
       completedAt: r.completedAt?.toISOString() ?? null,
       createdAt: r.createdAt.toISOString(),
+      bill: r.bill,
     };
   }
 }
