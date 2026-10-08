@@ -153,7 +153,7 @@ Implemented in Phase 1 (`apps/api/src/modules/clinical`). Prescriptions, the saf
 | Vitals | `GET /appointments/{id}/vitals` → `{vitals}`; `PUT /appointments/{id}/vitals` `{bpSystolic?, bpDiastolic?, pulse?, temperatureC?, spo2?, weightKg?, heightCm?, painScore?, pregnancyStatus?}` | Front desk, doctor |
 | Consultation | `GET /appointments/{id}/consultation` → `{appointment, consultation, vitals, canEdit}`; `PUT /appointments/{id}/consultation` `{notes, followUpDate, revision}` | Doctor (writing: the visit's doctor) |
 
-- **Access (PRD §3.2):** chart and notes are doctors' only, shared across the organisation's doctors (the "shared chart" model; "own patients only" is a later setting). Front desk records vitals; clinic admins have no clinical access. Every view and change is audited (`chart.viewed`, `allergy|condition|medication.added|removed`, `vitals.viewed|saved`, `consultation.viewed|saved`) with IDs, revisions and removal reasons only.
+- **Access (PRD §3.2):** chart and notes are doctors' only, shared across the organisation's doctors by default (the "shared chart" model); under "own patients only" (§3l) a doctor needs the patient checked in to them first. Front desk records vitals; clinic admins have no clinical access. Every view and change is audited (`chart.viewed`, `allergy|condition|medication.added|removed`, `vitals.viewed|saved`, `consultation.viewed|saved`) with IDs, revisions and removal reasons only.
 - **Chart entries** are never deleted: removing one keeps it with who, when and why, because past prescriptions were checked against it. `source: patient` marks patient-reported entries, shown as unverified (safety rule SR-21).
 - **Vitals** are one set per visit. `PUT` replaces the whole set (readings left out are cleared), within plausible ranges (400 otherwise). BMI is worked out from weight and height. Allowed while the visit is pending, booked, checked in, in consultation or completed; 409 for cancelled, no-show or rescheduled visits.
 - **Notes** (`chiefComplaint`, `symptoms[{text, duration}]`, `examination`, `diagnoses[{code, label}]`, `plan`, `privateNotes`, `testsAdvised`, `advice`) are stored as one document encrypted with AES-256-GCM (the field cipher); `followUpDate` stays in the clear for reminders. Only the visit's doctor writes, once the patient has checked in (409 before; 403 for another doctor). `revision` must match the stored one (0 for the first save) or the save gets 409 with `fields.revision = stale`, so a second tab cannot overwrite newer notes; each save returns the next revision. Diagnoses may carry an ICD-10 code (a starter list ships in `@dhc/domain`; the full code set comes from a licensed source) or be free text.
@@ -291,12 +291,27 @@ Implemented in Phase 1 (`apps/api/src/modules/medicines`, PRD §9.2). Everything
 - **Audit:** `medicine.created` (medicine ID and ingredient count) and `medicine.updated` (medicine ID, ingredient count and whether active), `medicine_request.approved` and `medicine_request.rejected` (request ID and medicine ID), `medicine_request.undone` (the decision undone). Never reasons or patient details.
 - **Not built yet:** the licensed drug database import with its own update process (§3g), and a reference request to the platform team to add a medicine for every clinic.
 
+## 3l. Clinic settings: chart model, safety tuning and upload limits
+
+Implemented in Phase 1 (`apps/api/src/modules/settings`, PRD §9.2). One row per organisation (`organisation_settings`); until a clinic admin saves, the defaults apply.
+
+| Action | Endpoint | Who |
+|---|---|---|
+| Read | `GET /organisation-settings` → `{chartModel, hiddenSafetyRules, maxUploadMb, uploadTypes}` | Staff |
+| Change | `PUT /organisation-settings` (the same four fields, all required) | Clinic admin |
+
+- **Defaults:** `chartModel: shared`, `hiddenSafetyRules: []`, `maxUploadMb: 10`, `uploadTypes: [pdf, jpeg, png]`.
+- **Chart model (PRD §3.2):** `shared` lets every doctor in the organisation read every chart. `own_patients` lets a doctor read a patient's chart, a visit's notes and prescription (view, preview, PDF) and "Repeat last" only once that patient has a visit with them that was checked in, in consultation or completed; a booking alone is not enough. Otherwise 403 `CHART_RESTRICTED`. A doctor's own visit is always open to them, but its chart still follows the rule, so the doctor checks the patient in first. Front desk vitals and printing are not affected. Internal referrals open the chart in phase 3.
+- **Safety tuning (catalogue "Clinic can tune"):** `hiddenSafetyRules` takes only the "Visibility only" rules: `SR-06` (moderate and minor interactions), `SR-08` (duplicate class) and `SR-15` (older-adult caution); anything else is 400, and the database refuses it too. Hidden rules are left out of every check from then on. An alert of a hidden rule already in the safety log is closed without a doctor action. Blocks and the locked rules always show.
+- **Upload limits:** `maxUploadMb` 1–25 (the platform's ceiling), `uploadTypes` one or more of `pdf`, `jpeg`, `png` and `heic` (HEIC and HEIF), each once. `checkUpload` in `@dhc/contracts` applies them; the upload endpoints (§4 files) call it on the server once they are built.
+- **Audit:** `settings.updated` with each changed field's old and new value; saving the same values writes nothing.
+
 ## 4. Endpoint catalogue (by module)
 
 | Module | Main resources and actions |
 |---|---|
 | identity | `/auth/*`, `/me`, `/staff/invites` (built); `/me/devices` |
-| tenancy | `/organisations/current`, `/clinics` (built), `/consultation-types` (built), `/booking-rules` (built), `/doctors` (built), `/settings`, `/branding`, `/tags` (built), `/uhid-settings` (built) |
+| tenancy | `/organisations/current`, `/clinics` (built), `/consultation-types` (built), `/booking-rules` (built), `/doctors` (built), `/organisation-settings` (built), `/branding`, `/tags` (built), `/uhid-settings` (built) |
 | scheduling | `/availability/versions` (built), `/availability/exceptions` (built), `/slots?doctorId&clinicId&consultationTypeId&date&channel` (built), `/appointments` (book, walk-in, list, confirm, check-in, start, complete, cancel, no-show, reschedule; built), `/queue?date` (built), `/display-screens` (built), `/display/board` (built) |
 | patients | `/patients` (search by phone, name or UHID, filter by tag; register; built), `/patients/{id}` (demographics and family, each view audited; edit; built), `/patients/duplicate-check` (built), `/patients/{id}/tags` (built), `/patients/{id}/chart` and `/patients/{id}/allergies\|conditions\|medications` (built), `/patients/{id}/consents`, `/patients/merge-requests` |
 | clinical | `/appointments/{id}/consultation` (built), `/appointments/{id}/vitals` (built), `/scribe/sessions`, `/assessments/forms`, `/assessments`, `/patients/{id}/ask-ai` |
@@ -324,6 +339,7 @@ Implemented in Phase 1 (`apps/api/src/modules/medicines`, PRD §9.2). Everything
 | `SIGNING_UNAVAILABLE` | No signing service on this server (503) | Explain; signing waits |
 | `PAYMENT_PENDING` | Online consult without confirmed payment | Resume Cashfree checkout |
 | `CONSENT_REQUIRED` | Scribe or ABDM action without consent | Start consent flow |
+| `CHART_RESTRICTED` | "Own patients only" and the doctor has not seen the patient (403) | Explain; check the patient in to the doctor |
 
 ## 6. Change process
 1. Change Zod schema in `packages/contracts`.

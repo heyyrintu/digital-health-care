@@ -7,6 +7,7 @@ import {
   LoginResponse,
   NewPassword,
   buildOpenApiDocument,
+  checkUpload,
   page,
 } from './index';
 import { z } from 'zod';
@@ -110,5 +111,26 @@ describe('NewPassword', () => {
   it('requires at least 12 characters', () => {
     expect(() => NewPassword.parse('short')).toThrow();
     expect(NewPassword.parse('a long enough passphrase')).toBeTruthy();
+  });
+});
+
+describe('checkUpload', () => {
+  const limits = { maxUploadMb: 2, uploadTypes: ['pdf', 'heic'] as const };
+  const mb = 1024 * 1024;
+
+  it('accepts an allowed type within the size limit, whatever the media type’s case', () => {
+    const settings = { ...limits, uploadTypes: [...limits.uploadTypes] };
+    expect(checkUpload(settings, { mediaType: 'application/pdf', sizeBytes: 2 * mb })).toBe('ok');
+    expect(checkUpload(settings, { mediaType: 'IMAGE/HEIF', sizeBytes: 1 })).toBe('ok');
+  });
+
+  it('refuses other types and files over the limit', () => {
+    const settings = { ...limits, uploadTypes: [...limits.uploadTypes] };
+    expect(checkUpload(settings, { mediaType: 'image/png', sizeBytes: 1 })).toBe(
+      'type_not_allowed',
+    );
+    expect(checkUpload(settings, { mediaType: 'application/pdf', sizeBytes: 2 * mb + 1 })).toBe(
+      'too_large',
+    );
   });
 });

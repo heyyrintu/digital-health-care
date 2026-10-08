@@ -45,6 +45,7 @@ All alerts and actions are stored in `SafetyAlert` and appear in the audit log.
 - Checks run live as each line is added and again on the server before signing; the server result is final.
 - AI-scribe-suggested lines are checked exactly like typed lines.
 - Disabling or downgrading SR-01, SR-02, SR-04, SR-10, SR-12, SR-18, SR-20 is not possible in settings.
+- A clinic admin can hide only the "Visibility only" rules (SR-06, SR-08, SR-15) under **Chart, safety alerts and files**; hidden rules are skipped in every check from then on, and the setting and the database refuse any other rule (API guide §3l).
 - Every override records doctor, reason, time and the database version used.
 - Monthly alert review: alerts shown vs accepted vs overridden, to tune non-critical visibility and reduce alert fatigue.
 

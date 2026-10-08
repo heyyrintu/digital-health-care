@@ -254,6 +254,7 @@ model Organisation {
   billItems              BillItem[]
   payments               Payment[]
   receiptSettings        ReceiptSettings?
+  settings               OrganisationSettings?
   safetyAlerts           SafetyAlert[]
   doctorProfiles         DoctorProfile[]
   medicineRequests       MedicineRequest[]
@@ -415,6 +416,23 @@ model UhidSettings {
   organisation Organisation @relation(fields: [organisationId], references: [id])
 
   @@map("uhid_settings")
+}
+
+/// Clinic admin settings (PRD §9.2), one row per organisation; no row means the defaults.
+model OrganisationSettings {
+  organisationId    String   @id @map("organisation_id") @db.Uuid
+  /// shared: every doctor sees the full chart. own_patients: a doctor sees a patient's
+  /// chart once the patient has been checked in to them (PRD §3.2).
+  chartModel        String   @default("shared") @map("chart_model")
+  /// Non-critical safety rules hidden from doctors (catalogue "Visibility only" rules).
+  hiddenSafetyRules String[] @default([]) @map("hidden_safety_rules")
+  maxUploadMb       Int      @default(10) @map("max_upload_mb")
+  uploadTypes       String[] @default(["pdf", "jpeg", "png"]) @map("upload_types")
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+
+  @@map("organisation_settings")
 }
 
 /// Configurable patient label (Priority, Emergency, VIP, ...).

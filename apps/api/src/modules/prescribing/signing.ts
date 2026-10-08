@@ -15,6 +15,7 @@ import { AppError } from '../../errors';
 import { uniqueSuffix } from '../../files';
 import type { Services } from '../../services';
 import { writeAudit } from '../audit/write';
+import { assertChartAccess } from '../clinical/access';
 import { lockVisit } from '../clinical/service';
 import { DoctorProfileService, findProfile, signingGaps } from '../doctors/service';
 import { loadDocument } from './document';
@@ -80,6 +81,9 @@ export class SigningService {
     return withTenant(this.s.db, actor.organisationId, async (tx) => {
       const appointment = await tx.appointment.findUnique({ where: { id: appointmentId } });
       if (!appointment) throw NOT_FOUND();
+      if (appointment.doctorUserId !== actor.userId) {
+        await assertChartAccess(tx, actor, appointment.patientId);
+      }
       const row = await currentPrescription(tx, appointmentId);
       if (!row || row.status !== 'draft') throw NOT_FOUND();
       const profile = await tx.doctorProfile.findUnique({
@@ -432,6 +436,8 @@ export class SigningService {
         include: { items: true },
       });
       if (!row || row.status === 'draft') throw NOT_FOUND();
+      // Front desk prints any signed prescription; a doctor needs the chart.
+      if (row.doctorUserId !== actor.userId) await assertChartAccess(tx, actor, row.patientId);
       const file =
         row.status === 'void' && row.voidPdfFileKey
           ? await this.s.files.get(row.voidPdfFileKey)

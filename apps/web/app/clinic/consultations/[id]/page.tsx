@@ -62,7 +62,13 @@ function ConsultationScreen({ id, me }: { id: string; me: MeResponse }) {
   }, [signOut, t]);
   const fail = useCallback((e: unknown) => {
     if (e instanceof ApiError && e.status === 401) return void session.current.signOut('expired');
-    setError(e instanceof ApiError ? e.message : session.current.t('error.network'));
+    setError(
+      e instanceof ApiError
+        ? e.code === 'CHART_RESTRICTED'
+          ? session.current.t('chart.restricted')
+          : e.message
+        : session.current.t('error.network'),
+    );
   }, []);
 
   const load = useCallback(async () => {

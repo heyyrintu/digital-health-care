@@ -51,6 +51,7 @@ import {
 } from './billing';
 import { DashboardQuery, DashboardReport } from './dashboard';
 import { ErrorResponse } from './errors';
+import { OrganisationSettings, UpdateOrganisationSettingsBody } from './settings';
 import {
   LastPrescription,
   LastPrescriptionQuery,
@@ -357,6 +358,21 @@ const operations: Operation[] = [
     summary: 'Set the UHID prefix and next number (clinic admin)',
     body: UpdateUhidSettingsBody,
     response: UhidSettings,
+  },
+  {
+    method: 'get',
+    path: '/organisation-settings',
+    operationId: 'getOrganisationSettings',
+    summary: 'Chart model, hidden safety rules and upload limits (staff)',
+    response: OrganisationSettings,
+  },
+  {
+    method: 'put',
+    path: '/organisation-settings',
+    operationId: 'updateOrganisationSettings',
+    summary: 'Set the chart model, hidden safety rules and upload limits (clinic admin)',
+    body: UpdateOrganisationSettingsBody,
+    response: OrganisationSettings,
   },
   {
     method: 'get',
