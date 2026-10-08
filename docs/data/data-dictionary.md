@@ -65,7 +65,7 @@ Conventions for every table: `id` (UUID), `organisationId` (except platform-leve
 
 | Entity | Purpose | Key fields |
 |---|---|---|
-| DrugMolecule | Reference drug data (built; platform-wide, read-only to clinics; the licensed database in production, a synthetic sample in development) | name, drugClass, pregnancy and lactation (caution\|contraindicated), pregnancyOverridable, weightBased, childMin/MaxMgPerKgDay, childDoseOverridable, maxDailyMg (from 12 years), maxDoseOverridable, olderAdultCaution, renalAdjustment, hepaticCaution, telemedicineList (o\|a\|b\|prohibited) |
+| DrugMolecule | Reference drug data (built; platform-wide, read-only to clinics; the licensed database in production, a synthetic sample in development) | name, drugClass, pregnancy (caution\|contraindicated), lactation (caution\|contraindicated), pregnancyOverridable, weightBased, childMinMgPerKgDay, childMaxMgPerKgDay, childDoseOverridable, maxDailyMg (from 12 years), maxDoseOverridable, olderAdultCaution, renalAdjustment, hepaticCaution, telemedicineList (o\|a\|b\|prohibited) |
 | DrugInteraction | Interacting pair (built) | moleculeAId < moleculeBId, severity (contraindicated\|major\|moderate\|minor), overridable, note |
 | DrugCrossSensitivity | Allergy class that warns for another class (built) | allergyClass, drugClass, note |
 | DrugConditionRule | Molecule or class to take care with in a condition (built) | moleculeId or drugClass, conditionCodes (ICD-10 prefixes), conditionTerms, note |
@@ -76,7 +76,7 @@ Conventions for every table: `id` (UUID), `organisationId` (except platform-leve
 | Prescription | Prescription document (built) | appointmentId, patientId, doctorUserId, version, status (draft\|signed\|void), language, revision · planned: consultationId, prescriptionNumber (prefix + sequence), previousVersionId, statuses published\|amended, signatureMethod, signedAt, pdfKey, pdfHash, templateVersion, verificationCode, voidReason |
 | PrescriptionItem | Medicine line (built) | id (client-chosen UUID), prescriptionId, medicineId?, name, composition, form (snapshots), route, timing, steps (JSON: dose, frequency, durationValue, durationUnit; several for tapering), quantity, instructions, remarks (generated unless remarksEdited), sortOrder |
 | PrescriptionTest | Test on prescription | prescriptionId, testOrderId |
-| SafetyAlert | The safety log: an alert and the doctor's answer (built; never deleted) | prescriptionId, key (rule, line, subject), ruleId, itemId, severity (block\|warn\|info), overridable, message, params, firstShownAt, lastShownAt, resolvedAt, action (acknowledged\|overridden\|changed), reason, actionByUserId, actionAt, drugDatabaseVersion |
+| SafetyAlert | The safety log: an alert and the doctor's answer (built; never deleted) | prescriptionId, key (rule, line, subject; unique per prescription), ruleId, itemId?, severity (block\|warn\|info), overridable, message, params, firstShownAt, lastShownAt, resolvedAt? (set while the alert no longer fires), action? (acknowledged\|overridden\|changed; null while unanswered), reason?, actionByUserId?, actionAt?, drugDatabaseVersion |
 
 ## Orders and documents
 

@@ -338,11 +338,14 @@ export async function seedSampleMedicines(db: Db): Promise<number> {
       'molecule' in target
         ? { moleculeId: id(target.molecule), drugClass: null }
         : { moleculeId: null, drugClass: target.drugClass };
-    const exists = await db.drugConditionRule.findFirst({ where: { ...where, note } });
+    // Identified by its target and codes, so editing a note updates the rule in place.
+    const exists = await db.drugConditionRule.findFirst({
+      where: { ...where, conditionCodes: { equals: conditionCodes } },
+    });
     if (exists) {
       await db.drugConditionRule.update({
         where: { id: exists.id },
-        data: { conditionCodes, conditionTerms },
+        data: { conditionTerms, note },
       });
     } else {
       await db.drugConditionRule.create({

@@ -193,7 +193,8 @@ function stepDailyMg(
     const amounts = values.some((v) => v !== 0 && v !== 1);
     units = countable && amounts ? sum : dose.qty * sum;
   } else if (freq.kind === 'perDay') units = dose.qty * freq.times;
-  else if (['hs', 'stat', 'weekly', 'monthly', 'alternate'].includes(freq.kind)) units = dose.qty;
+  // A day's amount for once-a-day schedules; weekly and monthly doses have no daily total.
+  else if (['hs', 'stat', 'alternate'].includes(freq.kind)) units = dose.qty;
   else return null;
 
   if (countable) {
@@ -611,7 +612,8 @@ export function checkPrescription(input: SafetyInput): SafetyFinding[] {
         add(
           'SR-13',
           line,
-          `${m.id}:${perKg}`,
+          // The exact daily mg, so any change of dose is a new alert needing a new answer.
+          `${m.id}:${mg}`,
           {
             medicine: line.name,
             molecule: m.name,
@@ -630,7 +632,7 @@ export function checkPrescription(input: SafetyInput): SafetyFinding[] {
       add(
         'SR-14',
         line,
-        `${m.id}:${total}`,
+        `${m.id}:${mg}`,
         { medicine: line.name, molecule: m.name, dailyMg: total, maxMg: m.maxDailyMg },
         `${m.name}: ${total} mg a day is above the maximum of ${m.maxDailyMg} mg.`,
         { overridable: m.maxDoseOverridable },

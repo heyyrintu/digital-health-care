@@ -490,6 +490,7 @@ export const en = {
   'safety.SR-10': '{molecule} is contraindicated in pregnancy.',
   'safety.SR-11.pregnant': 'Use {molecule} with caution in pregnancy.',
   'safety.SR-11.breastfeeding': 'Use {molecule} with caution while breastfeeding.',
+  'safety.SR-11.breastfeedingAvoid': '{molecule} is not recommended while breastfeeding.',
   'safety.SR-12': '{molecule} is dosed by weight. Record today’s weight first.',
   'safety.SR-13.above':
     '{molecule}: {mgPerKgDay} mg/kg a day is above the range of {min}–{max} mg/kg a day.',

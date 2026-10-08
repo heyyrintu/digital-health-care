@@ -27,13 +27,13 @@ Available now on the web: open **Consultation** from a checked-in patient's row 
 - **Notes:** chief complaint, symptoms with duration, examination, diagnosis, plan, tests advised, advice, private notes (never printed or shared) and a follow-up date with **Book follow-up**. For a diagnosis, type a name or code and pick an ICD-10 match, or press Enter to keep your own wording. Notes save by themselves a moment after you stop typing (the top right shows *Saved*). If you had the visit open in another tab, the older tab tells you to reload instead of overwriting newer notes. Another doctor's visit opens read-only.
 
 - **Prescription:** below the notes. Search a medicine by name or composition and pick it; if it is not in the list, add it as typed (it is marked *Not in medicine list*). For each line enter the dose, frequency (`1-0-1`, `BD`, `TDS`, `SOS`, `weekly`… or your own words), duration, when to take it and the route. The printed remark is written for you as you type, in English or Hindi (*Remarks language*, the patient's language by default); **Edit remarks** to word it yourself, **Use automatic remarks** to go back. For a tapering course choose **Add taper step**. **Repeat last** adds the patient's previous prescription; **Templates** adds one of yours, and **Save as template** saves the current lines under a name (the same name replaces it). The prescription saves by itself like the notes.
-- **Safety checks:** after each save the lines are checked against the patient's allergies, conditions, current medicines, age, today's weight and pregnancy status, and the consultation type. Alerts show on each line, and the top of the card counts what is still open.
+- **Safety checks:** after each save, and again when you reopen a draft, the lines are checked against the patient's allergies, conditions, current medicines, age, today's weight and pregnancy status, and the consultation type. Alerts show on each line, and the top of the card counts what is still open.
   - **Red (Block):** change the prescription. A few blocks, such as a dose above the maximum, can be overridden with a reason where the drug data allows it.
   - **Amber (Warning):** choose **Acknowledge**; some warnings need a reason.
   - **Blue (Note):** for information only.
   - Alerts based on what the patient told the clinic are labelled *Patient-reported, not verified*.
   - While your changes are saving the card shows *Checking the changes…*; answer alerts once it has saved.
-  - Your answers are kept with the prescription; if the dose or medicine changes, a new alert may need a new answer. Signing comes next.
+  - Your answers are kept with the prescription; if the dose or medicine changes, a new alert may need a new answer. Signing is planned for a later update.
 
 When safety checks and signing arrive, the full flow will be:
 1. Check allergies (red banner), conditions and recent visits.

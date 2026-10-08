@@ -1243,7 +1243,8 @@ button.tab .count {
 }
 
 .safety-count.warn {
-  color: var(--color-severity-warn);
+  /* Amber text at this size needs a darker shade for contrast (WCAG AA). */
+  color: #92400e;
 }
 
 .safety-alerts {

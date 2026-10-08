@@ -52,7 +52,7 @@ All alerts and actions are stored in `SafetyAlert` and appear in the audit log.
 The engine is `checkPrescription` in `packages/safety`, and the test pack is `packages/safety/src/engine.test.ts`. These choices are the engine's, not the licensed database's. Each needs the clinical advisor's confirmation:
 
 - **Chart text:**
-  - Allergies and current medicines are free text. They match a molecule or class when its name appears as a whole word (case-insensitive, plural allowed): "Penicillin" or "Penicillins" matches the Penicillin class, and "Warfarin 5 mg" matches warfarin.
+  - Allergies and current medicines are free text, matched by whole words (case-insensitive, plural allowed). An allergy matches a molecule or a class: "Penicillin" or "Penicillins" matches the Penicillin class. A current medicine matches molecules by name only: "Warfarin 5 mg" matches warfarin, but a class such as "NSAID" alone is not matched.
   - Only active chart entries are used. Patient-reported entries are checked like any other, and their alerts are labelled unverified (SR-21).
 - **Conditions:**
   - Kidney disease is ICD-10 N17–N19 or a name with *kidney*, *renal* or *CKD*.
@@ -68,7 +68,7 @@ The engine is `checkPrescription` in `packages/safety`, and the test pack is `pa
   - Slot amounts other than 1 count tablets ("2-0-1" is 3 tablets); for a measured dose they multiply it.
   - For a tapering course the highest step counts.
   - The same molecule is summed across lines.
-  - As-needed (SOS/PRN) and free-text frequencies, and creams, have no daily total, so SR-13 and SR-14 do not fire for them.
+  - As-needed (SOS/PRN), weekly, monthly and free-text frequencies, and creams, have no daily total, so SR-13 and SR-14 do not fire for them. Alternate-day doses count the amount on a dosing day.
 - **Interactions and duplicates (SR-04 to SR-08):**
   - They are checked between lines, and between each line and current medicines.
   - Molecules within one combination product are not checked against each other.
@@ -79,7 +79,7 @@ The engine is `checkPrescription` in `packages/safety`, and the test pack is `pa
 - **Completeness (SR-20):** every step needs a dose and a frequency, and a duration unless the frequency is STAT.
 - **Limited checks (SR-22):** this warning also fires for a medicine in the master that has no ingredients recorded.
 - **Answers to alerts:**
-  - An alert keeps its answer while the same problem fires. The key is the rule, the line and the subject; for SR-13 and SR-14 the subject includes the dose, so a higher dose needs a new answer.
+  - An alert keeps its answer while the same problem fires. The key is the rule, the line and the subject; for SR-13 and SR-14 the subject includes the exact daily amount in mg, so any change of dose needs a new answer.
   - An alert that stops firing is logged as `changed`.
 
 ## Test pack (minimum cases per rule)

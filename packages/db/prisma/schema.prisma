@@ -790,6 +790,8 @@ model DrugConditionRule {
 
   molecule DrugMolecule? @relation(fields: [moleculeId], references: [id], onDelete: Restrict)
 
+  @@index([moleculeId])
+  @@index([drugClass])
   @@map("drug_condition_rules")
 }
 

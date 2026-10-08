@@ -114,6 +114,12 @@ CREATE INDEX "drug_interactions_molecule_b_id_idx" ON "drug_interactions"("molec
 CREATE UNIQUE INDEX "drug_interactions_molecule_a_id_molecule_b_id_key" ON "drug_interactions"("molecule_a_id", "molecule_b_id");
 
 -- CreateIndex
+CREATE INDEX "drug_condition_rules_molecule_id_idx" ON "drug_condition_rules"("molecule_id");
+
+-- CreateIndex
+CREATE INDEX "drug_condition_rules_drug_class_idx" ON "drug_condition_rules"("drug_class");
+
+-- CreateIndex
 CREATE INDEX "medicine_ingredients_molecule_id_idx" ON "medicine_ingredients"("molecule_id");
 
 -- CreateIndex
@@ -142,8 +148,12 @@ ALTER TABLE "safety_alerts" ADD CONSTRAINT "safety_alerts_prescription_id_fkey" 
 
 -- Medicines now list their molecules as ingredients (with a foreign key and, when known, a
 -- strength) instead of an array of molecule IDs. Existing links move across first.
+-- The old array had no foreign key, so links to missing molecules are left behind.
 INSERT INTO "medicine_ingredients" ("medicine_id", "molecule_id")
-  SELECT m.id, unnest(m.molecule_ids) FROM "medicines" m
+  SELECT m.id, mm
+  FROM "medicines" m, unnest(m.molecule_ids) AS mm
+  WHERE mm IS NOT NULL
+    AND EXISTS (SELECT 1 FROM "drug_molecules" dm WHERE dm.id = mm)
   ON CONFLICT DO NOTHING;
 ALTER TABLE "medicines" DROP COLUMN "molecule_ids";
 
@@ -201,3 +211,5 @@ END $$;
 CREATE TRIGGER safety_alerts_same_tenant
   BEFORE INSERT OR UPDATE OF organisation_id, prescription_id
   ON safety_alerts FOR EACH ROW EXECUTE FUNCTION safety_alerts_same_tenant();
+-- Only this trigger uses it; no role may attach it elsewhere.
+REVOKE EXECUTE ON FUNCTION safety_alerts_same_tenant() FROM PUBLIC;

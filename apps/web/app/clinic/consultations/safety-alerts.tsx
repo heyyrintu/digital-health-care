@@ -10,8 +10,15 @@ type Translate = ReturnType<typeof useSession>['t'];
 /** The alert in the clinic's language, from its rule and the names and numbers it carries. */
 export function alertText(alert: SafetyAlert, t: Translate): string {
   const p = alert.params;
+  // SR-11 while breastfeeding words a contraindication more strongly than a caution.
   const variant =
-    alert.ruleId === 'SR-11' ? `.${p.status}` : alert.ruleId === 'SR-13' ? `.${p.direction}` : '';
+    alert.ruleId === 'SR-11'
+      ? p.status === 'breastfeeding' && p.risk === 'contraindicated'
+        ? '.breastfeedingAvoid'
+        : `.${p.status}`
+      : alert.ruleId === 'SR-13'
+        ? `.${p.direction}`
+        : '';
   const params =
     alert.ruleId === 'SR-20'
       ? {
@@ -49,7 +56,7 @@ export function SafetyBanner({
       {checking ? (
         <p className="hint">{t('safety.checking')}</p>
       ) : safety.openBlocks === 0 && safety.openWarnings === 0 ? (
-        <p className="hint">{safety.alerts.length === 0 ? t('safety.clear') : ''}</p>
+        safety.alerts.length === 0 && <p className="hint">{t('safety.clear')}</p>
       ) : (
         <>
           {safety.openBlocks > 0 && (
@@ -127,7 +134,10 @@ function AlertRow({
         {alert.unverified && <span className="pill">{t('safety.unverified')}</span>}
       </p>
       {alert.params.note && alert.ruleId !== 'SR-09' && (
-        <p className="hint">{String(alert.params.note)}</p>
+        // Notes come from the reference drug data, which is in English.
+        <p className="hint" lang="en">
+          {String(alert.params.note)}
+        </p>
       )}
       {alert.action === 'acknowledged' || alert.action === 'overridden' ? (
         <p className="hint">

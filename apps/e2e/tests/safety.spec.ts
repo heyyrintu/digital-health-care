@@ -109,9 +109,19 @@ test.describe('safety checks', () => {
     await expect(rx.getByTestId('rx-line-0').locator('[data-rule="SR-05"]')).toContainText(
       'Acknowledged: Short course; INR check booked',
     );
-    const row = await db.safetyAlert.findFirstOrThrow({ where: { ruleId: 'SR-05' } });
+    // This visit's prescription only: the test database is reused between runs.
+    const prescription = await db.prescription.findFirstOrThrow({
+      where: { appointmentId: visit.id },
+    });
+    const row = await db.safetyAlert.findFirstOrThrow({
+      where: { prescriptionId: prescription.id, ruleId: 'SR-05' },
+    });
     expect(row.action).toBe('acknowledged');
-    expect(await db.safetyAlert.findFirstOrThrow({ where: { ruleId: 'SR-02' } })).toMatchObject({
+    expect(
+      await db.safetyAlert.findFirstOrThrow({
+        where: { prescriptionId: prescription.id, ruleId: 'SR-02' },
+      }),
+    ).toMatchObject({
       action: 'changed',
     });
   });

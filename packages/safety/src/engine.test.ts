@@ -429,15 +429,28 @@ describe('children and doses (SR-12 to SR-14)', () => {
   });
 
   it('SR-14 keys the alert by the total, so a higher dose needs a new override', () => {
-    const one = find(
-      input({ lines: [line(M.para, { mg: 1000, steps: [step({ frequency: '2-2-2' })] })] }),
-      'SR-14',
-    );
-    const two = find(
-      input({ lines: [line(M.para, { mg: 1000, steps: [step({ frequency: '3-3-3' })] })] }),
-      'SR-14',
-    );
-    expect(one?.key).not.toBe(two?.key);
+    // The same line (same ID) each time: only the total can change the key.
+    const base = line(M.para, { mg: 1000, steps: [step({ frequency: '2-2-2' })] });
+    const at = (frequency: string) =>
+      find(input({ lines: [{ ...base, steps: [step({ frequency })] }] }), 'SR-14')?.key;
+    expect(at('2-2-2')).toBeDefined();
+    expect(at('2-2-2')).toBe(at('2-2-2'));
+    expect(at('3-3-3')).not.toBe(at('2-2-2'));
+  });
+
+  it('gives weekly and monthly doses no daily total', () => {
+    const weekly = line(M.para, {
+      mg: 1000,
+      steps: [step({ dose: '5 tablets', frequency: 'weekly' })],
+    });
+    expect(rules(input({ lines: [weekly] }))).toEqual([]);
+    const child = { ageYears: 6, weightKg: 20, pregnancy: null };
+    const monthly = line(M.para, {
+      mg: 50,
+      per: 'ml',
+      steps: [step({ dose: '1 ml', frequency: 'monthly' })],
+    });
+    expect(rules(input({ patient: child, lines: [monthly] }))).toEqual([]);
   });
 });
 

@@ -251,17 +251,24 @@ export function PrescriptionCard({
 
   /** The doctor's answer to an alert; the server returns the updated check. */
   const act: SafetyAct = async (key, action, reason) => {
+    const editsAtStart = edits.current;
     try {
-      setSafety(
-        await api.request('POST', `/appointments/${appointmentId}/prescription/safety-actions`, {
-          schema: SafetySummary,
-          body: { key, action, reason },
-        }),
+      const summary = await api.request(
+        'POST',
+        `/appointments/${appointmentId}/prescription/safety-actions`,
+        { schema: SafetySummary, body: { key, action, reason } },
       );
+      // Lines edited meanwhile: their save brings a newer check, so keep that one.
+      if (edits.current === editsAtStart) setSafety(summary);
       setError(null);
       return true;
     } catch (e) {
-      fail(e);
+      // The alert no longer applies (the chart or lines changed): show the current check.
+      if (e instanceof ApiError && e.status === 409 && edits.current === editsAtStart) {
+        void load();
+      } else {
+        fail(e);
+      }
       return false;
     }
   };
@@ -357,7 +364,8 @@ export function PrescriptionCard({
 
   const editable = view.canEdit && state !== 'stale';
   // Alerts belong to the last saved lines: while changes wait to save, they may be out of date.
-  const checking = state === 'dirty' || state === 'saving';
+  // After a failed save they belong to lines no longer on screen, so they wait too.
+  const checking = state === 'dirty' || state === 'saving' || state === 'error';
   const alertsFor = (itemId: string | null) =>
     safety?.alerts.filter((a) => a.itemId === itemId) ?? [];
   const status =

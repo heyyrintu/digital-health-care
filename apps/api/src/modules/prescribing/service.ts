@@ -20,7 +20,7 @@ import { AppError } from '../../errors';
 import type { Services } from '../../services';
 import { writeAudit } from '../audit/write';
 import { lockVisit, NOTE_STATUSES } from '../clinical/service';
-import { checkAndRecord, type SafetyVisit } from './safety';
+import { checkAndRecord, summarise, type SafetyVisit } from './safety';
 
 interface Actor {
   userId: string;
@@ -115,15 +115,10 @@ export class PrescribingService {
       // The chart may have changed since the last save (a new allergy, today's weight), so
       // a draft is checked again on opening.
       // Only the visit's doctor writes to the safety log; others see the check without it.
-      const safety = row
-        ? await this.safety(
-            tx,
-            actor,
-            appointment,
-            row,
-            row.status === 'draft' && appointment.doctorUserId === actor.userId,
-          )
-        : null;
+      // Writing takes the visit lock, like a save, so two openings cannot race.
+      const persist = row?.status === 'draft' && appointment.doctorUserId === actor.userId;
+      if (persist) await lockVisit(tx, appointmentId);
+      const safety = row ? await this.safety(tx, actor, appointment, row, persist) : null;
       return {
         prescription: row && safety ? this.out(row, safety) : null,
         defaultLanguage: appointment.patient.language,
@@ -225,7 +220,7 @@ export class PrescribingService {
     return withTenant(this.s.db, actor.organisationId, async (tx) => {
       const { appointment, existing } = await this.writable(tx, actor, appointmentId);
       if (!existing) throw NOT_FOUND();
-      const { findings } = await this.check(tx, actor, appointment, existing, true);
+      const { findings, summary } = await this.check(tx, actor, appointment, existing, true);
       const finding = findings.find((f) => f.key === body.key);
       if (!finding) {
         throw new AppError(409, 'CONFLICT', 'This alert no longer applies.', { key: 'resolved' });
@@ -250,7 +245,8 @@ export class PrescribingService {
         ruleId: finding.ruleId,
         drugDatabaseVersion: row.drugDatabaseVersion,
       });
-      return (await this.check(tx, actor, appointment, existing, false)).summary;
+      const rows = await tx.safetyAlert.findMany({ where: { prescriptionId: existing.id } });
+      return summarise(findings, new Map(rows.map((r) => [r.key, r])), summary.drugDatabaseVersion);
     });
   }
 

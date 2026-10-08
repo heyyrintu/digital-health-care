@@ -494,6 +494,7 @@ export const hi: Record<MessageKey, string> = {
   'safety.SR-10': 'गर्भावस्था में {molecule} वर्जित है।',
   'safety.SR-11.pregnant': 'गर्भावस्था में {molecule} सावधानी से दें।',
   'safety.SR-11.breastfeeding': 'स्तनपान के दौरान {molecule} सावधानी से दें।',
+  'safety.SR-11.breastfeedingAvoid': 'स्तनपान के दौरान {molecule} देने की सलाह नहीं है।',
   'safety.SR-12': '{molecule} की खुराक वज़न से तय होती है। पहले आज का वज़न दर्ज करें।',
   'safety.SR-13.above':
     '{molecule}: रोज़ {mgPerKgDay} mg/kg, {min}–{max} mg/kg की सीमा से ज़्यादा है।',
@@ -504,6 +505,6 @@ export const hi: Record<MessageKey, string> = {
   'safety.SR-17': '{condition} में {molecule} सावधानी से दें।',
   'safety.SR-18': '{molecule} ऑनलाइन परामर्श में नहीं लिखी जा सकती।',
   'safety.SR-19': '{molecule} सूची B में है: ऑनलाइन केवल फ़ॉलो-अप में।',
-  'safety.SR-20': 'बाकी: {fields}।',
+  'safety.SR-20': 'ज़रूरी जानकारी नहीं है: {fields}।',
   'safety.SR-22': 'दवा सूची में नहीं है, इसलिए सुरक्षा जाँच सीमित है।',
 };

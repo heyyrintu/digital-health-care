@@ -167,7 +167,8 @@ async function loadInput(tx: Tx, visit: SafetyVisit, items: ItemRow[]): Promise<
   };
 }
 
-function summarise(
+/** The engine's findings with the doctor's answers from the safety log. */
+export function summarise(
   findings: SafetyFinding[],
   rows: Map<string, AlertRow>,
   version: string,

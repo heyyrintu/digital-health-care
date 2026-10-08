@@ -180,7 +180,7 @@ Implemented in Phase 1 (`apps/api/src/modules/prescribing`), with the safety eng
 
 ## 3g. Safety engine
 
-The rules are SR-01 to SR-22 in `docs/safety/safety-rule-catalogue.md`, implemented as a pure function, `checkPrescription`, in `@dhc/safety`; the API module is `prescribing/safety.ts`. Drug facts come from the reference drug data tables, never from code: molecule facts, interactions, cross-sensitivities, drug–condition rules, and medicine ingredients with strengths. Production loads the licensed database. Development and tests use a synthetic sample that is illustrative only.
+The rules are SR-01 to SR-22 in `docs/safety/safety-rule-catalogue.md`, implemented as a pure function, `checkPrescription`, in `@dhc/safety`; the API module is `prescribing/safety.ts`. Drug facts come from the reference drug data tables, never from code: molecule facts, interactions, cross-sensitivities, drug–condition rules, and medicine ingredients with strengths. The licensed database import and clinical sign-off are still pending, so for now development and tests use a synthetic sample that is illustrative only.
 
 - **When it runs:** on every save of a draft, and again when a draft is opened (the chart may have changed: a new allergy, today's weight). The result is returned as `safety` on the prescription: `{alerts, drugDatabaseVersion, openBlocks, openWarnings}`. The server's result is final.
 - **Inputs:**
@@ -189,9 +189,9 @@ The rules are SR-01 to SR-22 in `docs/safety/safety-rule-catalogue.md`, implemen
   - Today's weight and pregnancy status from this visit's vitals.
   - The consultation type's mode.
   - Whether the same doctor has an earlier completed visit with the patient (the follow-up condition for SR-19).
-  - Each line's ingredients and steps. Daily doses are worked out from the dose, the frequency and the ingredient strength; as-needed and free-text frequencies have no daily total.
+  - Each line's ingredients and steps. Daily doses are worked out from the dose, the frequency and the ingredient strength; as-needed, weekly, monthly and free-text frequencies have no daily total.
 - **An alert:** `{key, ruleId, severity (block|warn|info), itemId, overridable, reasonRequired, unverified, params, message, action, reason, actionAt}`.
-  - `key` is the rule, the line and the subject (for example the other molecule, or the daily total for SR-13 and SR-14), so the same problem keeps its answer across saves and a different one (a higher dose) needs a new answer.
+  - `key` is the rule, the line and the subject (for example the other molecule, or the exact daily amount for SR-13 and SR-14), so the same problem keeps its answer across saves and a different one (a higher dose) needs a new answer.
   - `params` carries names and numbers for the screen's own wording in English or Hindi; `message` is English, for the log.
   - `unverified` marks alerts based on patient-reported chart entries (SR-21).
 - **Answers:**
@@ -200,7 +200,7 @@ The rules are SR-01 to SR-22 in `docs/safety/safety-rule-catalogue.md`, implemen
   - Anything else is 400. An alert that no longer fires is 409 `key: resolved`.
   - `openBlocks` counts blocks not overridden; signing will stay disabled while it is above 0. `openWarnings` counts warnings not acknowledged.
 - **Safety log** (`safety_alerts`):
-  - One row per alert key, with first and last shown times and the drug data version.
+  - One row per prescription and alert key, with first and last shown times and the drug data version.
   - When an alert stops firing it is resolved, and recorded as `changed` if the doctor had not answered it. If it fires again it reopens.
   - Rows are never deleted; row-level security applies per organisation, and a trigger keeps each row on a prescription of the same organisation.
 - **Audit:**
