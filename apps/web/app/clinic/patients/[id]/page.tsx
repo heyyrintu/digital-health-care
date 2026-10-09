@@ -18,6 +18,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { AgeGender } from '../../patient-bits';
 import { PatientForm } from '../../patient-form';
 import { TagList, TagPicker } from '../../patient-tags';
+import { MergePanel } from '../merge-panel';
 import { useSession } from '../../session-provider';
 import { ClinicShell, canRegister, canTag } from '../../shell';
 
@@ -37,6 +38,7 @@ function PatientView({ role }: { role: string }) {
   const [saved, setSaved] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [reload, setReload] = useState(0);
 
   const show = useCallback((p: PatientDetail) => {
     setPatient(p);
@@ -66,7 +68,7 @@ function PatientView({ role }: { role: string }) {
         .then((list) => setTags(list.data))
         .catch(() => undefined);
     }
-  }, [api, id, role, show, handle]);
+  }, [api, id, role, show, handle, reload]);
 
   async function run(action: () => Promise<void>) {
     setBusy(true);
@@ -133,6 +135,7 @@ function PatientView({ role }: { role: string }) {
     );
   }
 
+  const merged = patient.mergedInto;
   const tagsChanged =
     [...selectedTags].sort().join() !==
     patient.tags
@@ -165,7 +168,7 @@ function PatientView({ role }: { role: string }) {
             </>
           }
           actions={
-            canRegister(role) ? (
+            canRegister(role) && !merged ? (
               <Link
                 className={buttonVariants()}
                 href={`/clinic/appointments/new?patientId=${patient.id}`}
@@ -177,6 +180,39 @@ function PatientView({ role }: { role: string }) {
           }
         />
         <Surface className="grid gap-4 p-4 sm:p-6">
+          {merged && (
+            <p
+              role="status"
+              data-testid="merged-banner"
+              className="rounded-xl bg-warning-soft px-4 py-3 text-sm text-warning-foreground"
+            >
+              {t('merge.mergedInto', { name: merged.name, uhid: merged.uhid })}{' '}
+              <Link
+                href={`/clinic/patients/${merged.id}`}
+                className="font-semibold underline underline-offset-2"
+              >
+                {t('merge.openKept')}
+              </Link>
+            </p>
+          )}
+          {patient.mergedFrom.length > 0 && (
+            <p data-testid="merged-from" className="text-sm text-muted-foreground">
+              {t('merge.alsoRegisteredAs', {
+                uhids: patient.mergedFrom.map((m) => m.uhid).join(', '),
+              })}
+            </p>
+          )}
+          {patient.pendingMerge && (
+            <p
+              data-testid="pending-merge"
+              className="rounded-xl bg-accent px-4 py-3 text-sm text-accent-foreground"
+            >
+              {t('merge.pending', {
+                duplicate: patient.pendingMerge.source.uhid,
+                kept: patient.pendingMerge.target.uhid,
+              })}
+            </p>
+          )}
           <p data-testid="patient-tags" className="flex flex-wrap gap-1.5">
             <TagList tags={patient.tags} />
           </p>
@@ -196,7 +232,7 @@ function PatientView({ role }: { role: string }) {
               {t('patient.saved')}
             </p>
           )}
-          {canTag(role) && tags.length > 0 && (
+          {canTag(role) && !merged && tags.length > 0 && (
             <div className="tag-editor grid justify-items-start gap-3">
               <TagPicker tags={tags} selected={selectedTags} onChange={setSelectedTags} />
               <Button type="button" disabled={busy || !tagsChanged} onClick={() => void saveTags()}>
@@ -213,7 +249,7 @@ function PatientView({ role }: { role: string }) {
             <h2 id="details-title" className="font-display text-lg font-bold">
               {t('patient.details')}
             </h2>
-            {canRegister(role) && !editing && (
+            {canRegister(role) && !merged && !editing && (
               <Button type="button" variant="outline" onClick={() => setEditing(true)}>
                 <Pencil aria-hidden />
                 {t('patient.edit')}
@@ -252,6 +288,17 @@ function PatientView({ role }: { role: string }) {
           )}
         </section>
       </Surface>
+
+      {canRegister(role) && !merged && !patient.pendingMerge && (
+        <Surface className="p-4 sm:p-6">
+          <section aria-labelledby="merge-title" className="grid gap-3">
+            <h2 id="merge-title" className="font-display text-lg font-bold">
+              {t('merge.title')}
+            </h2>
+            <MergePanel patient={patient} onRequested={() => setReload((n) => n + 1)} />
+          </section>
+        </Surface>
+      )}
 
       <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">
         <Surface className="p-4 sm:p-6">

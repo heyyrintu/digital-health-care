@@ -26,6 +26,8 @@ export const PatientSummary = PatientRef.extend({
   dob: z.iso.date().nullable(),
   gender: Gender.nullable(),
   tags: z.array(TagRef),
+  /** Set when this duplicate was merged into another record (open that one instead). */
+  mergedIntoId: z.uuid().nullable(),
 });
 export type PatientSummary = z.infer<typeof PatientSummary>;
 
@@ -41,6 +43,12 @@ export const PatientDetail = PatientSummary.extend({
   /** Others on the same phone number, the guardian, and dependants. */
   family: z.array(PatientRef.extend({ relation: z.enum(['guardian', 'dependant', 'same_phone']) })),
   createdAt: z.iso.datetime(),
+  /** The record this one was merged into; this one is then read-only. */
+  mergedInto: PatientRef.nullable(),
+  /** Duplicates merged into this record; their visits and prescriptions show here. */
+  mergedFrom: z.array(PatientRef),
+  /** A merge request waiting for a clinic admin that involves this record. */
+  pendingMerge: z.object({ id: z.uuid(), source: PatientRef, target: PatientRef }).nullable(),
 });
 export type PatientDetail = z.infer<typeof PatientDetail>;
 

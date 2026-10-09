@@ -8,6 +8,7 @@ import {
   IndianRupee,
   ListOrdered,
   ScrollText,
+  GitMerge,
   Pill,
   UserPlus,
   Users,
@@ -66,6 +67,7 @@ export function ClinicShell({ children }: { children: (me: MeResponse) => ReactN
             ? [
                 { href: '/clinic/audit', label: t('dashboard.auditLog'), icon: ScrollText },
                 { href: '/clinic/medicines', label: t('dashboard.medicines'), icon: Pill },
+                { href: '/clinic/merges', label: t('dashboard.merges'), icon: GitMerge },
               ]
             : []),
           ...(me.role === 'doctor'

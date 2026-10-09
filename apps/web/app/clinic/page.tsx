@@ -178,6 +178,14 @@ function PatientSearch() {
                       >
                         {p.name}
                       </Link>
+                      {p.mergedIntoId && (
+                        <Link
+                          href={`/clinic/patients/${p.mergedIntoId}`}
+                          className="ml-2 text-xs font-semibold text-primary hover:underline"
+                        >
+                          {t('merge.mergedChip')}
+                        </Link>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <AgeGender patient={p} />

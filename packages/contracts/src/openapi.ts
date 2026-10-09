@@ -100,6 +100,14 @@ import {
 } from './medicines';
 import { HealthResponse } from './health';
 import {
+  ApprovePatientMergeBody,
+  CreatePatientMergeBody,
+  PatientMergeList,
+  PatientMergeQuery,
+  PatientMergeRequest,
+  RejectPatientMergeBody,
+} from './merges';
+import {
   CreatePatientBody,
   DuplicateCheckBody,
   DuplicateCheckResponse,
@@ -808,6 +816,41 @@ const operations: Operation[] = [
     summary: 'Withdraw a decision; the name goes back to the queue',
     pathParams: ['id'],
     status: 204,
+  },
+  {
+    method: 'post',
+    path: '/patient-merges',
+    operationId: 'requestPatientMerge',
+    summary: 'Ask a clinic admin to merge a duplicate record into the one that stays',
+    body: CreatePatientMergeBody,
+    response: PatientMergeRequest,
+    status: 201,
+  },
+  {
+    method: 'get',
+    path: '/patient-merges',
+    operationId: 'listPatientMerges',
+    summary: 'Merge requests waiting for a decision, or the latest decided (clinic admin)',
+    query: PatientMergeQuery,
+    response: PatientMergeList,
+  },
+  {
+    method: 'post',
+    path: '/patient-merges/{id}/approve',
+    operationId: 'approvePatientMerge',
+    summary: 'Merge the duplicate into the kept record (clinic admin; cannot be undone)',
+    pathParams: ['id'],
+    body: ApprovePatientMergeBody,
+    response: PatientMergeRequest,
+  },
+  {
+    method: 'post',
+    path: '/patient-merges/{id}/reject',
+    operationId: 'rejectPatientMerge',
+    summary: 'Keep both records, with a reason (clinic admin)',
+    pathParams: ['id'],
+    body: RejectPatientMergeBody,
+    response: PatientMergeRequest,
   },
   {
     method: 'get',

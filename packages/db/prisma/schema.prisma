@@ -258,6 +258,7 @@ model Organisation {
   doctorProfiles         DoctorProfile[]
   medicineRequests       MedicineRequest[]
   verifications          PrescriptionVerification[]
+  patientMergeRequests   PatientMergeRequest[]
 
   @@map("organisations")
 }
@@ -368,6 +369,37 @@ model OtpChallenge {
 }
 
 /// Person receiving care. Minimal Phase 0 shape; full fields in docs/data/data-dictionary.md.
+enum PatientMergeStatus {
+  pending
+  approved
+  rejected
+}
+
+/// A request to merge a duplicate patient record (source) into the one that stays (target).
+/// Front desk, doctors and clinic admins ask; a clinic admin approves or rejects.
+model PatientMergeRequest {
+  id                String             @id @default(uuid()) @db.Uuid
+  organisationId    String             @map("organisation_id") @db.Uuid
+  sourcePatientId   String             @map("source_patient_id") @db.Uuid
+  targetPatientId   String             @map("target_patient_id") @db.Uuid
+  reason            String
+  status            PatientMergeStatus @default(pending)
+  requestedByUserId String             @map("requested_by_user_id") @db.Uuid
+  requestedAt       DateTime           @default(now()) @map("requested_at") @db.Timestamptz(3)
+  decidedByUserId   String?            @map("decided_by_user_id") @db.Uuid
+  decidedAt         DateTime?          @map("decided_at") @db.Timestamptz(3)
+  decisionNote      String?            @map("decision_note")
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+  source       Patient      @relation("MergeSource", fields: [sourcePatientId], references: [id], onDelete: Restrict)
+  target       Patient      @relation("MergeTarget", fields: [targetPatientId], references: [id], onDelete: Restrict)
+
+  @@index([organisationId, status])
+  @@index([sourcePatientId])
+  @@index([targetPatientId])
+  @@map("patient_merge_requests")
+}
+
 model Patient {
   id                    String    @id @default(uuid()) @db.Uuid
   organisationId        String    @map("organisation_id") @db.Uuid
@@ -386,13 +418,21 @@ model Patient {
   emergencyContactPhone String?   @map("emergency_contact_phone")
   /// Under-18s (or anyone without a phone) are linked to the adult who looks after them.
   guardianPatientId     String?   @map("guardian_patient_id") @db.Uuid
+  /// Set when a clinic admin merged this duplicate into another record; the record is then
+  /// read-only and its history shows under the kept one.
+  mergedIntoId          String?   @map("merged_into_id") @db.Uuid
+  mergedAt              DateTime? @map("merged_at") @db.Timestamptz(3)
   createdByUserId       String?   @map("created_by_user_id") @db.Uuid
   createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt             DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  organisation Organisation        @relation(fields: [organisationId], references: [id])
-  guardian     Patient?            @relation("Guardian", fields: [guardianPatientId], references: [id])
-  dependants   Patient[]           @relation("Guardian")
+  organisation Organisation          @relation(fields: [organisationId], references: [id])
+  guardian     Patient?              @relation("Guardian", fields: [guardianPatientId], references: [id])
+  dependants   Patient[]             @relation("Guardian")
+  mergedInto   Patient?              @relation("Merge", fields: [mergedIntoId], references: [id], onDelete: Restrict)
+  mergedFrom   Patient[]             @relation("Merge")
+  mergeSources PatientMergeRequest[] @relation("MergeSource")
+  mergeTargets PatientMergeRequest[] @relation("MergeTarget")
   tags         PatientTag[]
   appointments Appointment[]
   allergies    Allergy[]
@@ -402,6 +442,7 @@ model Patient {
   @@unique([organisationId, uhid])
   @@index([organisationId, phone])
   @@index([guardianPatientId])
+  @@index([mergedIntoId])
   @@map("patients")
 }
 
