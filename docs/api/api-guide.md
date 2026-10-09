@@ -206,8 +206,8 @@ The rules are SR-01 to SR-22 in `docs/safety/safety-rule-catalogue.md`, implemen
 - **Audit:**
   - `prescription.safety_acknowledged` and `prescription.safety_overridden` record the alert ID, the rule and the drug data version, never the reason text.
   - `prescription.saved` adds the open block and warning counts.
+- **Clinic tuning:** a clinic admin can hide SR-06, SR-08 and SR-15 (§3l).
 - **Not built yet:**
-  - Clinic tuning of visibility for SR-06, SR-08 and SR-15.
   - The monthly alert review.
   - Kidney checks from eGFR (only recorded conditions are used today).
 
