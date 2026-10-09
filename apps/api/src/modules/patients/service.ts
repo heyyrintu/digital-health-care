@@ -16,6 +16,7 @@ import { normaliseIndianMobile } from '../../auth/phone';
 import { AppError } from '../../errors';
 import type { Services } from '../../services';
 import { writeAudit } from '../audit/write';
+import { assertNotMerged } from './merged';
 
 interface Actor {
   userId: string;
@@ -51,8 +52,11 @@ export function toSummary(p: PatientWithTags): PatientSummary {
       colour: tag.colour,
       sortToTop: tag.sortToTop,
     })),
+    mergedIntoId: p.mergedIntoId,
   };
 }
+
+const ref = { id: true, uhid: true, name: true } as const;
 
 const uhidOf = (prefix: string, n: number) => `${prefix}${n}`;
 
@@ -81,15 +85,20 @@ export class PatientService {
   async list(actor: Actor, query: PatientListQuery, decodeCursor: (c: string) => string) {
     const { limit, cursor, q, tagId } = query;
     const where: Prisma.PatientWhereInput = {
-      ...(q
-        ? {
-            OR: [
-              { name: { contains: cleanName(q), mode: 'insensitive' } },
-              { uhid: { contains: q.toUpperCase() } },
-              { phone: { contains: q.replace(/[\s\-()]/g, '') } },
-            ],
-          }
-        : {}),
+      AND: [
+        q
+          ? {
+              OR: [
+                { name: { contains: cleanName(q), mode: 'insensitive' } },
+                { uhid: { contains: q.toUpperCase() } },
+                { phone: { contains: q.replace(/[\s\-()]/g, '') } },
+              ],
+            }
+          : {},
+        // Merged duplicates stay out of lists, except by their exact old UHID (on old
+        // papers), where they lead to the record they were merged into.
+        { OR: [{ mergedIntoId: null }, ...(q ? [{ uhid: q.trim().toUpperCase() }] : [])] },
+      ],
       ...(tagId ? { tags: { some: { tagId } } } : {}),
     };
     const rows = await withTenant(this.s.db, actor.organisationId, (tx) =>
@@ -207,6 +216,7 @@ export class PatientService {
     return withTenant(this.s.db, actor.organisationId, async (tx) => {
       const current = await tx.patient.findUnique({ where: { id } });
       if (!current) throw NOT_FOUND();
+      assertNotMerged(current);
       if (fields.guardianPatientId) await this.checkGuardian(tx, fields.guardianPatientId, id);
 
       const phone = fields.phone === undefined ? current.phone : fields.phone;
@@ -250,6 +260,7 @@ export class PatientService {
     return withTenant(this.s.db, actor.organisationId, async (tx) => {
       const patient = await tx.patient.findUnique({ where: { id }, include: withTags });
       if (!patient) throw NOT_FOUND();
+      assertNotMerged(patient);
       const current = new Set(patient.tags.map((t) => t.tagId));
       const added = [...wanted].filter((t) => !current.has(t));
       const removed = [...current].filter((t) => !wanted.has(t));
@@ -353,7 +364,11 @@ export class PatientService {
     if (dob)
       or.push({ dob: new Date(`${dob}T00:00:00Z`), name: { equals: name, mode: 'insensitive' } });
     if (or.length === 0) return [];
-    return tx.patient.findMany({ where: { OR: or }, include: withTags, take: 5 });
+    return tx.patient.findMany({
+      where: { OR: or, mergedIntoId: null },
+      include: withTags,
+      take: 5,
+    });
   }
 
   /** A guardian is an adult record without a guardian of their own (one level only). */
@@ -363,6 +378,12 @@ export class PatientService {
     }
     const guardian = await tx.patient.findUnique({ where: { id: guardianId } });
     if (!guardian) throw invalid('guardianPatientId', 'Guardian not found.');
+    if (guardian.mergedIntoId) {
+      throw invalid(
+        'guardianPatientId',
+        'That record was merged into another one; choose that one.',
+      );
+    }
     if (guardian.guardianPatientId) {
       throw invalid('guardianPatientId', 'The guardian must not have a guardian themselves.');
     }
@@ -382,13 +403,23 @@ export class PatientService {
   private async detail(tx: Tx, id: string): Promise<PatientDetail> {
     const p = await tx.patient.findUnique({
       where: { id },
-      include: { ...withTags, guardian: { select: { id: true, uhid: true, name: true } } },
+      include: {
+        ...withTags,
+        guardian: { select: ref },
+        mergedInto: { select: ref },
+        mergedFrom: { select: ref, orderBy: { mergedAt: 'asc' } },
+      },
     });
     if (!p) throw NOT_FOUND();
+    const pendingMerge = await tx.patientMergeRequest.findFirst({
+      where: { status: 'pending', OR: [{ sourcePatientId: id }, { targetPatientId: id }] },
+      select: { id: true, source: { select: ref }, target: { select: ref } },
+    });
 
     const related = await tx.patient.findMany({
       where: {
         id: { not: p.id },
+        mergedIntoId: null,
         OR: [
           { guardianPatientId: p.id },
           ...(p.phone ? [{ phone: p.phone }] : []),
@@ -421,6 +452,9 @@ export class PatientService {
               : 'same_phone',
       })),
       createdAt: p.createdAt.toISOString(),
+      mergedInto: p.mergedInto,
+      mergedFrom: p.mergedFrom,
+      pendingMerge,
     };
   }
 

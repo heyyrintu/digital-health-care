@@ -291,6 +291,24 @@ Implemented in Phase 1 (`apps/api/src/modules/medicines`, PRD §9.2). Everything
 - **Audit:** `medicine.created` (medicine ID and ingredient count) and `medicine.updated` (medicine ID, ingredient count and whether active), `medicine_request.approved` and `medicine_request.rejected` (request ID and medicine ID), `medicine_request.undone` (the decision undone). Never reasons or patient details.
 - **Not built yet:** the licensed drug database import with its own update process (§3g), and a reference request to the platform team to add a medicine for every clinic.
 
+## 3m. Merging duplicate patient records
+
+Implemented in Phase 1 (`apps/api/src/modules/patients/merges.ts`, PRD §3.2, §5.3).
+
+| Action | Endpoint | Who |
+|---|---|---|
+| Ask | `POST /patient-merges` `{sourcePatientId, targetPatientId, reason}` → 201 | Front desk, doctor, clinic admin |
+| Requests | `GET /patient-merges?status=pending\|decided` → `{data}` (pending oldest first; the latest 50 decided) | Clinic admin |
+| Approve | `POST /patient-merges/{id}/approve` `{note?}` | Clinic admin |
+| Reject | `POST /patient-merges/{id}/reject` `{note}` | Clinic admin |
+
+- **Asking:** the source is the duplicate that closes, the target the record that stays. Both must be this clinic's live records (400 otherwise) and different; a record already in a pending request cannot be in another (409 `merge: pending`; one pending request per source is also enforced in the database). Each side comes back with UHID, name, mobile, date of birth, gender, registration time and completed visits, for the admin to compare. The patient page shows the waiting request (`pendingMerge`).
+- **Approving** (one decision at a time per clinic) moves the living record to the target in one transaction: chart entries (allergies, conditions, current medicines, including removed ones with their reasons), tags the target lacks, upcoming bookings nobody has started (pending or confirmed, without vitals or notes), dependants (their guardian becomes the target; a link from the target to the source is dropped), records previously merged into the source, and a patient-app account when the target has none. The source gets `mergedIntoId` and `mergedAt`. Past visits, notes, prescriptions and bills stay where they were written, because signed records never change; they count as the target's from then on. A merge cannot be undone; a decided request gives 409 `merge: decided`.
+- **Guardians** stay one level deep: if the source is someone's guardian and the target has a guardian of its own, the request is refused (409 `merge: guardian`) until the family links are changed.
+- **Merged records** are read-only: editing, tagging, chart entries and booking give 409 `PATIENT_MERGED` with `fields.patientId` (the record to use). Database triggers refuse anything new pointing at a merged record (visits, chart entries, tags, guardian links, merges). Search and duplicate checks leave merged records out, except a search for the exact old UHID, which returns the merged record with `mergedIntoId` so the client can open the kept one. Patient views carry `mergedInto` and `mergedFrom`.
+- **History under the kept record:** the chart, the patient's appointment list, Repeat last and the safety engine's follow-up check (SR-19) include the merged records' visits and prescriptions. A chart requested for a merged record returns the kept record's (`patientId` is the kept one), and an open visit of a merged record is checked against the kept record's chart.
+- **Audit:** `patient_merge.requested`, `patient_merge.rejected` and `patient.merged` (request, source and target IDs; for a merge, how many chart entries, tags, bookings and dependants moved). Never names or reasons.
+
 ## 4. Endpoint catalogue (by module)
 
 | Module | Main resources and actions |
@@ -298,7 +316,7 @@ Implemented in Phase 1 (`apps/api/src/modules/medicines`, PRD §9.2). Everything
 | identity | `/auth/*`, `/me`, `/staff/invites` (built); `/me/devices` |
 | tenancy | `/organisations/current`, `/clinics` (built), `/consultation-types` (built), `/booking-rules` (built), `/doctors` (built), `/settings`, `/branding`, `/tags` (built), `/uhid-settings` (built) |
 | scheduling | `/availability/versions` (built), `/availability/exceptions` (built), `/slots?doctorId&clinicId&consultationTypeId&date&channel` (built), `/appointments` (book, walk-in, list, confirm, check-in, start, complete, cancel, no-show, reschedule; built), `/queue?date` (built), `/display-screens` (built), `/display/board` (built) |
-| patients | `/patients` (search by phone, name or UHID, filter by tag; register; built), `/patients/{id}` (demographics and family, each view audited; edit; built), `/patients/duplicate-check` (built), `/patients/{id}/tags` (built), `/patients/{id}/chart` and `/patients/{id}/allergies\|conditions\|medications` (built), `/patients/{id}/consents`, `/patients/merge-requests` |
+| patients | `/patients` (search by phone, name or UHID, filter by tag; register; built), `/patients/{id}` (demographics and family, each view audited; edit; built), `/patients/duplicate-check` (built), `/patients/{id}/tags` (built), `/patients/{id}/chart` and `/patients/{id}/allergies\|conditions\|medications` (built), `/patients/{id}/consents`, `/patient-merges` (ask, approve, reject; built) |
 | clinical | `/appointments/{id}/consultation` (built), `/appointments/{id}/vitals` (built), `/scribe/sessions`, `/assessments/forms`, `/assessments`, `/patients/{id}/ask-ai` |
 | prescribing | `/medicines` (search; built), `/medicine-master`, `/drug-molecules` and `/medicine-requests` (clinic admin; built), `/prescription-templates` (built), `/appointments/{id}/prescription` (draft and lines; built), `/patients/{id}/last-prescription` (built), `/appointments/{id}/prescription/safety-actions` (built), `/appointments/{id}/prescription/preview\|sign\|amend\|void` (built), `/prescriptions/{id}/pdf` (built), `/verify` (public; built), `/doctor-profile` (built) |
 | orders | `/test-orders`, `/test-orders/{id}/results`, `/referrals`, `/attachments` |
@@ -324,6 +342,7 @@ Implemented in Phase 1 (`apps/api/src/modules/medicines`, PRD §9.2). Everything
 | `SIGNING_UNAVAILABLE` | No signing service on this server (503) | Explain; signing waits |
 | `PAYMENT_PENDING` | Online consult without confirmed payment | Resume Cashfree checkout |
 | `CONSENT_REQUIRED` | Scribe or ABDM action without consent | Start consent flow |
+| `PATIENT_MERGED` | Writing to a record merged into another (409, `fields.patientId`) | Open the kept record |
 
 ## 6. Change process
 1. Change Zod schema in `packages/contracts`.

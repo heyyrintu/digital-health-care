@@ -18,6 +18,7 @@ import { AppError } from '../../errors';
 import type { Services } from '../../services';
 import { writeAudit } from '../audit/write';
 import { lockVisit, NOTE_STATUSES } from '../clinical/service';
+import { historyIds, liveId } from '../patients/merged';
 import { findProfile, signingGaps } from '../doctors/service';
 import { checkAndRecord, summarise, type SafetyVisit } from './safety';
 import {
@@ -266,21 +267,23 @@ export class PrescribingService {
     const row = await withTenant(this.s.db, actor.organisationId, async (tx) => {
       const patient = await tx.patient.findUnique({
         where: { id: patientId },
-        select: { id: true },
+        select: { id: true, mergedIntoId: true },
       });
       if (!patient) throw NOT_FOUND();
+      // Prescriptions from duplicates merged into the record count as its own.
+      const ids = await historyIds(tx, liveId(patient));
       // "Last" is relative to the visit being written: from an older visit, a later
       // visit's prescription must not be offered.
       const current = before
         ? await tx.appointment.findFirst({
-            where: { id: before, patientId },
+            where: { id: before, patientId: { in: ids } },
             select: { startAt: true },
           })
         : null;
       if (before && !current) throw NOT_FOUND();
       const found = await tx.prescription.findFirst({
         where: {
-          patientId,
+          patientId: { in: ids },
           status: { not: 'void' },
           items: { some: {} },
           ...(current

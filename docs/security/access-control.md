@@ -22,4 +22,4 @@ Patient, Doctor, Front desk, Clinic Admin, Platform Admin (no clinical access), 
 Accounts created by role on joining; removed the same day on leaving (staff devices revoked, cloud and store access removed, keys rotated if they had access).
 
 ## Clinic staff
-Clinic Admin manages staff accounts and devices; front desk sees no clinical content; chart model (shared vs own patients) set per organisation. The clinic admin's medicine list and approval queue show medicine names typed by doctors with usage counts only, never patients or prescriptions.
+Clinic Admin manages staff accounts and devices; front desk sees no clinical content; chart model (shared vs own patients) set per organisation. The clinic admin's medicine list and approval queue show medicine names typed by doctors with usage counts only, never patients or prescriptions. Patient merges are asked for by front desk, doctors and clinic admins and decided only by a clinic admin; the comparison shows demographics and visit counts, never clinical content.

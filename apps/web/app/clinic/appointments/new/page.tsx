@@ -422,7 +422,7 @@ function PatientFinder({ onPick }: { onPick(p: Who): void }) {
         schema: PatientListResponse,
         query: { q: q.trim(), limit: 10 },
       })
-      .then((r) => setResults(r.data))
+      .then((r) => setResults(r.data.filter((p) => !p.mergedIntoId)))
       .catch(() => setResults([]));
   }
 

@@ -8,6 +8,7 @@ export * from './errors';
 export * from './health';
 export * from './invites';
 export * from './medicines';
+export * from './merges';
 export * from './openapi';
 export * from './pagination';
 export * from './patients';
