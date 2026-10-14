@@ -97,6 +97,28 @@ export type StaffMember = z.infer<typeof StaffMember>;
 export const StaffMemberList = z.object({ data: z.array(StaffMember) });
 export type StaffMemberList = z.infer<typeof StaffMemberList>;
 
+/**
+ * One signed-in device of a staff member at this clinic, for the clinic admin. A session
+ * belongs to one clinic, so other clinics' devices never show here.
+ */
+export const StaffSession = z.object({
+  id: z.uuid(),
+  /** The browser or app as it reported itself; null when it sent none. */
+  userAgent: z.string().nullable(),
+  ip: z.string().nullable(),
+  signedInAt: z.iso.datetime(),
+  lastUsedAt: z.iso.datetime(),
+  /** The session making this request: signing it out signs the admin out. */
+  current: z.boolean(),
+});
+export type StaffSession = z.infer<typeof StaffSession>;
+
+export const StaffSessionList = z.object({ data: z.array(StaffSession) });
+export type StaffSessionList = z.infer<typeof StaffSessionList>;
+
+export const SignOutAllResponse = z.object({ revoked: z.number().int().min(0) });
+export type SignOutAllResponse = z.infer<typeof SignOutAllResponse>;
+
 export const ResetAuthenticatorBody = z.object({
   /** Role the setup link is for; defaults to the person's only (or first) active role. */
   role: StaffRole.optional(),

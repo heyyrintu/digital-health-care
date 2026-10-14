@@ -83,8 +83,10 @@ import {
   InviteDetails,
   InviteTokenBody,
   ResetAuthenticatorBody,
+  SignOutAllResponse,
   StaffInviteList,
   StaffMemberList,
+  StaffSessionList,
 } from './invites';
 import {
   ApproveMedicineRequestBody,
@@ -1061,6 +1063,30 @@ const operations: Operation[] = [
     body: ResetAuthenticatorBody,
     response: CreatedStaffInvite,
     status: 201,
+  },
+  {
+    method: 'get',
+    path: '/staff/members/{id}/sessions',
+    operationId: 'listStaffSessions',
+    summary: 'A staff member’s signed-in devices at this clinic (clinic admin)',
+    pathParams: ['id'],
+    response: StaffSessionList,
+  },
+  {
+    method: 'post',
+    path: '/staff/members/{id}/sign-out-all',
+    operationId: 'signOutStaffMember',
+    summary: 'Sign a staff member out of every device at this clinic (clinic admin)',
+    pathParams: ['id'],
+    response: SignOutAllResponse,
+  },
+  {
+    method: 'post',
+    path: '/staff/sessions/{id}/revoke',
+    operationId: 'revokeStaffSession',
+    summary: 'Sign one staff device out (clinic admin)',
+    pathParams: ['id'],
+    status: 204,
   },
   {
     method: 'get',

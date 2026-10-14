@@ -324,6 +324,20 @@ Implemented in Phase 1 (`apps/api/src/modules/patients/merges.ts`, PRD §3.2, §
 - **History under the kept record:** the chart, the patient's appointment list, Repeat last and the safety engine's follow-up check (SR-19) include the merged records' visits and prescriptions. A chart requested for a merged record returns the kept record's (`patientId` is the kept one), and an open visit of a merged record is checked against the kept record's chart.
 - **Audit:** `patient_merge.requested`, `patient_merge.rejected` and `patient.merged` (request, source and target IDs; for a merge, how many chart entries, tags, bookings and dependants moved). Never names or reasons.
 
+## 3n. Staff devices and sign-out
+
+Implemented in Phase 1 (`apps/api/src/modules/staff`, PRD §9.2 "device revocation"). Clinic admin only.
+
+| Action | Endpoint | Who |
+|---|---|---|
+| Devices | `GET /staff/members/{id}/sessions` → `{data: [{id, userAgent, ip, signedInAt, lastUsedAt, current}]}`, most recently used first | Clinic admin |
+| Sign one out | `POST /staff/sessions/{id}/revoke` → 204 | Clinic admin |
+| Sign out everywhere | `POST /staff/members/{id}/sign-out-all` → `{revoked}` | Clinic admin |
+
+- **Scope:** a session belongs to one clinic. The list and both sign-outs only touch this clinic's live staff sessions, so a doctor who also works at another clinic stays signed in there. Another clinic's staff, patients and their sessions read as 404.
+- **Effect:** a signed-out session fails on its next request (the bearer check reads the session), and its refresh token stops working. Its push devices (§3q) stop getting notifications in the same transaction (`revokedReason: admin_signout`). The person keeps their access and can sign in again. To also cut access, remove the membership or use **Reset sign-in**.
+- `current` marks the admin's own session; the web hides its sign-out button. `lastUsedAt` moves when the session is refreshed, so it can lag by up to one access-token lifetime.
+- **Audit:** `staff.session.revoked` (session ID and the staff member's user ID) and `staff.sessions.revoked_all` (user ID and how many were signed out). Revoked sessions keep `revokedReason: admin_signout`.
 ## 3p. Follow-ups and automatic no-shows
 
 Implemented in Phase 1 (`apps/api/src/modules/queue/service.ts`, `apps/api/src/modules/appointments/no-shows.ts`).
@@ -356,7 +370,7 @@ Implemented for the Clinic app (`apps/api/src/modules/devices`, `apps/api/src/mo
 
 | Module | Main resources and actions |
 |---|---|
-| identity | `/auth/*`, `/me`, `/staff/invites` (built); `/me/devices` |
+| identity | `/auth/*`, `/me`, `/staff/invites` (built), `/staff/members/{id}/sessions`, `/staff/members/{id}/sign-out-all` and `/staff/sessions/{id}/revoke` (built); `/me/devices` |
 | tenancy | `/organisations/current`, `/clinics` (built), `/consultation-types` (built), `/booking-rules` (built), `/doctors` (built), `/organisation-settings` (built), `/branding`, `/tags` (built), `/uhid-settings` (built) |
 | scheduling | `/availability/versions` (built), `/availability/exceptions` (built), `/slots?doctorId&clinicId&consultationTypeId&date&channel` (built), `/appointments` (book, walk-in, list, confirm, check-in, start, complete, cancel, no-show, reschedule; built), `/queue?date` (built), `/display-screens` (built), `/display/board` (built) |
 | patients | `/patients` (search by phone, name or UHID, filter by tag; register; built), `/patients/{id}` (demographics and family, each view audited; edit; built), `/patients/duplicate-check` (built), `/patients/{id}/tags` (built), `/patients/{id}/chart` and `/patients/{id}/allergies\|conditions\|medications` (built), `/patients/{id}/consents`, `/patient-merges` (ask, approve, reject; built) |
