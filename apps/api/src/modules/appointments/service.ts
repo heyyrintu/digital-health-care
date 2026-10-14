@@ -19,6 +19,7 @@ import type { Services } from '../../services';
 import { writeAudit } from '../audit/write';
 import { toSummary, withTags } from '../patients/service';
 import { loadDaySlots } from '../scheduling/availability';
+import { assertNotMerged, historyIds, liveId } from '../patients/merged';
 
 interface Actor {
   userId: string;
@@ -98,11 +99,15 @@ export class AppointmentService {
   constructor(private readonly s: Services) {}
 
   async list(actor: Actor, query: AppointmentListQuery): Promise<Appointment[]> {
-    const rows = await withTenant(this.s.db, actor.organisationId, (tx) =>
+    const rows = await withTenant(this.s.db, actor.organisationId, async (tx) =>
       tx.appointment.findMany({
         where: {
           ...(query.patientId
-            ? { patientId: query.patientId, ...(query.date ? { date: toDbDate(query.date) } : {}) }
+            ? {
+                // A patient's visits include those of duplicates merged into the record.
+                patientId: { in: await historyIds(tx, query.patientId) },
+                ...(query.date ? { date: toDbDate(query.date) } : {}),
+              }
             : { date: toDbDate(query.date ?? istDate(this.s.now())) }),
           doctorUserId: query.doctorId,
           clinicId: query.clinicId,
@@ -210,8 +215,13 @@ export class AppointmentService {
       if (!['pending', 'confirmed'].includes(old.status)) {
         throw new AppError(409, 'CONFLICT', 'Only booked appointments can be rescheduled.');
       }
+      const patient = await tx.patient.findUniqueOrThrow({
+        where: { id: old.patientId },
+        select: { id: true, mergedIntoId: true },
+      });
       const newId = await this.place(tx, request, actor, {
-        patientId: old.patientId,
+        // The new booking goes on the live record if the patient's was merged.
+        patientId: liveId(patient),
         doctorUserId: body.doctorUserId ?? old.doctorUserId,
         clinicId: body.clinicId ?? old.clinicId,
         consultationTypeId: body.consultationTypeId ?? old.consultationTypeId,
@@ -247,9 +257,10 @@ export class AppointmentService {
     const now = this.s.now();
     const patient = await tx.patient.findUnique({
       where: { id: p.patientId },
-      select: { id: true },
+      select: { id: true, mergedIntoId: true },
     });
     if (!patient) throw invalid('patientId', 'Choose a registered patient.');
+    assertNotMerged(patient);
     const doctor = await tx.membership.findFirst({
       where: { userId: p.doctorUserId, role: 'doctor', status: 'active' },
       select: { id: true },
@@ -432,14 +443,17 @@ export class AppointmentService {
       include: { ...include, history: { orderBy: { at: 'asc' } } },
     });
     if (!row) throw NOT_FOUND();
-    const names = await this.names([row.doctorUserId, ...row.history.map((h) => h.actorUserId)]);
+    const names = await this.names([
+      row.doctorUserId,
+      ...row.history.flatMap((h) => (h.actorUserId ? [h.actorUserId] : [])),
+    ]);
     return {
       ...this.toAppointment(row, names),
       history: row.history.map((h) => ({
         fromStatus: h.fromStatus,
         toStatus: h.toStatus,
         actorUserId: h.actorUserId,
-        actorName: names.get(h.actorUserId) ?? null,
+        actorName: h.actorUserId ? (names.get(h.actorUserId) ?? null) : null,
         note: h.note,
         at: h.at.toISOString(),
       })),

@@ -28,6 +28,8 @@ const Env = z
     SIGNER: z.enum(['test_key', 'disabled']).default('disabled'),
     /** Directory for stored files (signed PDFs) until object storage is connected. */
     FILE_STORE_DIR: z.string().default('.data/files'),
+    /** How often (seconds) bookings past their grace period become no-shows; 0 turns it off. */
+    NO_SHOW_SWEEP_SECONDS: z.coerce.number().int().min(0).max(3600).default(60),
   })
   .refine((env) => !(env.NODE_ENV === 'production' && env.OTP_DELIVERY === 'log'), {
     message: 'OTP_DELIVERY=log is not allowed in production',
