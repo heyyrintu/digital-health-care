@@ -1,6 +1,7 @@
 import type { AppointmentStatus, Role } from '@dhc/contracts';
 import type { Tx } from '@dhc/db';
 import { AppError } from '../../errors';
+import { historyIds, liveId } from '../patients/merged';
 import { readSettings } from '../settings/service';
 
 /** A visit at which the doctor treated the patient: checked in to them, or later. */
@@ -11,7 +12,8 @@ const TREATED: AppointmentStatus[] = ['checked_in', 'in_consultation', 'complete
  * patient's chart, notes and prescriptions only once the patient has been checked in to
  * them; under `shared` (the default) every doctor can. Other roles are already kept out
  * of clinical content by their route's role check. Internal referrals add access in
- * phase 3.
+ * phase 3. After a merge, a visit to the kept record or to any duplicate merged into it
+ * counts, whichever of those records `patientId` names.
  */
 export async function assertChartAccess(
   tx: Tx,
@@ -21,8 +23,13 @@ export async function assertChartAccess(
   if (actor.role !== 'doctor') return;
   const { chartModel } = await readSettings(tx, actor.organisationId);
   if (chartModel === 'shared') return;
+  const patient = await tx.patient.findUnique({
+    where: { id: patientId },
+    select: { id: true, mergedIntoId: true },
+  });
+  const ids = patient ? await historyIds(tx, liveId(patient)) : [patientId];
   const treated = await tx.appointment.count({
-    where: { patientId, doctorUserId: actor.userId, status: { in: TREATED } },
+    where: { patientId: { in: ids }, doctorUserId: actor.userId, status: { in: TREATED } },
   });
   if (treated === 0) {
     throw new AppError(
