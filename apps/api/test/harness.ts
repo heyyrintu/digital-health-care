@@ -154,7 +154,7 @@ export async function patientLogin(h: Harness, organisation: string, phone: stri
   const verified = await h.app.inject({
     method: 'POST',
     url: '/v1/auth/otp/verify',
-    payload: { challengeId, code: h.sentCodes.at(-1)!.code },
+    payload: { challengeId, code: h.sentCodes.findLast((c) => c.phone.endsWith(phone))!.code },
   });
   if (verified.statusCode !== 200) throw new Error(`OTP verify failed: ${verified.body}`);
   return verified.json() as TokenResponse;
