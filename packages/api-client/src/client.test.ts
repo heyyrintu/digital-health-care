@@ -157,6 +157,13 @@ describe('staff invite calls', () => {
     const client = createApiClient({ baseUrl: 'https://api.test/v1', fetch });
 
     const { challengeId } = await client.requestOtp('demo-clinic', '+919800000001');
+    const [requestUrl, requestInit] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+    expect(requestUrl).toBe('https://api.test/v1/auth/otp/request');
+    expect(requestInit.method).toBe('POST');
+    expect(JSON.parse(requestInit.body as string)).toEqual({
+      organisation: 'demo-clinic',
+      phone: '+919800000001',
+    });
     await expect(client.verifyOtp(challengeId, '123456')).resolves.toMatchObject({
       accessToken: 'a',
       refreshToken: 'r',

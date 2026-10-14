@@ -9,6 +9,12 @@ type Variant = 'patient' | 'clinic';
 const variant: Variant = process.env.APP_VARIANT === 'clinic' ? 'clinic' : 'patient';
 const idPrefix = process.env.BUNDLE_ID_PREFIX ?? 'dev.dhc';
 
+// Store and preview builds must call a real API, never the localhost development default.
+const profile = process.env.EAS_BUILD_PROFILE ?? '';
+if (/^(preview|production)-/.test(profile) && !process.env.EXPO_PUBLIC_API_BASE_URL?.trim()) {
+  throw new Error(`EXPO_PUBLIC_API_BASE_URL must be set for the ${profile} build`);
+}
+
 const VARIANTS: Record<Variant, Pick<ExpoConfig, 'name' | 'slug' | 'scheme' | 'orientation'>> = {
   patient: { name: 'Patient', slug: 'dhc-patient', scheme: 'dhc-patient', orientation: 'portrait' },
   // Clinic app supports landscape for the iPad and tablet two-pane layout (ADR 0005).
@@ -33,10 +39,17 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
   },
   plugins: [
     'expo-router',
-    [
-      'expo-local-authentication',
-      { faceIDPermission: 'Face ID unlocks the Clinic app after it locks.' },
-    ],
+    // Only the Clinic app uses biometrics (unlock and signing); the Patient app asks for none.
+    ...(variant === 'clinic'
+      ? [
+          [
+            'expo-local-authentication',
+            {
+              faceIDPermission: 'Face ID unlocks the Clinic app and approves prescription signing.',
+            },
+          ] as [string, Record<string, string>],
+        ]
+      : []),
     'expo-notifications',
   ],
   experiments: { typedRoutes: true },

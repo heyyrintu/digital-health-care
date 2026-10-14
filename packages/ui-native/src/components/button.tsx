@@ -14,6 +14,7 @@ export function Button({
   variant = 'primary',
   loading = false,
   disabled,
+  accessibilityState,
   ...props
 }: ButtonProps) {
   const theme = useTheme();
@@ -23,8 +24,10 @@ export function Button({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
-      accessibilityState={{ disabled: inactive, busy: loading }}
       disabled={inactive}
+      {...props}
+      // The caller's state first; disabled and busy are this component's to report.
+      accessibilityState={{ ...accessibilityState, disabled: inactive, busy: loading }}
       style={({ pressed }) => ({
         minHeight: theme.minTouchTarget,
         paddingHorizontal: theme.spacing[4],
@@ -36,7 +39,6 @@ export function Button({
         justifyContent: 'center',
         opacity: inactive ? 0.6 : pressed ? 0.85 : 1,
       })}
-      {...props}
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2] }}>
         {loading && <ActivityIndicator size="small" color={colors.text} />}

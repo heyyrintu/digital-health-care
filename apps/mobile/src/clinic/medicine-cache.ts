@@ -19,6 +19,8 @@ export type FetchMedicines = (cursor: string | undefined) => Promise<SyncMedicin
  */
 export class MedicineCache {
   private saved: Saved = { cursor: null, medicines: {}, aliases: [], syncedAt: null };
+  /** Bumped by clear(): a sync started before a sign-out never writes its result. */
+  private generation = 0;
 
   constructor(
     private readonly store: KeyValueStore,
@@ -26,7 +28,9 @@ export class MedicineCache {
   ) {}
 
   async load(): Promise<void> {
-    this.saved = (await this.store.get<Saved>(KEY)) ?? this.saved;
+    const generation = this.generation;
+    const saved = await this.store.get<Saved>(KEY);
+    if (saved && generation === this.generation) this.saved = saved;
   }
 
   get syncedAt(): number | null {
@@ -39,6 +43,7 @@ export class MedicineCache {
 
   /** Pulls every page of changes. A failure keeps what was saved before it. */
   async sync(fetch: FetchMedicines): Promise<void> {
+    const generation = this.generation;
     let { cursor } = this.saved;
     const medicines = { ...this.saved.medicines };
     let aliases: Saved['aliases'] | undefined;
@@ -52,8 +57,10 @@ export class MedicineCache {
       cursor = page.cursor;
       if (!page.hasMore) break;
     }
-    this.saved = { cursor, medicines, aliases: aliases ?? [], syncedAt: this.now() };
-    await this.store.set(KEY, this.saved);
+    if (generation !== this.generation) return;
+    const next = { cursor, medicines, aliases: aliases ?? [], syncedAt: this.now() };
+    await this.store.set(KEY, next);
+    this.saved = next;
   }
 
   /** Offline search, two characters or more, as the online search: up to 20 by name. */
@@ -76,6 +83,7 @@ export class MedicineCache {
   }
 
   async clear(): Promise<void> {
+    this.generation += 1;
     this.saved = { cursor: null, medicines: {}, aliases: [], syncedAt: null };
     await this.store.remove(KEY);
   }

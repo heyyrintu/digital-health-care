@@ -18,6 +18,15 @@ describe('IdleLock', () => {
   });
 });
 
+describe('IdleLock activity', () => {
+  it('locks on a touch that comes after the limit instead of extending the session', () => {
+    const lock = new IdleLock(0);
+    expect(lock.activity(IDLE_LOCK_MS - 1)).toBe(false);
+    expect(lock.activity(2 * IDLE_LOCK_MS)).toBe(true);
+    expect(lock.isLocked).toBe(true);
+  });
+});
+
 describe('IdleLock on launch', () => {
   it('can start locked, for an app opened on a saved session', () => {
     const lock = new IdleLock(0, { locked: true });

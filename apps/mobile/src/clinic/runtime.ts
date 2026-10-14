@@ -56,7 +56,7 @@ export async function syncNow(messageOf: (error: unknown) => string): Promise<vo
 
 // What one person saved or queued is never shown to, or sent as, the next person to sign
 // in on a shared device.
-let wasSignedIn = false;
+let wasSignedIn = session.getState().status === 'signed_in';
 session.subscribe(() => {
   const signedIn = session.getState().status === 'signed_in';
   if (wasSignedIn && !signedIn) {

@@ -19,5 +19,5 @@ export const session = new SessionManager(secureVault, {
 export const api = createApiClient({
   baseUrl: API_BASE_URL,
   getAccessToken: () => session.getAccessToken(),
-  fetch: expiringFetch(globalThis.fetch.bind(globalThis), () => void session.expire()),
+  fetch: expiringFetch(globalThis.fetch.bind(globalThis), (token) => void session.expire(token)),
 });
