@@ -83,6 +83,7 @@ async function open(path: string, init: RequestInit) {
   const reader = res.body!.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
+  let ended = false;
   const next = async (ms = 3000): Promise<{ event: string; data: unknown } | null> => {
     const deadline = Date.now() + ms;
     for (;;) {
@@ -101,11 +102,12 @@ async function open(path: string, init: RequestInit) {
         reader.read(),
         new Promise<null>((r) => setTimeout(() => r(null), left)),
       ]);
+      if (chunk?.done) ended = true;
       if (!chunk || chunk.done) return null;
       buffer += decoder.decode(chunk.value, { stream: true });
     }
   };
-  return { next, close: () => controller.abort() };
+  return { next, ended: () => ended, close: () => controller.abort() };
 }
 
 describe('live queue stream', () => {
@@ -160,13 +162,18 @@ describe('live queue stream', () => {
     expect((await stream.next())?.event).toBe('ready');
     const visit = await visitIn('a');
     expect(await stream.next()).toEqual({ event: 'queue', data: { appointmentId: visit.id } });
-    stream.close();
 
     await h.app.inject({
       method: 'POST',
       url: `/v1/display-screens/${screen.id}/revoke`,
       headers: bearer(admin),
     });
+    // The open stream hears nothing more once the screen is revoked, and is closed.
+    await visitIn('a');
+    expect(await stream.next()).toBeNull();
+    expect(stream.ended()).toBe(true);
+    stream.close();
+
     const refused = await fetch(`${base}/display/stream`, init);
     expect(refused.status).toBeGreaterThanOrEqual(400);
   });

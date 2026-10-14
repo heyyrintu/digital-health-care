@@ -12,7 +12,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { authOf, authenticate, requireRole } from '../../plugins/authenticate';
 import type { Services } from '../../services';
-import { streamQueue } from '../../sse';
+import { nextIstMidnight, streamQueue } from '../../sse';
 import { istDate } from '@dhc/domain';
 import { QueueService } from './service';
 
@@ -39,8 +39,18 @@ export const queueRoutes: FastifyPluginAsync<{ services: Services }> = async (
   // Server-sent events: a `queue` event names each visit that changed; refetch /queue.
   app.get('/queue/stream', staff, async (request, reply) => {
     const { date } = QueueQuery.parse(request.query);
-    const day = date ?? istDate(services.now());
-    await streamQueue(services, request, reply, authOf(request).organisationId, day);
+    const now = services.now();
+    // A stream for "today" ends at midnight, so the client reconnects to the new day.
+    await streamQueue(
+      services,
+      request,
+      reply,
+      authOf(request).organisationId,
+      date ?? istDate(now),
+      {
+        endAt: date ? undefined : nextIstMidnight(now),
+      },
+    );
   });
 
   app.get('/display-screens', admin, async (request) =>
@@ -69,6 +79,15 @@ export const queueRoutes: FastifyPluginAsync<{ services: Services }> = async (
   app.post('/display/stream', SCREEN_RATE_LIMIT, async (request, reply) => {
     const { token } = DisplayTokenBody.parse(request.body);
     const screen = await queue.screen(token);
-    await streamQueue(services, request, reply, screen.organisationId, istDate(services.now()));
+    const now = services.now();
+    // Revoking the screen cuts an open stream off too, not just the next reconnect.
+    await streamQueue(services, request, reply, screen.organisationId, istDate(now), {
+      endAt: nextIstMidnight(now),
+      stillAllowed: () =>
+        queue.screen(token).then(
+          (s) => s.id === screen.id,
+          () => false,
+        ),
+    });
   });
 };

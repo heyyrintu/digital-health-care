@@ -17,7 +17,7 @@ This guide explains conventions and lists the endpoint catalogue by module. Fiel
 | Versioning | URL major version (`/v1`). Additive changes only within a version. Two latest mobile app versions must keep working |
 | Rate limits | Per user and per IP; stricter on OTP, login, upload, payment endpoints. `429` with `Retry-After` |
 | CORS | Only the web app's origin (`WEB_BASE_URL`, or the `CORS_ORIGINS` list) may call the API from a browser. No cookies; credentials are never allowed cross-origin |
-| Real time | Web: Server-Sent Events `/v1/stream/queue`; mobile: WebSocket `/v1/ws`; scribe audio: WebSocket `/v1/scribe/stream` |
+| Real time | Web: Server-Sent Events `/v1/queue/stream` (staff) and `/v1/display/stream` (waiting-room screens); mobile: WebSocket `/v1/ws`; scribe audio: WebSocket `/v1/scribe/stream` |
 
 ## 2. Error shape
 

@@ -34,11 +34,17 @@ export class LiveEvents {
     let set = this.listeners.get(key);
     if (!set) this.listeners.set(key, (set = new Set()));
     set.add(listener);
-    await this.ensureConnected();
-    return () => {
+    const unsubscribe = () => {
       set.delete(listener);
       if (set.size === 0) this.listeners.delete(key);
     };
+    try {
+      await this.ensureConnected();
+    } catch (error) {
+      unsubscribe();
+      throw error;
+    }
+    return unsubscribe;
   }
 
   async close(): Promise<void> {
@@ -69,8 +75,13 @@ export class LiveEvents {
     });
     client.on('error', () => this.reconnect(client));
     client.on('end', () => this.reconnect(client));
-    await client.connect();
-    await client.query(`LISTEN ${CHANNEL}`);
+    try {
+      await client.connect();
+      await client.query(`LISTEN ${CHANNEL}`);
+    } catch (error) {
+      await client.end().catch(() => undefined);
+      throw error;
+    }
     if (this.closed) {
       await client.end();
       return;
