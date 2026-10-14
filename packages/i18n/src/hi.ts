@@ -838,6 +838,7 @@ export const hi: Record<MessageKey, string> = {
   'medicines.perMl': 'mg प्रति ml',
   'medicines.strength': 'mg',
   'audit.area.settings': 'सेटिंग्स',
+  'audit.area.consent': 'मरीज़ की सहमति',
   'chart.restricted':
     'यह क्लिनिक मरीज़ का चार्ट केवल उन डॉक्टरों के लिए खोलता है जिन्होंने उन्हें देखा है। इसे खोलने के लिए मरीज़ को अपने पास चेक-इन करें।',
   'policy.title': 'चार्ट, सुरक्षा चेतावनियाँ और फ़ाइलें',

@@ -51,6 +51,13 @@ import {
 } from './billing';
 import { DashboardQuery, DashboardReport } from './dashboard';
 import { ErrorResponse } from './errors';
+import {
+  AcceptConsentsBody,
+  ConsentStatus,
+  CreatePortalPatientBody,
+  PortalPatient,
+  PortalPatientList,
+} from './portal';
 import { OrganisationSettings, UpdateOrganisationSettingsBody } from './settings';
 import {
   LastPrescription,
@@ -373,6 +380,45 @@ const operations: Operation[] = [
     summary: 'Set the chart model, hidden safety rules and upload limits (clinic admin)',
     body: UpdateOrganisationSettingsBody,
     response: OrganisationSettings,
+  },
+  {
+    method: 'get',
+    path: '/portal/consents',
+    operationId: 'getPortalConsents',
+    summary: 'The account’s privacy, terms and health-data consents, and which to accept (patient)',
+    response: ConsentStatus,
+  },
+  {
+    method: 'post',
+    path: '/portal/consents',
+    operationId: 'acceptPortalConsents',
+    summary: 'Accept the current privacy notice, terms or health-data consent (patient)',
+    body: AcceptConsentsBody,
+    response: ConsentStatus,
+  },
+  {
+    method: 'post',
+    path: '/portal/consents/health_data/withdraw',
+    operationId: 'withdrawHealthDataConsent',
+    summary: 'Withdraw the health-data consent (patient)',
+    response: ConsentStatus,
+  },
+  {
+    method: 'get',
+    path: '/portal/patients',
+    operationId: 'listPortalPatients',
+    summary:
+      'Patients on this account: records on the verified number and their dependants (patient)',
+    response: PortalPatientList,
+  },
+  {
+    method: 'post',
+    path: '/portal/patients',
+    operationId: 'addPortalPatient',
+    summary: 'Add yourself or a family member to this account (patient)',
+    body: CreatePortalPatientBody,
+    response: PortalPatient,
+    status: 201,
   },
   {
     method: 'get',

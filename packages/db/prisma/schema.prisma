@@ -259,6 +259,7 @@ model Organisation {
   doctorProfiles         DoctorProfile[]
   medicineRequests       MedicineRequest[]
   verifications          PrescriptionVerification[]
+  accountConsents        AccountConsent[]
 
   @@map("organisations")
 }
@@ -1226,4 +1227,22 @@ model AuditLog {
 
   @@index([organisationId, at])
   @@map("audit_logs")
+}
+
+/// A patient account's acceptance of the privacy notice, terms or health-data consent
+/// (PRD §4.1, C9), one row per acceptance. Withdrawing keeps the row and sets withdrawnAt.
+model AccountConsent {
+  id             String    @id @default(uuid()) @db.Uuid
+  organisationId String    @map("organisation_id") @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  /// privacy_notice, terms or health_data
+  kind           String
+  version        String
+  acceptedAt     DateTime  @default(now()) @map("accepted_at") @db.Timestamptz(3)
+  withdrawnAt    DateTime? @map("withdrawn_at") @db.Timestamptz(3)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+
+  @@index([organisationId, userId, kind])
+  @@map("account_consents")
 }

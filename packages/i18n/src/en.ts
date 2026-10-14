@@ -835,6 +835,7 @@ export const en = {
   'medicines.perMl': 'mg per ml',
   'medicines.strength': 'mg',
   'audit.area.settings': 'Settings',
+  'audit.area.consent': 'Patient consents',
   'chart.restricted':
     'This clinic opens a patient’s chart only to the doctors who have seen them. Check the patient in to you to open it.',
   'policy.title': 'Chart, safety alerts and files',

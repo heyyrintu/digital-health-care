@@ -14,5 +14,6 @@ export * from './patients';
 export * from './prescriptions';
 export * from './queue';
 export * from './scheduling';
+export * from './portal';
 export * from './settings';
 export * from './tags';

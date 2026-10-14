@@ -1,5 +1,10 @@
 import {
   AcceptInviteResponse,
+  ConsentStatus,
+  PortalPatient,
+  PortalPatientList,
+  type AcceptConsentsBody,
+  type CreatePortalPatientBody,
   ErrorResponse,
   HealthResponse,
   InviteDetails,
@@ -152,6 +157,16 @@ export function createApiClient(options: ApiClientOptions) {
     /** Doctor: set or change the signing PIN, confirmed with the account password. */
     setSigningPin: (password: string, pin: string) =>
       request('PUT', '/doctor-profile/signing-pin', { schema: NoContent, body: { password, pin } }),
+    // Patient app and web portal (patients only).
+    portalConsents: () => request('GET', '/portal/consents', { schema: ConsentStatus }),
+    acceptConsents: (accept: AcceptConsentsBody['accept']) =>
+      request('POST', '/portal/consents', { schema: ConsentStatus, body: { accept } }),
+    withdrawHealthDataConsent: () =>
+      request('POST', '/portal/consents/health_data/withdraw', { schema: ConsentStatus }),
+    portalPatients: () => request('GET', '/portal/patients', { schema: PortalPatientList }),
+    addPortalPatient: (body: CreatePortalPatientBody) =>
+      request('POST', '/portal/patients', { schema: PortalPatient, body }),
+
     /** Ends the session of the current access token. */
     logout: () => request('POST', '/auth/logout', { schema: NoContent }),
   };
