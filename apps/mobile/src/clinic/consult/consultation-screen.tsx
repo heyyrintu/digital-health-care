@@ -36,6 +36,9 @@ export function ConsultationScreen({ appointmentId }: { appointmentId: string })
 
   // Each load is numbered; only the latest one's answer is applied, so an earlier request
   // answering last never puts an older revision back on screen.
+  // A reload remounts the sections, so it waits while any of them holds unsaved edits.
+  const dirty = useRef(new Set<string>());
+  const reloadWhenClean = useRef(false);
   const loadSeq = useRef(0);
   // A reload after queued saves were sent that could not reach the server: retried when the
   // queue next reaches it.
@@ -58,6 +61,11 @@ export function ConsultationScreen({ appointmentId }: { appointmentId: string })
         schema: PatientChart,
       });
       if (mine !== loadSeq.current) return;
+      // Edits started while this was in flight win: apply the server copy once they are saved.
+      if (viewRef.current && dirty.current.size > 0) {
+        reloadWhenClean.current = true;
+        return;
+      }
       reloadOwed.current = false;
       setView(v);
       setRx(p);
@@ -99,9 +107,6 @@ export function ConsultationScreen({ appointmentId }: { appointmentId: string })
     .map((i) => i.id)
     .join(',');
   const before = useRef(waiting);
-  // A reload remounts the sections, so it waits while any of them holds unsaved edits.
-  const dirty = useRef(new Set<string>());
-  const reloadWhenClean = useRef(false);
   useEffect(() => {
     const now = new Set(waiting.split(',').filter(Boolean));
     const sent = before.current.split(',').some((id) => id && !now.has(id));
