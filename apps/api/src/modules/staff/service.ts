@@ -115,6 +115,8 @@ export class StaffService {
         where: { id: sessionId },
         data: { revokedAt: this.s.now(), revokedReason: 'admin_signout' },
       });
+      // TODO(push devices): once push_devices lands, also call
+      // revokePushDevicesForSessions(tx, [sessionId], 'admin_signout').
       await writeAudit(tx, request, {
         action: 'staff.session.revoked',
         organisationId: actor.organisationId,
@@ -143,6 +145,7 @@ export class StaffService {
         },
         data: { revokedAt: this.s.now(), revokedReason: 'admin_signout' },
       });
+      // TODO(push devices): revoke this person's push devices for these sessions too.
       await writeAudit(tx, request, {
         action: 'staff.sessions.revoked_all',
         organisationId: actor.organisationId,
