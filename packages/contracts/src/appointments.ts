@@ -88,7 +88,8 @@ export type Appointment = z.infer<typeof Appointment>;
 export const AppointmentHistoryEntry = z.object({
   fromStatus: AppointmentStatus.nullable(),
   toStatus: AppointmentStatus,
-  actorUserId: z.uuid(),
+  /** Null for automatic changes (a booking nobody arrived for becoming a no-show). */
+  actorUserId: z.uuid().nullable(),
   actorName: z.string().nullable(),
   note: z.string().nullable(),
   at: z.iso.datetime(),

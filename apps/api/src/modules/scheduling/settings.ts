@@ -29,6 +29,7 @@ export const DEFAULT_BOOKING_RULES: BookingRules = {
   noShowWindowDays: 90,
   cancelCutoffMinutes: 120,
   autoConfirm: true,
+  noShowAfterMinutes: 30,
 };
 
 const NOT_FOUND = () => new AppError(404, 'NOT_FOUND', 'Not found.');
@@ -63,6 +64,7 @@ export const toRules = (r: Prisma.BookingRulesGetPayload<object>): BookingRules 
   noShowWindowDays: r.noShowWindowDays,
   cancelCutoffMinutes: r.cancelCutoffMinutes,
   autoConfirm: r.autoConfirm,
+  noShowAfterMinutes: r.noShowAfterMinutes,
 });
 
 /**

@@ -49,6 +49,8 @@ export default defineConfig({
         // Prescriptions are signed with the test key and stored in a throwaway folder.
         SIGNER: 'test_key',
         FILE_STORE_DIR: join(tmpdir(), 'dhc-e2e-files'),
+        // Specs mark no-shows themselves; the automatic sweep would race them.
+        NO_SHOW_SWEEP_SECONDS: '0',
         // All browser traffic comes from one address here.
         SIGN_IN_RATE_LIMIT: '100000',
       },

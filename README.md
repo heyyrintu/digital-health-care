@@ -6,7 +6,7 @@ Production platform for Dr. Siddharth Gupta's clinic: a web app, a Patient app a
 - **How to build it:** [Build Plan — Web, iOS and Android](docs/product/build-plan.md)
 - **All project documentation:** [docs/README.md](docs/README.md) (ADRs, API, data dictionary, safety rules, security, QA, runbooks, store pack, user guides)
 
-**Status:** Phase 0 (Foundations) — monorepo, CI, auth (patient OTP; staff password + authenticator, set up through admin invite links), tenancy with Postgres row-level security and the audit log are in place. The tenant-isolation suite runs in CI.
+**Status:** Phase 1 (Core clinic on web) is nearly done: scheduling, the patient register, queue, consultation and vitals, the prescription builder with the safety engine, signing with PDF and QR, billing and counter payments, and the clinic admin dashboard, medicines, staff devices, clinic settings, patient merges and audit log run on the web, and a full simulated clinic day passes in the browser. Phase 0 foundations (monorepo, CI, auth, row-level security, audit log) are in place. Phase 2 (mobile apps) is next; see [build plan §9.1](docs/product/build-plan.md#91-phases-and-exit-criteria) for progress.
 
 ## Repository layout
 
