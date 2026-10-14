@@ -82,7 +82,11 @@ export function LockGate({ children }: { children: ReactNode }) {
       <View
         style={{ flex: 1 }}
         onStartShouldSetResponderCapture={() => {
-          lock.activity(Date.now());
+          // Past the limit the touch locks the app instead of reaching the screen.
+          if (lock.activity(Date.now())) {
+            setLocked(true);
+            return true;
+          }
           return false;
         }}
       >

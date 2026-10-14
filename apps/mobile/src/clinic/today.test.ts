@@ -64,3 +64,34 @@ describe('TodayStore', () => {
     });
   });
 });
+
+describe('TodayStore across a sign-out and midnight', () => {
+  it('drops a refresh that answers after the person signed out', async () => {
+    const store = memoryStore();
+    const today = new TodayStore(store, () => '2026-10-06');
+    let answer: (value: SyncTodayResponse) => void = () => undefined;
+    const refreshing = today.refresh(() => new Promise((resolve) => (answer = resolve)), String);
+    await today.clear();
+    answer(snapshot('2026-10-06'));
+    expect(await refreshing).toBe(false);
+    expect(today.getState().data).toBeNull();
+    expect(await store.get('clinic.today')).toBeNull();
+  });
+
+  it('stops showing yesterday’s queue when a refresh after midnight fails', async () => {
+    let date = '2026-10-06';
+    const today = new TodayStore(memoryStore(), () => date);
+    await today.refresh(async () => snapshot('2026-10-06'), String);
+    date = '2026-10-07';
+    await today.refresh(async () => {
+      throw new TypeError('Network request failed');
+    }, String);
+    expect(today.getState()).toMatchObject({ data: null, fetchedAt: null, offline: true });
+  });
+
+  it('still reports the server answered when keeping the copy fails', async () => {
+    const store = { ...memoryStore(), set: async () => Promise.reject(new Error('disk full')) };
+    const today = new TodayStore(store, () => '2026-10-06');
+    expect(await today.refresh(async () => snapshot('2026-10-06'), String)).toBe(true);
+  });
+});

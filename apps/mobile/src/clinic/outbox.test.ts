@@ -106,3 +106,60 @@ describe('Outbox', () => {
     expect(store.data.size).toBe(0);
   });
 });
+
+describe('Outbox across a sign-out', () => {
+  it('stops sending the previous person’s queue once it is cleared', async () => {
+    const { store, box } = setup();
+    await box.add(checkIn('a1'));
+    await box.add(checkIn('a2'));
+    const sent: string[] = [];
+    let release: () => void = () => undefined;
+    const flushing = box.flush(async (item) => {
+      sent.push(item.path);
+      await new Promise<void>((resolve) => (release = resolve));
+      return { kind: 'sent' };
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await box.clear();
+    release();
+    await flushing;
+    expect(sent).toEqual(['/appointments/a1/actions']);
+    expect(box.getItems()).toEqual([]);
+    expect(await store.get('clinic.outbox')).toBeNull();
+  });
+
+  it('does not bring back a queue whose read was still running at sign-out', async () => {
+    const store = memoryStore();
+    await store.set('clinic.outbox', [{ id: 'old', status: 'pending' }]);
+    let release: () => void = () => undefined;
+    const slow = {
+      ...store,
+      get: async <T>(key: string) => {
+        await new Promise<void>((resolve) => (release = resolve));
+        return store.get<T>(key);
+      },
+    };
+    const box = new Outbox(slow, () => 'k');
+    const loading = box.load();
+    await box.clear();
+    release();
+    await loading;
+    expect(box.getItems()).toEqual([]);
+  });
+
+  it('shares one read between concurrent callers, so a queued item is never hidden', async () => {
+    const { store, box } = setup();
+    await Promise.all([box.load(), box.add(checkIn('a1')), box.load()]);
+    expect(box.getItems().map((i) => i.path)).toEqual(['/appointments/a1/actions']);
+    expect(await store.get<OutboxItem[]>('clinic.outbox')).toHaveLength(1);
+  });
+
+  it('replays with the key the first attempt used, and drops a save a newer one replaced', async () => {
+    const { box } = setup();
+    await box.add(checkIn('a1'), 'first-attempt-key');
+    expect(box.getItems()[0]?.id).toBe('first-attempt-key');
+    await box.add({ ...checkIn('a2'), kind: 'notes', method: 'PUT', path: '/n' });
+    await box.dropPending('notes', '/n');
+    expect(box.getItems().map((i) => i.id)).toEqual(['first-attempt-key']);
+  });
+});

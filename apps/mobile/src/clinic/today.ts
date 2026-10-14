@@ -24,6 +24,8 @@ export const isNetworkError = (error: unknown) => error instanceof TypeError;
  */
 export class TodayStore {
   private state: TodayState = { data: null, fetchedAt: null, offline: false, error: null };
+  /** Bumped by clear(): a refresh started before a sign-out is dropped when it answers. */
+  private generation = 0;
   private readonly listeners = new Set<() => void>();
 
   constructor(
@@ -40,7 +42,9 @@ export class TodayStore {
   };
 
   async load(): Promise<void> {
+    const generation = this.generation;
     const saved = await this.store.get<{ data: SyncTodayResponse; fetchedAt: number }>(KEY);
+    if (generation !== this.generation) return;
     if (saved && saved.data.queue.date === this.today() && !this.state.data) {
       this.set({ ...this.state, data: saved.data, fetchedAt: saved.fetchedAt });
     }
@@ -48,23 +52,32 @@ export class TodayStore {
 
   /** Returns whether the server answered. */
   async refresh(fetch: FetchToday, messageOf: (error: unknown) => string): Promise<boolean> {
+    const generation = this.generation;
+    let data: SyncTodayResponse;
     try {
-      const data = await fetch();
-      const fetchedAt = this.now();
-      this.set({ data, fetchedAt, offline: false, error: null });
-      await this.store.set(KEY, { data, fetchedAt });
-      return true;
+      data = await fetch();
     } catch (error) {
+      if (generation !== this.generation) return false;
+      // Past midnight the copy kept from yesterday is not today's queue.
+      const stale = this.state.data && this.state.data.queue.date !== this.today();
       this.set({
         ...this.state,
+        ...(stale ? { data: null, fetchedAt: null } : {}),
         offline: isNetworkError(error),
         error: isNetworkError(error) ? null : messageOf(error),
       });
       return false;
     }
+    if (generation !== this.generation) return false;
+    const fetchedAt = this.now();
+    this.set({ data, fetchedAt, offline: false, error: null });
+    // The server answered; failing to keep a copy only costs the offline fallback.
+    await this.store.set(KEY, { data, fetchedAt }).catch(() => undefined);
+    return generation === this.generation;
   }
 
   async clear(): Promise<void> {
+    this.generation += 1;
     this.set({ data: null, fetchedAt: null, offline: false, error: null });
     await this.store.remove(KEY);
   }

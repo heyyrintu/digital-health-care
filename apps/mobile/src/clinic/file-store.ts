@@ -10,9 +10,14 @@ export const fileStore: KeyValueStore = {
   async get<T>(key: string) {
     const file = new File(Paths.document, `${key}.json`);
     if (!file.exists) return null;
+    const text = await file.text();
     try {
-      return JSON.parse(await file.text()) as T;
+      return JSON.parse(text) as T;
     } catch {
+      // Unreadable (say a write cut short): keep it aside for support rather than letting the
+      // next save overwrite what may be the only copy of queued work, and start empty.
+      new File(Paths.document, `${key}.unreadable-${Date.now()}.json`).write(text);
+      file.delete();
       return null;
     }
   },

@@ -37,7 +37,7 @@ export function StaffSignIn({ initialOrganisation, notice }: Props) {
     setError(null);
     try {
       const result = await publicApi.login({
-        organisation: organisation.trim(),
+        organisation: organisation.trim().toLowerCase(),
         identifier: identifier.trim(),
         password,
         role,
@@ -62,7 +62,7 @@ export function StaffSignIn({ initialOrganisation, notice }: Props) {
     try {
       const tokens = await publicApi.verifyMfa(mfaToken, code);
       setPassword('');
-      await session.signIn(organisation.trim(), tokens);
+      await session.signIn(organisation.trim().toLowerCase(), tokens);
     } catch (e) {
       setError(errorMessage(e, t));
       setBusy(false);
@@ -92,7 +92,12 @@ export function StaffSignIn({ initialOrganisation, notice }: Props) {
               autoFocus
             />
             <Button label={t('login.verify')} loading={busy} onPress={verify} />
-            <Button variant="ghost" label={t('login.startOver')} onPress={startOver} />
+            <Button
+              variant="ghost"
+              label={t('login.startOver')}
+              disabled={busy}
+              onPress={startOver}
+            />
           </>
         ) : roles.length > 0 ? (
           <>
@@ -106,7 +111,12 @@ export function StaffSignIn({ initialOrganisation, notice }: Props) {
                 onPress={() => signIn(role)}
               />
             ))}
-            <Button variant="ghost" label={t('login.startOver')} onPress={startOver} />
+            <Button
+              variant="ghost"
+              label={t('login.startOver')}
+              disabled={busy}
+              onPress={startOver}
+            />
           </>
         ) : (
           <>

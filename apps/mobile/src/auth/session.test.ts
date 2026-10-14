@@ -132,6 +132,62 @@ describe('SessionManager', () => {
   });
 });
 
+describe('SessionManager across sign-outs', () => {
+  it('keeps nothing when sign-out comes while a sign-in is loading who signed in', async () => {
+    const { manager, api, stored } = setup();
+    let answer: (value: MeResponse) => void = () => undefined;
+    api.me.mockImplementationOnce(() => new Promise((resolve) => (answer = resolve)));
+    const signingIn = manager.signIn('demo-clinic', tokens(0));
+    await manager.signOut();
+    answer(me);
+    await signingIn;
+    expect(manager.getState()).toEqual({ status: 'signed_out', reason: 'signed_out' });
+    expect(stored()).toBeNull();
+    await expect(manager.getAccessToken()).resolves.toBeNull();
+  });
+
+  it('keeps nothing when who signed in cannot be loaded', async () => {
+    const { manager, api, stored } = setup();
+    api.me.mockRejectedValueOnce(new TypeError('Network request failed'));
+    await expect(manager.signIn('demo-clinic', tokens(0))).rejects.toThrow();
+    expect(stored()).toBeNull();
+    await expect(manager.getAccessToken()).resolves.toBeNull();
+  });
+
+  it('ignores a 401 that answers a previous session’s request', async () => {
+    const { manager } = setup();
+    await manager.signIn('demo-clinic', tokens(7));
+    await manager.expire('a-previous-token');
+    expect(manager.getState().status).toBe('signed_in');
+    await manager.expire('a7');
+    expect(manager.getState()).toEqual({ status: 'signed_out', reason: 'expired' });
+  });
+
+  it('refreshes once to end the server session when the access token has run out', async () => {
+    const { manager, api, clock } = setup();
+    await manager.signIn('demo-clinic', tokens(0));
+    clock.advance(901_000);
+    await manager.signOut();
+    expect(api.refresh).toHaveBeenCalledWith('r0');
+    expect(api.logout).toHaveBeenCalledWith('a1');
+  });
+
+  it('signs out on screen even when the keychain cannot be cleared', async () => {
+    const { manager, vault } = setup();
+    await manager.signIn('demo-clinic', tokens(0));
+    vi.mocked(vault.clear).mockRejectedValueOnce(new Error('keychain'));
+    await expect(manager.signOut()).rejects.toThrow('keychain');
+    expect(manager.getState()).toEqual({ status: 'signed_out', reason: 'signed_out' });
+  });
+
+  it('starts from sign-in when the keychain cannot be read', async () => {
+    const { manager, vault } = setup();
+    vi.mocked(vault.load).mockRejectedValueOnce(new Error('keychain'));
+    await manager.restore();
+    expect(manager.getState()).toEqual({ status: 'signed_out' });
+  });
+});
+
 describe('expiringFetch', () => {
   it('reports a 401 from a signed-in call but not from a sign-in call', async () => {
     const onUnauthenticated = vi.fn();
@@ -140,7 +196,8 @@ describe('expiringFetch', () => {
 
     await wrapped('https://api.test/v1/auth/otp/verify', { method: 'POST' });
     expect(onUnauthenticated).not.toHaveBeenCalled();
-    await wrapped('https://api.test/v1/me');
+    await wrapped('https://api.test/v1/me', { headers: { authorization: 'Bearer a1' } });
     expect(onUnauthenticated).toHaveBeenCalledTimes(1);
+    expect(onUnauthenticated).toHaveBeenCalledWith('a1');
   });
 });

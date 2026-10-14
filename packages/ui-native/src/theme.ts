@@ -13,12 +13,20 @@ import {
  * the same radius scale (web derives sm to 3xl from `--radius`), spacing and type sizes.
  */
 export interface NativeTheme {
-  mode: ThemeMode;
-  colors: Record<ThemeColor, string>;
-  radii: { sm: number; md: number; lg: number; xl: number; '2xl': number; full: number };
-  spacing: typeof spacing;
-  fontSizes: typeof fontSizes;
-  minTouchTarget: number;
+  readonly mode: ThemeMode;
+  readonly colors: Readonly<Record<ThemeColor, string>>;
+  readonly radii: Readonly<{
+    sm: number;
+    md: number;
+    lg: number;
+    xl: number;
+    '2xl': number;
+    '3xl': number;
+    full: number;
+  }>;
+  readonly spacing: Readonly<typeof spacing>;
+  readonly fontSizes: Readonly<typeof fontSizes>;
+  readonly minTouchTarget: number;
 }
 
 const cache = new Map<ThemeMode, NativeTheme>();
@@ -26,21 +34,23 @@ const cache = new Map<ThemeMode, NativeTheme>();
 export function nativeTheme(mode: ThemeMode): NativeTheme {
   let theme = cache.get(mode);
   if (!theme) {
-    theme = {
+    // Shared by every screen in this mode, so frozen: one caller cannot restyle the rest.
+    theme = Object.freeze({
       mode,
-      colors: themeHex(mode),
-      radii: {
+      colors: Object.freeze(themeHex(mode)),
+      radii: Object.freeze({
         sm: baseRadius - 4,
         md: baseRadius - 2,
         lg: baseRadius,
         xl: baseRadius + 4,
         '2xl': baseRadius + 8,
+        '3xl': baseRadius + 12,
         full: 9999,
-      },
-      spacing,
-      fontSizes,
+      }),
+      spacing: Object.freeze({ ...spacing }),
+      fontSizes: Object.freeze({ ...fontSizes }),
       minTouchTarget: MIN_TOUCH_TARGET,
-    };
+    });
     cache.set(mode, theme);
   }
   return theme;

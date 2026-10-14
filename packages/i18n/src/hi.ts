@@ -958,7 +958,7 @@ export const hi: Record<MessageKey, string> = {
   'mobile.clinic.unlockFailed': 'नहीं हो पाया। फिर कोशिश करें, या साइन आउट करें।',
   'mobile.clinic.noDeviceLock':
     'पहले इस डिवाइस की सेटिंग में पासकोड लगाएँ। क्लिनिक ऐप सिर्फ़ स्क्रीन लॉक वाले डिवाइस पर खुलता है।',
-  'mobile.clinic.offlineCopy': 'आप ऑफ़लाइन हैं। यह {time} की कतार है।',
+  'mobile.clinic.offlineCopy': 'आप ऑफ़लाइन हैं। यह कतार {time} पर आख़िरी बार अपडेट हुई थी।',
   'mobile.clinic.waitingToSync': '{count} बदलाव इस डिवाइस पर सेव हैं, सिंक होने का इंतज़ार है।',
   'mobile.clinic.syncFailed': 'सेव नहीं हुआ: {label}। {reason}',
   'mobile.clinic.discard': 'यह बदलाव हटाएँ',

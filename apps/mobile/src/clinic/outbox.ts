@@ -40,8 +40,10 @@ const KEY = 'clinic.outbox';
  */
 export class Outbox {
   private items: OutboxItem[] = [];
-  private loaded = false;
+  private loading: Promise<void> | null = null;
   private flushing: Promise<void> | null = null;
+  /** Bumped by clear(): work started before a sign-out must not touch what comes after. */
+  private generation = 0;
   private readonly listeners = new Set<() => void>();
 
   constructor(
@@ -57,20 +59,32 @@ export class Outbox {
 
   getItems = (): readonly OutboxItem[] => this.items;
 
-  async load(): Promise<void> {
-    if (this.loaded) return;
-    this.items = (await this.store.get<OutboxItem[]>(KEY)) ?? [];
-    this.loaded = true;
+  /** Reads the saved queue once; concurrent callers share the read. */
+  load(): Promise<void> {
+    this.loading ??= this.read();
+    return this.loading;
+  }
+
+  private async read(): Promise<void> {
+    const generation = this.generation;
+    const saved = (await this.store.get<OutboxItem[]>(KEY)) ?? [];
+    if (generation !== this.generation) return;
+    this.items = saved;
     this.emit();
   }
 
+  /**
+   * Queues a write. `id` is the Idempotency-Key the first attempt already used, so a request
+   * that reached the server before the network dropped is applied once when it is replayed.
+   */
   async add(
     item: Pick<OutboxItem, 'kind' | 'method' | 'path' | 'body' | 'label'>,
+    id: string = this.newId(),
   ): Promise<OutboxItem> {
     await this.load();
     const full: OutboxItem = {
       ...item,
-      id: this.newId(),
+      id,
       createdAt: this.now(),
       attempts: 0,
       status: 'pending',
@@ -95,20 +109,36 @@ export class Outbox {
   }
 
   async discard(id: string): Promise<void> {
+    await this.load();
     this.items = this.items.filter((i) => i.id !== id);
+    await this.save();
+  }
+
+  /** A newer save reached the server: an older one still waiting here must not replay. */
+  async dropPending(kind: OutboxKind, path: string): Promise<void> {
+    await this.load();
+    const kept = this.items.filter(
+      (i) => !(i.status === 'pending' && i.kind === kind && i.path === path),
+    );
+    if (kept.length === this.items.length) return;
+    this.items = kept;
     await this.save();
   }
 
   /** Signing out clears what this person queued: it must not be sent as someone else. */
   async clear(): Promise<void> {
+    this.generation += 1;
     this.items = [];
+    this.loading = Promise.resolve();
     await this.store.remove(KEY);
     this.emit();
   }
 
   private async run(send: Sender): Promise<void> {
     await this.load();
+    const generation = this.generation;
     for (const item of [...this.items]) {
+      if (generation !== this.generation) return;
       if (item.status !== 'pending') continue;
       item.attempts += 1;
       let outcome: SendOutcome;
@@ -117,6 +147,7 @@ export class Outbox {
       } catch {
         outcome = { kind: 'retry' };
       }
+      if (generation !== this.generation) return;
       if (outcome.kind === 'retry') {
         await this.save();
         return;

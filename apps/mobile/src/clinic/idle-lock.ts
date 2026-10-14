@@ -25,9 +25,14 @@ export class IdleLock {
     return this.locked;
   }
 
-  /** A touch or keypress. Ignored while locked. */
-  activity(now: number): void {
+  /**
+   * A touch or keypress. Ignored while locked; a touch after the limit has passed (before the
+   * timer noticed) locks instead of extending the session. True if it just locked.
+   */
+  activity(now: number): boolean {
+    if (this.check(now)) return true;
     if (!this.locked) this.lastActive = now;
+    return false;
   }
 
   /** Call on a timer and when the app returns to the foreground; true if it just locked. */

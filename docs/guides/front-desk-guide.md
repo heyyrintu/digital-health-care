@@ -23,7 +23,7 @@ On the **Queue**: **Reschedule** moves a booking to another slot (the old one sh
 **Follow-ups** on the Queue lists patients the doctor asked to come back that day, with the visit they came from. If they have booked, the row shows when; if not, it says *Not booked yet* and **Book follow-up** opens the booking page for them on that day.
 
 ## On the Clinic app (iPhone, iPad, Android)
-The **Queue** has the same tabs as the web. Tap a patient to see their booking and **Check in**, **Confirm** or **Mark no-show**; on an iPad or tablet the patient opens beside the list. Pull down to refresh. Cancelling and rescheduling are on the web for now.
+The **Queue** has **My OPD**, **Booked**, **Completed** and **Cancelled and no-shows**, as on the web; **Follow-ups** is on the web only for now. Tap a patient to see their booking and **Check in**, **Confirm** or **Mark no-show**; on an iPad or tablet the patient opens beside the list. Pull down to refresh. Cancelling and rescheduling are on the web for now.
 - **No network?** The app keeps showing the queue as it was, with the time, and you can still check patients in: they show *Check-in waiting to sync* and reach the queue on their own when the connection is back. If one can't be saved (say the visit was cancelled meanwhile), the app tells you why and you can discard it.
 - **Locking:** after 15 minutes without use, or when you open it again, the app asks for Face ID, your fingerprint or the device passcode. The device must have a screen lock.
 - Signing out removes everything the app saved on the device.

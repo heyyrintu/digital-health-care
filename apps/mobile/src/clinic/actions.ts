@@ -26,13 +26,16 @@ export async function runAction(a: Appointment, action: QueueAction): Promise<Ac
   } catch (error) {
     if (!isNetworkError(error)) throw error;
     if (action !== 'check_in') return 'needs_connection';
-    await outbox.add({
-      kind: 'check_in',
-      method: 'POST',
-      path: `/appointments/${a.id}/actions`,
-      body,
-      label: `${a.patient.name} · ${a.tokenNumber}`,
-    });
+    await outbox.add(
+      {
+        kind: 'check_in',
+        method: 'POST',
+        path: `/appointments/${a.id}/actions`,
+        body,
+        label: `${a.patient.name} · ${a.tokenNumber}`,
+      },
+      key,
+    );
     return 'queued';
   }
 }
