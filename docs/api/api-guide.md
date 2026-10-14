@@ -12,12 +12,12 @@ This guide explains conventions and lists the endpoint catalogue by module. Fiel
 | Format | JSON, UTF-8; dates ISO 8601 in UTC (clients display IST) |
 | Auth | `Authorization: Bearer <access token>` (short-lived) + rotating refresh token |
 | Tenant | Derived from the token; never sent by the client. Platform console uses a separate audience |
-| Idempotency | `Idempotency-Key` header required on retryable writes (check-in, vitals, notes, payments, bookings, uploads). Same key + same body → same result for 24 h |
+| Idempotency | `Idempotency-Key` header (8–100 letters, digits, `-`, `_`) on retryable writes. Same person, key and body → the first result, replayed for 24 h with `idempotent-replay: true`; built on bookings, appointment actions, bills, payments and the price list (§3o). Same key with a different body, or while the first request is still running → 409 |
 | Pagination | Cursor based: `?limit=50&cursor=<opaque>`; response `{ data, nextCursor }` |
 | Versioning | URL major version (`/v1`). Additive changes only within a version. Two latest mobile app versions must keep working |
 | Rate limits | Per user and per IP; stricter on OTP, login, upload, payment endpoints. `429` with `Retry-After` |
 | CORS | Only the web app's origin (`WEB_BASE_URL`, or the `CORS_ORIGINS` list) may call the API from a browser. No cookies; credentials are never allowed cross-origin |
-| Real time | Web: Server-Sent Events `/v1/stream/queue`; mobile: WebSocket `/v1/ws`; scribe audio: WebSocket `/v1/scribe/stream` |
+| Real time | Web: Server-Sent Events `/v1/queue/stream` (staff) and `/v1/display/stream` (waiting-room screens); mobile: WebSocket `/v1/ws`; scribe audio: WebSocket `/v1/scribe/stream` |
 
 ## 2. Error shape
 
@@ -137,7 +137,7 @@ Implemented in Phase 1 (`apps/api/src/modules/queue`).
 | Screens | `GET /display-screens`; `POST /display-screens` `{clinicId, label}` → 201 with the `link` (shown once); `POST /display-screens/{id}/revoke` → 204 | Clinic admin |
 | Screen board | `POST /display/board` `{token}` → `{clinicName, date, doctors: [{doctorName, nowServing, next}]}` | Public (the screen's token; rate limited) |
 
-- **Tabs:** `myOpd` is the patient in consultation first, then checked-in patients — those with a "show first" tag (Emergency, Priority) ahead of the rest, then by check-in time; `booked` is pending and confirmed by time; `completed` is newest first; `closed` is cancelled, no-show and rescheduled; `followUps` is the patients due back that day (§3p), a list of its own that does not change the other tabs. `averageConsultationMinutes` is the mean of the day's completed consultations (start to completion). The web queue refreshes every 15 seconds while visible; live push may replace polling later.
+- **Tabs:** `myOpd` is the patient in consultation first, then checked-in patients — those with a "show first" tag (Emergency, Priority) ahead of the rest, then by check-in time; `booked` is pending and confirmed by time; `completed` is newest first; `closed` is cancelled, no-show and rescheduled; `followUps` is the patients due back that day (§3p), a list of its own that does not change the other tabs. `averageConsultationMinutes` is the mean of the day's completed consultations (start to completion). The web queue refreshes when `/queue/stream` reports a change (§3o) and every 60 seconds as a fallback.
 - **Screens** are kiosk links `…/display#<token>`: 32 random bytes, stored only as a SHA-256 hash, never in a URL path (the token stays in the fragment and travels in the request body), so it does not reach server logs. A screen shows, per doctor, the token in consultation and the next five waiting, in queue order; never patient names. Revoked or unknown tokens give 404. (Build plan §6 names the route `/display/[clinic]`; a guessable clinic ID in the path was replaced by the token link.)
 - **Audit:** `display_screen.created`, `display_screen.revoked`.
 
@@ -338,6 +338,26 @@ Implemented in Phase 1 (`apps/api/src/modules/staff`, PRD §9.2 "device revocati
 - **Effect:** a signed-out session fails on its next request (the bearer check reads the session), and its refresh token stops working. Its push devices (§3q) stop getting notifications in the same transaction (`revokedReason: admin_signout`). The person keeps their access and can sign in again. To also cut access, remove the membership or use **Reset sign-in**.
 - `current` marks the admin's own session; the web hides its sign-out button. `lastUsedAt` moves when the session is refreshed, so it can lag by up to one access-token lifetime.
 - **Audit:** `staff.session.revoked` (session ID and the staff member's user ID) and `staff.sessions.revoked_all` (user ID and how many were signed out). Revoked sessions keep `revokedReason: admin_signout`.
+## 3o. Idempotency keys and the live queue
+
+Implemented in Phase 1 (`apps/api/src/idempotency.ts`, `live.ts`, `sse.ts`).
+
+**Idempotency-Key** (§1) on `POST /appointments`, `POST /appointments/{id}/actions`, `PUT /appointments/{id}/bill`, `POST /bills/{id}/payments` and `POST /price-list`:
+- Keys are kept per organisation and person (`idempotency_keys`, row-level security) for 24 hours. A retry with the same key and body gets the stored status and body, with `idempotent-replay: true`; nothing runs twice.
+- The same key with a different body is 409 `fields.idempotencyKey = reused`. A retry while the first request is still running is 409 `in_progress`, so a double tap never books or charges twice. A badly formed key is 400 `invalid`.
+- A write that fails without changing anything (4xx or 5xx) releases its key, so the client can correct and retry under the same key. Each transaction of the write that changes data marks the key in that same transaction, so a retry never runs a write twice: a first attempt that died before writing frees its key after 60 seconds, and one that wrote but lost its response gives 409 `unknown` (check the result before retrying with a new key). Expired keys are deleted by the API's scheduled sweep. Without the header the write runs as before; payments are also safe by their client-chosen `id`.
+
+**Live queue** (server-sent events, replacing 15-second polling):
+
+| Stream | Endpoint | Who |
+|---|---|---|
+| Staff queue | `GET /queue/stream?date` (IST day, default today) | Staff |
+| Waiting-room screen | `POST /display/stream` `{token}` (today) | Public; the screen token is the credential |
+
+- Events: `ready` `{date}` once listening, then `queue` `{appointmentId}` whenever that day's visit, its vitals, bill or prescription status, the patient's tags, or a follow-up due that day changes. Clients refetch `/queue` or `/display/board`; events carry IDs only, never patient details. A comment line every 25 s keeps proxies open.
+- Database triggers (`notify_queue_change`) announce changes on the `dhc_queue` channel; each API process holds one `LISTEN` connection, so every instance behind a load balancer hears every change. Staff streams carry the organisation's changes; a waiting-room screen hears only its own clinic.
+- The web reconnects with a growing delay (1 to 30 s) and refetches every 60 s as a safety net. Streams use `fetch`, so the bearer token stays in a header. Streams for today end at IST midnight and the client reconnects to the new day. Revoking a screen closes its open stream; the reconnect is 404 and the screen shows that it is no longer linked.
+
 ## 3p. Follow-ups and automatic no-shows
 
 Implemented in Phase 1 (`apps/api/src/modules/queue/service.ts`, `apps/api/src/modules/appointments/no-shows.ts`).
@@ -372,7 +392,7 @@ Implemented for the Clinic app (`apps/api/src/modules/devices`, `apps/api/src/mo
 |---|---|
 | identity | `/auth/*`, `/me`, `/staff/invites` (built), `/staff/members/{id}/sessions`, `/staff/members/{id}/sign-out-all` and `/staff/sessions/{id}/revoke` (built); `/me/devices` |
 | tenancy | `/organisations/current`, `/clinics` (built), `/consultation-types` (built), `/booking-rules` (built), `/doctors` (built), `/organisation-settings` (built), `/branding`, `/tags` (built), `/uhid-settings` (built) |
-| scheduling | `/availability/versions` (built), `/availability/exceptions` (built), `/slots?doctorId&clinicId&consultationTypeId&date&channel` (built), `/appointments` (book, walk-in, list, confirm, check-in, start, complete, cancel, no-show, reschedule; built), `/queue?date` (built), `/display-screens` (built), `/display/board` (built) |
+| scheduling | `/availability/versions` (built), `/availability/exceptions` (built), `/slots?doctorId&clinicId&consultationTypeId&date&channel` (built), `/appointments` (book, walk-in, list, confirm, check-in, start, complete, cancel, no-show, reschedule; built), `/queue?date` (built), `/queue/stream` (SSE; built), `/display-screens` (built), `/display/board` and `/display/stream` (built) |
 | patients | `/patients` (search by phone, name or UHID, filter by tag; register; built), `/patients/{id}` (demographics and family, each view audited; edit; built), `/patients/duplicate-check` (built), `/patients/{id}/tags` (built), `/patients/{id}/chart` and `/patients/{id}/allergies\|conditions\|medications` (built), `/patients/{id}/consents`, `/patient-merges` (ask, approve, reject; built) |
 | clinical | `/appointments/{id}/consultation` (built), `/appointments/{id}/vitals` (built), `/scribe/sessions`, `/assessments/forms`, `/assessments`, `/patients/{id}/ask-ai` |
 | prescribing | `/medicines` (search; built), `/medicine-master`, `/drug-molecules` and `/medicine-requests` (clinic admin; built), `/prescription-templates` (built), `/appointments/{id}/prescription` (draft and lines; built), `/patients/{id}/last-prescription` (built), `/appointments/{id}/prescription/safety-actions` (built), `/appointments/{id}/prescription/preview\|sign\|amend\|void` (built), `/prescriptions/{id}/pdf` (built), `/verify` (public; built), `/doctor-profile` (built) |
