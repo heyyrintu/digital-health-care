@@ -1,6 +1,7 @@
 /**
- * Something on a day's queue changed. Shape agreed for the live queue (server-sent
- * events); until that lands, screens refresh by polling and this is a no-op hook.
+ * Something on a day's queue changed. Open queue screens already hear about it from the
+ * database (the `notify_queue_change` trigger feeds `/queue/stream`, API guide §3o), so
+ * this in-process hook is for tests and future consumers; by default it does nothing.
  */
 export interface QueueChanged {
   type: 'queue.changed';

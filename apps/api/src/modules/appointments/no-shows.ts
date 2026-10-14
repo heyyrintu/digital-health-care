@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { withAuth, withTenant } from '@dhc/db';
+import { purgeExpiredIdempotencyKeys } from '../../idempotency';
 import type { Services } from '../../services';
 import { writeAudit, type AuditSource } from '../audit/write';
 import { publishQueueChanged, type QueueChanged } from '../queue/live';
@@ -91,7 +92,7 @@ export async function sweepOrganisation(
 }
 
 /**
- * Runs the sweep every `seconds` (0 turns it off). Returns a stop function. A run that
+ * Runs the sweep every `seconds` (0 turns it off), then deletes expired idempotency keys. Returns a stop function. A run that
  * fails is logged and the next one tries again; runs never overlap.
  */
 export function scheduleNoShowSweep(
@@ -110,8 +111,10 @@ export function scheduleNoShowSweep(
       headers: { 'user-agent': 'no-show-sweep' },
     };
     sweepNoShows(s, source)
-      .then((count) => {
+      .then(async (count) => {
         if (count > 0) log.info({ count }, 'Marked bookings as no-shows');
+        const purged = await purgeExpiredIdempotencyKeys(s);
+        if (purged > 0) log.info({ count: purged }, 'Deleted expired idempotency keys');
       })
       .catch((err: unknown) => log.error({ err }, 'No-show sweep failed'))
       .finally(() => {

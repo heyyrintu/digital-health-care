@@ -1,4 +1,5 @@
 import { PrismaPg } from '@prisma/adapter-pg';
+import { AsyncLocalStorage } from 'node:async_hooks';
 import { PrismaClient, type Prisma } from './generated/prisma/client.ts';
 
 export type Db = PrismaClient;
@@ -9,6 +10,15 @@ export function createDb(databaseUrl: string): Db {
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Runs last inside every `withTenant` transaction started within `afterTenantWork.run`,
+ * before it commits; throwing rolls that transaction back. Idempotency keys use it to
+ * record, atomically with a write, that the write happened.
+ */
+export const afterTenantWork = new AsyncLocalStorage<
+  (tx: Tx, organisationId: string) => Promise<void>
+>();
 
 /**
  * Runs `fn` as the `dhc_app` role with the organisation set for row-level security.
@@ -24,7 +34,9 @@ export async function withTenant<T>(
   return db.$transaction(async (tx) => {
     await tx.$executeRawUnsafe('SET LOCAL ROLE dhc_app');
     await tx.$executeRaw`SELECT set_config('app.organisation_id', ${organisationId}, true)`;
-    return fn(tx);
+    const result = await fn(tx);
+    await afterTenantWork.getStore()?.(tx, organisationId);
+    return result;
   });
 }
 
