@@ -8,7 +8,7 @@ import { api } from '../../api';
 import { errorMessage } from '../../errors';
 import { useLocale } from '../../locale/provider';
 import { TWO_PANE_MIN_WIDTH } from '../../variant';
-import { useOutbox } from '../hooks';
+import { useOutbox, useToday } from '../hooks';
 import { loadOffline, visits } from '../runtime';
 import { isNetworkError } from '../today';
 import { ChartSection } from './chart-section';
@@ -27,12 +27,21 @@ export function ConsultationScreen({ appointmentId }: { appointmentId: string })
   const router = useRouter();
   const { width } = useWindowDimensions();
   const [view, setView] = useState<ConsultationView | null>(null);
+  const viewRef = useRef<ConsultationView | null>(null);
+  viewRef.current = view;
   const [rx, setRx] = useState<PrescriptionView | null>(null);
   const [chart, setChart] = useState<PatientChart | null>(null);
   const [offline, setOffline] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  // Each load is numbered; only the latest one's answer is applied, so an earlier request
+  // answering last never puts an older revision back on screen.
+  const loadSeq = useRef(0);
+  // A reload after queued saves were sent that could not reach the server: retried when the
+  // queue next reaches it.
+  const reloadOwed = useRef(false);
+  const load = useCallback(async (): Promise<void> => {
+    const mine = ++loadSeq.current;
     setError(null);
     // Saves still waiting on the device are read first: the sections start from them.
     await loadOffline().catch(() => undefined);
@@ -48,15 +57,25 @@ export function ConsultationScreen({ appointmentId }: { appointmentId: string })
       const c = await api.request('GET', `/patients/${v.appointment.patient.id}/chart`, {
         schema: PatientChart,
       });
+      if (mine !== loadSeq.current) return;
+      reloadOwed.current = false;
       setView(v);
       setRx(p);
       setChart(c);
       setOffline(false);
       await visits.put(v, c);
     } catch (e) {
+      if (mine !== loadSeq.current) return;
       if (isNetworkError(e)) {
-        const saved = await visits.get(appointmentId);
         setOffline(true);
+        // Already showing the visit: keep it (it is newer than the saved copy) and reload
+        // once the network is back.
+        if (viewRef.current) {
+          reloadOwed.current = true;
+          return;
+        }
+        const saved = await visits.get(appointmentId);
+        if (mine !== loadSeq.current) return;
         if (saved) {
           setView(saved.view);
           setChart(saved.chart);
@@ -72,20 +91,26 @@ export function ConsultationScreen({ appointmentId }: { appointmentId: string })
   // Once this visit's waiting notes or vitals have been sent, reload: the server's revision
   // and readings move on, and the next save must start from them, not be refused as stale.
   const items = useOutbox();
-  const waiting = items.filter(
-    (i) => i.status === 'pending' && i.path.startsWith(`/appointments/${appointmentId}/`),
-  ).length;
+  // The queue screen's refresh tells when the server is reachable again.
+  const offlineQueue = useToday().offline;
+  // By identity, not count: a newer save replacing one being sent keeps the count the same.
+  const waiting = items
+    .filter((i) => i.status === 'pending' && i.path.startsWith(`/appointments/${appointmentId}/`))
+    .map((i) => i.id)
+    .join(',');
   const before = useRef(waiting);
   // A reload remounts the sections, so it waits while any of them holds unsaved edits.
   const dirty = useRef(new Set<string>());
   const reloadWhenClean = useRef(false);
   useEffect(() => {
-    if (waiting < before.current) {
+    const now = new Set(waiting.split(',').filter(Boolean));
+    const sent = before.current.split(',').some((id) => id && !now.has(id));
+    if (sent || (reloadOwed.current && !offlineQueue)) {
       if (dirty.current.size > 0) reloadWhenClean.current = true;
       else void load();
     }
     before.current = waiting;
-  }, [waiting, load]);
+  }, [waiting, offlineQueue, load]);
   const markDirty = useCallback(
     (section: string, isDirty: boolean) => {
       if (isDirty) dirty.current.add(section);

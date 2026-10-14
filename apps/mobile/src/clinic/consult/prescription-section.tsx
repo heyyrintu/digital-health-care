@@ -414,7 +414,8 @@ function MedicineSearch({
   const seq = useRef(0);
 
   useEffect(() => {
-    const query = q.trim();
+    // The search takes at most 60 characters; a longer free-text name is still allowed.
+    const query = q.trim().slice(0, 60);
     const mine = ++seq.current;
     // Results for the previous text are never left to pick while the new search runs.
     setResults([]);
@@ -448,7 +449,7 @@ function MedicineSearch({
         label={t('rx.search')}
         value={q}
         editable={!disabled}
-        maxLength={60}
+        maxLength={200}
         onChangeText={setQ}
         autoCorrect={false}
       />
