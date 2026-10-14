@@ -133,6 +133,7 @@ export function PracticeCard() {
             horizonDays: Number(data.get('horizonDays')),
             sameDayCutoffMinutes: Number(data.get('cutoff')),
             overbookPerDay: Number(data.get('overbook')),
+            noShowAfterMinutes: data.get('noShow') === '' ? null : Number(data.get('noShow')),
           },
         }),
       );
@@ -326,6 +327,23 @@ export function PracticeCard() {
               required
               defaultValue={rules.overbookPerDay}
             />
+          </div>
+          <div className={FIELD}>
+            <label className={LABEL} htmlFor="rules-no-show">
+              {t('practice.noShow')}
+            </label>
+            <Input
+              id="rules-no-show"
+              name="noShow"
+              type="number"
+              min={0}
+              max={720}
+              aria-describedby="rules-no-show-hint"
+              defaultValue={rules.noShowAfterMinutes ?? ''}
+            />
+            <p id="rules-no-show-hint" className="text-xs text-muted-foreground">
+              {t('practice.noShowHint')}
+            </p>
           </div>
           <Button type="submit" disabled={busy} className="sm:col-span-2 sm:justify-self-start">
             {t('common.save')}

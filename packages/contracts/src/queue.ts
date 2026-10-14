@@ -1,5 +1,31 @@
 import { z } from 'zod';
-import { Appointment } from './appointments';
+import { Appointment, AppointmentStatus } from './appointments';
+import { PatientSummary } from './patients';
+
+/**
+ * A patient due back on the day (PRD §5.1 Follow-ups): the visit whose notes set this
+ * follow-up date, and the booking made for it, if any.
+ */
+export const FollowUp = z.object({
+  /** The earlier visit that asked for the follow-up. */
+  visitAppointmentId: z.uuid(),
+  visitDate: z.iso.date(),
+  followUpDate: z.iso.date(),
+  patient: PatientSummary,
+  doctorUserId: z.uuid(),
+  doctorName: z.string().nullable(),
+  clinicId: z.uuid(),
+  /** A later booking with the same doctor that is still going ahead, or done. */
+  booking: z
+    .object({
+      id: z.uuid(),
+      date: z.iso.date(),
+      startTime: z.string(),
+      status: AppointmentStatus,
+    })
+    .nullable(),
+});
+export type FollowUp = z.infer<typeof FollowUp>;
 
 /**
  * One day's queue (PRD §5.1), grouped as the tabs show it:
@@ -15,6 +41,8 @@ export const QueueResponse = z.object({
   booked: z.array(Appointment),
   completed: z.array(Appointment),
   closed: z.array(Appointment),
+  /** Patients due back on this day, booked or not (not counted in the other tabs). */
+  followUps: z.array(FollowUp),
   /** Mean minutes from start to completion of the day's consultations, when any. */
   averageConsultationMinutes: z.number().nullable(),
 });

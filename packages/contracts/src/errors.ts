@@ -22,6 +22,8 @@ export const ErrorCode = z.enum([
   'SIGNING_UNAVAILABLE',
   'PAYMENT_PENDING',
   'CONSENT_REQUIRED',
+  'PATIENT_MERGED',
+  'CHART_RESTRICTED',
 ]);
 export type ErrorCode = z.infer<typeof ErrorCode>;
 
