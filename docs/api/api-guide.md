@@ -93,7 +93,7 @@ Implemented in Phase 1 (`apps/api/src/modules/scheduling`; the slot engine is `s
 |---|---|---|
 | Clinics | `GET /clinics`; `POST /clinics` `{name, address?, phone?}`; `PATCH /clinics/{id}` (incl. `active`) | Read: all staff · change: clinic admin |
 | Consultation types | `GET /consultation-types`; `POST` `{name, mode, defaultDurationMin, feePaise, followUpFeePaise?, requiresPrepayment}`; `PATCH /consultation-types/{id}` | Read: all staff · change: clinic admin |
-| Booking rules | `GET /booking-rules`; `PUT /booking-rules` `{horizonDays, sameDayCutoffMinutes}` (defaults 30 and 60) | Read: all staff · change: clinic admin |
+| Booking rules | `GET /booking-rules`; `PUT /booking-rules` `{horizonDays, sameDayCutoffMinutes, overbookPerDay, maxActiveBookings, noShowLimit, noShowWindowDays, cancelCutoffMinutes, autoConfirm}` (defaults 30, 60, 2, 2, 3, 90, 120 and true; the last five govern patient self-booking, §3r) | Read: all staff · change: clinic admin |
 | Doctors | `GET /doctors` → active doctors (for pickers) | All staff |
 | Weekly schedules | `GET /availability/versions?doctorId&clinicId&consultationTypeId`; `POST /availability/versions` `{doctorUserId?, clinicId, consultationTypeId, effectiveFrom, weekly, slotMinutes?, bufferMinutes}`; `DELETE /availability/versions/{id}` | Read: all staff · change: the doctor (own) or a clinic admin |
 | Leave, holidays, extra sessions | `GET /availability/exceptions?doctorId&clinicId&from`; `POST /availability/exceptions` `{type, doctorUserId?, clinicId?, consultationTypeId?, startDate, endDate, startTime?, endTime?, reason?}`; `DELETE /availability/exceptions/{id}` | Read: all staff · leave and extra sessions: the doctor (own) or a clinic admin · holidays: clinic admin |
@@ -323,6 +323,24 @@ Implemented in Phase 2 (`apps/api/src/modules/portal`, PRD §4, §4.1). For the 
 - **Adding:** without `guardianPatientId` the record takes the account's number; with it, a dependant without a number, looked after by an `account` patient (not by another dependant). Name and date of birth already on the account are 409. New records get the next UHID and show at the clinic like any other.
 - **Audit:** `consent.accepted` (kinds and versions), `consent.withdrawn` and `patient.created` with `source: patient_app`.
 
+**Booking, appointments and prescriptions** (PRD §4.3, §4.4). All need the consents above and act only on the account's patients.
+
+| Action | Endpoint | Who |
+|---|---|---|
+| What can be booked | `GET /portal/booking-options` → `{doctors, clinics, consultationTypes, horizonDays, cancelCutoffMinutes, maxActiveBookings}` | Patient |
+| Slots | `GET /portal/slots?doctorId&clinicId&consultationTypeId&date` → as `GET /slots` with `channel=patient` | Patient |
+| Book | `POST /portal/appointments {patientId, doctorUserId, clinicId, consultationTypeId, startAt, reason?}` → 201 the appointment | Patient |
+| Appointments | `GET /portal/appointments` → `{upcoming, past}`, each `{id, patient, doctorName, clinicName, consultationTypeName, mode, date, startAt, startTime, tokenNumber, status, reason, canCancel, prescription}` | Patient |
+| Cancel | `POST /portal/appointments/{id}/cancel {reason?}` → the appointment | Patient |
+| Prescriptions | `GET /portal/prescriptions` → `{data: [{id, number, version, status, patient, doctorName, date, signedAt}]}` (signed, superseded and void versions) | Patient |
+| PDF | `GET /portal/prescriptions/{id}/pdf` → the signed PDF (the copy stamped VOID once voided) | Patient |
+
+- **What patients book:** active in-person consultation types that need no payment at booking. Online modes (identity check, telemedicine consent) and prepaid types (Cashfree) open with those features; until then they are 400 `consultationTypeId: not_bookable`.
+- **Rules:** the slot must be open on the patient channel (horizon; inside the same-day cutoff is 409 `SLOT_TAKEN` with `startAt: cutoff`); no overbooking. A patient may hold `maxActiveBookings` upcoming bookings (409 `BOOKING_LIMIT`, `reason: active_bookings`), and `noShowLimit` no-shows within `noShowWindowDays` pause online booking (`reason: no_shows`). Bookings are `confirmed`, or `pending` for the front desk when `autoConfirm` is off; `source` is `app`. One patient's bookings are serialised, so a double tap cannot pass the limits twice.
+- **Cancel:** booked (`pending` or `confirmed`) and at least `cancelCutoffMinutes` before the start; otherwise 409 (`reason: cutoff`, call the clinic). `canCancel` says so in advance.
+- **Upcoming** is booked or in progress, today or later (IST), soonest first; everything else is past, most recent first. Rescheduled bookings show as their new appointment only.
+- **Audit:** `appointment.created` (`source: app`), `appointment.status_changed` (`source: patient_app`) and `prescription.pdf_viewed`, all under the patient's user ID.
+
 ## 4. Endpoint catalogue (by module)
 
 | Module | Main resources and actions |
@@ -331,7 +349,7 @@ Implemented in Phase 2 (`apps/api/src/modules/portal`, PRD §4, §4.1). For the 
 | tenancy | `/organisations/current`, `/clinics` (built), `/consultation-types` (built), `/booking-rules` (built), `/doctors` (built), `/organisation-settings` (built), `/branding`, `/tags` (built), `/uhid-settings` (built) |
 | scheduling | `/availability/versions` (built), `/availability/exceptions` (built), `/slots?doctorId&clinicId&consultationTypeId&date&channel` (built), `/appointments` (book, walk-in, list, confirm, check-in, start, complete, cancel, no-show, reschedule; built), `/queue?date` (built), `/display-screens` (built), `/display/board` (built) |
 | patients | `/patients` (search by phone, name or UHID, filter by tag; register; built), `/patients/{id}` (demographics and family, each view audited; edit; built), `/patients/duplicate-check` (built), `/patients/{id}/tags` (built), `/patients/{id}/chart` and `/patients/{id}/allergies\|conditions\|medications` (built), `/patients/{id}/consents`, `/patients/merge-requests` |
-| portal | `/portal/consents` (built), `/portal/patients` (built) |
+| portal | `/portal/consents`, `/portal/patients`, `/portal/booking-options`, `/portal/slots`, `/portal/appointments` (book, list, cancel), `/portal/prescriptions` and `/portal/prescriptions/{id}/pdf` (all built) |
 | clinical | `/appointments/{id}/consultation` (built), `/appointments/{id}/vitals` (built), `/scribe/sessions`, `/assessments/forms`, `/assessments`, `/patients/{id}/ask-ai` |
 | prescribing | `/medicines` (search; built), `/medicine-master`, `/drug-molecules` and `/medicine-requests` (clinic admin; built), `/prescription-templates` (built), `/appointments/{id}/prescription` (draft and lines; built), `/patients/{id}/last-prescription` (built), `/appointments/{id}/prescription/safety-actions` (built), `/appointments/{id}/prescription/preview\|sign\|amend\|void` (built), `/prescriptions/{id}/pdf` (built), `/verify` (public; built), `/doctor-profile` (built) |
 | orders | `/test-orders`, `/test-orders/{id}/results`, `/referrals`, `/attachments` |
