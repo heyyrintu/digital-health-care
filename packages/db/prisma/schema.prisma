@@ -291,6 +291,7 @@ model User {
   sessions    Session[]
   pushDevices PushDevice[]
   invites     StaffInvite[]
+  consents    AccountConsent[]
 
   @@map("users")
 }
@@ -1332,6 +1333,7 @@ model AccountConsent {
   withdrawnAt    DateTime? @map("withdrawn_at") @db.Timestamptz(3)
 
   organisation Organisation @relation(fields: [organisationId], references: [id])
+  user         User         @relation(fields: [userId], references: [id])
 
   @@index([organisationId, userId, kind])
   @@map("account_consents")

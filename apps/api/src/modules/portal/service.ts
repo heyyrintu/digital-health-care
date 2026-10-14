@@ -8,6 +8,7 @@ import {
   type PortalPatient,
 } from '@dhc/contracts';
 import { withTenant, type Tx } from '@dhc/db';
+import { istDate } from '@dhc/domain';
 import type { FastifyRequest } from 'fastify';
 import { AppError } from '../../errors';
 import type { Services } from '../../services';
@@ -171,10 +172,20 @@ export class PortalService {
     return withTenant(this.s.db, actor.organisationId, async (tx) => {
       await this.requireConsents(tx, actor);
       if (body.guardianPatientId) {
+        // One level only: the guardian is an adult who shares the number, not a dependant.
         const guardian = await ownPatient(tx, phone, body.guardianPatientId);
-        if (guardian.phone !== phone) {
+        if (
+          guardian.phone !== phone ||
+          guardian.guardianPatientId ||
+          (guardian.dob && !this.isAdult(guardian.dob))
+        ) {
           throw invalid('guardianPatientId', 'Choose an adult on this account as the guardian.');
         }
+      } else if (!this.isAdult(dob)) {
+        throw invalid(
+          'guardianPatientId',
+          'Add a child with an adult on this account as guardian.',
+        );
       }
       // The clinic may have registered this person already; signing in claimed that record.
       const existing = await tx.patient.findFirst({
@@ -249,6 +260,15 @@ export class PortalService {
         { consents: pending.join(',') },
       );
     }
+  }
+
+  /** 18 or older today (IST). */
+  private isAdult(dob: Date): boolean {
+    const [year, rest] = [
+      Number(istDate(this.s.now()).slice(0, 4)),
+      istDate(this.s.now()).slice(4),
+    ];
+    return dob.toISOString().slice(0, 10) <= `${year - 18}${rest}`;
   }
 
   private dob(raw: string): Date {
