@@ -133,6 +133,7 @@ describe('clinic setup', () => {
       horizonDays: 30,
       sameDayCutoffMinutes: 60,
       overbookPerDay: 2,
+      noShowAfterMinutes: 30,
     });
     const put = await call('PUT', '/booking-rules', adminA, {
       horizonDays: 14,
@@ -140,7 +141,27 @@ describe('clinic setup', () => {
       overbookPerDay: 1,
     });
     expect(put.statusCode).toBe(200);
-    expect((await call('GET', '/booking-rules', desk)).json().horizonDays).toBe(14);
+    expect((await call('GET', '/booking-rules', desk)).json()).toMatchObject({
+      horizonDays: 14,
+      noShowAfterMinutes: 30,
+    });
+    const off = await call('PUT', '/booking-rules', adminA, {
+      horizonDays: 14,
+      sameDayCutoffMinutes: 120,
+      overbookPerDay: 1,
+      noShowAfterMinutes: null,
+    });
+    expect(off.json().noShowAfterMinutes).toBeNull();
+    expect(
+      (
+        await call('PUT', '/booking-rules', adminA, {
+          horizonDays: 14,
+          sameDayCutoffMinutes: 120,
+          overbookPerDay: 1,
+          noShowAfterMinutes: 721,
+        })
+      ).statusCode,
+    ).toBe(400);
     expect(
       (
         await call('PUT', '/booking-rules', adminA, {

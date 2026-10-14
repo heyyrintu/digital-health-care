@@ -432,14 +432,17 @@ export class AppointmentService {
       include: { ...include, history: { orderBy: { at: 'asc' } } },
     });
     if (!row) throw NOT_FOUND();
-    const names = await this.names([row.doctorUserId, ...row.history.map((h) => h.actorUserId)]);
+    const names = await this.names([
+      row.doctorUserId,
+      ...row.history.flatMap((h) => (h.actorUserId ? [h.actorUserId] : [])),
+    ]);
     return {
       ...this.toAppointment(row, names),
       history: row.history.map((h) => ({
         fromStatus: h.fromStatus,
         toStatus: h.toStatus,
         actorUserId: h.actorUserId,
-        actorName: names.get(h.actorUserId) ?? null,
+        actorName: h.actorUserId ? (names.get(h.actorUserId) ?? null) : null,
         note: h.note,
         at: h.at.toISOString(),
       })),

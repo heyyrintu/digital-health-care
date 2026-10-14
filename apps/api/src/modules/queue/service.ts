@@ -4,6 +4,7 @@ import type {
   CreatedDisplayScreen,
   DisplayBoard,
   DisplayScreen,
+  FollowUp,
   QueueQuery,
   QueueResponse,
   Role,
@@ -17,6 +18,7 @@ import { AppError } from '../../errors';
 import type { Services } from '../../services';
 import { AppointmentService } from '../appointments/service';
 import { writeAudit } from '../audit/write';
+import { toSummary, withTags } from '../patients/service';
 
 interface Actor {
   userId: string;
@@ -37,7 +39,11 @@ export function waitingOrder(a: Appointment, b: Appointment): number {
 }
 
 /** Groups a day's appointments into the queue tabs, each in its working order. */
-export function toQueue(date: string, all: Appointment[]): QueueResponse {
+export function toQueue(
+  date: string,
+  all: Appointment[],
+  followUps: FollowUp[] = [],
+): QueueResponse {
   const by = (statuses: Appointment['status'][]) => all.filter((a) => statuses.includes(a.status));
   const inConsultation = by(['in_consultation']).sort(
     (a, b) => time(a.consultationStartedAt) - time(b.consultationStartedAt),
@@ -53,12 +59,27 @@ export function toQueue(date: string, all: Appointment[]): QueueResponse {
     closed: by(['cancelled', 'no_show', 'rescheduled']).sort(
       (a, b) => time(a.startAt) - time(b.startAt),
     ),
+    followUps,
     averageConsultationMinutes:
       durations.length > 0
         ? Math.round((durations.reduce((s, d) => s + d, 0) / durations.length) * 10) / 10
         : null,
   };
 }
+
+const toDbDate = (date: string) => new Date(`${date}T00:00:00.000Z`);
+const fromDbDate = (date: Date) => date.toISOString().slice(0, 10);
+const istTime = (instant: Date) =>
+  new Date(instant.getTime() + 330 * 60_000).toISOString().slice(11, 16);
+
+/** A booking that still counts as the patient coming back. */
+const GOING_AHEAD: Appointment['status'][] = [
+  'pending',
+  'confirmed',
+  'checked_in',
+  'in_consultation',
+  'completed',
+];
 
 const NOT_FOUND = () => new AppError(404, 'NOT_FOUND', 'Not found.');
 const BAD_SCREEN = () =>
@@ -84,12 +105,87 @@ export class QueueService {
 
   async queue(actor: Actor, query: QueueQuery): Promise<QueueResponse> {
     const date = query.date ?? istDate(this.s.now());
-    const all = await this.appointments.list(actor, {
-      date,
-      doctorId: query.doctorId,
-      clinicId: query.clinicId,
+    const [all, followUps] = await Promise.all([
+      this.appointments.list(actor, { date, doctorId: query.doctorId, clinicId: query.clinicId }),
+      this.followUps(actor, { ...query, date }),
+    ]);
+    return toQueue(date, all, followUps);
+  }
+
+  /**
+   * Patients whose consultation notes set a follow-up for this day, with the doctor and
+   * clinic of that visit, and the first later booking with the same doctor if one exists.
+   */
+  async followUps(actor: Actor, query: QueueQuery & { date: string }): Promise<FollowUp[]> {
+    const rows = await withTenant(this.s.db, actor.organisationId, async (tx) => {
+      const consultations = await tx.consultation.findMany({
+        where: {
+          followUpDate: toDbDate(query.date),
+          appointment: { doctorUserId: query.doctorId, clinicId: query.clinicId },
+        },
+        include: { appointment: { include: { patient: { include: withTags } } } },
+        orderBy: { appointment: { startAt: 'asc' } },
+        take: 500,
+      });
+      const later =
+        consultations.length === 0
+          ? []
+          : await tx.appointment.findMany({
+              where: {
+                patientId: { in: [...new Set(consultations.map((c) => c.patientId))] },
+                status: { in: GOING_AHEAD },
+                startAt: {
+                  gt: new Date(
+                    Math.min(...consultations.map((c) => c.appointment.startAt.getTime())),
+                  ),
+                },
+              },
+              select: {
+                id: true,
+                patientId: true,
+                doctorUserId: true,
+                date: true,
+                startAt: true,
+                status: true,
+              },
+              orderBy: { startAt: 'asc' },
+            });
+      return consultations.map((c) => ({
+        consultation: c,
+        booking:
+          later.find(
+            (b) =>
+              b.patientId === c.patientId &&
+              b.doctorUserId === c.appointment.doctorUserId &&
+              b.startAt > c.appointment.startAt,
+          ) ?? null,
+      }));
     });
-    return toQueue(date, all);
+    const names = await this.doctorNames(rows.map((r) => r.consultation.appointment.doctorUserId));
+    return rows.map(({ consultation: c, booking }) => ({
+      visitAppointmentId: c.appointmentId,
+      visitDate: fromDbDate(c.appointment.date),
+      followUpDate: query.date,
+      patient: toSummary(c.appointment.patient),
+      doctorUserId: c.appointment.doctorUserId,
+      doctorName: names.get(c.appointment.doctorUserId) ?? null,
+      clinicId: c.appointment.clinicId,
+      booking: booking && {
+        id: booking.id,
+        date: fromDbDate(booking.date),
+        startTime: istTime(booking.startAt),
+        status: booking.status,
+      },
+    }));
+  }
+
+  private async doctorNames(userIds: string[]): Promise<Map<string, string | null>> {
+    const ids = [...new Set(userIds)];
+    if (ids.length === 0) return new Map();
+    const users = await withAuth(this.s.db, (tx) =>
+      tx.user.findMany({ where: { id: { in: ids } }, select: { id: true, displayName: true } }),
+    );
+    return new Map(users.map((u) => [u.id, u.displayName]));
   }
 
   async listScreens(actor: Actor): Promise<DisplayScreen[]> {

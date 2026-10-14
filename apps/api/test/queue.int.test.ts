@@ -207,3 +207,70 @@ describe('waiting-room screens', () => {
     expect(stored.tokenHash).not.toContain(token);
   });
 });
+
+describe('follow-ups', () => {
+  const NEXT_TUE = '2026-10-13';
+
+  async function followUp(appointmentId: string, patientId: string, date: string) {
+    await h.owner.consultation.create({
+      data: {
+        organisationId: clinics.a.org.id,
+        appointmentId,
+        patientId,
+        doctorUserId: clinics.a.doctor.userId,
+        notesCipher: h.services.cipher.encrypt('{}'),
+        followUpDate: new Date(`${date}T00:00:00.000Z`),
+      },
+    });
+  }
+
+  it('lists patients due back on the day, with their booking when they have one', async () => {
+    const [asha, kamla] = clinics.a.patients.map((p) => p.id) as [string, string];
+    const ashaVisit = await book(asha, { startAt: at(TODAY, '11:00') });
+    const kamlaVisit = await book(kamla, { startAt: at(TODAY, '11:15') });
+    await followUp(ashaVisit.id, asha, NEXT_TUE);
+    await followUp(kamlaVisit.id, kamla, NEXT_TUE);
+    const kamlaBack = await book(kamla, { startAt: at(NEXT_TUE, '10:30') });
+    // A cancelled booking does not count as coming back.
+    const ashaCancelled = await book(asha, { startAt: at(NEXT_TUE, '10:00') });
+    expect((await act(ashaCancelled.id, 'cancel', desk, 'Travelling')).statusCode).toBe(200);
+
+    const res = await call('GET', `/queue?date=${NEXT_TUE}`, desk);
+    const day = QueueResponse.parse(res.json());
+    expect(day.followUps).toMatchObject([
+      {
+        visitAppointmentId: ashaVisit.id,
+        visitDate: TODAY,
+        followUpDate: NEXT_TUE,
+        patient: { id: asha, name: 'Asha Verma' },
+        doctorUserId: clinics.a.doctor.userId,
+        clinicId,
+        booking: null,
+      },
+      {
+        visitAppointmentId: kamlaVisit.id,
+        patient: { id: kamla },
+        booking: { id: kamlaBack.id, date: NEXT_TUE, startTime: '10:30', status: 'confirmed' },
+      },
+    ]);
+    // Follow-ups are their own list: the day's bookings still show under Booked.
+    expect(day.booked.map((a) => a.id)).toEqual([kamlaBack.id]);
+
+    expect((await queue()).followUps).toEqual([]);
+    const otherDoctor = await call(
+      'GET',
+      `/queue?date=${NEXT_TUE}&doctorId=${clinics.a.admin.userId}`,
+      desk,
+    );
+    expect(QueueResponse.parse(otherDoctor.json()).followUps).toEqual([]);
+  });
+
+  it('never shows another clinic’s follow-ups', async () => {
+    const [asha] = clinics.a.patients.map((p) => p.id) as [string];
+    const visit = await book(asha, { startAt: at(TODAY, '11:00') });
+    await followUp(visit.id, asha, NEXT_TUE);
+    const otherAdmin = await staffLogin(h, 'clinic-b', clinics.b.admin);
+    const res = await call('GET', `/queue?date=${NEXT_TUE}`, otherAdmin);
+    expect(QueueResponse.parse(res.json()).followUps).toEqual([]);
+  });
+});
