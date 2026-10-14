@@ -18,7 +18,9 @@ To check when a doctor is free, open **Availability**, choose the doctor, clinic
 
 To book, open the patient's page and choose **Book appointment** (or **Appointments → Book appointment** and search for the patient). Pick the doctor, clinic, consultation type and date, choose a free slot, add the reason if they gave one, and choose **Book**. Taken slots are marked *taken*; if the doctor agrees to see an extra patient, tick **Allow booking into a taken slot (overbook)** first (the clinic sets how many per doctor per day). WhatsApp/SMS confirmations will follow once messaging is set up.
 
-On the **Queue**: **Reschedule** moves a booking to another slot (the old one shows as Rescheduled); **Cancel appointment** asks for the reason; **Mark no-show** appears once the slot time has passed.
+On the **Queue**: **Reschedule** moves a booking to another slot (the old one shows as Rescheduled); **Cancel appointment** asks for the reason; **Mark no-show** appears once the slot time has passed. If you do nothing, a booking nobody checked in becomes a no-show by itself a while after its slot ends (30 minutes unless the clinic changed it), and the slot is free again.
+
+**Follow-ups** on the Queue lists patients the doctor asked to come back that day, with the visit they came from. If they have booked, the row shows when; if not, it says *Not booked yet* and **Book follow-up** opens the booking page for them on that day.
 
 ## Printing the prescription
 Once the doctor signs, the patient's card on the **Queue** shows **Print prescription** with its number (for example *Print prescription SG-00042*). It opens the signed PDF in a new tab; print it from there. If the doctor amends it, the button prints the newest signed version. If the doctor voids it, the button reads *Prescription … (void)* and opens the copy stamped VOID: do not hand that one over. You see only the number, never the prescription's contents, on the card.
