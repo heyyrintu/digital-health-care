@@ -159,11 +159,11 @@ describe('in the database (row-level security)', () => {
       JOIN pg_namespace n ON n.oid = c.relnamespace AND n.nspname = 'public'
       JOIN pg_attribute a ON a.attrelid = c.oid AND a.attname = 'organisation_id' AND NOT a.attisdropped
       WHERE c.relkind = 'r'
-        AND c.relname NOT IN ('sessions', 'otp_challenges')
+        AND c.relname NOT IN ('sessions', 'otp_challenges', 'push_devices')
         AND (NOT c.relrowsecurity OR NOT EXISTS (
           SELECT 1 FROM pg_policy p WHERE p.polrelid = c.oid AND 'dhc_app'::regrole = ANY (p.polroles)
         ))`;
-    // sessions and otp_challenges are identity tables reachable only by dhc_auth.
+    // sessions, otp_challenges and push_devices are identity tables reachable only by dhc_auth.
     expect(unprotected).toEqual([]);
   });
 });

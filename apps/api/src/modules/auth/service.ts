@@ -10,6 +10,7 @@ import { matchTotpStep } from '../../auth/totp';
 import { AppError } from '../../errors';
 import type { Services } from '../../services';
 import { writeAudit } from '../audit/write';
+import { revokePushDevicesForSessions } from '../devices/revoke';
 
 const OTP_TTL_MS = 5 * 60_000;
 const OTP_MAX_ATTEMPTS = 5;
@@ -337,6 +338,7 @@ export class AuthService {
             where: { id: reused.id },
             data: { revokedAt: now, revokedReason: 'refresh_token_reuse' },
           });
+          await revokePushDevicesForSessions(tx, [reused.id], 'refresh_token_reuse', now);
           await writeAudit(tx, request, {
             action: 'auth.refresh.reuse_detected',
             organisationId: reused.organisationId,
@@ -367,6 +369,7 @@ export class AuthService {
           where: { id: session.id },
           data: { revokedAt: now, revokedReason: 'access_removed' },
         });
+        await revokePushDevicesForSessions(tx, [session.id], 'access_removed', now);
         return null;
       }
 
@@ -407,6 +410,7 @@ export class AuthService {
         where: { id: sessionId, revokedAt: null },
         data: { revokedAt: this.s.now(), revokedReason: 'logout' },
       });
+      await revokePushDevicesForSessions(tx, [sessionId], 'logout', this.s.now());
       await writeAudit(tx, request, {
         action: 'auth.logout',
         organisationId,

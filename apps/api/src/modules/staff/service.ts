@@ -14,6 +14,7 @@ import { AppError } from '../../errors';
 import type { Services } from '../../services';
 import { writeAudit } from '../audit/write';
 import { INVITE_TTL_MS, toStaffInvite } from '../invites/service';
+import { liveSessionIds, revokePushDevicesForSessions } from '../devices/revoke';
 
 interface Actor {
   userId: string;
@@ -111,12 +112,13 @@ export class StaffService {
         select: { userId: true },
       });
       if (!session) throw new AppError(404, 'NOT_FOUND', 'Not found.');
+      const now = this.s.now();
       await tx.session.update({
         where: { id: sessionId },
-        data: { revokedAt: this.s.now(), revokedReason: 'admin_signout' },
+        data: { revokedAt: now, revokedReason: 'admin_signout' },
       });
-      // TODO(push devices): once push_devices lands, also call
-      // revokePushDevicesForSessions(tx, [sessionId], 'admin_signout').
+      // The device stops getting push notifications in the same transaction.
+      await revokePushDevicesForSessions(tx, [sessionId], 'admin_signout', now);
       await writeAudit(tx, request, {
         action: 'staff.session.revoked',
         organisationId: actor.organisationId,
@@ -136,16 +138,24 @@ export class StaffService {
   ): Promise<{ revoked: number }> {
     await this.requireStaff(actor, targetUserId);
     return withAuth(this.s.db, async (tx) => {
+      const now = this.s.now();
+      // Only this clinic's staff sessions: their sessions elsewhere stay signed in.
+      const ending = (
+        await tx.session.findMany({
+          where: {
+            userId: targetUserId,
+            organisationId: actor.organisationId,
+            role: { not: 'patient' },
+            revokedAt: null,
+          },
+          select: { id: true },
+        })
+      ).map((r) => r.id);
       const { count } = await tx.session.updateMany({
-        where: {
-          userId: targetUserId,
-          organisationId: actor.organisationId,
-          role: { not: 'patient' },
-          revokedAt: null,
-        },
-        data: { revokedAt: this.s.now(), revokedReason: 'admin_signout' },
+        where: { id: { in: ending }, revokedAt: null },
+        data: { revokedAt: now, revokedReason: 'admin_signout' },
       });
-      // TODO(push devices): revoke this person's push devices for these sessions too.
+      await revokePushDevicesForSessions(tx, ending, 'admin_signout', now);
       await writeAudit(tx, request, {
         action: 'staff.sessions.revoked_all',
         organisationId: actor.organisationId,
@@ -232,10 +242,12 @@ export class StaffService {
           lockedUntil: null,
         },
       });
+      const ending = await liveSessionIds(tx, { userId: targetUserId, staffOnly: true });
       const revoked = await tx.session.updateMany({
-        where: { userId: targetUserId, revokedAt: null, role: { not: 'patient' } },
+        where: { id: { in: ending }, revokedAt: null },
         data: { revokedAt: now, revokedReason: 'authenticator_reset' },
       });
+      await revokePushDevicesForSessions(tx, ending, 'authenticator_reset', now);
       await writeAudit(tx, request, {
         action: 'staff.authenticator.reset',
         organisationId: actor.organisationId,

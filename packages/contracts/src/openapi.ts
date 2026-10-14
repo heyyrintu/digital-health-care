@@ -154,6 +154,13 @@ import {
   QueueResponse,
 } from './queue';
 import { CreateTagBody, Tag, TagList, UpdateTagBody } from './tags';
+import { PushDevice, PushDeviceList, RegisterPushDeviceBody } from './devices';
+import {
+  SyncMedicinesQuery,
+  SyncMedicinesResponse,
+  SyncTodayQuery,
+  SyncTodayResponse,
+} from './sync';
 
 interface Operation {
   method: 'get' | 'post' | 'put' | 'patch' | 'delete';
@@ -1098,6 +1105,48 @@ const operations: Operation[] = [
       'Clinic figures for a range of IST days: visits, no-shows, new patients, prescriptions and collections (clinic admin)',
     query: DashboardQuery,
     response: DashboardReport,
+  },
+  {
+    method: 'post',
+    path: '/push-devices',
+    operationId: 'registerPushDevice',
+    summary:
+      'Receive push notifications on this device for the signed-in session; the same token moves to this session',
+    body: RegisterPushDeviceBody,
+    response: PushDevice,
+    status: 201,
+  },
+  {
+    method: 'get',
+    path: '/push-devices',
+    operationId: 'listPushDevices',
+    summary: 'Your devices that receive push notifications in this clinic',
+    response: PushDeviceList,
+  },
+  {
+    method: 'delete',
+    path: '/push-devices/{id}',
+    operationId: 'removePushDevice',
+    summary: 'Stop push notifications to one of your devices',
+    pathParams: ['id'],
+    status: 204,
+  },
+  {
+    method: 'get',
+    path: '/sync/medicines',
+    operationId: 'syncMedicines',
+    summary:
+      'Medicines changed since a cursor, with the clinic’s linked names, for the offline cache (doctor)',
+    query: SyncMedicinesQuery,
+    response: SyncMedicinesResponse,
+  },
+  {
+    method: 'get',
+    path: '/sync/today',
+    operationId: 'syncToday',
+    summary: 'Today’s queue and the doctor’s templates for the offline cache (staff)',
+    query: SyncTodayQuery,
+    response: SyncTodayResponse,
   },
 ];
 

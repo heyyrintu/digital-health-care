@@ -37,8 +37,28 @@ afterAll(async () => {
   await h.owner.$disconnect();
 });
 
-const call = (method: string, url: string, tokens: TokenResponse) =>
-  h.app.inject({ method: method as 'GET', url: `/v1${url}`, headers: bearer(tokens) });
+const call = (method: string, url: string, tokens: TokenResponse, payload?: unknown) =>
+  h.app.inject({
+    method: method as 'GET',
+    url: `/v1${url}`,
+    headers: bearer(tokens),
+    payload: payload as object,
+  });
+
+/** Registers the session's device for push notifications (the Clinic app does this). */
+async function registerPush(tokens: TokenResponse, n: number) {
+  const res = await call('POST', '/push-devices', tokens, {
+    platform: 'ios',
+    appVariant: 'clinic',
+    expoPushToken: `ExponentPushToken[staff-device-${n}]`,
+    deviceName: `Device ${n}`,
+  });
+  expect(res.statusCode, res.body).toBe(201);
+  return res.json().id as string;
+}
+
+const pushRevoked = async (id: string) =>
+  (await h.owner.pushDevice.findUniqueOrThrow({ where: { id } })).revokedReason;
 
 const sessionsOf = async (userId: string, tokens = admin) => {
   const res = await call('GET', `/staff/members/${userId}/sessions`, tokens);
@@ -125,5 +145,24 @@ describe('staff devices', () => {
       entityId: clinics.a.doctor.userId,
       metadata: { sessionsRevoked: 2 },
     });
+  });
+
+  it('stops push notifications to the devices it signs out, in the same step', async () => {
+    const onLaptop = await registerPush(laptop, 1);
+    const onPhone = await registerPush(phone, 2);
+    const atB = await registerPush(elsewhere, 3);
+
+    const [first] = await sessionsOf(clinics.a.doctor.userId);
+    const one = await call('POST', `/staff/sessions/${first!.id}/revoke`, admin);
+    expect(one.statusCode, one.body).toBe(204);
+    const afterOne = await Promise.all([onLaptop, onPhone].map(pushRevoked));
+    expect(afterOne.filter((r) => r === 'admin_signout')).toHaveLength(1);
+
+    const all = await call('POST', `/staff/members/${clinics.a.doctor.userId}/sign-out-all`, admin);
+    expect(all.statusCode, all.body).toBe(200);
+    expect(await pushRevoked(onLaptop)).toBe('admin_signout');
+    expect(await pushRevoked(onPhone)).toBe('admin_signout');
+    // The doctor's device at the other clinic keeps getting notifications.
+    expect(await pushRevoked(atB)).toBeNull();
   });
 });

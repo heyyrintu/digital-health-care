@@ -10,6 +10,7 @@ import { authRoutes } from './modules/auth/routes';
 import { inviteRoutes } from './modules/invites/routes';
 import { patientRoutes } from './modules/patients/routes';
 import { clinicalRoutes } from './modules/clinical/routes';
+import { deviceRoutes } from './modules/devices/routes';
 import { doctorRoutes } from './modules/doctors/routes';
 import { medicineRoutes } from './modules/medicines/routes';
 import { prescribingRoutes } from './modules/prescribing/routes';
@@ -19,6 +20,7 @@ import { reportRoutes } from './modules/reports/routes';
 import { settingsRoutes } from './modules/settings/routes';
 import { schedulingRoutes } from './modules/scheduling/routes';
 import { staffRoutes } from './modules/staff/routes';
+import { syncRoutes } from './modules/sync/routes';
 import { systemRoutes } from './routes/system';
 import type { Services } from './services';
 
@@ -95,6 +97,8 @@ export function buildApp({
     app.register(auditRoutes, { prefix: '/v1', services });
     app.register(reportRoutes, { prefix: '/v1', services });
     app.register(settingsRoutes, { prefix: '/v1', services });
+    app.register(deviceRoutes, { prefix: '/v1', services });
+    app.register(syncRoutes, { prefix: '/v1', services });
     app.addHook('onClose', async () => services.db.$disconnect());
   }
 
