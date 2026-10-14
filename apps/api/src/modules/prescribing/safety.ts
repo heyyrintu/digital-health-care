@@ -11,6 +11,7 @@ import {
 } from '@dhc/safety';
 import { z } from 'zod';
 import { historyIds, liveId } from '../patients/merged';
+import { readSettings } from '../settings/service';
 
 const Steps = z.array(DoseStep);
 const num = (d: Prisma.Decimal | null) => (d === null ? null : Number(d));
@@ -228,7 +229,10 @@ export async function checkAndRecord(
   },
 ): Promise<{ summary: SafetySummary; findings: SafetyFinding[] }> {
   const input = await loadInput(tx, opts.visit, opts.items);
-  const findings = checkPrescription(input);
+  // Safety tuning (PRD §9.2): the clinic may hide the non-critical "Visibility only" rules.
+  // The settings allow no others, so blocks and the locked rules always show.
+  const hidden = new Set<string>((await readSettings(tx, opts.organisationId)).hiddenSafetyRules);
+  const findings = checkPrescription(input).filter((f) => !hidden.has(f.ruleId));
   const version = input.facts.version;
   const existing = await tx.safetyAlert.findMany({
     where: { prescriptionId: opts.prescriptionId },
@@ -284,7 +288,8 @@ export async function checkAndRecord(
         where: { id: r.id },
         data: {
           resolvedAt: opts.now,
-          ...(r.action === null
+          // A rule hidden since it was shown was not resolved by the doctor's change.
+          ...(r.action === null && !hidden.has(r.ruleId)
             ? { action: 'changed', actionByUserId: opts.actorUserId, actionAt: opts.now }
             : {}),
         },

@@ -25,6 +25,7 @@ import type { Services } from '../../services';
 import { AppointmentService } from '../appointments/service';
 import { writeAudit } from '../audit/write';
 import { assertNotMerged, historyIds, liveId } from '../patients/merged';
+import { assertChartAccess } from './access';
 
 interface Actor {
   userId: string;
@@ -90,6 +91,7 @@ export class ClinicalService {
       const patient = await tx.patient.findUnique({ where: { id } });
       if (!patient) throw NOT_FOUND();
       patientId = liveId(patient);
+      await assertChartAccess(tx, actor, patientId);
       const live = { patientId, removedAt: null };
       const order = { createdAt: 'asc' } as const;
       // One after another: a transaction is one connection, which runs one query at a time.
@@ -222,6 +224,7 @@ export class ClinicalService {
     reason: string,
   ): Promise<void> {
     await withTenant(this.s.db, actor.organisationId, async (tx) => {
+      await assertChartAccess(tx, actor, patientId);
       const where = { id: entryId, patientId, removedAt: null };
       const data = {
         removedAt: this.s.now(),
@@ -320,6 +323,9 @@ export class ClinicalService {
   ): Promise<ConsultationView> {
     return withTenant(this.s.db, actor.organisationId, async (tx) => {
       const appointment = await this.appointments.detail(tx, appointmentId);
+      if (appointment.doctorUserId !== actor.userId) {
+        await assertChartAccess(tx, actor, appointment.patient.id);
+      }
       const row = await tx.consultation.findUnique({ where: { appointmentId } });
       const vitals = await tx.vitals.findUnique({ where: { appointmentId } });
       await this.audit(tx, request, actor, 'consultation.viewed', 'appointment', appointmentId);
@@ -417,6 +423,7 @@ export class ClinicalService {
       });
       if (!patient) throw NOT_FOUND();
       assertNotMerged(patient);
+      await assertChartAccess(tx, actor, patientId);
       const row = (await create(tx, {
         organisationId: actor.organisationId,
         patientId,
