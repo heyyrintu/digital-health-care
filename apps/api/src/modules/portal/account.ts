@@ -19,10 +19,11 @@ export async function accountPhone(s: Services, userId: string): Promise<string>
 /**
  * The account's patients (PRD §4): records on the verified number, and the dependants they
  * look after. Row-level security already limits this to the organisation; this is what
- * limits it to the family.
+ * limits it to the family. Records merged into another are left out: the kept record
+ * carries their history.
  */
 export function accountPatientsWhere(phone: string): Prisma.PatientWhereInput {
-  return { OR: [{ phone }, { guardian: { phone } }] };
+  return { mergedIntoId: null, OR: [{ phone }, { guardian: { phone } }] };
 }
 
 /** One of the account's patients, or 404 so other people's records stay invisible. */

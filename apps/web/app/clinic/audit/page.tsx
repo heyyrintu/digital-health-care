@@ -22,6 +22,7 @@ const AREAS = [
   { prefix: 'payment.', label: 'audit.area.payment' },
   { prefix: 'receipt.', label: 'audit.area.receipt' },
   { prefix: 'settings.', label: 'audit.area.settings' },
+  { prefix: 'patient_merge.', label: 'audit.area.merges' },
   { prefix: 'consent.', label: 'audit.area.consent' },
 ] as const;
 
