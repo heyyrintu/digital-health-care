@@ -24,6 +24,7 @@ export const DEFAULT_BOOKING_RULES: BookingRules = {
   horizonDays: 30,
   sameDayCutoffMinutes: 60,
   overbookPerDay: 2,
+  noShowAfterMinutes: 30,
 };
 
 const NOT_FOUND = () => new AppError(404, 'NOT_FOUND', 'Not found.');
@@ -53,6 +54,7 @@ const toRules = (r: Prisma.BookingRulesGetPayload<object>): BookingRules => ({
   horizonDays: r.horizonDays,
   sameDayCutoffMinutes: r.sameDayCutoffMinutes,
   overbookPerDay: r.overbookPerDay,
+  noShowAfterMinutes: r.noShowAfterMinutes,
 });
 
 /**

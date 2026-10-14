@@ -3,6 +3,7 @@ import { createHmac, hkdfSync } from 'node:crypto';
 import { FieldCipher } from './auth/field-cipher';
 import { TokenService } from './auth/tokens';
 import type { Config } from './config';
+import { LiveEvents } from './live';
 import { LocalFileStore, type FileStore } from './files';
 import { TestKeySigner, type PrescriptionSigner } from './signing/signer';
 
@@ -28,6 +29,8 @@ export interface Services {
   /** Null when signing is not set up on this server: signing then answers 503. */
   signer: PrescriptionSigner | null;
   files: FileStore;
+  /** Queue changes from the database, for the live queue and waiting-room streams. */
+  live: LiveEvents;
   now(): Date;
 }
 
@@ -77,6 +80,7 @@ export function createServices(
           ? new TestKeySigner(JWT_SECRET)
           : null,
     files: overrides.files ?? new LocalFileStore(config.FILE_STORE_DIR ?? '.data/files'),
+    live: new LiveEvents(DATABASE_URL),
     now: overrides.now ?? (() => new Date()),
   };
 }
