@@ -331,6 +331,29 @@ describe('prescriptions', () => {
     });
   }
 
+  it('shows a merged duplicate’s visits and prescriptions under the kept record', async () => {
+    const duplicate = (
+      await call('POST', '/patients', desk, { name: 'Neha K', phone: '9811111111' })
+    ).json().id as string;
+    const old = await signedFor(duplicate, 'RX-3');
+    await h.owner.patient.update({
+      where: { id: duplicate },
+      data: { mergedIntoId: neha, mergedAt: new Date() },
+    });
+
+    const rx = PortalPrescriptionList.parse(
+      (await call('GET', '/portal/prescriptions', patient)).json(),
+    );
+    expect(rx.data.map((r) => [r.id, r.patient.id])).toEqual([[old.id, neha]]);
+    expect((await call('GET', `/portal/prescriptions/${old.id}/pdf`, patient)).statusCode).toBe(
+      200,
+    );
+    const visits = PortalAppointmentList.parse(
+      (await call('GET', '/portal/appointments', patient)).json(),
+    );
+    expect(visits.past.map((a) => a.patient.id)).toEqual([neha]);
+  });
+
   it('lists the family’s signed prescriptions and opens their PDFs, never others’', async () => {
     const own = await signedFor(child, 'RX-1');
     const theirs = await signedFor(stranger, 'RX-2');
