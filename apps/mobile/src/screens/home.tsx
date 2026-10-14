@@ -29,7 +29,8 @@ export function Home({ me }: { me: MeResponse }) {
           loading={busy}
           onPress={async () => {
             setBusy(true);
-            await session.signOut();
+            // Signed out on screen even if the keychain could not be cleared.
+            await session.signOut().catch(() => undefined);
           }}
         />
       </Card>

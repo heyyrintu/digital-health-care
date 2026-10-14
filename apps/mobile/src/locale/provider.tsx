@@ -31,9 +31,12 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
   // A choice made before the saved one is read wins over it.
   const chosen = useRef(false);
   useEffect(() => {
-    void SecureStore.getItemAsync(LOCALE_KEY).then((saved) => {
-      if (!chosen.current && (saved === 'en' || saved === 'hi')) setLocaleState(saved);
-    });
+    void SecureStore.getItemAsync(LOCALE_KEY)
+      .then((saved) => {
+        if (!chosen.current && (saved === 'en' || saved === 'hi')) setLocaleState(saved);
+      })
+      // Unreadable keychain: the device language stays.
+      .catch(() => undefined);
   }, []);
 
   const value = useMemo<LocaleContextValue>(
@@ -42,7 +45,7 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
       setLocale: (next) => {
         chosen.current = true;
         setLocaleState(next);
-        void SecureStore.setItemAsync(LOCALE_KEY, next);
+        void SecureStore.setItemAsync(LOCALE_KEY, next).catch(() => undefined);
       },
       t: (key, params) => translate(locale, key, params),
     }),

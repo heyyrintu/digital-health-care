@@ -3,7 +3,7 @@ import { Vitals, VitalsBody, type ConsultationView, type PregnancyStatus } from 
 import { ageFrom, bmiOf, istDateKey } from '@dhc/domain';
 import type { MessageKey } from '@dhc/i18n';
 import { Button, Card, Notice, Text, TextField, useTheme } from '@dhc/ui-native';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 import { errorMessage } from '../../errors';
 import { useLocale } from '../../locale/provider';
@@ -33,9 +33,11 @@ type Draft = Record<(typeof FIELDS)[number]['key'], string>;
 export function VitalsSection({
   view,
   onSaved,
+  onDirty,
 }: {
   view: ConsultationView;
   onSaved: (vitals: Vitals) => void;
+  onDirty: (dirty: boolean) => void;
 }) {
   const { t } = useLocale();
   const theme = useTheme();
@@ -57,6 +59,12 @@ export function VitalsSection({
     waiting ? (waiting.basedOn ?? null) : (view.vitals?.updatedAt ?? null),
   );
   const [busy, setBusy] = useState(false);
+  const [dirty, setDirty] = useState(false);
+  // Reported to the screen, which holds a reload back while any section has unsaved edits.
+  const onDirtyRef = useRef(onDirty);
+  onDirtyRef.current = onDirty;
+  useEffect(() => onDirtyRef.current(dirty), [dirty]);
+  useEffect(() => () => onDirtyRef.current(false), []);
   const [notice, setNotice] = useState<{ tone: 'error' | 'info' | 'success'; text: string } | null>(
     null,
   );
@@ -89,6 +97,7 @@ export function VitalsSection({
         label: `${t('vitals.title')} · ${view.appointment.patient.name}`,
         schema: Vitals,
       });
+      setDirty(false);
       if (result.status === 'saved') {
         setBasedOn(result.data.updatedAt);
         onSaved(result.data);
@@ -118,7 +127,10 @@ export function VitalsSection({
           editable={canType}
           maxLength={6}
           value={draft[f.key]}
-          onChangeText={(v) => setDraft({ ...draft, [f.key]: v })}
+          onChangeText={(v) => {
+            setDraft({ ...draft, [f.key]: v });
+            setDirty(true);
+          }}
         />
       ))}
       {bmi !== null && <Text variant="muted">{t('vitals.bmi', { bmi })}</Text>}
@@ -133,7 +145,10 @@ export function VitalsSection({
                 label={t(p ? `vitals.pregnancy.${p}` : 'vitals.pregnancy.none')}
                 accessibilityState={{ selected: pregnancy === p }}
                 disabled={!canType}
-                onPress={() => setPregnancy(p)}
+                onPress={() => {
+                  setPregnancy(p);
+                  setDirty(true);
+                }}
               />
             ))}
           </View>

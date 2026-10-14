@@ -16,12 +16,12 @@ type Request = (
 export function outboxSender(request: Request) {
   return async (item: OutboxItem): Promise<SendOutcome> => {
     try {
-      await request(item.method, item.path, {
+      const result = await request(item.method, item.path, {
         schema: z.unknown(),
         body: item.body,
         idempotencyKey: item.id,
       });
-      return { kind: 'sent' };
+      return { kind: 'sent', result };
     } catch (error) {
       if (
         error instanceof ApiError &&

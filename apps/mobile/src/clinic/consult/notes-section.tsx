@@ -8,7 +8,7 @@ import {
 import { searchIcd10 } from '@dhc/domain';
 import type { MessageKey } from '@dhc/i18n';
 import { Button, Card, Notice, Text, TextField, useTheme } from '@dhc/ui-native';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { ApiError } from '@dhc/api-client';
 import { errorMessage } from '../../errors';
@@ -48,9 +48,11 @@ export function followUpValue(input: string): string | null | undefined {
 export function NotesSection({
   view,
   onSaved,
+  onDirty,
 }: {
   view: ConsultationView;
   onSaved: (record: ConsultationRecord) => void;
+  onDirty: (dirty: boolean) => void;
 }) {
   const { t } = useLocale();
   const theme = useTheme();
@@ -69,6 +71,11 @@ export function NotesSection({
   const [revision, setRevision] = useState(waiting?.revision ?? view.consultation?.revision ?? 0);
   const [dx, setDx] = useState('');
   const [dirty, setDirty] = useState(false);
+  // Reported to the screen, which holds a reload back while any section has unsaved edits.
+  const onDirtyRef = useRef(onDirty);
+  onDirtyRef.current = onDirty;
+  useEffect(() => onDirtyRef.current(dirty), [dirty]);
+  useEffect(() => () => onDirtyRef.current(false), []);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ tone: 'error' | 'info' | 'success'; text: string } | null>(
     null,

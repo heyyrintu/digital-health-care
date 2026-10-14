@@ -76,10 +76,29 @@ export function ConsultationScreen({ appointmentId }: { appointmentId: string })
     (i) => i.status === 'pending' && i.path.startsWith(`/appointments/${appointmentId}/`),
   ).length;
   const before = useRef(waiting);
+  // A reload remounts the sections, so it waits while any of them holds unsaved edits.
+  const dirty = useRef(new Set<string>());
+  const reloadWhenClean = useRef(false);
   useEffect(() => {
-    if (waiting < before.current) void load();
+    if (waiting < before.current) {
+      if (dirty.current.size > 0) reloadWhenClean.current = true;
+      else void load();
+    }
     before.current = waiting;
   }, [waiting, load]);
+  const markDirty = useCallback(
+    (section: string, isDirty: boolean) => {
+      if (isDirty) dirty.current.add(section);
+      else dirty.current.delete(section);
+      if (dirty.current.size === 0 && reloadWhenClean.current) {
+        reloadWhenClean.current = false;
+        void load();
+      }
+    },
+    [load],
+  );
+  const chartRef = useRef(chart);
+  chartRef.current = chart;
 
   const back = (
     <Button variant="ghost" label={t('mobile.clinic.back')} onPress={() => router.back()} />
@@ -97,10 +116,15 @@ export function ConsultationScreen({ appointmentId }: { appointmentId: string })
     );
   }
 
-  // A save updates the copy kept for offline too, so reopening without network shows it.
-  const keep = (next: ConsultationView) => {
-    setView(next);
-    void visits.put(next, chart).catch(() => undefined);
+  // A save updates the copy kept for offline too, so reopening without network shows it. It
+  // patches the latest view, so two saves answering out of order never undo each other.
+  const keep = (patch: (prev: ConsultationView) => ConsultationView) => {
+    setView((prev) => {
+      if (!prev) return prev;
+      const next = patch(prev);
+      void visits.put(next, chartRef.current).catch(() => undefined);
+      return next;
+    });
   };
 
   const left = (
@@ -111,6 +135,7 @@ export function ConsultationScreen({ appointmentId }: { appointmentId: string })
           editable={view.canEdit && !offline}
           onChange={(next) => {
             setChart(next);
+            chartRef.current = next;
             void visits.put(view, next).catch(() => undefined);
           }}
         />
@@ -118,12 +143,14 @@ export function ConsultationScreen({ appointmentId }: { appointmentId: string })
       <NotesSection
         key={`notes-${view.consultation?.revision ?? 0}`}
         view={view}
-        onSaved={(record) => keep({ ...view, consultation: record })}
+        onDirty={(d) => markDirty('notes', d)}
+        onSaved={(record) => keep((prev) => ({ ...prev, consultation: record }))}
       />
       <VitalsSection
         key={`vitals-${view.vitals?.updatedAt ?? 'none'}`}
         view={view}
-        onSaved={(vitals) => keep({ ...view, vitals })}
+        onDirty={(d) => markDirty('vitals', d)}
+        onSaved={(vitals) => keep((prev) => ({ ...prev, vitals }))}
       />
     </>
   );
@@ -132,6 +159,7 @@ export function ConsultationScreen({ appointmentId }: { appointmentId: string })
       key={`rx-${rx.prescription?.revision ?? 0}-${rx.prescription?.status ?? 'none'}`}
       view={view}
       rx={rx}
+      onDirty={(d) => markDirty('rx', d)}
       onChanged={load}
     />
   ) : (

@@ -146,6 +146,19 @@ describe('SessionManager across sign-outs', () => {
     await expect(manager.getAccessToken()).resolves.toBeNull();
   });
 
+  it('does not clear a newer sign-in’s saved session when an older one finishes late', async () => {
+    const { manager, api, stored } = setup();
+    let answerA: (value: MeResponse) => void = () => undefined;
+    api.me.mockImplementationOnce(() => new Promise((resolve) => (answerA = resolve)));
+    const a = manager.signIn('demo-clinic', tokens(1));
+    const b = manager.signIn('demo-clinic', tokens(2));
+    await b;
+    answerA(me);
+    await a;
+    expect(stored()).toEqual({ organisation: 'demo-clinic', refreshToken: 'r2' });
+    expect(manager.getState().status).toBe('signed_in');
+  });
+
   it('keeps nothing when who signed in cannot be loaded', async () => {
     const { manager, api, stored } = setup();
     api.me.mockRejectedValueOnce(new TypeError('Network request failed'));

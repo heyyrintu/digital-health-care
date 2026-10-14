@@ -20,6 +20,8 @@ export const visits = new VisitCache(fileStore, () => istDateKey(new Date()));
 const send = outboxSender((method, path, options) => api.request(method, path, options));
 
 let loaded: Promise<void> | null = null;
+/** The last sign-out's clean-up; the next session's first read waits for it. */
+let clearing: Promise<unknown> = Promise.resolve();
 
 /**
  * The body of a notes or vitals save still on this device for `path`, if any: waiting, or
@@ -32,7 +34,9 @@ export function waitingBody<T>(kind: 'notes' | 'vitals', path: string): T | null
 
 /** Reads what this device saved, once. */
 export function loadOffline(): Promise<void> {
-  loaded ??= Promise.all([outbox.load(), today.load(), medicines.load()]).then(() => undefined);
+  loaded ??= clearing
+    .then(() => Promise.all([outbox.load(), today.load(), medicines.load()]))
+    .then(() => undefined);
   return loaded;
 }
 
@@ -71,7 +75,14 @@ let wasSignedIn = session.getState().status === 'signed_in';
 session.subscribe(() => {
   const signedIn = session.getState().status === 'signed_in';
   if (wasSignedIn && !signedIn) {
-    void Promise.all([outbox.clear(), today.clear(), medicines.clear(), visits.clear()]);
+    // Kept, not fire-and-forget: a late delete must not remove what the next person writes.
+    clearing = Promise.all([
+      outbox.clear(),
+      today.clear(),
+      medicines.clear(),
+      visits.clear(),
+    ]).catch(() => undefined);
+    loaded = null;
   }
   wasSignedIn = signedIn;
 });

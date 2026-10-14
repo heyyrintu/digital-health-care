@@ -48,10 +48,12 @@ export function PrescriptionSection({
   view,
   rx,
   onChanged,
+  onDirty,
 }: {
   view: ConsultationView;
   rx: PrescriptionView;
   onChanged: () => Promise<void>;
+  onDirty: (dirty: boolean) => void;
 }) {
   const { t } = useLocale();
   const theme = useTheme();
@@ -64,6 +66,11 @@ export function PrescriptionSection({
   );
   const [saved, setSaved] = useState<Prescription | null>(rx.prescription);
   const [dirty, setDirty] = useState(false);
+  // Reported to the screen, which holds a reload back while any section has unsaved edits.
+  const onDirtyRef = useRef(onDirty);
+  onDirtyRef.current = onDirty;
+  useEffect(() => onDirtyRef.current(dirty), [dirty]);
+  useEffect(() => () => onDirtyRef.current(false), []);
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ tone: Tone; text: string } | null>(null);
   const editable = rx.canEdit;

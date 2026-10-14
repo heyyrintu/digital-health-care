@@ -22,7 +22,11 @@ export const fileStore: KeyValueStore = {
     }
   },
   async set(key, value) {
-    new File(Paths.document, `${key}.json`).write(JSON.stringify(value));
+    // Written aside and moved over the old copy, so a write cut short (the app killed
+    // mid-save) leaves the previous file whole instead of half a file.
+    const tmp = new File(Paths.document, `${key}.tmp.json`);
+    tmp.write(JSON.stringify(value));
+    await tmp.move(new File(Paths.document, `${key}.json`), { overwrite: true });
   },
   async remove(key) {
     const file = new File(Paths.document, `${key}.json`);

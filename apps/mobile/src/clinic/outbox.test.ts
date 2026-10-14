@@ -163,3 +163,45 @@ describe('Outbox across a sign-out', () => {
     expect(box.getItems().map((i) => i.id)).toEqual(['first-attempt-key']);
   });
 });
+
+describe('Outbox while a save is being sent', () => {
+  const notes = (revision: number, text: string) => ({
+    kind: 'notes' as const,
+    method: 'PUT' as const,
+    path: '/appointments/a1/consultation',
+    body: { notes: { plan: text }, followUpDate: null, revision },
+    label: 'Notes',
+  });
+
+  it('keeps a newer save and moves it onto the revision the send left', async () => {
+    const { box } = setup();
+    await box.add(notes(3, 'first'));
+    let release: () => void = () => undefined;
+    const flushing = box.flush(async () => {
+      await new Promise<void>((resolve) => (release = resolve));
+      return { kind: 'sent', result: { revision: 4 } };
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await box.add(notes(3, 'second'));
+    release();
+    await flushing;
+    expect(box.getItems().map((i) => i.body)).toEqual([
+      { notes: { plan: 'second' }, followUpDate: null, revision: 4 },
+    ]);
+  });
+
+  it('marks the one being sent failed when refused, and keeps the newer save', async () => {
+    const { box } = setup();
+    await box.add(notes(3, 'first'));
+    let release: () => void = () => undefined;
+    const flushing = box.flush(async () => {
+      await new Promise<void>((resolve) => (release = resolve));
+      return { kind: 'rejected', message: 'These notes were changed somewhere else.' };
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await box.add(notes(3, 'second'));
+    release();
+    await flushing;
+    expect(box.getItems().map((i) => i.status)).toEqual(['failed', 'pending']);
+  });
+});
