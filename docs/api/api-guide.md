@@ -93,7 +93,7 @@ Implemented in Phase 1 (`apps/api/src/modules/scheduling`; the slot engine is `s
 |---|---|---|
 | Clinics | `GET /clinics`; `POST /clinics` `{name, address?, phone?}`; `PATCH /clinics/{id}` (incl. `active`) | Read: all staff · change: clinic admin |
 | Consultation types | `GET /consultation-types`; `POST` `{name, mode, defaultDurationMin, feePaise, followUpFeePaise?, requiresPrepayment}`; `PATCH /consultation-types/{id}` | Read: all staff · change: clinic admin |
-| Booking rules | `GET /booking-rules`; `PUT /booking-rules` `{horizonDays, sameDayCutoffMinutes, overbookPerDay, noShowAfterMinutes}` (defaults 30, 60, 2 and 30; `noShowAfterMinutes` 0–720 or `null` for off, see §3n) | Read: all staff · change: clinic admin |
+| Booking rules | `GET /booking-rules`; `PUT /booking-rules` `{horizonDays, sameDayCutoffMinutes, overbookPerDay, noShowAfterMinutes}` (defaults 30, 60, 2 and 30; `noShowAfterMinutes` 0–720 or `null` for off, see §3p) | Read: all staff · change: clinic admin |
 | Doctors | `GET /doctors` → active doctors (for pickers) | All staff |
 | Weekly schedules | `GET /availability/versions?doctorId&clinicId&consultationTypeId`; `POST /availability/versions` `{doctorUserId?, clinicId, consultationTypeId, effectiveFrom, weekly, slotMinutes?, bufferMinutes}`; `DELETE /availability/versions/{id}` | Read: all staff · change: the doctor (own) or a clinic admin |
 | Leave, holidays, extra sessions | `GET /availability/exceptions?doctorId&clinicId&from`; `POST /availability/exceptions` `{type, doctorUserId?, clinicId?, consultationTypeId?, startDate, endDate, startTime?, endTime?, reason?}`; `DELETE /availability/exceptions/{id}` | Read: all staff · leave and extra sessions: the doctor (own) or a clinic admin · holidays: clinic admin |
@@ -123,7 +123,7 @@ Implemented in Phase 1 (`apps/api/src/modules/appointments`). Staff booking only
 - **Busy slots:** pending, booked, checked-in, in-consultation and completed appointments mark their slot busy in `GET /slots` for that doctor at every clinic; cancelled, no-show and rescheduled ones free it. Walk-ins hold no slot.
 - **Tokens** number each doctor's patients per clinic per day, in booking order (walk-ins included). A rescheduled booking gets a new token on its new day.
 - **One per day:** a patient cannot hold two active bookings with the same doctor on one day (409; reschedule instead).
-- **Actions and roles:** `confirm` (pending → confirmed; front desk, doctor, admin), `check_in` (pending/confirmed → checked in; on the day only; front desk, doctor), `start` and `complete` (checked in → in consultation → completed; the patient's own doctor only), `cancel` (needs `reason`; front desk, doctor, admin), `no_show` (after the slot starts; front desk, doctor). Anything else gives 409. Staff bookings are created confirmed; walk-ins are created checked in. Bookings nobody checks in become no-shows automatically once the clinic's grace period has passed (§3n).
+- **Actions and roles:** `confirm` (pending → confirmed; front desk, doctor, admin), `check_in` (pending/confirmed → checked in; on the day only; front desk, doctor), `start` and `complete` (checked in → in consultation → completed; the patient's own doctor only), `cancel` (needs `reason`; front desk, doctor, admin), `no_show` (after the slot starts; front desk, doctor). Anything else gives 409. Staff bookings are created confirmed; walk-ins are created checked in. Bookings nobody checks in become no-shows automatically once the clinic's grace period has passed (§3p).
 - **Reschedule** works on pending or confirmed bookings: the new appointment is checked like a fresh booking (its own slot may be the old one's), the old one becomes `rescheduled` and the two are linked (`rescheduledFromId` / `rescheduledToId`).
 - **Audit:** `appointment.created`, `appointment.status_changed`, `appointment.rescheduled` (IDs, dates, statuses and source only; never reasons or patient details). Every status change is also kept in the appointment's history with who and when.
 
@@ -137,7 +137,7 @@ Implemented in Phase 1 (`apps/api/src/modules/queue`).
 | Screens | `GET /display-screens`; `POST /display-screens` `{clinicId, label}` → 201 with the `link` (shown once); `POST /display-screens/{id}/revoke` → 204 | Clinic admin |
 | Screen board | `POST /display/board` `{token}` → `{clinicName, date, doctors: [{doctorName, nowServing, next}]}` | Public (the screen's token; rate limited) |
 
-- **Tabs:** `myOpd` is the patient in consultation first, then checked-in patients — those with a "show first" tag (Emergency, Priority) ahead of the rest, then by check-in time; `booked` is pending and confirmed by time; `completed` is newest first; `closed` is cancelled, no-show and rescheduled; `followUps` is the patients due back that day (§3n), a list of its own that does not change the other tabs. `averageConsultationMinutes` is the mean of the day's completed consultations (start to completion). The web queue refreshes every 15 seconds while visible; live push may replace polling later.
+- **Tabs:** `myOpd` is the patient in consultation first, then checked-in patients — those with a "show first" tag (Emergency, Priority) ahead of the rest, then by check-in time; `booked` is pending and confirmed by time; `completed` is newest first; `closed` is cancelled, no-show and rescheduled; `followUps` is the patients due back that day (§3p), a list of its own that does not change the other tabs. `averageConsultationMinutes` is the mean of the day's completed consultations (start to completion). The web queue refreshes every 15 seconds while visible; live push may replace polling later.
 - **Screens** are kiosk links `…/display#<token>`: 32 random bytes, stored only as a SHA-256 hash, never in a URL path (the token stays in the fragment and travels in the request body), so it does not reach server logs. A screen shows, per doctor, the token in consultation and the next five waiting, in queue order; never patient names. Revoked or unknown tokens give 404. (Build plan §6 names the route `/display/[clinic]`; a guessable clinic ID in the path was replaced by the token link.)
 - **Audit:** `display_screen.created`, `display_screen.revoked`.
 
@@ -291,7 +291,7 @@ Implemented in Phase 1 (`apps/api/src/modules/medicines`, PRD §9.2). Everything
 - **Audit:** `medicine.created` (medicine ID and ingredient count) and `medicine.updated` (medicine ID, ingredient count and whether active), `medicine_request.approved` and `medicine_request.rejected` (request ID and medicine ID), `medicine_request.undone` (the decision undone). Never reasons or patient details.
 - **Not built yet:** the licensed drug database import with its own update process (§3g), and a reference request to the platform team to add a medicine for every clinic.
 
-## 3n. Follow-ups and automatic no-shows
+## 3p. Follow-ups and automatic no-shows
 
 Implemented in Phase 1 (`apps/api/src/modules/queue/service.ts`, `apps/api/src/modules/appointments/no-shows.ts`).
 
