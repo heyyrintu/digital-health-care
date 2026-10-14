@@ -1031,6 +1031,8 @@ export const en = {
   'patient.family.guardian': 'Who looks after them',
   'patient.family.guardianNone': 'No one: they use this mobile number',
   'patient.family.added': '{name} has been added.',
+  'patient.family.childNeedsGuardian':
+    'Someone under 18 is added with the adult who looks after them.',
   'patient.privacy.accepted': 'Accepted {date}',
   'patient.privacy.withdrawn': 'Withdrawn {date}',
   'patient.privacy.kind.privacy_notice': 'Privacy notice',

@@ -5,7 +5,7 @@ import { api } from '../../api';
 import { errorMessage } from '../../errors';
 import { useLocale } from '../../locale/provider';
 import { ChoiceRow } from '../parts';
-import { istToday, isValidDob } from '../logic';
+import { isAdult, istToday, isValidDob } from '../logic';
 
 const GENDERS: Gender[] = ['female', 'male', 'other'];
 
@@ -38,6 +38,10 @@ export function PatientForm({
     };
     setErrors(next);
     if (next.name || next.dob || !gender) return;
+    if (!guardianId && !isAdult(dob.trim(), istToday(new Date()))) {
+      setError(t('patient.family.childNeedsGuardian'));
+      return;
+    }
     setBusy(true);
     setError(null);
     try {

@@ -1035,6 +1035,8 @@ export const hi: Record<MessageKey, string> = {
   'patient.family.guardian': 'देखभाल कौन करता है',
   'patient.family.guardianNone': 'कोई नहीं: वे यही मोबाइल नंबर इस्तेमाल करते हैं',
   'patient.family.added': '{name} को जोड़ दिया गया।',
+  'patient.family.childNeedsGuardian':
+    '18 साल से कम उम्र के व्यक्ति को उनकी देखभाल करने वाले वयस्क के साथ जोड़ें।',
   'patient.privacy.accepted': '{date} को स्वीकार किया',
   'patient.privacy.withdrawn': '{date} को वापस लिया',
   'patient.privacy.kind.privacy_notice': 'गोपनीयता सूचना',

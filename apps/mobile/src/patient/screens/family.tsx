@@ -5,6 +5,7 @@ import { patientAccount } from '../../api';
 import { useLocale } from '../../locale/provider';
 import type { ReadyAccount } from '../gate';
 import { PatientScreen } from '../parts';
+import { isAdult, istToday } from '../logic';
 import { PatientForm } from './patient-form';
 
 /** PRD §4.1: everyone on the number, the children they look after, and adding someone. */
@@ -13,7 +14,11 @@ export function FamilyScreen({ account }: { account: ReadyAccount }) {
   const theme = useTheme();
   const [added, setAdded] = useState<string | null>(null);
   const [formKey, setFormKey] = useState(0);
-  const adults = account.patients.filter((p) => p.relation === 'account');
+  // Guardians are adults on this number (the API refuses anyone else).
+  const today = istToday(new Date());
+  const adults = account.patients.filter(
+    (p) => p.relation === 'account' && (!p.dob || isAdult(p.dob, today)),
+  );
   const nameOf = (id: string | null) => account.patients.find((p) => p.id === id)?.name ?? '';
 
   return (

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bookingDays, dayPart, istToday, isValidDob, rupees, shortDate } from './logic';
+import { bookingDays, dayPart, isAdult, istToday, isValidDob, rupees, shortDate } from './logic';
 
 describe('patient app helpers', () => {
   it('takes today in India, not UTC', () => {
@@ -29,6 +29,8 @@ describe('patient app helpers', () => {
 
   it('checks dates of birth', () => {
     expect(isValidDob('1997-11-23', '2026-10-07')).toBe(true);
+    expect(isAdult('2008-10-07', '2026-10-07')).toBe(true);
+    expect(isAdult('2008-10-08', '2026-10-07')).toBe(false);
     expect(isValidDob('2026-02-30', '2026-10-07')).toBe(false);
     expect(isValidDob('2027-01-01', '2026-10-07')).toBe(false);
     expect(isValidDob('23/11/1997', '2026-10-07')).toBe(false);
