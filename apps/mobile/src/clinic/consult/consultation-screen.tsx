@@ -21,6 +21,16 @@ import { VitalsSection } from './vitals-section';
  * beside the prescription; on phones they stack. Without a network the saved copy of a
  * visit opened today still opens, and notes and vitals can be written (they sync later).
  */
+/**
+ * Keeps the offline copy of a visit. Written only once the last person's copies are cleared:
+ * loadOffline() is remembered once it succeeds and retries that clean-up while it fails.
+ */
+function cacheVisit(view: ConsultationView, chart: PatientChart | null): Promise<void> {
+  return loadOffline()
+    .then(() => visits.put(view, chart))
+    .catch(() => undefined);
+}
+
 export function ConsultationScreen({ appointmentId }: { appointmentId: string }) {
   const { t } = useLocale();
   const theme = useTheme();
@@ -43,16 +53,11 @@ export function ConsultationScreen({ appointmentId }: { appointmentId: string })
   // A reload after queued saves were sent that could not reach the server: retried when the
   // queue next reaches it.
   const reloadOwed = useRef(false);
-  const offlineOk = useRef(false);
   const load = useCallback(async (): Promise<void> => {
     const mine = ++loadSeq.current;
     setError(null);
     // Saves still waiting on the device are read first: the sections start from them.
-    // While the last person's copies could not be cleared, the visit cache is left alone.
-    offlineOk.current = await loadOffline().then(
-      () => true,
-      () => false,
-    );
+    await loadOffline().catch(() => undefined);
     try {
       const [v, p] = await Promise.all([
         api.request('GET', `/appointments/${appointmentId}/consultation`, {
@@ -76,7 +81,7 @@ export function ConsultationScreen({ appointmentId }: { appointmentId: string })
       setRx(p);
       setChart(c);
       setOffline(false);
-      if (offlineOk.current) await visits.put(v, c);
+      await cacheVisit(v, c);
     } catch (e) {
       if (mine !== loadSeq.current) return;
       if (isNetworkError(e)) {
@@ -87,7 +92,11 @@ export function ConsultationScreen({ appointmentId }: { appointmentId: string })
           reloadOwed.current = true;
           return;
         }
-        const saved = offlineOk.current ? await visits.get(appointmentId) : null;
+        // While the last person's copies could not be cleared, none is read.
+        const saved = await loadOffline().then(
+          () => visits.get(appointmentId),
+          () => null,
+        );
         if (mine !== loadSeq.current) return;
         if (saved) {
           setView(saved.view);
@@ -157,7 +166,7 @@ export function ConsultationScreen({ appointmentId }: { appointmentId: string })
     setView((prev) => {
       if (!prev) return prev;
       const next = patch(prev);
-      if (offlineOk.current) void visits.put(next, chartRef.current).catch(() => undefined);
+      void cacheVisit(next, chartRef.current);
       return next;
     });
   };
@@ -171,7 +180,7 @@ export function ConsultationScreen({ appointmentId }: { appointmentId: string })
           onChange={(next) => {
             setChart(next);
             chartRef.current = next;
-            if (offlineOk.current) void visits.put(view, next).catch(() => undefined);
+            void cacheVisit(view, next);
           }}
         />
       )}
