@@ -6,6 +6,7 @@ import { AppError } from '../../errors';
 import type { Services } from '../../services';
 import { writeAudit, type AuditSource } from '../audit/write';
 import { INVITE_TTL_MS, maskIdentifier, parseIdentifier } from '../invites/service';
+import { liveSessionIds, revokePushDevicesForSessions } from '../devices/revoke';
 
 const STAFF = [...STAFF_ROLES];
 
@@ -150,10 +151,12 @@ export async function supportResetAuthenticator(
         lockedUntil: null,
       },
     });
+    const ending = await liveSessionIds(tx, { userId: user.id, staffOnly: true });
     const revoked = await tx.session.updateMany({
-      where: { userId: user.id, revokedAt: null, role: { not: 'patient' } },
+      where: { id: { in: ending }, revokedAt: null },
       data: { revokedAt: now, revokedReason: 'support_authenticator_reset' },
     });
+    await revokePushDevicesForSessions(tx, ending, 'support_authenticator_reset', now);
     // Each clinic sees in its own audit log that support reset one of its staff.
     for (const organisationId of clinicsById.keys()) {
       await writeAudit(tx, source, {

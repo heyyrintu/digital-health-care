@@ -228,6 +228,7 @@ model Organisation {
   memberships            Membership[]
   patients               Patient[]
   sessions               Session[]
+  pushDevices            PushDevice[]
   invites                StaffInvite[]
   uhidSettings           UhidSettings?
   tags                   Tag[]
@@ -254,6 +255,7 @@ model Organisation {
   billItems              BillItem[]
   payments               Payment[]
   receiptSettings        ReceiptSettings?
+  idempotencyKeys        IdempotencyKey[]
   settings               OrganisationSettings?
   safetyAlerts           SafetyAlert[]
   doctorProfiles         DoctorProfile[]
@@ -286,6 +288,7 @@ model User {
 
   memberships Membership[]
   sessions    Session[]
+  pushDevices PushDevice[]
   invites     StaffInvite[]
 
   @@map("users")
@@ -327,9 +330,47 @@ model Session {
 
   user         User         @relation(fields: [userId], references: [id])
   organisation Organisation @relation(fields: [organisationId], references: [id])
+  pushDevices  PushDevice[]
 
   @@index([userId])
   @@map("sessions")
+}
+
+enum DevicePlatform {
+  ios
+  android
+}
+
+enum AppVariant {
+  clinic
+  patient
+}
+
+/// A phone or tablet that receives push notifications for one signed-in session. One row
+/// per Expo push token: signing in on the device again moves the row to the new session.
+/// Platform-level like sessions (auth role only); it stops receiving when its session
+/// ends or it is removed.
+model PushDevice {
+  id             String         @id @default(uuid()) @db.Uuid
+  userId         String         @map("user_id") @db.Uuid
+  organisationId String         @map("organisation_id") @db.Uuid
+  sessionId      String         @map("session_id") @db.Uuid
+  platform       DevicePlatform
+  appVariant     AppVariant     @map("app_variant")
+  expoPushToken  String         @unique @map("expo_push_token")
+  deviceName     String?        @map("device_name")
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  lastSeenAt     DateTime       @default(now()) @map("last_seen_at") @db.Timestamptz(3)
+  revokedAt      DateTime?      @map("revoked_at") @db.Timestamptz(3)
+  revokedReason  String?        @map("revoked_reason")
+
+  user         User         @relation(fields: [userId], references: [id])
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+  session      Session      @relation(fields: [sessionId], references: [id])
+
+  @@index([sessionId])
+  @@index([userId])
+  @@map("push_devices")
 }
 
 /// Single-use link a clinic admin sends to a new staff member. The only way to set a staff
@@ -564,6 +605,9 @@ model BookingRules {
   sameDayCutoffMinutes Int      @default(60) @map("same_day_cutoff_minutes")
   /// Staff may book this many extra patients into taken slots per doctor per day.
   overbookPerDay       Int      @default(2) @map("overbook_per_day")
+  /// Bookings nobody arrived for become no-shows this many minutes after the slot ends;
+  /// null switches automatic no-shows off.
+  noShowAfterMinutes   Int?     @default(30) @map("no_show_after_minutes")
   updatedAt            DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   organisation Organisation @relation(fields: [organisationId], references: [id])
@@ -680,7 +724,8 @@ model AppointmentStatusHistory {
   appointmentId  String             @map("appointment_id") @db.Uuid
   fromStatus     AppointmentStatus? @map("from_status")
   toStatus       AppointmentStatus  @map("to_status")
-  actorUserId    String             @map("actor_user_id") @db.Uuid
+  /// Null for automatic changes (a booking nobody arrived for becoming a no-show).
+  actorUserId    String?            @map("actor_user_id") @db.Uuid
   note           String?
   at             DateTime           @db.Timestamptz(3)
 
@@ -822,6 +867,7 @@ model Consultation {
   organisation Organisation @relation(fields: [organisationId], references: [id])
   appointment  Appointment  @relation(fields: [appointmentId], references: [id])
 
+  @@index([organisationId, followUpDate])
   @@index([patientId])
   @@map("consultations")
 }
@@ -964,12 +1010,15 @@ model Medicine {
   source         MedicineSource
   active         Boolean        @default(true)
   createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  /// Moves on every change, so the Clinic app can fetch only what changed (offline cache).
+  updatedAt      DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   organisation Organisation?        @relation(fields: [organisationId], references: [id], onDelete: Restrict)
   ingredients  MedicineIngredient[]
   requests     MedicineRequest[]
 
   @@index([organisationId])
+  @@index([updatedAt, id])
   @@map("medicines")
 }
 
@@ -1267,4 +1316,28 @@ model AuditLog {
 
   @@index([organisationId, at])
   @@map("audit_logs")
+}
+
+/// A retryable write's first result, replayed for 24 hours when the same person sends the
+/// same Idempotency-Key again (API guide §2). A row without a status is still running.
+model IdempotencyKey {
+  organisationId String   @map("organisation_id") @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  key            String
+  method         String
+  path           String
+  requestHash    String   @map("request_hash")
+  /// Which attempt holds the key; a write commits only while its attempt still holds it.
+  claim          String   @db.Uuid
+  /// Set in the write's own transaction, so a retry knows whether the write happened.
+  writeCommitted Boolean  @default(false) @map("write_committed")
+  statusCode     Int?     @map("status_code")
+  response       Json?
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+
+  @@id([organisationId, userId, key])
+  @@index([createdAt])
+  @@map("idempotency_keys")
 }

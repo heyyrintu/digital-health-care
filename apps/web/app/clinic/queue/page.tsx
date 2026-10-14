@@ -30,19 +30,22 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useState } from 'react';
 import { AppointmentRow } from '../appointments/appointment-row';
+import { keepLive } from '../../../lib/live';
 import { useSession } from '../session-provider';
 import { ClinicShell, canRegister } from '../shell';
+import { FollowUpRow } from './follow-up-row';
 
-const TABS = ['myOpd', 'booked', 'completed', 'closed'] as const;
+const TABS = ['myOpd', 'booked', 'followUps', 'completed', 'closed'] as const;
 type Tab = (typeof TABS)[number];
 const MODES: ConsultationMode[] = ['in_person', 'video', 'audio'];
 
-/** How often the queue refreshes while the page is visible. */
-const REFRESH_MS = 15_000;
+/** Changes arrive live; this poll only covers a stream that has dropped. */
+const FALLBACK_REFRESH_MS = 60_000;
 
 /**
- * The live queue (PRD §5.1): My OPD, Booked, Completed and Closed for a day, shared by
- * the doctor and front desk. Refreshes every 15 seconds while visible.
+ * The live queue (PRD §5.1): My OPD, Booked, Follow-ups, Completed and Closed for a day,
+ * shared by the doctor and front desk. Refreshes when the live stream reports a change,
+ * and every minute as a fallback.
  */
 export default function QueuePage() {
   return (
@@ -104,18 +107,31 @@ function Queue({ me }: { me: MeResponse }) {
   useEffect(() => {
     setQueue(null);
     load().catch(handle);
-    const timer = setInterval(() => {
-      if (document.visibilityState === 'visible') load().catch(handle);
-    }, REFRESH_MS);
+    // Live: the API says when a visit changes; a slow poll covers a stream that drops.
+    const stop = keepLive({
+      open: (signal, onEvent) =>
+        api.stream('GET', '/queue/stream', { query: { date }, signal, onEvent }),
+      refresh: () => {
+        if (document.visibilityState === 'visible') load().catch(handle);
+      },
+      fallbackMs: FALLBACK_REFRESH_MS,
+      isFatal: (e) => {
+        if (e instanceof ApiError && e.status < 500) {
+          handle(e);
+          return true;
+        }
+        return false;
+      },
+    });
     const tick = setInterval(() => setNow(new Date()), 30_000);
     const onVisible = () => document.visibilityState === 'visible' && load().catch(handle);
     document.addEventListener('visibilitychange', onVisible);
     return () => {
-      clearInterval(timer);
+      stop();
       clearInterval(tick);
       document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [load, handle]);
+  }, [api, date, load, handle]);
 
   useEffect(() => {
     api
@@ -147,14 +163,16 @@ function Queue({ me }: { me: MeResponse }) {
     router.replace(`/clinic/queue?date=${next.date ?? date}&tab=${next.tab ?? tab}`);
 
   const needle = q.trim().toLowerCase();
-  const matches = (a: Appointment) =>
+  const patientMatches = (p: Appointment['patient']) =>
     (!needle ||
-      a.patient.name.toLowerCase().includes(needle) ||
-      a.patient.uhid.toLowerCase().includes(needle) ||
-      (a.patient.phone ?? '').includes(needle.replace(/\s/g, ''))) &&
-    (!tagId || a.patient.tags.some((tag) => tag.id === tagId)) &&
-    (!mode || a.mode === mode);
-  const rows = queue ? queue[tab].filter(matches) : null;
+      p.name.toLowerCase().includes(needle) ||
+      p.uhid.toLowerCase().includes(needle) ||
+      (p.phone ?? '').includes(needle.replace(/\s/g, ''))) &&
+    (!tagId || p.tags.some((tag) => tag.id === tagId));
+  const matches = (a: Appointment) => patientMatches(a.patient) && (!mode || a.mode === mode);
+  const rows = queue && tab !== 'followUps' ? queue[tab].filter(matches) : null;
+  const followUps =
+    queue && tab === 'followUps' ? queue.followUps.filter((f) => patientMatches(f.patient)) : null;
 
   return (
     <section aria-labelledby="queue-title" className="space-y-5">
@@ -324,8 +342,17 @@ function Queue({ me }: { me: MeResponse }) {
       )}
       <div id="queue-panel" role="tabpanel" aria-labelledby={`tab-${tab}`}>
         {queue && queue[tab].length === 0 && <EmptyState title={t(`queue.empty.${tab}`)} />}
-        {rows && queue && queue[tab].length > 0 && rows.length === 0 && (
+        {queue && queue[tab].length > 0 && (rows ?? followUps)?.length === 0 && (
           <EmptyState title={t('queue.noMatch')} />
+        )}
+        {followUps && followUps.length > 0 && (
+          <Surface className="overflow-hidden">
+            <ul className="divide-y divide-border/60" data-testid="follow-ups">
+              {followUps.map((f) => (
+                <FollowUpRow key={f.visitAppointmentId} f={f} canBook={canRegister(me.role)} />
+              ))}
+            </ul>
+          </Surface>
         )}
         {rows && rows.length > 0 && (
           <Surface className="overflow-hidden">
