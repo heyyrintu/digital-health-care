@@ -834,6 +834,16 @@ export const en = {
   'medicines.perUnit': 'mg per tablet, capsule or drop',
   'medicines.perMl': 'mg per ml',
   'medicines.strength': 'mg',
+  'devices.show': 'Devices',
+  'devices.title': 'Signed-in devices for {name}',
+  'devices.none': 'Not signed in on any device here.',
+  'devices.unknown': 'Unknown device',
+  'devices.thisDevice': 'This device',
+  'devices.lastUsed': 'Last used {date}',
+  'devices.signOut': 'Sign out',
+  'devices.signOutAll': 'Sign out of all devices',
+  'devices.signedOutOne': 'Signed out of that device.',
+  'devices.signedOutAll': 'Signed {name} out of {count} devices.',
 } as const;
 
 export type MessageKey = keyof typeof en;

@@ -28,8 +28,11 @@
   - **Reject**, with a reason, when it is not a medicine (an appliance or a test). Doctors can still type it.
   After approval, doctors searching the typed name find the medicine. Prescriptions already written are not changed. **Decisions** lists what was decided, by whom and when; **Undo** puts a name back in the queue (a medicine it added stays in the list).
 
+## Signed-in devices
+On the dashboard, under **Staff**, choose **Devices** next to someone's name to see where they are signed in at this clinic: the browser or app, when it was last used and from which network address. **Sign out** ends one device (for example a shared front-desk computer someone forgot to sign out of); **Sign out of all devices** ends every one. They can sign in again with their password and authenticator; their access is not removed. Each sign-out shows in the audit log under *Staff and invites*. Your own current device is marked *This device* and can't be signed out from here (use **Sign out** in the menu).
+
 ## Lost phone or authenticator
 If a staff member loses their phone or authenticator app, open **Staff** on the dashboard and choose **Reset sign-in** next to their name. This signs them out everywhere and clears their password and authenticator; you get a new link (valid 72 hours) to give them directly. They open it, choose a new password and set up the authenticator again — their role stays the same. You cannot reset your own sign-in (ask another clinic admin), and someone who also works at another clinic needs platform support: ask them to contact support, who will call them back on their registered number and ask you (or the other clinic's admin) to confirm before sending a new link. Their reset shows in your audit log as `support.authenticator.reset`.
 
 ## Security
-Remove staff accounts the same day someone leaves. For a lost staff phone, use **Staff → Reset sign-in**, which ends all their staff sessions (signing out a single device is not available yet). Review the audit log (in the menu) monthly.
+Remove staff accounts the same day someone leaves. For a lost staff phone, use **Staff → Reset sign-in**, which ends all their staff sessions; to end just one device, use **Staff → Devices**. Review the audit log (in the menu) monthly.

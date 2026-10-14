@@ -541,6 +541,15 @@ Week 1 starts when the team is hired and the open decisions in §11 are closed. 
 | 5 Clinic pilot         | 27–30 | Production go-live at the clinic with real patients; parallel run with the current EMR for 2 weeks, then cut-over                                                                                                                                                           | Clinic runs fully on the platform for 2 weeks with no blocker issues                         |
 | 6 Store launch         | 31–32 | Public App Store and Play release, patient onboarding campaign at the clinic, ABDM M3 (fetch records) in the following weeks                                                                                                                                                | Apps live; first onboarded patients using booking and prescriptions                          |
 
+**Progress (October 2026):**
+
+| Phase | State |
+|---|---|
+| 0 Foundations | Done: monorepo, CI, staff and patient sign-in, tenancy with row-level security, audit log, ADRs. |
+| 1 Core clinic on web | Exit criterion met: the full simulated clinic day passes in the browser (`apps/e2e/tests/clinic-day.spec.ts`). Built: scheduling and slots, patients, tags and UHID, queue and waiting-room screen, consultation and vitals, prescription builder, safety engine, signing with PDF and QR, billing and counter payments, clinic admin dashboard, audit log, medicine list, staff devices. In review: clinic settings (chart model, safety tuning, upload limits) and patient merges. Next: idempotency keys and live queue updates. |
+| 2 Mobile apps | Starting: shared React Native components and the mobile foundation, then the Clinic and Patient apps. |
+| 3 to 6 | Not started. |
+
 ### 9.2 Sprint rhythm
 
 - Two-week sprints (16 sprints to launch): planning on day 1, demo to Dr. Gupta every second Friday, retrospective at the end.
