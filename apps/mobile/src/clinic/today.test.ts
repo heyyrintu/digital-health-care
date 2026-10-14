@@ -11,6 +11,7 @@ const snapshot = (date: string): SyncTodayResponse => ({
     booked: [],
     completed: [],
     closed: [],
+    followUps: [],
     averageConsultationMinutes: null,
   },
   templates: [],
