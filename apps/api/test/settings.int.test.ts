@@ -90,13 +90,14 @@ let token = 0;
 async function visit(
   doctorUserId: string,
   status: 'confirmed' | 'checked_in' | 'in_consultation' = 'in_consultation',
+  patient = patientId(),
 ) {
   const startAt = new Date('2026-10-06T04:30:00.000Z');
   token += 1;
   const row = await h.owner.appointment.create({
     data: {
       organisationId: clinics.a.org.id,
-      patientId: patientId(),
+      patientId: patient,
       doctorUserId,
       clinicId,
       consultationTypeId: typeId,
@@ -281,5 +282,34 @@ describe('chart model', () => {
     expect(
       (await call('GET', `/appointments/${visitId}/consultation`, otherDoctor)).statusCode,
     ).toBe(200);
+  });
+
+  it('own patients only: a visit to a duplicate merged into the record counts', async () => {
+    // The second doctor saw the patient under a duplicate registration.
+    const duplicate = await h.owner.patient.create({
+      data: { organisationId: clinics.a.org.id, uhid: 'CL-DUP001', name: 'Asha Verma' },
+    });
+    await visit(otherDoctorId, 'checked_in', duplicate.id);
+    await setSettings({ chartModel: 'own_patients' });
+    expect((await call('GET', `/patients/${patientId()}/chart`, otherDoctor)).statusCode).toBe(403);
+
+    await h.owner.patient.update({
+      where: { id: duplicate.id },
+      data: { mergedIntoId: patientId(), mergedAt: h.clock.now() },
+    });
+    // After the merge they read the kept record, by either record's ID.
+    expect((await call('GET', `/patients/${patientId()}/chart`, otherDoctor)).statusCode).toBe(200);
+    expect((await call('GET', `/patients/${duplicate.id}/chart`, otherDoctor)).statusCode).toBe(
+      200,
+    );
+    expect(
+      (await call('GET', `/patients/${patientId()}/last-prescription`, otherDoctor)).statusCode,
+    ).toBe(200);
+    // A doctor who saw neither record still cannot.
+    const third = await addStaff(h, clinics.a.org.id, 'doctor', 'third@clinic-a.test');
+    const thirdDoctor = await staffLogin(h, 'clinic-a', third);
+    const refused = await call('GET', `/patients/${duplicate.id}/chart`, thirdDoctor);
+    expect(refused.statusCode).toBe(403);
+    expect(refused.json().error.code).toBe('CHART_RESTRICTED');
   });
 });

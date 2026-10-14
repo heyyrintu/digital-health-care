@@ -30,6 +30,9 @@ Once the doctor signs, the patient's card on the **Queue** shows **Print prescri
 - The queue card shows the bill total and whether it is due, partly paid or paid. **Collections** (in the menu) shows the day's payments by mode and doctor and the visits still due.
 - Coming with online payments: **Send payment link** (WhatsApp, SMS fallback), automatic receipts when paid, and refunds with a reason.
 
+## Duplicate records
+If a patient was registered twice, open either record and choose **Merge a duplicate record**: find the other record, choose which one stays (usually the older one, with the UHID on the patient's papers), say why they are the same person and **Send to clinic admin**. Nothing changes until a clinic admin approves. Afterwards the duplicate shows *This record was merged into…* with a link, and can no longer be edited or booked; searching its old UHID leads to the kept record.
+
 ## When things change
 - Doctor running late → **Broadcast delay**.
 - Session cancelled → **Bulk reschedule**; patients are notified.
