@@ -138,6 +138,7 @@ describe('clinic setup', () => {
       noShowWindowDays: 90,
       cancelCutoffMinutes: 120,
       autoConfirm: true,
+      noShowAfterMinutes: 30,
     });
     const put = await call('PUT', '/booking-rules', adminA, {
       horizonDays: 14,
@@ -155,7 +156,25 @@ describe('clinic setup', () => {
       noShowLimit: 0,
       cancelCutoffMinutes: 60,
       autoConfirm: false,
+      noShowAfterMinutes: 30,
     });
+    const off = await call('PUT', '/booking-rules', adminA, {
+      horizonDays: 14,
+      sameDayCutoffMinutes: 120,
+      overbookPerDay: 1,
+      noShowAfterMinutes: null,
+    });
+    expect(off.json().noShowAfterMinutes).toBeNull();
+    expect(
+      (
+        await call('PUT', '/booking-rules', adminA, {
+          horizonDays: 14,
+          sameDayCutoffMinutes: 120,
+          overbookPerDay: 1,
+          noShowAfterMinutes: 721,
+        })
+      ).statusCode,
+    ).toBe(400);
     expect(
       (
         await call('PUT', '/booking-rules', adminA, {

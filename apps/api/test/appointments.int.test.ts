@@ -1,5 +1,7 @@
 import { AppointmentDetail, SlotsResponse, type TokenResponse } from '@dhc/contracts';
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { sweepNoShows } from '../src/modules/appointments/no-shows';
+import { setQueuePublisher, type QueueChanged } from '../src/modules/queue/live';
 import {
   addStaff,
   bearer,
@@ -371,3 +373,107 @@ async function registerPatient(name: string) {
   });
   return patient.id;
 }
+
+describe('automatic no-shows', () => {
+  const source = { id: 'sweep-test', ip: 'scheduler', headers: { 'user-agent': 'no-show-sweep' } };
+  const sweep = () => sweepNoShows(h.services, source);
+  const published: QueueChanged[] = [];
+  beforeEach(() => {
+    published.length = 0;
+    setQueuePublisher((e) => published.push(e));
+  });
+  afterEach(() => setQueuePublisher(() => {}));
+
+  /** Moves the clock to an IST wall-clock time today. */
+  const clockAt = (time: string) => {
+    h.clock.ms = Date.parse(at(TODAY, time));
+  };
+
+  it('marks bookings not checked in by slot end plus the grace period, with no actor', async () => {
+    const late = await booked({ startAt: at(TODAY, '10:15') });
+    const arrived = await booked({ patientId: kamla, startAt: at(TODAY, '10:30') });
+    expect((await act(arrived.id, 'check_in', desk)).statusCode).toBe(200);
+
+    // 10:15–10:30 slot, default 30 minutes' grace: due at 11:00.
+    clockAt('10:59');
+    expect(await sweep()).toBe(0);
+    clockAt('11:00');
+    expect(await sweep()).toBe(1);
+    expect(await sweep()).toBe(0);
+
+    const view = AppointmentDetail.parse(
+      (await call('GET', `/appointments/${late.id}`, desk)).json(),
+    );
+    expect(view.status).toBe('no_show');
+    expect(view.history.at(-1)).toMatchObject({
+      fromStatus: 'confirmed',
+      toStatus: 'no_show',
+      actorUserId: null,
+      actorName: null,
+    });
+    const checkedIn = await call('GET', `/appointments/${arrived.id}`, desk);
+    expect(checkedIn.json().status).toBe('checked_in');
+
+    const audit = await h.owner.auditLog.findMany({
+      where: { action: 'appointment.status_changed', entityId: late.id },
+    });
+    expect(audit).toMatchObject([
+      {
+        organisationId: clinics.a.org.id,
+        actorUserId: null,
+        requestId: 'sweep-test',
+        metadata: { from: 'confirmed', to: 'no_show', automatic: true },
+      },
+    ]);
+    expect(published).toEqual([
+      {
+        type: 'queue.changed',
+        organisationId: clinics.a.org.id,
+        date: TODAY,
+        clinicId,
+        doctorUserId: clinics.a.doctor.userId,
+        appointmentId: late.id,
+        reason: 'no_show',
+      },
+    ]);
+    // A no-show does not hold its slot.
+    const held = await h.owner.appointment.count({
+      where: {
+        id: late.id,
+        status: { in: ['pending', 'confirmed', 'checked_in', 'in_consultation', 'completed'] },
+      },
+    });
+    expect(held).toBe(0);
+  });
+
+  it('follows the clinic’s grace period, and does nothing when it is turned off', async () => {
+    const appt = await booked({ startAt: at(TODAY, '10:15') });
+    const rules = { horizonDays: 30, sameDayCutoffMinutes: 60, overbookPerDay: 2 };
+    expect(
+      (await call('PUT', '/booking-rules', adminA, { ...rules, noShowAfterMinutes: null }))
+        .statusCode,
+    ).toBe(200);
+    clockAt('15:00');
+    expect(await sweep()).toBe(0);
+
+    await call('PUT', '/booking-rules', adminA, { ...rules, noShowAfterMinutes: 0 });
+    expect(await sweep()).toBe(1);
+    expect((await call('GET', `/appointments/${appt.id}`, desk)).json().status).toBe('no_show');
+  });
+
+  it('leaves other clinics to their own rules', async () => {
+    await booked({ startAt: at(TODAY, '10:15') });
+    await call('PUT', '/booking-rules', adminA, {
+      horizonDays: 30,
+      sameDayCutoffMinutes: 60,
+      overbookPerDay: 2,
+      noShowAfterMinutes: null,
+    });
+    // Clinic B's booking rules (the default) do not reach Clinic A's bookings.
+    await h.owner.bookingRules.create({
+      data: { organisationId: clinics.b.org.id, noShowAfterMinutes: 0 },
+    });
+    clockAt('15:00');
+    expect(await sweep()).toBe(0);
+  });
+});

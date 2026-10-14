@@ -88,8 +88,10 @@ export class PortalService {
       const pending = await pendingConsents(tx, actor);
       const fresh = body.accept.filter((a) => pending.includes(a.kind));
       const acceptedAt = this.s.now();
+      const recorded: typeof fresh = [];
       for (const { kind, version } of fresh) {
-        await tx.accountConsent.create({
+        // Two taps at once: the in-force index keeps one row, and the other records nothing.
+        const { count } = await tx.accountConsent.createMany({
           data: {
             organisationId: actor.organisationId,
             userId: actor.userId,
@@ -97,16 +99,18 @@ export class PortalService {
             version,
             acceptedAt,
           },
+          skipDuplicates: true,
         });
+        if (count) recorded.push({ kind, version });
       }
-      if (fresh.length) {
+      if (recorded.length) {
         await writeAudit(tx, request, {
           action: 'consent.accepted',
           organisationId: actor.organisationId,
           actorUserId: actor.userId,
           entityType: 'account',
           entityId: actor.userId,
-          metadata: { consents: fresh.map((a) => `${a.kind}@${a.version}`) },
+          metadata: { consents: recorded.map((a) => `${a.kind}@${a.version}`) },
         });
       }
       return this.consentStatus(tx, actor);

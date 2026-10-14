@@ -4,6 +4,7 @@ import {
   type ResetAuthenticatorBody,
   type StaffMember,
   type StaffRole,
+  type StaffSession,
 } from '@dhc/contracts';
 import { withAuth, withTenant } from '@dhc/db';
 import type { FastifyRequest } from 'fastify';
@@ -13,10 +14,12 @@ import { AppError } from '../../errors';
 import type { Services } from '../../services';
 import { writeAudit } from '../audit/write';
 import { INVITE_TTL_MS, toStaffInvite } from '../invites/service';
+import { liveSessionIds, revokePushDevicesForSessions } from '../devices/revoke';
 
 interface Actor {
   userId: string;
   organisationId: string;
+  sessionId?: string;
 }
 
 const STAFF = [...STAFF_ROLES];
@@ -63,6 +66,114 @@ export class StaffService {
         };
       })
       .sort((a, b) => (a.displayName ?? a.identifier).localeCompare(b.displayName ?? b.identifier));
+  }
+
+  // ---- Devices (signed-in sessions) -------------------------------------------------
+
+  /**
+   * A staff member's live sessions at this clinic, most recently used first. Sessions
+   * belong to one clinic, so devices signed in to another clinic never show.
+   */
+  async sessions(actor: Actor, targetUserId: string): Promise<StaffSession[]> {
+    await this.requireStaff(actor, targetUserId);
+    const now = this.s.now();
+    const rows = await withAuth(this.s.db, (tx) =>
+      tx.session.findMany({
+        where: {
+          userId: targetUserId,
+          organisationId: actor.organisationId,
+          role: { not: 'patient' },
+          revokedAt: null,
+          expiresAt: { gt: now },
+        },
+        orderBy: { lastUsedAt: 'desc' },
+      }),
+    );
+    return rows.map((r) => ({
+      id: r.id,
+      userAgent: r.userAgent,
+      ip: r.ip,
+      signedInAt: r.createdAt.toISOString(),
+      lastUsedAt: r.lastUsedAt.toISOString(),
+      current: r.id === actor.sessionId,
+    }));
+  }
+
+  /** Signs one device out; its next request gets 401. */
+  async revokeSession(request: FastifyRequest, actor: Actor, sessionId: string): Promise<void> {
+    await withAuth(this.s.db, async (tx) => {
+      const session = await tx.session.findFirst({
+        where: {
+          id: sessionId,
+          organisationId: actor.organisationId,
+          role: { not: 'patient' },
+          revokedAt: null,
+        },
+        select: { userId: true },
+      });
+      if (!session) throw new AppError(404, 'NOT_FOUND', 'Not found.');
+      const now = this.s.now();
+      await tx.session.update({
+        where: { id: sessionId },
+        data: { revokedAt: now, revokedReason: 'admin_signout' },
+      });
+      // The device stops getting push notifications in the same transaction.
+      await revokePushDevicesForSessions(tx, [sessionId], 'admin_signout', now);
+      await writeAudit(tx, request, {
+        action: 'staff.session.revoked',
+        organisationId: actor.organisationId,
+        actorUserId: actor.userId,
+        entityType: 'session',
+        entityId: sessionId,
+        metadata: { targetUserId: session.userId },
+      });
+    });
+  }
+
+  /** Signs a staff member out of every device at this clinic. Their access stays. */
+  async signOutAll(
+    request: FastifyRequest,
+    actor: Actor,
+    targetUserId: string,
+  ): Promise<{ revoked: number }> {
+    await this.requireStaff(actor, targetUserId);
+    return withAuth(this.s.db, async (tx) => {
+      const now = this.s.now();
+      // Only this clinic's staff sessions: their sessions elsewhere stay signed in.
+      const ending = (
+        await tx.session.findMany({
+          where: {
+            userId: targetUserId,
+            organisationId: actor.organisationId,
+            role: { not: 'patient' },
+            revokedAt: null,
+          },
+          select: { id: true },
+        })
+      ).map((r) => r.id);
+      const { count } = await tx.session.updateMany({
+        where: { id: { in: ending }, revokedAt: null },
+        data: { revokedAt: now, revokedReason: 'admin_signout' },
+      });
+      await revokePushDevicesForSessions(tx, ending, 'admin_signout', now);
+      await writeAudit(tx, request, {
+        action: 'staff.sessions.revoked_all',
+        organisationId: actor.organisationId,
+        actorUserId: actor.userId,
+        entityType: 'user',
+        entityId: targetUserId,
+        metadata: { sessionsRevoked: count },
+      });
+      return { revoked: count };
+    });
+  }
+
+  /** Another organisation's staff (or a patient) read as not found. */
+  private async requireStaff(actor: Actor, targetUserId: string): Promise<void> {
+    const count = await withTenant(this.s.db, actor.organisationId, (tx) =>
+      tx.membership.count({ where: { userId: targetUserId, role: { in: STAFF } } }),
+    );
+    if (count === 0) throw new AppError(404, 'NOT_FOUND', 'Not found.');
   }
 
   /**
@@ -131,10 +242,12 @@ export class StaffService {
           lockedUntil: null,
         },
       });
+      const ending = await liveSessionIds(tx, { userId: targetUserId, staffOnly: true });
       const revoked = await tx.session.updateMany({
-        where: { userId: targetUserId, revokedAt: null, role: { not: 'patient' } },
+        where: { id: { in: ending }, revokedAt: null },
         data: { revokedAt: now, revokedReason: 'authenticator_reset' },
       });
+      await revokePushDevicesForSessions(tx, ending, 'authenticator_reset', now);
       await writeAudit(tx, request, {
         action: 'staff.authenticator.reset',
         organisationId: actor.organisationId,

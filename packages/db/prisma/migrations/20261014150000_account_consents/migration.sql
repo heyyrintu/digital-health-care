@@ -23,6 +23,11 @@ ALTER TABLE account_consents ADD CONSTRAINT account_consents_kind_check
 ALTER TABLE account_consents ADD CONSTRAINT account_consents_withdrawn_check
   CHECK (withdrawn_at IS NULL OR withdrawn_at >= accepted_at);
 
+-- One acceptance in force per account, consent and version, even if two taps race.
+CREATE UNIQUE INDEX account_consents_in_force_key
+  ON account_consents (organisation_id, user_id, kind, version)
+  WHERE withdrawn_at IS NULL;
+
 -- Consent records are evidence: never deleted, and only the withdrawal time may change.
 ALTER TABLE account_consents ENABLE ROW LEVEL SECURITY;
 GRANT SELECT, INSERT ON account_consents TO dhc_app;

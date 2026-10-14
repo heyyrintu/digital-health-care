@@ -78,6 +78,16 @@ describe('consents', () => {
     expect(audit).toHaveLength(1);
   });
 
+  it('records one acceptance when two arrive at once', async () => {
+    const tokens = await patientLogin(h, 'clinic-a', '9876543210');
+    const both = await Promise.all([
+      call('POST', '/portal/consents', tokens, { accept: ALL }),
+      call('POST', '/portal/consents', tokens, { accept: ALL }),
+    ]);
+    expect(both.map((r) => r.statusCode)).toEqual([200, 200]);
+    expect(await h.owner.accountConsent.count()).toBe(3);
+  });
+
   it('refuses an outdated version', async () => {
     const tokens = await patientLogin(h, 'clinic-a', '9876543210');
     const res = await call('POST', '/portal/consents', tokens, {

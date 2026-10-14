@@ -138,6 +138,7 @@ export function PracticeCard() {
             noShowWindowDays: Number(data.get('noShowWindow')),
             cancelCutoffMinutes: Number(data.get('cancelCutoff')),
             autoConfirm: data.get('autoConfirm') === 'on',
+            noShowAfterMinutes: data.get('noShow') === '' ? null : Number(data.get('noShow')),
           },
         }),
       );
@@ -331,6 +332,23 @@ export function PracticeCard() {
               required
               defaultValue={rules.overbookPerDay}
             />
+          </div>
+          <div className={FIELD}>
+            <label className={LABEL} htmlFor="rules-no-show">
+              {t('practice.noShow')}
+            </label>
+            <Input
+              id="rules-no-show"
+              name="noShow"
+              type="number"
+              min={0}
+              max={720}
+              aria-describedby="rules-no-show-hint"
+              defaultValue={rules.noShowAfterMinutes ?? ''}
+            />
+            <p id="rules-no-show-hint" className="text-xs text-muted-foreground">
+              {t('practice.noShowHint')}
+            </p>
           </div>
           <div className={FIELD}>
             <label className={LABEL} htmlFor="rules-max-active">

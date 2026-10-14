@@ -9,6 +9,7 @@ import {
 } from '@dhc/contracts';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
+import { idempotent } from '../../idempotency';
 import { authOf, authenticate, requireRole } from '../../plugins/authenticate';
 import type { Services } from '../../services';
 import { AppointmentService } from './service';
@@ -39,14 +40,19 @@ export const appointmentRoutes: FastifyPluginAsync<{ services: Services }> = asy
 
   app.post('/appointments', staff, async (request, reply) => {
     const body = CreateAppointmentBody.parse(request.body);
-    const created = await appointments.create(request, authOf(request), body);
-    return reply.status(201).send(AppointmentDetail.parse(created));
+    return idempotent(services, request, reply, async () => {
+      const created = await appointments.create(request, authOf(request), body);
+      return { status: 201, body: AppointmentDetail.parse(created) };
+    });
   });
 
-  app.post('/appointments/:id/actions', staff, async (request) => {
+  app.post('/appointments/:id/actions', staff, async (request, reply) => {
     const { id } = IdParams.parse(request.params);
     const body = AppointmentActionBody.parse(request.body);
-    return AppointmentDetail.parse(await appointments.act(request, authOf(request), id, body));
+    return idempotent(services, request, reply, async () => ({
+      status: 200,
+      body: AppointmentDetail.parse(await appointments.act(request, authOf(request), id, body)),
+    }));
   });
 
   app.post('/appointments/:id/reschedule', staff, async (request, reply) => {
