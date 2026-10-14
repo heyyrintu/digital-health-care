@@ -275,12 +275,18 @@ export class QueueService {
     });
   }
 
-  /** Today's board for a screen: per doctor, the token being seen and the next few. */
-  async board(token: string): Promise<DisplayBoard> {
+  /** The live screen a token belongs to; a revoked or unknown token is refused. */
+  async screen(token: string) {
     const screen = await withAuth(this.s.db, (tx) =>
       tx.displayScreen.findUnique({ where: { tokenHash: hashToken(token) } }),
     );
     if (!screen || screen.revokedAt) throw BAD_SCREEN();
+    return screen;
+  }
+
+  /** Today's board for a screen: per doctor, the token being seen and the next few. */
+  async board(token: string): Promise<DisplayBoard> {
+    const screen = await this.screen(token);
 
     const date = istDate(this.s.now());
     const actor: Actor = {

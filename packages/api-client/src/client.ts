@@ -68,6 +68,58 @@ export function createApiClient(options: ApiClientOptions) {
     return schema.parse(payload);
   }
 
+  /**
+   * A server-sent event stream (the live queue). Calls `onEvent` for each event until the
+   * server closes the stream or `signal` aborts; refusals throw ApiError like requests do.
+   * Uses fetch rather than EventSource so the bearer token goes in a header.
+   */
+  async function stream(
+    method: 'GET' | 'POST',
+    path: string,
+    {
+      body,
+      query,
+      signal,
+      onEvent,
+    }: {
+      body?: unknown;
+      query?: RequestOptions<z.ZodType>['query'];
+      signal?: AbortSignal;
+      onEvent: (event: string, data: unknown) => void;
+    },
+  ): Promise<void> {
+    const headers: Record<string, string> = { accept: 'text/event-stream' };
+    if (body !== undefined) headers['content-type'] = 'application/json';
+    const token = await options.getAccessToken?.();
+    if (token) headers.authorization = `Bearer ${token}`;
+    const response = await fetchImpl(buildUrl(baseUrl, path, query), {
+      method,
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal,
+    });
+    if (!response.ok || !response.body) {
+      throw toApiError(response, await response.json().catch(() => undefined));
+    }
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) return;
+      buffer += decoder.decode(value, { stream: true });
+      let end: number;
+      while ((end = buffer.indexOf('\n\n')) >= 0) {
+        const block = buffer.slice(0, end);
+        buffer = buffer.slice(end + 2);
+        if (!block || block.startsWith(':')) continue;
+        const event = /^event: (.*)$/m.exec(block)?.[1] ?? 'message';
+        const raw = /^data: (.*)$/m.exec(block)?.[1];
+        onEvent(event, parseData(raw));
+      }
+    }
+  }
+
   /** A file response (a PDF); errors come back as the usual JSON error shape. */
   async function requestFile(
     method: 'GET' | 'POST',
@@ -93,6 +145,7 @@ export function createApiClient(options: ApiClientOptions) {
   return {
     request,
     requestFile,
+    stream,
     getHealth: (signal?: AbortSignal) =>
       request('GET', '/health', { schema: HealthResponse, signal }),
 
@@ -185,4 +238,13 @@ function toApiError(response: Response, payload: unknown): ApiError {
     'Something went wrong. Please try again.',
     response.headers.get('x-request-id') ?? undefined,
   );
+}
+
+function parseData(raw: string | undefined): unknown {
+  if (raw === undefined) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return raw;
+  }
 }
