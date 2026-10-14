@@ -259,6 +259,7 @@ model Organisation {
   doctorProfiles         DoctorProfile[]
   medicineRequests       MedicineRequest[]
   verifications          PrescriptionVerification[]
+  accountConsents        AccountConsent[]
 
   @@map("organisations")
 }
@@ -523,6 +524,13 @@ model BookingRules {
   sameDayCutoffMinutes Int      @default(60) @map("same_day_cutoff_minutes")
   /// Staff may book this many extra patients into taken slots per doctor per day.
   overbookPerDay       Int      @default(2) @map("overbook_per_day")
+  /// Patient self-booking (PRD §4.3): upcoming bookings per patient, the no-show block,
+  /// how late a patient may cancel, and whether bookings wait for the front desk.
+  maxActiveBookings    Int      @default(2) @map("max_active_bookings")
+  noShowLimit          Int      @default(3) @map("no_show_limit")
+  noShowWindowDays     Int      @default(90) @map("no_show_window_days")
+  cancelCutoffMinutes  Int      @default(120) @map("cancel_cutoff_minutes")
+  autoConfirm          Boolean  @default(true) @map("auto_confirm")
   updatedAt            DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   organisation Organisation @relation(fields: [organisationId], references: [id])
@@ -1226,4 +1234,22 @@ model AuditLog {
 
   @@index([organisationId, at])
   @@map("audit_logs")
+}
+
+/// A patient account's acceptance of the privacy notice, terms or health-data consent
+/// (PRD §4.1, C9), one row per acceptance. Withdrawing keeps the row and sets withdrawnAt.
+model AccountConsent {
+  id             String    @id @default(uuid()) @db.Uuid
+  organisationId String    @map("organisation_id") @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  /// privacy_notice, terms or health_data
+  kind           String
+  version        String
+  acceptedAt     DateTime  @default(now()) @map("accepted_at") @db.Timestamptz(3)
+  withdrawnAt    DateTime? @map("withdrawn_at") @db.Timestamptz(3)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+
+  @@index([organisationId, userId, kind])
+  @@map("account_consents")
 }

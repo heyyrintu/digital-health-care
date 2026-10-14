@@ -133,14 +133,29 @@ describe('clinic setup', () => {
       horizonDays: 30,
       sameDayCutoffMinutes: 60,
       overbookPerDay: 2,
+      maxActiveBookings: 2,
+      noShowLimit: 3,
+      noShowWindowDays: 90,
+      cancelCutoffMinutes: 120,
+      autoConfirm: true,
     });
     const put = await call('PUT', '/booking-rules', adminA, {
       horizonDays: 14,
       sameDayCutoffMinutes: 120,
       overbookPerDay: 1,
+      maxActiveBookings: 1,
+      noShowLimit: 0,
+      noShowWindowDays: 30,
+      cancelCutoffMinutes: 60,
+      autoConfirm: false,
     });
     expect(put.statusCode).toBe(200);
-    expect((await call('GET', '/booking-rules', desk)).json().horizonDays).toBe(14);
+    expect((await call('GET', '/booking-rules', desk)).json()).toMatchObject({
+      horizonDays: 14,
+      noShowLimit: 0,
+      cancelCutoffMinutes: 60,
+      autoConfirm: false,
+    });
     expect(
       (
         await call('PUT', '/booking-rules', adminA, {

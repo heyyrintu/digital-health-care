@@ -1,5 +1,17 @@
 import {
   AcceptInviteResponse,
+  BookingOptions,
+  ConsentStatus,
+  PortalAppointment,
+  PortalAppointmentList,
+  PortalPrescriptionList,
+  SlotsResponse,
+  type PortalBookBody,
+  type PortalSlotsQuery,
+  PortalPatient,
+  PortalPatientList,
+  type AcceptConsentsBody,
+  type CreatePortalPatientBody,
   ErrorResponse,
   HealthResponse,
   InviteDetails,
@@ -174,6 +186,33 @@ export function createApiClient(options: ApiClientOptions) {
     /** Doctor: set or change the signing PIN, confirmed with the account password. */
     setSigningPin: (password: string, pin: string) =>
       request('PUT', '/doctor-profile/signing-pin', { schema: NoContent, body: { password, pin } }),
+    // Patient app and web portal (patients only).
+    portalConsents: () => request('GET', '/portal/consents', { schema: ConsentStatus }),
+    acceptConsents: (accept: AcceptConsentsBody['accept']) =>
+      request('POST', '/portal/consents', { schema: ConsentStatus, body: { accept } }),
+    withdrawHealthDataConsent: () =>
+      request('POST', '/portal/consents/health_data/withdraw', { schema: ConsentStatus }),
+    portalPatients: () => request('GET', '/portal/patients', { schema: PortalPatientList }),
+    addPortalPatient: (body: CreatePortalPatientBody) =>
+      request('POST', '/portal/patients', { schema: PortalPatient, body }),
+    bookingOptions: () => request('GET', '/portal/booking-options', { schema: BookingOptions }),
+    portalSlots: (query: PortalSlotsQuery) =>
+      request('GET', '/portal/slots', { schema: SlotsResponse, query: { ...query } }),
+    portalAppointments: () =>
+      request('GET', '/portal/appointments', { schema: PortalAppointmentList }),
+    bookPortalAppointment: (body: PortalBookBody) =>
+      request('POST', '/portal/appointments', { schema: PortalAppointment, body }),
+    cancelPortalAppointment: (id: string, reason?: string) =>
+      request('POST', `/portal/appointments/${encodeURIComponent(id)}/cancel`, {
+        schema: PortalAppointment,
+        body: reason ? { reason } : {},
+      }),
+    portalPrescriptions: () =>
+      request('GET', '/portal/prescriptions', { schema: PortalPrescriptionList }),
+    /** The signed PDF of one of the family's prescriptions. */
+    portalPrescriptionPdf: (id: string) =>
+      requestFile('GET', `/portal/prescriptions/${encodeURIComponent(id)}/pdf`),
+
     /** Ends the session of the current access token. */
     logout: () => request('POST', '/auth/logout', { schema: NoContent }),
   };

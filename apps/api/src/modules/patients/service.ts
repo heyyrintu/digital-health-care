@@ -56,6 +56,35 @@ export function toSummary(p: PatientWithTags): PatientSummary {
 
 const uhidOf = (prefix: string, n: number) => `${prefix}${n}`;
 
+/**
+ * Takes the next number under a row lock, so concurrent registrations never share a
+ * UHID. Numbers already in use (imported patients keep their UHIDs, or an admin moved
+ * the counter back) are skipped.
+ */
+export async function allocateUhid(tx: Tx, organisationId: string): Promise<string> {
+  await tx.$executeRaw`
+    INSERT INTO uhid_settings (organisation_id, prefix, next_number, updated_at)
+    VALUES (${organisationId}::uuid, '', ${DEFAULT_UHID_START}, now())
+    ON CONFLICT (organisation_id) DO NOTHING`;
+  for (let attempt = 0; attempt < 1000; attempt++) {
+    const [row] = await tx.$queryRaw<{ prefix: string; n: number }[]>`
+      UPDATE uhid_settings SET next_number = next_number + 1, updated_at = now()
+      WHERE organisation_id = ${organisationId}::uuid
+      RETURNING prefix, next_number - 1 AS n`;
+    const uhid = uhidOf(row!.prefix, row!.n);
+    const taken = await tx.patient.findUnique({
+      where: { organisationId_uhid: { organisationId, uhid } },
+      select: { id: true },
+    });
+    if (!taken) return uhid;
+  }
+  throw new AppError(
+    409,
+    'CONFLICT',
+    'No free UHID near the next number. Ask a clinic admin to check the UHID settings.',
+  );
+}
+
 interface PatientFieldData {
   name?: string;
   phone?: string | null;
@@ -166,7 +195,7 @@ export class PatientService {
       }
       if (tagIds.length > 0) await this.assignableTags(tx, tagIds);
 
-      const uhid = await this.allocateUhid(tx, actor.organisationId);
+      const uhid = await allocateUhid(tx, actor.organisationId);
       const created = await tx.patient.create({
         data: {
           ...fields,
@@ -316,35 +345,6 @@ export class PatientService {
   }
 
   // ---- Internals ----------------------------------------------------------------------
-
-  /**
-   * Takes the next number under a row lock, so concurrent registrations never share a
-   * UHID. Numbers already in use (imported patients keep their UHIDs, or an admin moved
-   * the counter back) are skipped.
-   */
-  private async allocateUhid(tx: Tx, organisationId: string): Promise<string> {
-    await tx.$executeRaw`
-      INSERT INTO uhid_settings (organisation_id, prefix, next_number, updated_at)
-      VALUES (${organisationId}::uuid, '', ${DEFAULT_UHID_START}, now())
-      ON CONFLICT (organisation_id) DO NOTHING`;
-    for (let attempt = 0; attempt < 1000; attempt++) {
-      const [row] = await tx.$queryRaw<{ prefix: string; n: number }[]>`
-        UPDATE uhid_settings SET next_number = next_number + 1, updated_at = now()
-        WHERE organisation_id = ${organisationId}::uuid
-        RETURNING prefix, next_number - 1 AS n`;
-      const uhid = uhidOf(row!.prefix, row!.n);
-      const taken = await tx.patient.findUnique({
-        where: { organisationId_uhid: { organisationId, uhid } },
-        select: { id: true },
-      });
-      if (!taken) return uhid;
-    }
-    throw new AppError(
-      409,
-      'CONFLICT',
-      'No free UHID near the next number. Ask a clinic admin to check the UHID settings.',
-    );
-  }
 
   private async findDuplicates(tx: Tx, name: string, phone: string | null, dob: string | null) {
     const or: Prisma.PatientWhereInput[] = [];

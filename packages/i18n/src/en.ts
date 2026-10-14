@@ -298,6 +298,12 @@ export const en = {
   'patient.noAppointments': 'No appointments yet.',
   'patient.book': 'Book appointment',
   'practice.overbook': 'Extra patients staff may overbook (per doctor, per day)',
+  'practice.maxActive': 'Upcoming bookings one patient may hold (patient app)',
+  'practice.noShowLimit': 'Pause online booking after this many no-shows (0 = never)',
+  'practice.noShowWindow': 'Count no-shows over the last (days)',
+  'practice.cancelCutoff': 'Patients may cancel up to (minutes before)',
+  'practice.autoConfirm':
+    'Confirm patient bookings at once (otherwise the front desk confirms them)',
   'dashboard.queue': 'Queue',
   'queue.title': 'Queue',
   'queue.tab.myOpd': 'My OPD',
@@ -835,6 +841,7 @@ export const en = {
   'medicines.perMl': 'mg per ml',
   'medicines.strength': 'mg',
   'audit.area.settings': 'Settings',
+  'audit.area.consent': 'Patient consents',
   'chart.restricted':
     'This clinic opens a patient’s chart only to the doctors who have seen them. Check the patient in to you to open it.',
   'policy.title': 'Chart, safety alerts and files',

@@ -48,8 +48,15 @@ test.describe('doctor availability', () => {
     await expect(page.getByTestId('type-Video consultation')).toContainText('Paid at booking');
 
     await card.getByLabel('Patients can book up to (days ahead)').fill('14');
+    await card.getByLabel('Patients may cancel up to (minutes before)').fill('60');
+    await card.getByLabel(/Confirm patient bookings at once/).uncheck();
     await card.getByRole('button', { name: 'Save' }).click();
     await expect(card.getByRole('status')).toHaveText('Booking rules saved.');
+
+    await page.reload();
+    await expect(card.getByLabel('Patients can book up to (days ahead)')).toHaveValue('14');
+    await expect(card.getByLabel('Patients may cancel up to (minutes before)')).toHaveValue('60');
+    await expect(card.getByLabel(/Confirm patient bookings at once/)).not.toBeChecked();
   });
 
   test('a doctor sets a weekly schedule, takes leave, and sees the slots change', async ({

@@ -10,6 +10,7 @@ import {
   type CreateAppointmentBody,
   type RescheduleAppointmentBody,
   type Role,
+  type SlotChannel,
 } from '@dhc/contracts';
 import { withAuth, withTenant, type Prisma, type Tx } from '@dhc/db';
 import { istDate } from '@dhc/domain';
@@ -86,6 +87,10 @@ interface Placement {
   reason?: string | null;
   source: AppointmentSource;
   rescheduledFromId?: string;
+  /** `patient` applies the horizon and same-day cutoff (self-booking); staff otherwise. */
+  channel?: SlotChannel;
+  /** Defaults to confirmed (checked in for walk-ins). */
+  status?: AppointmentStatus;
 }
 
 /**
@@ -237,13 +242,11 @@ export class AppointmentService {
     });
   }
 
-  /** Checks and books one appointment inside the caller's transaction; returns its ID. */
-  private async place(
-    tx: Tx,
-    request: FastifyRequest,
-    actor: Actor,
-    p: Placement,
-  ): Promise<string> {
+  /**
+   * Checks and books one appointment inside the caller's transaction; returns its ID.
+   * Also used by the patient portal for self-booking.
+   */
+  async place(tx: Tx, request: FastifyRequest, actor: Actor, p: Placement): Promise<string> {
     const now = this.s.now();
     const patient = await tx.patient.findUnique({
       where: { id: p.patientId },
@@ -268,7 +271,7 @@ export class AppointmentService {
         clinicId: p.clinicId,
         consultationTypeId: p.consultationTypeId,
         date,
-        channel: 'staff',
+        channel: p.channel ?? 'staff',
       },
       now,
       { ignoreAppointmentId: p.rescheduledFromId },
@@ -300,6 +303,11 @@ export class AppointmentService {
       if (slot.unavailableReason === 'past') {
         throw new AppError(409, 'SLOT_TAKEN', 'This slot has already started.', {
           startAt: 'unavailable',
+        });
+      }
+      if (slot.unavailableReason === 'cutoff') {
+        throw new AppError(409, 'SLOT_TAKEN', 'This slot is too soon to book online.', {
+          startAt: 'cutoff',
         });
       }
       if (slot.unavailableReason === 'busy') {
@@ -353,7 +361,7 @@ export class AppointmentService {
       where: { doctorUserId: p.doctorUserId, clinicId: p.clinicId, date: toDbDate(date) },
       _max: { tokenNumber: true },
     });
-    const status: AppointmentStatus = p.walkIn ? 'checked_in' : 'confirmed';
+    const status: AppointmentStatus = p.status ?? (p.walkIn ? 'checked_in' : 'confirmed');
     const created = await tx.appointment.create({
       data: {
         organisationId: actor.organisationId,
@@ -398,12 +406,13 @@ export class AppointmentService {
    * changes (or reschedules) of the same appointment never both pass the status check.
    * RLS still applies: another organisation's row is not found.
    */
-  private async lockRow(tx: Tx, id: string) {
+  async lockRow(tx: Tx, id: string) {
     await tx.$queryRaw`SELECT id FROM appointments WHERE id = ${id}::uuid FOR UPDATE`;
     return tx.appointment.findUnique({ where: { id } });
   }
 
-  private record(
+  /** Adds a status change to the appointment's history (also used by the patient portal). */
+  record(
     tx: Tx,
     actor: Actor,
     appointmentId: string,

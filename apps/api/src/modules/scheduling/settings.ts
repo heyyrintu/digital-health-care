@@ -24,6 +24,11 @@ export const DEFAULT_BOOKING_RULES: BookingRules = {
   horizonDays: 30,
   sameDayCutoffMinutes: 60,
   overbookPerDay: 2,
+  maxActiveBookings: 2,
+  noShowLimit: 3,
+  noShowWindowDays: 90,
+  cancelCutoffMinutes: 120,
+  autoConfirm: true,
 };
 
 const NOT_FOUND = () => new AppError(404, 'NOT_FOUND', 'Not found.');
@@ -49,10 +54,15 @@ const toConsultationType = (t: Prisma.ConsultationTypeGetPayload<object>): Consu
   active: t.active,
 });
 
-const toRules = (r: Prisma.BookingRulesGetPayload<object>): BookingRules => ({
+export const toRules = (r: Prisma.BookingRulesGetPayload<object>): BookingRules => ({
   horizonDays: r.horizonDays,
   sameDayCutoffMinutes: r.sameDayCutoffMinutes,
   overbookPerDay: r.overbookPerDay,
+  maxActiveBookings: r.maxActiveBookings,
+  noShowLimit: r.noShowLimit,
+  noShowWindowDays: r.noShowWindowDays,
+  cancelCutoffMinutes: r.cancelCutoffMinutes,
+  autoConfirm: r.autoConfirm,
 });
 
 /**
