@@ -202,10 +202,13 @@ describe('the account’s patients', () => {
       expect.objectContaining({ id: kid.json().id, relation: 'dependant' }),
     ]);
     const audit = await h.owner.auditLog.findMany({ where: { action: 'patient.created' } });
-    expect(audit.map((a) => a.metadata)).toEqual([
-      { source: 'patient_app', dependant: false },
-      { source: 'patient_app', dependant: true },
-    ]);
+    expect(audit).toHaveLength(2);
+    expect(audit.map((a) => a.metadata)).toEqual(
+      expect.arrayContaining([
+        { source: 'patient_app', dependant: false },
+        { source: 'patient_app', dependant: true },
+      ]),
+    );
   });
 
   it('does not add the same person twice', async () => {
@@ -257,6 +260,41 @@ describe('the account’s patients', () => {
       guardianPatientId: kid.id,
     });
     expect(viaChild.statusCode).toBe(400);
+
+    // A teenager on the account's own number is still not a guardian.
+    const teen = await registerAtDesk({
+      name: 'Riya Kapoor',
+      phone: '9876543210',
+      dob: '2010-06-01',
+      gender: 'female',
+    });
+    const viaTeen = await call('POST', '/portal/patients', tokens, {
+      name: 'Baby Kapoor',
+      dob: '2025-01-01',
+      gender: 'female',
+      guardianPatientId: teen.id,
+    });
+    expect(viaTeen.statusCode).toBe(400);
+
+    // And a child is added with a guardian, never on their own.
+    const alone = await call('POST', '/portal/patients', tokens, {
+      name: 'Kabir Kapoor',
+      dob: '2018-03-03',
+      gender: 'male',
+    });
+    expect(alone.statusCode).toBe(400);
+    expect(alone.json().error.fields).toEqual({ guardianPatientId: expect.any(String) });
+  });
+
+  it('keeps a withdrawal final in the database', async () => {
+    const tokens = await signedUp('9876543210');
+    await call('POST', '/portal/consents/health_data/withdraw', tokens);
+    await expect(
+      h.owner.accountConsent.updateMany({
+        where: { kind: 'health_data' },
+        data: { withdrawnAt: null },
+      }),
+    ).rejects.toThrow(/stays withdrawn/);
   });
 
   it('refuses a date of birth in the future', async () => {

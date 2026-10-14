@@ -17,6 +17,9 @@ CREATE INDEX "account_consents_organisation_id_user_id_kind_idx" ON "account_con
 -- AddForeignKey
 ALTER TABLE "account_consents" ADD CONSTRAINT "account_consents_organisation_id_fkey" FOREIGN KEY ("organisation_id") REFERENCES "organisations"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
+-- AddForeignKey
+ALTER TABLE "account_consents" ADD CONSTRAINT "account_consents_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "users"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+
 
 ALTER TABLE account_consents ADD CONSTRAINT account_consents_kind_check
   CHECK (kind IN ('privacy_notice', 'terms', 'health_data'));
@@ -35,3 +38,19 @@ GRANT UPDATE (withdrawn_at) ON account_consents TO dhc_app;
 CREATE POLICY tenant_isolation ON account_consents TO dhc_app
   USING (organisation_id = app_current_organisation_id())
   WITH CHECK (organisation_id = app_current_organisation_id());
+
+-- A withdrawal is final: consenting again appends a new acceptance, so the record shows both.
+CREATE FUNCTION account_consents_withdraw_once() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  IF OLD.withdrawn_at IS NOT NULL THEN
+    RAISE EXCEPTION 'A withdrawn consent stays withdrawn; record a new acceptance instead'
+      USING ERRCODE = 'check_violation';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER account_consents_withdraw_once
+  BEFORE UPDATE ON account_consents
+  FOR EACH ROW EXECUTE FUNCTION account_consents_withdraw_once();

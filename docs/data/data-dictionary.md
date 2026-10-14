@@ -2,7 +2,7 @@
 
 **Status:** Draft · **Owner:** Backend lead · **Update:** with every migration.
 
-Conventions for every table: `id` (UUID), `organisationId` (except platform-level User/Device), `createdAt`, `updatedAt`, `deletedAt` where soft delete applies. Files are stored by S3 key, never by public URL. Fields marked *(encrypted)* use field-level encryption. Row-level security filters every query by `organisationId` (ADR 0014). Database columns are snake_case (`organisation_id`); this document uses the camelCase field names.
+Conventions for every table: `id` (UUID), `organisationId` (except platform-level User/Device), `createdAt`, `updatedAt`, `deletedAt` where soft delete applies; append-only evidence tables such as AccountConsent carry their own event times instead (`acceptedAt`, `withdrawnAt`). Files are stored by S3 key, never by public URL. Fields marked *(encrypted)* use field-level encryption. Row-level security filters every query by `organisationId` (ADR 0014). Database columns are snake_case (`organisation_id`); this document uses the camelCase field names.
 
 **Implemented so far:** Organisation, User, Membership, StaffInvite, Session, OtpChallenge and AuditLog (Phase 0); Patient, UhidSettings, Tag and PatientTag (patient register); Clinic, ConsultationType, BookingRules, AvailabilityVersion and AvailabilityException (availability); Appointment and AppointmentStatusHistory (appointments); DisplayScreen (queue); PriceListItem, Bill, BillItem, Payment and ReceiptSettings (billing and counter payments); OrganisationSettings (clinic admin settings); AccountConsent (patient onboarding consents) — see `packages/db/prisma/schema.prisma`. Everything else below is the target design.
 
