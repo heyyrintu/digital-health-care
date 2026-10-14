@@ -970,6 +970,11 @@ export const hi: Record<MessageKey, string> = {
   'mobile.clinic.back': 'कतार पर लौटें',
   'mobile.clinic.reason': 'कारण: {reason}',
   'mobile.clinic.savedOnDevice': 'इस डिवाइस पर सेव हो गया। कनेक्शन लौटने पर सिंक होगा।',
+  'mobile.clinic.followUpInvalid': 'फ़ॉलो-अप की तारीख़ YYYY-MM-DD में लिखें, या ख़ाली छोड़ें।',
+  'mobile.clinic.vitalsStale':
+    'ये वाइटल्स किसी दूसरे डिवाइस पर बदले गए हैं। नई रीडिंग देखने के लिए विज़िट फिर से खोलें।',
+  'mobile.clinic.signNeedsBiometrics':
+    'यहाँ साइन करने के लिए इस डिवाइस पर Face ID या फ़िंगरप्रिंट सेट होना चाहिए। आप वेब पर भी साइन कर सकते हैं।',
   'mobile.clinic.vitalsInvalid': 'रीडिंग जाँचें: एक संभव सीमा से बाहर है।',
   'mobile.clinic.offlineMedicines': 'ऑफ़लाइन: इस डिवाइस पर रखी दवा सूची में खोज रहे हैं।',
   'mobile.clinic.signPrompt': 'यह पर्चा साइन करने के लिए पुष्टि करें कि यह आप हैं',

@@ -967,6 +967,11 @@ export const en = {
   'mobile.clinic.back': 'Back to the queue',
   'mobile.clinic.reason': 'Reason: {reason}',
   'mobile.clinic.savedOnDevice': 'Saved on this device. It will sync when the connection is back.',
+  'mobile.clinic.followUpInvalid': 'Enter the follow-up date as YYYY-MM-DD, or leave it empty.',
+  'mobile.clinic.vitalsStale':
+    'These vitals were changed on another device. Reopen the visit to see the latest readings.',
+  'mobile.clinic.signNeedsBiometrics':
+    'Signing here needs Face ID or a fingerprint set up on this device. You can also sign on the web.',
   'mobile.clinic.vitalsInvalid': 'Check the readings: one is outside the possible range.',
   'mobile.clinic.offlineMedicines':
     'Offline: searching the copy of the medicine list on this device.',

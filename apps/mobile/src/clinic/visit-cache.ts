@@ -14,6 +14,10 @@ export interface SavedVisit {
  * when the network drops. Only today's are kept; signing out deletes them.
  */
 export class VisitCache {
+  /** Writes run one after another, and clear() waits for them, so none outlives a sign-out. */
+  private queue: Promise<void> = Promise.resolve();
+  private generation = 0;
+
   constructor(
     private readonly store: KeyValueStore,
     private readonly today: () => string,
@@ -25,17 +29,28 @@ export class VisitCache {
     return saved && saved.view.appointment.date === this.today() ? saved : null;
   }
 
-  async put(view: ConsultationView, chart: PatientChart | null): Promise<void> {
-    const all = (await this.store.get<Record<string, SavedVisit>>(KEY)) ?? {};
-    const today = this.today();
-    const kept = Object.fromEntries(
-      Object.entries(all).filter(([, v]) => v.view.appointment.date === today),
-    );
-    kept[view.appointment.id] = { view, chart };
-    await this.store.set(KEY, kept);
+  put(view: ConsultationView, chart: PatientChart | null): Promise<void> {
+    const generation = this.generation;
+    return this.serial(async () => {
+      if (generation !== this.generation) return;
+      const all = (await this.store.get<Record<string, SavedVisit>>(KEY)) ?? {};
+      const today = this.today();
+      const kept = Object.fromEntries(
+        Object.entries(all).filter(([, v]) => v.view.appointment.date === today),
+      );
+      kept[view.appointment.id] = { view, chart };
+      await this.store.set(KEY, kept);
+    });
   }
 
-  async clear(): Promise<void> {
-    await this.store.remove(KEY);
+  clear(): Promise<void> {
+    this.generation += 1;
+    return this.serial(() => this.store.remove(KEY));
+  }
+
+  private serial(task: () => Promise<void>): Promise<void> {
+    const run = this.queue.then(task);
+    this.queue = run.catch(() => undefined);
+    return run;
   }
 }

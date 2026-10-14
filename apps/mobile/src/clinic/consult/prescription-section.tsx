@@ -2,6 +2,7 @@ import { ApiError } from '@dhc/api-client';
 import {
   LastPrescription,
   MedicineList,
+  MedicineRoute,
   Prescription,
   SafetySummary,
   type ConsultationView,
@@ -66,6 +67,10 @@ export function PrescriptionSection({
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ tone: Tone; text: string } | null>(null);
   const editable = rx.canEdit;
+  const [signing, setSigning] = useState(false);
+  // While a save, an alert answer or signing is in flight the draft is frozen: the answer
+  // replaces it, and signing approves exactly the saved revision on screen.
+  const canType = editable && busy === null && !signing;
   const templates = useToday().data?.templates ?? [];
   const [showTemplates, setShowTemplates] = useState(false);
 
@@ -172,6 +177,7 @@ export function PrescriptionSection({
               key={l}
               variant={language === l ? 'primary' : 'secondary'}
               label={l === 'en' ? 'English' : 'हिन्दी'}
+              disabled={!canType}
               onPress={() => {
                 setLanguage(l);
                 setDirty(true);
@@ -186,14 +192,14 @@ export function PrescriptionSection({
           key={line.id}
           line={line}
           language={language}
-          editable={editable}
+          editable={canType}
           alerts={(safety?.alerts ?? []).filter((a) => a.itemId === line.id)}
           onChange={(next) => change(lines.map((l, j) => (j === i ? next : l)))}
           onRemove={() => change(lines.filter((_, j) => j !== i))}
         />
       ))}
       {editable && lines.length < 30 && (
-        <MedicineSearch onPick={(line) => change([...lines, line])} />
+        <MedicineSearch disabled={!canType} onPick={(line) => change([...lines, line])} />
       )}
       {editable && (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing[2] }}>
@@ -201,12 +207,14 @@ export function PrescriptionSection({
             variant="secondary"
             label={t('rx.repeatLast')}
             loading={busy === 'last'}
+            disabled={!canType}
             onPress={() => void repeatLast()}
           />
           {templates.length > 0 && (
             <Button
               variant="secondary"
               label={t('rx.templates')}
+              disabled={!canType}
               onPress={() => setShowTemplates((v) => !v)}
             />
           )}
@@ -219,6 +227,7 @@ export function PrescriptionSection({
             key={tpl.id}
             variant="ghost"
             label={`${t('rx.applyTemplate')}: ${tpl.name}`}
+            disabled={!canType}
             onPress={() => {
               setShowTemplates(false);
               add(tpl.items, (count) =>
@@ -230,7 +239,9 @@ export function PrescriptionSection({
       {editable && (
         <Button
           label={dirty ? t('common.save') : t('rx.saved')}
-          disabled={!dirty || lines.length === 0}
+          // An empty list saves too, so removing the last line takes effect; signing still
+          // needs at least one line.
+          disabled={!dirty || signing || (busy !== null && busy !== 'save')}
           loading={busy === 'save'}
           onPress={() => void save()}
         />
@@ -250,7 +261,14 @@ export function PrescriptionSection({
           revision={saved.revision}
           blocker={blocker}
           missing={rx.signingMissing}
-          onSigned={onChanged}
+          onStage={setSigning}
+          onSigned={async (signed) => {
+            // Shown as signed even if the reload that follows fails.
+            setSaved(signed);
+            setLines(signed.items.map(lineFromItem));
+            setDirty(false);
+            await onChanged().catch(() => undefined);
+          }}
         />
       )}
     </Card>
@@ -287,7 +305,27 @@ function LineEditor({
       }}
     >
       <Text variant="label">{line.name}</Text>
-      {line.medicineId === null && <Text variant="caption">{t('rx.notInMaster')}</Text>}
+      {line.medicineId === null && (
+        <>
+          <Text variant="caption">{t('rx.notInMaster')}</Text>
+          {/* Not in the list, so the route is the doctor's to say; it sets the remark's verb. */}
+          <Text variant="label">{t('rx.route')}</Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing[2] }}>
+            {MedicineRoute.options.map((r) => (
+              <Button
+                key={r}
+                variant={line.route === r ? 'primary' : 'secondary'}
+                label={t(`rx.route.${r}`)}
+                accessibilityState={{ selected: line.route === r }}
+                disabled={!editable}
+                onPress={() =>
+                  onChange({ ...line, route: r, timing: r === 'oral' ? line.timing : null })
+                }
+              />
+            ))}
+          </View>
+        </>
+      )}
       <View style={{ flexDirection: 'row', gap: theme.spacing[2] }}>
         <View style={{ flex: 1 }}>
           <TextField
@@ -353,7 +391,13 @@ function LineEditor({
   );
 }
 
-function MedicineSearch({ onPick }: { onPick: (line: DraftLine) => void }) {
+function MedicineSearch({
+  disabled,
+  onPick,
+}: {
+  disabled: boolean;
+  onPick: (line: DraftLine) => void;
+}) {
   const { t } = useLocale();
   const theme = useTheme();
   const [q, setQ] = useState('');
@@ -364,10 +408,9 @@ function MedicineSearch({ onPick }: { onPick: (line: DraftLine) => void }) {
   useEffect(() => {
     const query = q.trim();
     const mine = ++seq.current;
-    if (query.length < 2) {
-      setResults([]);
-      return;
-    }
+    // Results for the previous text are never left to pick while the new search runs.
+    setResults([]);
+    if (query.length < 2) return;
     const timer = setTimeout(() => {
       api
         .request('GET', '/medicines', { schema: MedicineList, query: { q: query } })
@@ -393,12 +436,20 @@ function MedicineSearch({ onPick }: { onPick: (line: DraftLine) => void }) {
   };
   return (
     <View style={{ gap: theme.spacing[2] }}>
-      <TextField label={t('rx.search')} value={q} onChangeText={setQ} autoCorrect={false} />
+      <TextField
+        label={t('rx.search')}
+        value={q}
+        editable={!disabled}
+        maxLength={100}
+        onChangeText={setQ}
+        autoCorrect={false}
+      />
       {offline && <Text variant="caption">{t('mobile.clinic.offlineMedicines')}</Text>}
       {results.map((m) => (
         <Pressable
           key={m.id}
           accessibilityRole="button"
+          disabled={disabled}
           onPress={() => pick(lineFromMedicine(newKey(), m))}
           style={{ minHeight: theme.minTouchTarget, justifyContent: 'center' }}
         >
@@ -413,6 +464,7 @@ function MedicineSearch({ onPick }: { onPick: (line: DraftLine) => void }) {
         <Button
           variant="secondary"
           label={t('rx.addFreeText', { text: q.trim() })}
+          disabled={disabled}
           onPress={() => pick(freeTextLine(newKey(), q.trim().slice(0, 200)))}
         />
       )}
@@ -505,28 +557,38 @@ function SignPanel({
   revision,
   blocker,
   missing,
+  onStage,
   onSigned,
 }: {
   appointmentId: string;
   revision: number;
   blocker: ReturnType<typeof signBlocker>;
   missing: PrescriptionView['signingMissing'];
-  onSigned: () => Promise<void>;
+  onStage: (signing: boolean) => void;
+  onSigned: (signed: Prescription) => Promise<void>;
 }) {
   const { t } = useLocale();
-  const [stage, setStage] = useState<'idle' | 'pin'>('idle');
+  const [stage, setStageState] = useState<'idle' | 'pin'>('idle');
+  const setStage = (next: 'idle' | 'pin') => {
+    setStageState(next);
+    onStage(next !== 'idle');
+  };
   const [pin, setPin] = useState('');
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
 
   async function approve() {
     setProblem(null);
+    // Biometrics only (build plan D8): the device passcode does not stand in for the doctor's
+    // face or fingerprint here; the server-checked PIN is the second step.
     const result = await LocalAuthentication.authenticateAsync({
       promptMessage: t('mobile.clinic.signPrompt'),
-      disableDeviceFallback: false,
+      disableDeviceFallback: true,
     });
     if (result.success) setStage('pin');
-    else if (result.error !== 'user_cancel' && result.error !== 'system_cancel') {
+    else if (result.error === 'not_enrolled' || result.error === 'not_available') {
+      setProblem(t('mobile.clinic.signNeedsBiometrics'));
+    } else if (result.error !== 'user_cancel' && result.error !== 'system_cancel') {
       setProblem(t('mobile.clinic.unlockFailed'));
     }
   }
@@ -535,13 +597,13 @@ function SignPanel({
     setBusy(true);
     setProblem(null);
     try {
-      await api.request('POST', `/appointments/${appointmentId}/prescription/sign`, {
+      const signed = await api.request('POST', `/appointments/${appointmentId}/prescription/sign`, {
         schema: Prescription,
         body: { revision, pin },
       });
       setStage('idle');
       setPin('');
-      await onSigned();
+      await onSigned(signed);
     } catch (error) {
       setPin('');
       setProblem(
@@ -579,9 +641,18 @@ function SignPanel({
           />
           <Button
             label={t('sign.confirm')}
-            disabled={!isSixDigitCode(pin)}
+            disabled={!isSixDigitCode(pin) || blocker !== null}
             loading={busy}
             onPress={() => void sign()}
+          />
+          <Button
+            variant="ghost"
+            label={t('common.cancel')}
+            disabled={busy}
+            onPress={() => {
+              setPin('');
+              setStage('idle');
+            }}
           />
         </>
       )}

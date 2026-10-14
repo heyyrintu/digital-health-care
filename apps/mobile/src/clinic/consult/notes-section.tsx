@@ -3,6 +3,7 @@ import {
   ConsultationRecord,
   type ConsultationView,
   type Diagnosis,
+  type SaveConsultationBody,
 } from '@dhc/contracts';
 import { searchIcd10 } from '@dhc/domain';
 import type { MessageKey } from '@dhc/i18n';
@@ -13,15 +14,31 @@ import { ApiError } from '@dhc/api-client';
 import { errorMessage } from '../../errors';
 import { useLocale } from '../../locale/provider';
 import { saveOrQueue } from '../actions';
+import { waitingBody } from '../runtime';
 
-const TEXT_FIELDS: { key: keyof ConsultationNotes; label: MessageKey; multiline?: boolean }[] = [
-  { key: 'chiefComplaint', label: 'consult.chiefComplaint' },
-  { key: 'examination', label: 'consult.examination', multiline: true },
-  { key: 'plan', label: 'consult.plan', multiline: true },
-  { key: 'testsAdvised', label: 'consult.testsAdvised', multiline: true },
-  { key: 'advice', label: 'consult.advice', multiline: true },
-  { key: 'privateNotes', label: 'consult.privateNotes', multiline: true },
+/** `max` matches the ConsultationNotes contract, so a note never fails to save for length. */
+const TEXT_FIELDS: {
+  key: keyof ConsultationNotes;
+  label: MessageKey;
+  max: number;
+  multiline?: boolean;
+}[] = [
+  { key: 'chiefComplaint', label: 'consult.chiefComplaint', max: 500 },
+  { key: 'examination', label: 'consult.examination', max: 4000, multiline: true },
+  { key: 'plan', label: 'consult.plan', max: 4000, multiline: true },
+  { key: 'testsAdvised', label: 'consult.testsAdvised', max: 2000, multiline: true },
+  { key: 'advice', label: 'consult.advice', max: 4000, multiline: true },
+  { key: 'privateNotes', label: 'consult.privateNotes', max: 4000, multiline: true },
 ];
+
+/** A blank follow-up clears it; anything else must be a real YYYY-MM-DD date. */
+export function followUpValue(input: string): string | null | undefined {
+  const v = input.trim();
+  if (!v) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return undefined;
+  const d = new Date(`${v}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().startsWith(v) ? v : undefined;
+}
 
 /**
  * The visit's notes. Saved on demand; offline the save waits on the device and is sent
@@ -38,10 +55,16 @@ export function NotesSection({
   const { t } = useLocale();
   const theme = useTheme();
   const editable = view.canEdit && !view.consultation?.lockedAt;
-  const [notes, setNotes] = useState<ConsultationNotes>(
-    () => view.consultation?.notes ?? ConsultationNotes.parse({}),
+  // A save still waiting on this device is newer than the copy the visit was opened with.
+  const [waiting] = useState(() =>
+    waitingBody<SaveConsultationBody>('notes', `/appointments/${view.appointment.id}/consultation`),
   );
-  const [followUp, setFollowUp] = useState(view.consultation?.followUpDate ?? '');
+  const [notes, setNotes] = useState<ConsultationNotes>(
+    () => waiting?.notes ?? view.consultation?.notes ?? ConsultationNotes.parse({}),
+  );
+  const [followUp, setFollowUp] = useState(
+    (waiting ? waiting.followUpDate : view.consultation?.followUpDate) ?? '',
+  );
   const [revision, setRevision] = useState(view.consultation?.revision ?? 0);
   const [dx, setDx] = useState('');
   const [dirty, setDirty] = useState(false);
@@ -60,7 +83,15 @@ export function NotesSection({
     setDx('');
   };
 
+  // Edits wait while a save is in flight: its answer replaces the draft.
+  const canType = editable && !busy;
+
   async function save() {
+    const followUpDate = followUpValue(followUp);
+    if (followUpDate === undefined) {
+      setNotice({ tone: 'error', text: t('mobile.clinic.followUpInvalid') });
+      return;
+    }
     setBusy(true);
     setNotice(null);
     try {
@@ -69,7 +100,7 @@ export function NotesSection({
         path: `/appointments/${view.appointment.id}/consultation`,
         body: {
           notes,
-          followUpDate: /^\d{4}-\d{2}-\d{2}$/.test(followUp) ? followUp : null,
+          followUpDate,
           revision,
         },
         label: `${t('consult.title')} · ${view.appointment.patient.name}`,
@@ -101,7 +132,8 @@ export function NotesSection({
         <TextField
           key={f.key}
           label={t(f.label)}
-          editable={editable}
+          editable={canType}
+          maxLength={f.max}
           multiline={f.multiline}
           value={notes[f.key] as string}
           onChangeText={(value) => edit({ ...notes, [f.key]: value })}
@@ -120,6 +152,7 @@ export function NotesSection({
           {editable && (
             <Button
               variant="ghost"
+              disabled={busy}
               label={t('consult.remove')}
               onPress={() =>
                 edit({ ...notes, diagnoses: notes.diagnoses.filter((_, j) => j !== i) })
@@ -130,11 +163,18 @@ export function NotesSection({
       ))}
       {editable && (
         <>
-          <TextField label={t('consult.diagnosisSearch')} value={dx} onChangeText={setDx} />
+          <TextField
+            label={t('consult.diagnosisSearch')}
+            editable={canType}
+            maxLength={200}
+            value={dx}
+            onChangeText={setDx}
+          />
           {suggestions.map((s) => (
             <Pressable
               key={s.code}
               accessibilityRole="button"
+              disabled={busy}
               onPress={() => addDiagnosis({ code: s.code, label: s.label })}
               style={{ minHeight: theme.minTouchTarget, justifyContent: 'center' }}
             >
@@ -146,6 +186,7 @@ export function NotesSection({
           {dx.trim().length >= 2 && (
             <Button
               variant="secondary"
+              disabled={busy}
               label={t('consult.addFreeText', { text: dx.trim() })}
               onPress={() => addDiagnosis({ code: null, label: dx.trim().slice(0, 200) })}
             />
@@ -155,7 +196,8 @@ export function NotesSection({
       <TextField
         label={t('consult.followUp')}
         hint="YYYY-MM-DD"
-        editable={editable}
+        editable={canType}
+        maxLength={10}
         value={followUp}
         onChangeText={(v) => {
           setFollowUp(v);

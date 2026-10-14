@@ -21,6 +21,14 @@ const send = outboxSender((method, path, options) => api.request(method, path, o
 
 let loaded: Promise<void> | null = null;
 
+/** The body of a notes or vitals save still waiting on this device for `path`, if any. */
+export function waitingBody<T>(kind: 'notes' | 'vitals', path: string): T | null {
+  const item = [...outbox.getItems()]
+    .reverse()
+    .find((i) => i.status === 'pending' && i.kind === kind && i.path === path);
+  return item ? (item.body as T) : null;
+}
+
 /** Reads what this device saved, once. */
 export function loadOffline(): Promise<void> {
   loaded ??= Promise.all([outbox.load(), today.load(), medicines.load()]).then(() => undefined);

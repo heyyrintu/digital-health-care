@@ -82,6 +82,12 @@ export function ConsultationScreen({ appointmentId }: { appointmentId: string })
     );
   }
 
+  // A save updates the copy kept for offline too, so reopening without network shows it.
+  const keep = (next: ConsultationView) => {
+    setView(next);
+    void visits.put(next, chart).catch(() => undefined);
+  };
+
   const left = (
     <>
       {chart && (
@@ -90,16 +96,16 @@ export function ConsultationScreen({ appointmentId }: { appointmentId: string })
           editable={view.canEdit && !offline}
           onChange={(next) => {
             setChart(next);
-            void visits.put(view, next);
+            void visits.put(view, next).catch(() => undefined);
           }}
         />
       )}
       <NotesSection
         key={`notes-${view.consultation?.revision ?? 0}`}
         view={view}
-        onSaved={(record) => setView((v) => (v ? { ...v, consultation: record } : v))}
+        onSaved={(record) => keep({ ...view, consultation: record })}
       />
-      <VitalsSection view={view} />
+      <VitalsSection view={view} onSaved={(vitals) => keep({ ...view, vitals })} />
     </>
   );
   const right = rx ? (

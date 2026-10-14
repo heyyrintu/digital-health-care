@@ -1,4 +1,4 @@
-import { Allergy, type PatientChart } from '@dhc/contracts';
+import { Allergy, PatientChart } from '@dhc/contracts';
 import { Button, Card, Notice, Text, TextField, useTheme } from '@dhc/ui-native';
 import { useState } from 'react';
 import { View } from 'react-native';
@@ -30,23 +30,41 @@ export function ChartSection({
   const [reaction, setReaction] = useState('');
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  // The last attempt lost its answer: it may have been saved, so look before posting again.
+  const [unsure, setUnsure] = useState(false);
   const unverified = (source: string) =>
     source === 'patient' ? ` · ${t('chart.unverified')}` : '';
 
   async function addAllergy() {
     setBusy(true);
     setProblem(null);
+    const done = () => {
+      setAdding(false);
+      setUnsure(false);
+      setSubstance('');
+      setReaction('');
+    };
     try {
+      if (unsure) {
+        const latest = await api.request('GET', `/patients/${chart.patientId}/chart`, {
+          schema: PatientChart,
+        });
+        const name = substance.trim().toLowerCase();
+        if (latest.allergies.some((a) => a.substance.toLowerCase() === name)) {
+          onChange(latest);
+          done();
+          return;
+        }
+      }
       const allergy = await api.request('POST', `/patients/${chart.patientId}/allergies`, {
         schema: Allergy,
         body: { substance: substance.trim(), reaction: reaction.trim() || null, source: 'doctor' },
         idempotencyKey: newKey(),
       });
       onChange({ ...chart, allergies: [...chart.allergies, allergy] });
-      setAdding(false);
-      setSubstance('');
-      setReaction('');
+      done();
     } catch (error) {
+      if (isNetworkError(error)) setUnsure(true);
       setProblem(
         isNetworkError(error) ? t('mobile.clinic.needsConnection') : errorMessage(error, t),
       );
@@ -77,8 +95,20 @@ export function ChartSection({
       )}
       {adding && (
         <View style={{ gap: theme.spacing[2] }}>
-          <TextField label={t('chart.substance')} value={substance} onChangeText={setSubstance} />
-          <TextField label={t('chart.reaction')} value={reaction} onChangeText={setReaction} />
+          <TextField
+            label={t('chart.substance')}
+            value={substance}
+            editable={!busy}
+            maxLength={120}
+            onChangeText={setSubstance}
+          />
+          <TextField
+            label={t('chart.reaction')}
+            value={reaction}
+            editable={!busy}
+            maxLength={200}
+            onChangeText={setReaction}
+          />
           {problem && <Notice tone="error">{problem}</Notice>}
           <Button
             label={t('chart.add')}
@@ -86,7 +116,12 @@ export function ChartSection({
             loading={busy}
             onPress={() => void addAllergy()}
           />
-          <Button variant="ghost" label={t('common.cancel')} onPress={() => setAdding(false)} />
+          <Button
+            variant="ghost"
+            label={t('common.cancel')}
+            disabled={busy}
+            onPress={() => setAdding(false)}
+          />
         </View>
       )}
       <Text variant="label">{t('chart.conditions')}</Text>

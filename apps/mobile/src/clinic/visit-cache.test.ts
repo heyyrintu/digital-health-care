@@ -26,3 +26,24 @@ describe('VisitCache', () => {
     expect(store.data.size).toBe(0);
   });
 });
+
+describe('VisitCache across a sign-out', () => {
+  it('does not bring a visit back when its write was still running at sign-out', async () => {
+    const store = memoryStore();
+    let release: () => void = () => undefined;
+    const slow = {
+      ...store,
+      get: async <T>(key: string) => {
+        await new Promise<void>((resolve) => (release = resolve));
+        return store.get<T>(key);
+      },
+    };
+    const cache = new VisitCache(slow, () => '2026-10-06');
+    const writing = cache.put(view('a1', '2026-10-06'), null);
+    const clearing = cache.clear();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    release();
+    await Promise.all([writing, clearing]);
+    expect(store.data.has('clinic.visits')).toBe(false);
+  });
+});

@@ -38,7 +38,7 @@ describe('prescription draft', () => {
           name: 'Paracetamol 650',
           route: 'oral',
           timing: 'after_food',
-          steps: [{ dose: '1', frequency: '1-0-1', durationValue: 5, durationUnit: 'days' }],
+          steps: [{ dose: '1 tablet', frequency: '1-0-1', durationValue: 5, durationUnit: 'days' }],
           instructions: null,
           remarksEdited: false,
         },
@@ -48,6 +48,15 @@ describe('prescription draft', () => {
     expect(previewRemarks(line, 'hi')).not.toBe(previewRemarks(line, 'en'));
   });
 
+  it('gives food timing only to medicines taken by mouth', () => {
+    const cream = lineFromMedicine('55555555-5555-4555-8555-555555555555', {
+      ...paracetamol,
+      form: 'cream',
+      defaultRoute: 'topical',
+    });
+    expect(cream).toMatchObject({ timing: null, dose: 'a thin layer', route: 'topical' });
+  });
+
   it('keeps free-text medicines unlinked and tapering steps it does not edit', () => {
     expect(
       toSaveBody([freeTextLine('33333333-3333-4333-8333-333333333333', ' Zerodol SP ')], 'en', 0)
@@ -55,7 +64,9 @@ describe('prescription draft', () => {
     ).toMatchObject({
       medicineId: null,
       name: 'Zerodol SP',
-      route: null,
+      route: 'oral',
+      timing: null,
+      steps: [{ dose: '' }],
     });
     const tapering: PrescriptionItem = {
       id: '44444444-4444-4444-8444-444444444444',

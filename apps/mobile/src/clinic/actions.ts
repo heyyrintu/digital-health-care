@@ -61,22 +61,30 @@ export async function saveOrQueue<T>(input: {
   label: string;
   schema: ZodType<T>;
 }): Promise<{ status: 'saved'; data: T } | { status: 'queued' }> {
+  // One key for the attempt and its replay: a save that reached the server before the
+  // network dropped is applied once.
+  const key = newKey();
   try {
     const data = (await api.request('PUT', input.path, {
       schema: input.schema,
       body: input.body,
-      idempotencyKey: newKey(),
+      idempotencyKey: key,
     })) as T;
+    // An older save of this record still waiting on the device must not replay over this one.
+    await outbox.dropPending(input.kind, input.path);
     return { status: 'saved', data };
   } catch (error) {
     if (!isNetworkError(error)) throw error;
-    await outbox.add({
-      kind: input.kind,
-      method: 'PUT',
-      path: input.path,
-      body: input.body,
-      label: input.label,
-    });
+    await outbox.add(
+      {
+        kind: input.kind,
+        method: 'PUT',
+        path: input.path,
+        body: input.body,
+        label: input.label,
+      },
+      key,
+    );
     return { status: 'queued' };
   }
 }

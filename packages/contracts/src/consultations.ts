@@ -113,6 +113,12 @@ export const VitalsBody = z.object({
   heightCm: reading(20, 250, false),
   painScore: reading(0, 10),
   pregnancyStatus: PregnancyStatus.nullable().optional(),
+  /**
+   * The `updatedAt` of the readings this edit started from, or null when there were none. When
+   * sent, a save over readings changed meanwhile is refused as stale instead of replacing them
+   * (the Clinic app's offline saves send it); left out, the save always applies.
+   */
+  basedOn: z.iso.datetime().nullable().optional(),
 });
 export type VitalsBody = z.infer<typeof VitalsBody>;
 

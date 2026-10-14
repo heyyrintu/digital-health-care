@@ -287,6 +287,20 @@ export class ClinicalService {
       }
       const consultation = await tx.consultation.findUnique({ where: { appointmentId } });
       if (consultation?.lockedAt) throw this.locked();
+      if (body.basedOn !== undefined) {
+        const current = await tx.vitals.findUnique({
+          where: { appointmentId },
+          select: { updatedAt: true },
+        });
+        if ((current?.updatedAt.toISOString() ?? null) !== body.basedOn) {
+          throw new AppError(
+            409,
+            'CONFLICT',
+            'These vitals were changed somewhere else. Reload to see the latest readings.',
+            { basedOn: 'stale' },
+          );
+        }
+      }
       const readings = {
         bpSystolic: body.bpSystolic ?? null,
         bpDiastolic: body.bpDiastolic ?? null,

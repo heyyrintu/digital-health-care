@@ -6,7 +6,7 @@ import type {
   SavePrescriptionBody,
   TemplateItem,
 } from '@dhc/contracts';
-import { dosageRemarks } from '@dhc/domain';
+import { defaultDose, dosageRemarks } from '@dhc/domain';
 
 /**
  * The prescription as the doctor edits it on the device: plain lines, saved to the server
@@ -41,8 +41,9 @@ export function lineFromMedicine(id: string, m: Medicine): DraftLine {
     composition: m.composition,
     form: m.form,
     route: m.defaultRoute,
-    timing: 'after_food',
-    dose: '1',
+    // As on the web: food timing is for medicines taken by mouth; the dose suits the form.
+    timing: m.defaultRoute === 'oral' ? 'after_food' : null,
+    dose: defaultDose(m.form),
     frequency: '',
     durationValue: null,
     durationUnit: 'days',
@@ -69,7 +70,9 @@ export function freeTextLine(id: string, name: string): DraftLine {
     medicineId: null,
     composition: null,
     form: null,
-    route: null,
+    // Oral until the doctor picks another route on the line, as on the web.
+    route: 'oral',
+    timing: null,
   };
 }
 
