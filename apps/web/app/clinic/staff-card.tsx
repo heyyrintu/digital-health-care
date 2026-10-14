@@ -14,6 +14,7 @@ import type { MessageKey } from '@dhc/i18n';
 import { Button, Input, NativeSelect } from '@dhc/ui-web';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useSession } from './session-provider';
+import { StaffDevices } from './staff-devices';
 
 const H3 = 'mb-3 mt-7 text-xs font-bold uppercase tracking-wide text-muted-foreground';
 
@@ -26,6 +27,7 @@ export function StaffCard({ currentUserId }: { currentUserId: string }) {
   const [members, setMembers] = useState<StaffMember[] | null>(null);
   const [pending, setPending] = useState<StaffInvite[] | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
+  const [devicesOf, setDevicesOf] = useState<string | null>(null);
   /** The one link currently on screen: after a reset (keyed by user) or a new invite. */
   const [link, setLink] = useState<{ key: string; name: string; url: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -159,12 +161,26 @@ export function StaffCard({ currentUserId }: { currentUserId: string }) {
                       : t('staff.neverSignedIn')}
                   </p>
                 </div>
-                {m.userId !== currentUserId && confirming !== m.userId && (
-                  <Button type="button" variant="outline" onClick={() => setConfirming(m.userId)}>
-                    {t('staff.reset')}
-                  </Button>
-                )}
+                <div className="flex flex-wrap gap-2">
+                  {m.status === 'active' && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      aria-expanded={devicesOf === m.userId}
+                      onClick={() => setDevicesOf(devicesOf === m.userId ? null : m.userId)}
+                    >
+                      {t('devices.show')}
+                    </Button>
+                  )}
+                  {m.userId !== currentUserId && confirming !== m.userId && (
+                    <Button type="button" variant="outline" onClick={() => setConfirming(m.userId)}>
+                      {t('staff.reset')}
+                    </Button>
+                  )}
+                </div>
               </div>
+
+              {devicesOf === m.userId && <StaffDevices userId={m.userId} name={nameOf(m)} />}
 
               {confirming === m.userId && (
                 <div

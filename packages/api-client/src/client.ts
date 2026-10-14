@@ -113,6 +113,12 @@ export function createApiClient(options: ApiClientOptions) {
         schema: NoContent,
       }),
 
+    /** Clinic admin: sign one staff device out. */
+    revokeStaffSession: (sessionId: string) =>
+      request('POST', `/staff/sessions/${encodeURIComponent(sessionId)}/revoke`, {
+        schema: NoContent,
+      }),
+
     /** Withdraw a weekly schedule that has not started yet. */
     deleteAvailabilityVersion: (id: string) =>
       request('DELETE', `/availability/versions/${encodeURIComponent(id)}`, {
