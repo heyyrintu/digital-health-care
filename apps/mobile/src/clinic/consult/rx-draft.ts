@@ -4,6 +4,7 @@ import type {
   Medicine,
   PrescriptionItem,
   SavePrescriptionBody,
+  TemplateItem,
 } from '@dhc/contracts';
 import { dosageRemarks } from '@dhc/domain';
 
@@ -92,6 +93,18 @@ export function lineFromItem(item: PrescriptionItem): DraftLine {
     remarks: item.remarks,
     remarksEdited: item.remarksEdited,
   };
+}
+
+/** Lines from a template or the last prescription: new IDs, up to the 30-line limit. */
+export function appendLines(
+  lines: DraftLine[],
+  items: TemplateItem[],
+  newId: () => string,
+  max = 30,
+): { lines: DraftLine[]; added: number } {
+  const room = Math.max(0, max - lines.length);
+  const added = items.slice(0, room).map((item) => lineFromItem({ id: newId(), ...item }));
+  return { lines: [...lines, ...added], added: added.length };
 }
 
 const firstStep = (l: DraftLine) => ({

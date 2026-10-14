@@ -24,7 +24,9 @@ On the **Clinic app** your queue opens first, refreshes itself, and keeps workin
 - **Notes and vitals** save when you tap **Save**. Without a network they are kept on the device (*saved on this device*) and sync when the connection is back; if the notes were changed on another device meanwhile, the app tells you instead of overwriting them.
 - **Prescription:** search a medicine (offline, the copy of the medicine list on the device is searched) or add one that is not listed, set dose, frequency and duration, and **Save**: the safety checks run on save, and you acknowledge warnings or override blocks with a reason as on the web. Saving needs a connection.
 - **Signing:** **Sign prescription** asks for Face ID or your fingerprint, then your 6-digit signing PIN.
-- Repeat last, templates, tapering steps, amendments and voiding are on the web for now; the app keeps tapering steps you set there.
+- **Chart:** allergies (highlighted, patient-reported ones labelled unverified), conditions, current medicines and recent visits sit with the notes and are kept with the visit for offline use. You can add an allergy from the app; removing entries and adding conditions or medicines are on the web.
+- **Repeat last** copies the patient's previous prescription; **Templates** adds one of your saved templates, also offline.
+- Saving templates, editing tapering steps, amendments and voiding are on the web for now; the app keeps tapering steps you set there.
 
 ## Consultation
 Available now on the web: open **Consultation** from a checked-in patient's row in the queue.

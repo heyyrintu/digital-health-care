@@ -1,4 +1,4 @@
-import { ConsultationView, PrescriptionView } from '@dhc/contracts';
+import { ConsultationView, PatientChart, PrescriptionView } from '@dhc/contracts';
 import { Button, Notice, Screen, Text, useTheme } from '@dhc/ui-native';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
@@ -10,6 +10,7 @@ import { useLocale } from '../../locale/provider';
 import { TWO_PANE_MIN_WIDTH } from '../../variant';
 import { visits } from '../runtime';
 import { isNetworkError } from '../today';
+import { ChartSection } from './chart-section';
 import { NotesSection } from './notes-section';
 import { PrescriptionSection } from './prescription-section';
 import { VitalsSection } from './vitals-section';
@@ -26,6 +27,7 @@ export function ConsultationScreen({ appointmentId }: { appointmentId: string })
   const { width } = useWindowDimensions();
   const [view, setView] = useState<ConsultationView | null>(null);
   const [rx, setRx] = useState<PrescriptionView | null>(null);
+  const [chart, setChart] = useState<PatientChart | null>(null);
   const [offline, setOffline] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,16 +42,22 @@ export function ConsultationScreen({ appointmentId }: { appointmentId: string })
           schema: PrescriptionView,
         }),
       ]);
+      const c = await api.request('GET', `/patients/${v.appointment.patient.id}/chart`, {
+        schema: PatientChart,
+      });
       setView(v);
       setRx(p);
+      setChart(c);
       setOffline(false);
-      await visits.put(v);
+      await visits.put(v, c);
     } catch (e) {
       if (isNetworkError(e)) {
         const saved = await visits.get(appointmentId);
         setOffline(true);
-        if (saved) setView(saved);
-        else setError(t('mobile.clinic.needsConnection'));
+        if (saved) {
+          setView(saved.view);
+          setChart(saved.chart);
+        } else setError(t('mobile.clinic.needsConnection'));
       } else setError(errorMessage(e, t));
     }
   }, [appointmentId, t]);
@@ -76,6 +84,16 @@ export function ConsultationScreen({ appointmentId }: { appointmentId: string })
 
   const left = (
     <>
+      {chart && (
+        <ChartSection
+          chart={chart}
+          editable={view.canEdit && !offline}
+          onChange={(next) => {
+            setChart(next);
+            void visits.put(view, next);
+          }}
+        />
+      )}
       <NotesSection
         key={`notes-${view.consultation?.revision ?? 0}`}
         view={view}

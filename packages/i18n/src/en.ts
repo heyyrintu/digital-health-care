@@ -874,6 +874,7 @@ export const en = {
     'You are offline. This is the visit as last opened; notes and vitals you save will sync later.',
   'mobile.clinic.rxNeedsConnection':
     'The prescription needs a connection. Notes and vitals can still be saved.',
+  'mobile.clinic.templateApplied': 'Template “{name}” added (lines: {count}).',
 } as const;
 
 export type MessageKey = keyof typeof en;

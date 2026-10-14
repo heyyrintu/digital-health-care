@@ -1,5 +1,6 @@
 import { ApiError } from '@dhc/api-client';
 import {
+  LastPrescription,
   MedicineList,
   Prescription,
   SafetySummary,
@@ -18,10 +19,12 @@ import { Pressable, View } from 'react-native';
 import { api } from '../../api';
 import { errorMessage, isSixDigitCode } from '../../errors';
 import { useLocale } from '../../locale/provider';
+import { useToday } from '../hooks';
 import { medicines } from '../runtime';
 import { newKey } from '../send';
 import { isNetworkError } from '../today';
 import {
+  appendLines,
   freeTextLine,
   lineFromItem,
   lineFromMedicine,
@@ -63,6 +66,39 @@ export function PrescriptionSection({
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ tone: Tone; text: string } | null>(null);
   const editable = rx.canEdit;
+  const templates = useToday().data?.templates ?? [];
+  const [showTemplates, setShowTemplates] = useState(false);
+
+  const add = (items: Parameters<typeof appendLines>[1], done: (count: number) => string) => {
+    const result = appendLines(lines, items, newKey);
+    change(result.lines);
+    setNotice(
+      result.added < items.length
+        ? { tone: 'warning', text: t('rx.tooMany', { max: 30 }) }
+        : { tone: 'info', text: done(result.added) },
+    );
+  };
+
+  async function repeatLast() {
+    setBusy('last');
+    setNotice(null);
+    try {
+      const { last } = await api.request(
+        'GET',
+        `/patients/${view.appointment.patient.id}/last-prescription`,
+        { schema: LastPrescription, query: { before: appointmentId } },
+      );
+      if (!last) setNotice({ tone: 'info', text: t('rx.noLast') });
+      else add(last.items, (count) => t('rx.repeated', { date: last.date, count }));
+    } catch (error) {
+      setNotice({
+        tone: 'error',
+        text: isNetworkError(error) ? t('mobile.clinic.needsConnection') : errorMessage(error, t),
+      });
+    } finally {
+      setBusy(null);
+    }
+  }
 
   const change = (next: DraftLine[]) => {
     setLines(next);
@@ -159,6 +195,38 @@ export function PrescriptionSection({
       {editable && lines.length < 30 && (
         <MedicineSearch onPick={(line) => change([...lines, line])} />
       )}
+      {editable && (
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing[2] }}>
+          <Button
+            variant="secondary"
+            label={t('rx.repeatLast')}
+            loading={busy === 'last'}
+            onPress={() => void repeatLast()}
+          />
+          {templates.length > 0 && (
+            <Button
+              variant="secondary"
+              label={t('rx.templates')}
+              onPress={() => setShowTemplates((v) => !v)}
+            />
+          )}
+        </View>
+      )}
+      {editable &&
+        showTemplates &&
+        templates.map((tpl) => (
+          <Button
+            key={tpl.id}
+            variant="ghost"
+            label={`${t('rx.applyTemplate')}: ${tpl.name}`}
+            onPress={() => {
+              setShowTemplates(false);
+              add(tpl.items, (count) =>
+                t('mobile.clinic.templateApplied', { name: tpl.name, count }),
+              );
+            }}
+          />
+        ))}
       {editable && (
         <Button
           label={dirty ? t('common.save') : t('rx.saved')}

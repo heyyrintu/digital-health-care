@@ -876,4 +876,5 @@ export const hi: Record<MessageKey, string> = {
     'आप ऑफ़लाइन हैं। यह पिछली बार खोली गई विज़िट है; सेव किए नोट्स और वाइटल्स बाद में सिंक होंगे।',
   'mobile.clinic.rxNeedsConnection':
     'पर्चे के लिए कनेक्शन चाहिए। नोट्स और वाइटल्स फिर भी सेव हो सकते हैं।',
+  'mobile.clinic.templateApplied': 'टेम्पलेट “{name}” जोड़ा गया (पंक्तियाँ: {count})।',
 };

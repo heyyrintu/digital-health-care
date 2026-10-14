@@ -16,11 +16,11 @@ describe('VisitCache', () => {
     let today = '2026-10-06';
     const store = memoryStore();
     const cache = new VisitCache(store, () => today);
-    await cache.put(view('a1', '2026-10-06'));
-    expect((await cache.get('a1'))?.appointment.id).toBe('a1');
+    await cache.put(view('a1', '2026-10-06'), null);
+    expect((await cache.get('a1'))?.view.appointment.id).toBe('a1');
     today = '2026-10-07';
     expect(await cache.get('a1')).toBeNull();
-    await cache.put(view('a2', '2026-10-07'));
+    await cache.put(view('a2', '2026-10-07'), null);
     expect(Object.keys(JSON.parse(store.data.get('clinic.visits')!))).toEqual(['a2']);
     await cache.clear();
     expect(store.data.size).toBe(0);

@@ -1,6 +1,7 @@
 import type { Medicine, PrescriptionItem } from '@dhc/contracts';
 import { describe, expect, it } from 'vitest';
 import {
+  appendLines,
   freeTextLine,
   lineFromItem,
   lineFromMedicine,
@@ -86,5 +87,28 @@ describe('prescription draft', () => {
     expect(signBlocker({ ...base, openBlocks: 1, openWarnings: 2 })).toBe('blocks');
     expect(signBlocker({ ...base, openWarnings: 2 })).toBe('warnings');
     expect(signBlocker({ ...base, missing: ['pin'] })).toBe('setup');
+  });
+
+  it('adds template or last-prescription lines with new IDs, up to the limit', () => {
+    const { id: _id, ...item } = toSaveBody(
+      [
+        {
+          ...lineFromMedicine('55555555-5555-4555-8555-555555555555', paracetamol),
+          frequency: 'BD',
+        },
+      ],
+      'en',
+      0,
+    ).items[0]!;
+    let n = 0;
+    const next = () => `66666666-6666-4666-8666-66666666666${n++}`;
+    const once = appendLines([], [item, item], next);
+    expect(once.added).toBe(2);
+    expect(once.lines.map((l) => l.id)).toEqual([
+      '66666666-6666-4666-8666-666666666660',
+      '66666666-6666-4666-8666-666666666661',
+    ]);
+    expect(once.lines[0]).toMatchObject({ name: 'Paracetamol 650', frequency: 'BD' });
+    expect(appendLines(once.lines, [item, item], next, 3).added).toBe(1);
   });
 });
