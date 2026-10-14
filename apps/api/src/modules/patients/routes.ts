@@ -1,11 +1,17 @@
 import {
+  ApprovePatientMergeBody,
   CreatePatientBody,
+  CreatePatientMergeBody,
   CreateTagBody,
   DuplicateCheckBody,
   DuplicateCheckResponse,
   PatientDetail,
   PatientListQuery,
   PatientListResponse,
+  PatientMergeList,
+  PatientMergeQuery,
+  PatientMergeRequest,
+  RejectPatientMergeBody,
   STAFF_ROLES,
   SetPatientTagsBody,
   Tag,
@@ -20,6 +26,7 @@ import { z } from 'zod';
 import { AppError } from '../../errors';
 import { authOf, authenticate, requireRole } from '../../plugins/authenticate';
 import type { Services } from '../../services';
+import { PatientMergeService } from './merges';
 import { PatientService } from './service';
 import { TagService } from './tags';
 
@@ -36,6 +43,7 @@ export const patientRoutes: FastifyPluginAsync<{ services: Services }> = async (
 ) => {
   const patients = new PatientService(services);
   const tags = new TagService(services);
+  const merges = new PatientMergeService(services);
   const auth = authenticate(services);
   const staff = { preHandler: [auth, requireRole(...STAFF_ROLES)] };
   const registrar = { preHandler: [auth, requireRole('front_desk', 'doctor', 'clinic_admin')] };
@@ -76,6 +84,30 @@ export const patientRoutes: FastifyPluginAsync<{ services: Services }> = async (
     const { id } = IdParams.parse(request.params);
     const { tagIds } = SetPatientTagsBody.parse(request.body);
     return PatientDetail.parse(await patients.setTags(request, authOf(request), id, tagIds));
+  });
+
+  // Merging duplicates: those who register patients ask; a clinic admin decides.
+  app.post('/patient-merges', registrar, async (request, reply) => {
+    const body = CreatePatientMergeBody.parse(request.body);
+    const created = await merges.request(request, authOf(request), body);
+    return reply.status(201).send(PatientMergeRequest.parse(created));
+  });
+
+  app.get('/patient-merges', admin, async (request) => {
+    const query = PatientMergeQuery.parse(request.query);
+    return PatientMergeList.parse({ data: await merges.list(authOf(request), query) });
+  });
+
+  app.post('/patient-merges/:id/approve', admin, async (request) => {
+    const { id } = IdParams.parse(request.params);
+    const body = ApprovePatientMergeBody.parse(request.body ?? {});
+    return PatientMergeRequest.parse(await merges.approve(request, authOf(request), id, body));
+  });
+
+  app.post('/patient-merges/:id/reject', admin, async (request) => {
+    const { id } = IdParams.parse(request.params);
+    const body = RejectPatientMergeBody.parse(request.body);
+    return PatientMergeRequest.parse(await merges.reject(request, authOf(request), id, body));
   });
 
   app.get('/tags', staff, async (request) =>

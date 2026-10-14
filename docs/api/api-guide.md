@@ -93,7 +93,7 @@ Implemented in Phase 1 (`apps/api/src/modules/scheduling`; the slot engine is `s
 |---|---|---|
 | Clinics | `GET /clinics`; `POST /clinics` `{name, address?, phone?}`; `PATCH /clinics/{id}` (incl. `active`) | Read: all staff · change: clinic admin |
 | Consultation types | `GET /consultation-types`; `POST` `{name, mode, defaultDurationMin, feePaise, followUpFeePaise?, requiresPrepayment}`; `PATCH /consultation-types/{id}` | Read: all staff · change: clinic admin |
-| Booking rules | `GET /booking-rules`; `PUT /booking-rules` `{horizonDays, sameDayCutoffMinutes}` (defaults 30 and 60) | Read: all staff · change: clinic admin |
+| Booking rules | `GET /booking-rules`; `PUT /booking-rules` `{horizonDays, sameDayCutoffMinutes, overbookPerDay, noShowAfterMinutes}` (defaults 30, 60, 2 and 30; `noShowAfterMinutes` 0–720 or `null` for off, see §3p) | Read: all staff · change: clinic admin |
 | Doctors | `GET /doctors` → active doctors (for pickers) | All staff |
 | Weekly schedules | `GET /availability/versions?doctorId&clinicId&consultationTypeId`; `POST /availability/versions` `{doctorUserId?, clinicId, consultationTypeId, effectiveFrom, weekly, slotMinutes?, bufferMinutes}`; `DELETE /availability/versions/{id}` | Read: all staff · change: the doctor (own) or a clinic admin |
 | Leave, holidays, extra sessions | `GET /availability/exceptions?doctorId&clinicId&from`; `POST /availability/exceptions` `{type, doctorUserId?, clinicId?, consultationTypeId?, startDate, endDate, startTime?, endTime?, reason?}`; `DELETE /availability/exceptions/{id}` | Read: all staff · leave and extra sessions: the doctor (own) or a clinic admin · holidays: clinic admin |
@@ -123,7 +123,7 @@ Implemented in Phase 1 (`apps/api/src/modules/appointments`). Staff booking only
 - **Busy slots:** pending, booked, checked-in, in-consultation and completed appointments mark their slot busy in `GET /slots` for that doctor at every clinic; cancelled, no-show and rescheduled ones free it. Walk-ins hold no slot.
 - **Tokens** number each doctor's patients per clinic per day, in booking order (walk-ins included). A rescheduled booking gets a new token on its new day.
 - **One per day:** a patient cannot hold two active bookings with the same doctor on one day (409; reschedule instead).
-- **Actions and roles:** `confirm` (pending → confirmed; front desk, doctor, admin), `check_in` (pending/confirmed → checked in; on the day only; front desk, doctor), `start` and `complete` (checked in → in consultation → completed; the patient's own doctor only), `cancel` (needs `reason`; front desk, doctor, admin), `no_show` (after the slot starts; front desk, doctor). Anything else gives 409. Staff bookings are created confirmed; walk-ins are created checked in. Automatic no-show after the slot is planned (worker).
+- **Actions and roles:** `confirm` (pending → confirmed; front desk, doctor, admin), `check_in` (pending/confirmed → checked in; on the day only; front desk, doctor), `start` and `complete` (checked in → in consultation → completed; the patient's own doctor only), `cancel` (needs `reason`; front desk, doctor, admin), `no_show` (after the slot starts; front desk, doctor). Anything else gives 409. Staff bookings are created confirmed; walk-ins are created checked in. Bookings nobody checks in become no-shows automatically once the clinic's grace period has passed (§3p).
 - **Reschedule** works on pending or confirmed bookings: the new appointment is checked like a fresh booking (its own slot may be the old one's), the old one becomes `rescheduled` and the two are linked (`rescheduledFromId` / `rescheduledToId`).
 - **Audit:** `appointment.created`, `appointment.status_changed`, `appointment.rescheduled` (IDs, dates, statuses and source only; never reasons or patient details). Every status change is also kept in the appointment's history with who and when.
 
@@ -133,11 +133,11 @@ Implemented in Phase 1 (`apps/api/src/modules/queue`).
 
 | Action | Endpoint | Who |
 |---|---|---|
-| Queue | `GET /queue?date&doctorId&clinicId` → `{date, myOpd, booked, completed, closed, averageConsultationMinutes}` (date defaults to today, IST) | All staff |
+| Queue | `GET /queue?date&doctorId&clinicId` → `{date, myOpd, booked, followUps, completed, closed, averageConsultationMinutes}` (date defaults to today, IST) | All staff |
 | Screens | `GET /display-screens`; `POST /display-screens` `{clinicId, label}` → 201 with the `link` (shown once); `POST /display-screens/{id}/revoke` → 204 | Clinic admin |
 | Screen board | `POST /display/board` `{token}` → `{clinicName, date, doctors: [{doctorName, nowServing, next}]}` | Public (the screen's token; rate limited) |
 
-- **Tabs:** `myOpd` is the patient in consultation first, then checked-in patients — those with a "show first" tag (Emergency, Priority) ahead of the rest, then by check-in time; `booked` is pending and confirmed by time; `completed` is newest first; `closed` is cancelled, no-show and rescheduled. `averageConsultationMinutes` is the mean of the day's completed consultations (start to completion). The web queue refreshes every 15 seconds while visible; live push may replace polling later.
+- **Tabs:** `myOpd` is the patient in consultation first, then checked-in patients — those with a "show first" tag (Emergency, Priority) ahead of the rest, then by check-in time; `booked` is pending and confirmed by time; `completed` is newest first; `closed` is cancelled, no-show and rescheduled; `followUps` is the patients due back that day (§3p), a list of its own that does not change the other tabs. `averageConsultationMinutes` is the mean of the day's completed consultations (start to completion). The web queue refreshes every 15 seconds while visible; live push may replace polling later.
 - **Screens** are kiosk links `…/display#<token>`: 32 random bytes, stored only as a SHA-256 hash, never in a URL path (the token stays in the fragment and travels in the request body), so it does not reach server logs. A screen shows, per doctor, the token in consultation and the next five waiting, in queue order; never patient names. Revoked or unknown tokens give 404. (Build plan §6 names the route `/display/[clinic]`; a guessable clinic ID in the path was replaced by the token link.)
 - **Audit:** `display_screen.created`, `display_screen.revoked`.
 
@@ -153,7 +153,7 @@ Implemented in Phase 1 (`apps/api/src/modules/clinical`). Prescriptions, the saf
 | Vitals | `GET /appointments/{id}/vitals` → `{vitals}`; `PUT /appointments/{id}/vitals` `{bpSystolic?, bpDiastolic?, pulse?, temperatureC?, spo2?, weightKg?, heightCm?, painScore?, pregnancyStatus?}` | Front desk, doctor |
 | Consultation | `GET /appointments/{id}/consultation` → `{appointment, consultation, vitals, canEdit}`; `PUT /appointments/{id}/consultation` `{notes, followUpDate, revision}` | Doctor (writing: the visit's doctor) |
 
-- **Access (PRD §3.2):** chart and notes are doctors' only, shared across the organisation's doctors (the "shared chart" model; "own patients only" is a later setting). Front desk records vitals; clinic admins have no clinical access. Every view and change is audited (`chart.viewed`, `allergy|condition|medication.added|removed`, `vitals.viewed|saved`, `consultation.viewed|saved`) with IDs, revisions and removal reasons only.
+- **Access (PRD §3.2):** chart and notes are doctors' only, shared across the organisation's doctors by default (the "shared chart" model); under "own patients only" (§3l) a doctor needs the patient checked in to them first. Front desk records vitals; clinic admins have no clinical access. Every view and change is audited (`chart.viewed`, `allergy|condition|medication.added|removed`, `vitals.viewed|saved`, `consultation.viewed|saved`) with IDs, revisions and removal reasons only.
 - **Chart entries** are never deleted: removing one keeps it with who, when and why, because past prescriptions were checked against it. `source: patient` marks patient-reported entries, shown as unverified (safety rule SR-21).
 - **Vitals** are one set per visit. `PUT` replaces the whole set (readings left out are cleared), within plausible ranges (400 otherwise). BMI is worked out from weight and height. Allowed while the visit is pending, booked, checked in, in consultation or completed; 409 for cancelled, no-show or rescheduled visits.
 - **Notes** (`chiefComplaint`, `symptoms[{text, duration}]`, `examination`, `diagnoses[{code, label}]`, `plan`, `privateNotes`, `testsAdvised`, `advice`) are stored as one document encrypted with AES-256-GCM (the field cipher); `followUpDate` stays in the clear for reminders. Only the visit's doctor writes, once the patient has checked in (409 before; 403 for another doctor). `revision` must match the stored one (0 for the first save) or the save gets 409 with `fields.revision = stale`, so a second tab cannot overwrite newer notes; each save returns the next revision. Diagnoses may carry an ICD-10 code (a starter list ships in `@dhc/domain`; the full code set comes from a licensed source) or be free text.
@@ -206,8 +206,8 @@ The rules are SR-01 to SR-22 in `docs/safety/safety-rule-catalogue.md`, implemen
 - **Audit:**
   - `prescription.safety_acknowledged` and `prescription.safety_overridden` record the alert ID, the rule and the drug data version, never the reason text.
   - `prescription.saved` adds the open block and warning counts.
+- **Clinic tuning:** a clinic admin can hide SR-06, SR-08 and SR-15 (§3l).
 - **Not built yet:**
-  - Clinic tuning of visibility for SR-06, SR-08 and SR-15.
   - The monthly alert review.
   - Kidney checks from eGFR (only recorded conditions are used today).
 
@@ -291,6 +291,48 @@ Implemented in Phase 1 (`apps/api/src/modules/medicines`, PRD §9.2). Everything
 - **Audit:** `medicine.created` (medicine ID and ingredient count) and `medicine.updated` (medicine ID, ingredient count and whether active), `medicine_request.approved` and `medicine_request.rejected` (request ID and medicine ID), `medicine_request.undone` (the decision undone). Never reasons or patient details.
 - **Not built yet:** the licensed drug database import with its own update process (§3g), and a reference request to the platform team to add a medicine for every clinic.
 
+## 3l. Clinic settings: chart model, safety tuning and upload limits
+
+Implemented in Phase 1 (`apps/api/src/modules/settings`, PRD §9.2). One row per organisation (`organisation_settings`); until a clinic admin saves, the defaults apply.
+
+| Action | Endpoint | Who |
+|---|---|---|
+| Read | `GET /organisation-settings` → `{chartModel, hiddenSafetyRules, maxUploadMb, uploadTypes}` | Staff |
+| Change | `PUT /organisation-settings` (the same four fields, all required) | Clinic admin |
+
+- **Defaults:** `chartModel: shared`, `hiddenSafetyRules: []`, `maxUploadMb: 10`, `uploadTypes: [pdf, jpeg, png]`.
+- **Chart model (PRD §3.2):** `shared` lets every doctor in the organisation read every chart. `own_patients` lets a doctor read a patient's chart, a visit's notes and prescription (view, preview, PDF) and "Repeat last" only once that patient has a visit with them that was checked in, in consultation or completed; a booking alone is not enough. Otherwise 403 `CHART_RESTRICTED`. A doctor's own visit is always open to them, but its chart still follows the rule, so the doctor checks the patient in first. Front desk vitals and printing are not affected. Internal referrals open the chart in phase 3. After a merge (§3m) a visit to the kept record or to any duplicate merged into it counts, whichever of those records the request names.
+- **Safety tuning (catalogue "Clinic can tune"):** `hiddenSafetyRules` takes only the "Visibility only" rules: `SR-06` (moderate and minor interactions), `SR-08` (duplicate class) and `SR-15` (older-adult caution); anything else is 400, and the database refuses it too. Hidden rules are left out of every check from then on. An alert of a hidden rule already in the safety log is closed without a doctor action. Blocks and the locked rules always show.
+- **Upload limits:** `maxUploadMb` 1–25 (the platform's ceiling), `uploadTypes` one or more of `pdf`, `jpeg`, `png` and `heic` (HEIC and HEIF), each once. `checkUpload` in `@dhc/contracts` applies them; the upload endpoints (§4 files) call it on the server once they are built.
+- **Audit:** `settings.updated` with each changed field's old and new value; saving the same values writes nothing.
+
+## 3m. Merging duplicate patient records
+
+Implemented in Phase 1 (`apps/api/src/modules/patients/merges.ts`, PRD §3.2, §5.3).
+
+| Action | Endpoint | Who |
+|---|---|---|
+| Ask | `POST /patient-merges` `{sourcePatientId, targetPatientId, reason}` → 201 | Front desk, doctor, clinic admin |
+| Requests | `GET /patient-merges?status=pending\|decided` → `{data}` (pending oldest first; the latest 50 decided) | Clinic admin |
+| Approve | `POST /patient-merges/{id}/approve` `{note?}` | Clinic admin |
+| Reject | `POST /patient-merges/{id}/reject` `{note}` | Clinic admin |
+
+- **Asking:** the source is the duplicate that closes, the target the record that stays. Both must be this clinic's live records (400 otherwise) and different; a record already in a pending request cannot be in another (409 `merge: pending`; one pending request per source is also enforced in the database). Each side comes back with UHID, name, mobile, date of birth, gender, registration time and completed visits, for the admin to compare. The patient page shows the waiting request (`pendingMerge`).
+- **Approving** (one decision at a time per clinic) moves the living record to the target in one transaction: chart entries (allergies, conditions, current medicines, including removed ones with their reasons), tags the target lacks, upcoming bookings nobody has started (pending or confirmed, without vitals or notes), dependants (their guardian becomes the target; a link from the target to the source is dropped), records previously merged into the source, and a patient-app account when the target has none. The source gets `mergedIntoId` and `mergedAt`. Past visits, notes, prescriptions and bills stay where they were written, because signed records never change; they count as the target's from then on. A merge cannot be undone; a decided request gives 409 `merge: decided`.
+- **Guardians** stay one level deep: if the source is someone's guardian and the target has a guardian of its own, the request is refused (409 `merge: guardian`) until the family links are changed.
+- **Merged records** are read-only: editing, tagging, chart entries and booking give 409 `PATIENT_MERGED` with `fields.patientId` (the record to use). Database triggers refuse anything new pointing at a merged record (visits, chart entries, tags, guardian links, merges). Search and duplicate checks leave merged records out, except a search for the exact old UHID, which returns the merged record with `mergedIntoId` so the client can open the kept one. Patient views carry `mergedInto` and `mergedFrom`.
+- **History under the kept record:** the chart, the patient's appointment list, Repeat last and the safety engine's follow-up check (SR-19) include the merged records' visits and prescriptions. A chart requested for a merged record returns the kept record's (`patientId` is the kept one), and an open visit of a merged record is checked against the kept record's chart.
+- **Audit:** `patient_merge.requested`, `patient_merge.rejected` and `patient.merged` (request, source and target IDs; for a merge, how many chart entries, tags, bookings and dependants moved). Never names or reasons.
+
+## 3p. Follow-ups and automatic no-shows
+
+Implemented in Phase 1 (`apps/api/src/modules/queue/service.ts`, `apps/api/src/modules/appointments/no-shows.ts`).
+
+- **Follow-ups** (`GET /queue` → `followUps`): every consultation whose follow-up date is the queue's day, filtered by the same `doctorId` and `clinicId` as the rest of the queue, in the order of the earlier visits. Each entry is `{visitAppointmentId, visitDate, followUpDate, patient, doctorUserId, doctorName, clinicId, booking}`; `booking` is the patient's first later appointment with the same doctor that is going ahead or done (pending, confirmed, checked in, in consultation or completed) as `{id, date, startTime, status}`, or `null` when they have not booked. A follow-up booked for another day still counts as booked. Patients appear by name and UHID as on the rest of the queue; notes are never read. A visit to a duplicate merged since (§3m) shows the kept record, and bookings on either count.
+- **Automatic no-shows:** a booking still pending or confirmed `noShowAfterMinutes` after its slot **ends** becomes `no_show` (booking rules; default 30, 0–720; `null` turns it off so no-shows are marked by hand only). A no-show does not hold its slot, so the time is free again. The history entry has no actor (`actorUserId: null`, `actorName: null`) and the note "Not checked in N minutes after the slot ended."; the audit entry is `appointment.status_changed` with no actor and `metadata: {from, to: 'no_show', automatic: true}`. Walk-ins are checked in when created and never swept.
+- **The sweep** runs inside the API every `NO_SHOW_SWEEP_SECONDS` (default 60; 0 turns it off, as the browser tests do). Each run goes through active clinics one transaction each and closes at most 500 bookings per clinic (the next run takes the rest). Rows are taken with `FOR UPDATE SKIP LOCKED` and their status is read again under the lock, so several API instances can run it at once and a check-in at the same moment either wins or waits; it is never undone by the sweep.
+- **Live updates:** each change calls `publishQueueChanged({type: 'queue.changed', organisationId, date, clinicId, doctorUserId, appointmentId, reason: 'no_show'})` (`apps/api/src/modules/queue/live.ts`) after the transaction commits. Until server-sent events land it does nothing, and the queue page picks the change up on its next refresh.
+
 ## 3q. Push devices and the offline cache
 
 Implemented for the Clinic app (`apps/api/src/modules/devices`, `apps/api/src/modules/sync`). The Patient app uses the same device endpoints.
@@ -315,9 +357,9 @@ Implemented for the Clinic app (`apps/api/src/modules/devices`, `apps/api/src/mo
 | Module | Main resources and actions |
 |---|---|
 | identity | `/auth/*`, `/me`, `/staff/invites` (built); `/me/devices` |
-| tenancy | `/organisations/current`, `/clinics` (built), `/consultation-types` (built), `/booking-rules` (built), `/doctors` (built), `/settings`, `/branding`, `/tags` (built), `/uhid-settings` (built) |
+| tenancy | `/organisations/current`, `/clinics` (built), `/consultation-types` (built), `/booking-rules` (built), `/doctors` (built), `/organisation-settings` (built), `/branding`, `/tags` (built), `/uhid-settings` (built) |
 | scheduling | `/availability/versions` (built), `/availability/exceptions` (built), `/slots?doctorId&clinicId&consultationTypeId&date&channel` (built), `/appointments` (book, walk-in, list, confirm, check-in, start, complete, cancel, no-show, reschedule; built), `/queue?date` (built), `/display-screens` (built), `/display/board` (built) |
-| patients | `/patients` (search by phone, name or UHID, filter by tag; register; built), `/patients/{id}` (demographics and family, each view audited; edit; built), `/patients/duplicate-check` (built), `/patients/{id}/tags` (built), `/patients/{id}/chart` and `/patients/{id}/allergies\|conditions\|medications` (built), `/patients/{id}/consents`, `/patients/merge-requests` |
+| patients | `/patients` (search by phone, name or UHID, filter by tag; register; built), `/patients/{id}` (demographics and family, each view audited; edit; built), `/patients/duplicate-check` (built), `/patients/{id}/tags` (built), `/patients/{id}/chart` and `/patients/{id}/allergies\|conditions\|medications` (built), `/patients/{id}/consents`, `/patient-merges` (ask, approve, reject; built) |
 | clinical | `/appointments/{id}/consultation` (built), `/appointments/{id}/vitals` (built), `/scribe/sessions`, `/assessments/forms`, `/assessments`, `/patients/{id}/ask-ai` |
 | prescribing | `/medicines` (search; built), `/medicine-master`, `/drug-molecules` and `/medicine-requests` (clinic admin; built), `/prescription-templates` (built), `/appointments/{id}/prescription` (draft and lines; built), `/patients/{id}/last-prescription` (built), `/appointments/{id}/prescription/safety-actions` (built), `/appointments/{id}/prescription/preview\|sign\|amend\|void` (built), `/prescriptions/{id}/pdf` (built), `/verify` (public; built), `/doctor-profile` (built) |
 | orders | `/test-orders`, `/test-orders/{id}/results`, `/referrals`, `/attachments` |
@@ -343,6 +385,8 @@ Implemented for the Clinic app (`apps/api/src/modules/devices`, `apps/api/src/mo
 | `SIGNING_UNAVAILABLE` | No signing service on this server (503) | Explain; signing waits |
 | `PAYMENT_PENDING` | Online consult without confirmed payment | Resume Cashfree checkout |
 | `CONSENT_REQUIRED` | Scribe or ABDM action without consent | Start consent flow |
+| `PATIENT_MERGED` | Writing to a record merged into another (409, `fields.patientId`) | Open the kept record |
+| `CHART_RESTRICTED` | "Own patients only" and the doctor has not seen the patient (403) | Explain; check the patient in to the doctor |
 
 ## 6. Change process
 1. Change Zod schema in `packages/contracts`.

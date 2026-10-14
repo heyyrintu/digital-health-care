@@ -24,6 +24,8 @@ import { AppError } from '../../errors';
 import type { Services } from '../../services';
 import { AppointmentService } from '../appointments/service';
 import { writeAudit } from '../audit/write';
+import { assertNotMerged, historyIds, liveId } from '../patients/merged';
+import { assertChartAccess } from './access';
 
 interface Actor {
   userId: string;
@@ -81,10 +83,15 @@ export class ClinicalService {
 
   // ---- Chart ------------------------------------------------------------------------
 
-  async chart(request: FastifyRequest, actor: Actor, patientId: string): Promise<PatientChart> {
+  async chart(request: FastifyRequest, actor: Actor, id: string): Promise<PatientChart> {
+    // A merged duplicate's chart is the kept record's: entries moved there, and visits from
+    // both records show.
+    let patientId = id;
     const data = await withTenant(this.s.db, actor.organisationId, async (tx) => {
-      const patient = await tx.patient.findUnique({ where: { id: patientId } });
+      const patient = await tx.patient.findUnique({ where: { id } });
       if (!patient) throw NOT_FOUND();
+      patientId = liveId(patient);
+      await assertChartAccess(tx, actor, patientId);
       const live = { patientId, removedAt: null };
       const order = { createdAt: 'asc' } as const;
       // One after another: a transaction is one connection, which runs one query at a time.
@@ -92,7 +99,10 @@ export class ClinicalService {
       const conditions = await tx.medicalCondition.findMany({ where: live, orderBy: order });
       const medications = await tx.currentMedication.findMany({ where: live, orderBy: order });
       const visits = await tx.consultation.findMany({
-        where: { patientId, appointment: { status: 'completed' } },
+        where: {
+          patientId: { in: await historyIds(tx, patientId) },
+          appointment: { status: 'completed' },
+        },
         include: { appointment: { select: { date: true, startAt: true } } },
         orderBy: { appointment: { startAt: 'desc' } },
         take: 5,
@@ -214,6 +224,7 @@ export class ClinicalService {
     reason: string,
   ): Promise<void> {
     await withTenant(this.s.db, actor.organisationId, async (tx) => {
+      await assertChartAccess(tx, actor, patientId);
       const where = { id: entryId, patientId, removedAt: null };
       const data = {
         removedAt: this.s.now(),
@@ -312,6 +323,9 @@ export class ClinicalService {
   ): Promise<ConsultationView> {
     return withTenant(this.s.db, actor.organisationId, async (tx) => {
       const appointment = await this.appointments.detail(tx, appointmentId);
+      if (appointment.doctorUserId !== actor.userId) {
+        await assertChartAccess(tx, actor, appointment.patient.id);
+      }
       const row = await tx.consultation.findUnique({ where: { appointmentId } });
       const vitals = await tx.vitals.findUnique({ where: { appointmentId } });
       await this.audit(tx, request, actor, 'consultation.viewed', 'appointment', appointmentId);
@@ -405,9 +419,11 @@ export class ClinicalService {
     return withTenant(this.s.db, actor.organisationId, async (tx) => {
       const patient = await tx.patient.findUnique({
         where: { id: patientId },
-        select: { id: true },
+        select: { id: true, mergedIntoId: true },
       });
       if (!patient) throw NOT_FOUND();
+      assertNotMerged(patient);
+      await assertChartAccess(tx, actor, patientId);
       const row = (await create(tx, {
         organisationId: actor.organisationId,
         patientId,

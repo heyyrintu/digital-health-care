@@ -385,6 +385,7 @@ export async function loadDaySlots(
         horizonDays: rules.horizonDays,
         sameDayCutoffMinutes: rules.sameDayCutoffMinutes,
         overbookPerDay: rules.overbookPerDay,
+        noShowAfterMinutes: rules.noShowAfterMinutes,
       }
     : DEFAULT_BOOKING_RULES;
   if (!clinic.active || !type.active) {
