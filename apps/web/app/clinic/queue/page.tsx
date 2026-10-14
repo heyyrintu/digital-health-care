@@ -44,7 +44,8 @@ const FALLBACK_REFRESH_MS = 60_000;
 
 /**
  * The live queue (PRD §5.1): My OPD, Booked, Follow-ups, Completed and Closed for a day,
- * shared by the doctor and front desk. Refreshes every 15 seconds while visible.
+ * shared by the doctor and front desk. Refreshes when the live stream reports a change,
+ * and every minute as a fallback.
  */
 export default function QueuePage() {
   return (

@@ -82,6 +82,7 @@ export const queueRoutes: FastifyPluginAsync<{ services: Services }> = async (
     const now = services.now();
     // Revoking the screen cuts an open stream off too, not just the next reconnect.
     await streamQueue(services, request, reply, screen.organisationId, istDate(now), {
+      clinicId: screen.clinicId,
       endAt: nextIstMidnight(now),
       stillAllowed: () =>
         queue.screen(token).then(

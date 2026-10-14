@@ -137,7 +137,7 @@ Implemented in Phase 1 (`apps/api/src/modules/queue`).
 | Screens | `GET /display-screens`; `POST /display-screens` `{clinicId, label}` → 201 with the `link` (shown once); `POST /display-screens/{id}/revoke` → 204 | Clinic admin |
 | Screen board | `POST /display/board` `{token}` → `{clinicName, date, doctors: [{doctorName, nowServing, next}]}` | Public (the screen's token; rate limited) |
 
-- **Tabs:** `myOpd` is the patient in consultation first, then checked-in patients — those with a "show first" tag (Emergency, Priority) ahead of the rest, then by check-in time; `booked` is pending and confirmed by time; `completed` is newest first; `closed` is cancelled, no-show and rescheduled; `followUps` is the patients due back that day (§3p), a list of its own that does not change the other tabs. `averageConsultationMinutes` is the mean of the day's completed consultations (start to completion). The web queue refreshes every 15 seconds while visible; live push may replace polling later.
+- **Tabs:** `myOpd` is the patient in consultation first, then checked-in patients — those with a "show first" tag (Emergency, Priority) ahead of the rest, then by check-in time; `booked` is pending and confirmed by time; `completed` is newest first; `closed` is cancelled, no-show and rescheduled; `followUps` is the patients due back that day (§3p), a list of its own that does not change the other tabs. `averageConsultationMinutes` is the mean of the day's completed consultations (start to completion). The web queue refreshes when `/queue/stream` reports a change (§3o) and every 60 seconds as a fallback.
 - **Screens** are kiosk links `…/display#<token>`: 32 random bytes, stored only as a SHA-256 hash, never in a URL path (the token stays in the fragment and travels in the request body), so it does not reach server logs. A screen shows, per doctor, the token in consultation and the next five waiting, in queue order; never patient names. Revoked or unknown tokens give 404. (Build plan §6 names the route `/display/[clinic]`; a guessable clinic ID in the path was replaced by the token link.)
 - **Audit:** `display_screen.created`, `display_screen.revoked`.
 
@@ -343,9 +343,9 @@ Implemented in Phase 1 (`apps/api/src/modules/staff`, PRD §9.2 "device revocati
 Implemented in Phase 1 (`apps/api/src/idempotency.ts`, `live.ts`, `sse.ts`).
 
 **Idempotency-Key** (§1) on `POST /appointments`, `POST /appointments/{id}/actions`, `PUT /appointments/{id}/bill`, `POST /bills/{id}/payments` and `POST /price-list`:
-- Keys are kept per clinic and person (`idempotency_keys`, row-level security) for 24 hours. A retry with the same key and body gets the stored status and body, with `idempotent-replay: true`; nothing runs twice.
+- Keys are kept per organisation and person (`idempotency_keys`, row-level security) for 24 hours. A retry with the same key and body gets the stored status and body, with `idempotent-replay: true`; nothing runs twice.
 - The same key with a different body is 409 `fields.idempotencyKey = reused`. A retry while the first request is still running is 409 `in_progress`, so a double tap never books or charges twice. A badly formed key is 400 `invalid`.
-- A write that fails (4xx or 5xx) releases its key, so the client can correct and retry under the same key. Without the header the write runs as before; payments are also safe by their client-chosen `id`.
+- A write that fails without changing anything (4xx or 5xx) releases its key, so the client can correct and retry under the same key. Each transaction of the write that changes data marks the key in that same transaction, so a retry never runs a write twice: a first attempt that died before writing frees its key after 60 seconds, and one that wrote but lost its response gives 409 `unknown` (check the result before retrying with a new key). Expired keys are deleted by the API's scheduled sweep. Without the header the write runs as before; payments are also safe by their client-chosen `id`.
 
 **Live queue** (server-sent events, replacing 15-second polling):
 
@@ -354,9 +354,9 @@ Implemented in Phase 1 (`apps/api/src/idempotency.ts`, `live.ts`, `sse.ts`).
 | Staff queue | `GET /queue/stream?date` (IST day, default today) | Staff |
 | Waiting-room screen | `POST /display/stream` `{token}` (today) | Public; the screen token is the credential |
 
-- Events: `ready` `{date}` once listening, then `queue` `{appointmentId}` whenever that day's visit, its vitals, bill or prescription status changes. Clients refetch `/queue` or `/display/board`; events carry IDs only, never patient details. A comment line every 25 s keeps proxies open.
-- Database triggers (`notify_queue_change`) announce changes on the `dhc_queue` channel; each API process holds one `LISTEN` connection, so every instance behind a load balancer hears every change. Only the clinic's own changes reach a stream.
-- The web reconnects with a growing delay (1 to 30 s) and refetches every 60 s as a safety net. Streams use `fetch`, so the bearer token stays in a header. A revoked screen token is 404 and the screen stops.
+- Events: `ready` `{date}` once listening, then `queue` `{appointmentId}` whenever that day's visit, its vitals, bill or prescription status, the patient's tags, or a follow-up due that day changes. Clients refetch `/queue` or `/display/board`; events carry IDs only, never patient details. A comment line every 25 s keeps proxies open.
+- Database triggers (`notify_queue_change`) announce changes on the `dhc_queue` channel; each API process holds one `LISTEN` connection, so every instance behind a load balancer hears every change. Staff streams carry the organisation's changes; a waiting-room screen hears only its own clinic.
+- The web reconnects with a growing delay (1 to 30 s) and refetches every 60 s as a safety net. Streams use `fetch`, so the bearer token stays in a header. Streams for today end at IST midnight and the client reconnects to the new day. Revoking a screen closes its open stream; the reconnect is 404 and the screen shows that it is no longer linked.
 
 ## 3p. Follow-ups and automatic no-shows
 

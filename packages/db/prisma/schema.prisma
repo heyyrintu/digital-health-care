@@ -1327,6 +1327,10 @@ model IdempotencyKey {
   method         String
   path           String
   requestHash    String   @map("request_hash")
+  /// Which attempt holds the key; a write commits only while its attempt still holds it.
+  claim          String   @db.Uuid
+  /// Set in the write's own transaction, so a retry knows whether the write happened.
+  writeCommitted Boolean  @default(false) @map("write_committed")
   statusCode     Int?     @map("status_code")
   response       Json?
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)

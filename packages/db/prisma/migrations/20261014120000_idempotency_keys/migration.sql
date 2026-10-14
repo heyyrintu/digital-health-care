@@ -6,6 +6,8 @@ CREATE TABLE "idempotency_keys" (
     "method" TEXT NOT NULL,
     "path" TEXT NOT NULL,
     "request_hash" TEXT NOT NULL,
+    "claim" UUID NOT NULL,
+    "write_committed" BOOLEAN NOT NULL DEFAULT false,
     "status_code" INTEGER,
     "response" JSONB,
     "created_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -24,7 +26,8 @@ ALTER TABLE "idempotency_keys" ADD CONSTRAINT "idempotency_keys_organisation_id_
 ALTER TABLE idempotency_keys ADD CONSTRAINT idempotency_keys_key_check
   CHECK (length(key) BETWEEN 8 AND 100);
 
--- One clinic's keys only. Rows are replaced after 24 hours, never read across clinics.
+-- One organisation's keys only. Expired rows are replaced on reuse and purged by the API's
+-- scheduled sweep after 24 hours.
 ALTER TABLE idempotency_keys ENABLE ROW LEVEL SECURITY;
 GRANT SELECT, INSERT, UPDATE, DELETE ON idempotency_keys TO dhc_app;
 CREATE POLICY tenant_isolation ON idempotency_keys TO dhc_app

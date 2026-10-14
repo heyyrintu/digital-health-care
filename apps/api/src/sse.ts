@@ -13,6 +13,8 @@ export function nextIstMidnight(now: Date): number {
 }
 
 export interface StreamOptions {
+  /** Only this clinic's visits (a waiting-room screen); staff hear the whole organisation. */
+  clinicId?: string;
   /** End the stream at this time (epoch ms), e.g. when "today" rolls over; clients reconnect. */
   endAt?: number;
   /** Checked before each event and heartbeat; the stream ends once it returns false. */
@@ -56,8 +58,9 @@ export async function streamQueue(
     unsubscribe?.();
     res.end();
   };
-  // Registered first, so a client that leaves while we subscribe is still cleaned up.
-  request.raw.on('close', end);
+  // Registered first, so a client that leaves while we subscribe is still cleaned up. On
+  // the response: a POST's request has already ended once its body was read.
+  res.on('close', end);
 
   const allowed = async () => {
     if (!options.stillAllowed) return true;
@@ -71,6 +74,7 @@ export async function streamQueue(
 
   try {
     const stop = await services.live.subscribe(organisationId, date, (change) => {
+      if (options.clinicId && change.clinicId !== options.clinicId) return;
       void allowed().then((ok) => ok && send('queue', { appointmentId: change.appointmentId }));
     });
     if (ended) return stop();

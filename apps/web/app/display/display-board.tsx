@@ -59,7 +59,13 @@ export function DisplayBoardView({ apiBaseUrl }: { apiBaseUrl: string }) {
       fallbackMs: FALLBACK_REFRESH_MS,
       onConnection: (connected) =>
         setState((s) => (s.kind === 'board' ? { ...s, offline: !connected } : s)),
-      isFatal: (e) => e instanceof ApiError && e.status === 404,
+      // A screen revoked while it was open: its stream is refused on the next reconnect.
+      isFatal: (e) => {
+        if (!(e instanceof ApiError && e.status === 404)) return false;
+        stopped = true;
+        setState({ kind: 'invalid' });
+        return true;
+      },
     });
     return () => {
       stopped = true;

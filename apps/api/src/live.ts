@@ -3,6 +3,7 @@ import { Client } from 'pg';
 /** A visit whose queue card or waiting-room token changed. IDs only, never patient data. */
 export interface QueueChange {
   organisationId: string;
+  clinicId: string;
   /** The visit's IST day, `YYYY-MM-DD`. */
   date: string;
   appointmentId: string;
@@ -107,11 +108,16 @@ export class LiveEvents {
 
 function parse(payload: string): QueueChange | null {
   try {
-    const raw = JSON.parse(payload) as { o?: unknown; d?: unknown; a?: unknown };
-    if (typeof raw.o !== 'string' || typeof raw.d !== 'string' || typeof raw.a !== 'string') {
+    const raw = JSON.parse(payload) as { o?: unknown; c?: unknown; d?: unknown; a?: unknown };
+    if (
+      typeof raw.o !== 'string' ||
+      typeof raw.c !== 'string' ||
+      typeof raw.d !== 'string' ||
+      typeof raw.a !== 'string'
+    ) {
       return null;
     }
-    return { organisationId: raw.o, date: raw.d, appointmentId: raw.a };
+    return { organisationId: raw.o, clinicId: raw.c, date: raw.d, appointmentId: raw.a };
   } catch {
     return null;
   }

@@ -1,12 +1,14 @@
 /** Retry delays after a dropped stream, longest last. */
 const RETRY_MS = [1_000, 2_000, 5_000, 10_000, 30_000];
+/** A stream that stayed up this long resets the retry delay; one that keeps dropping backs off. */
+const STABLE_MS = 30_000;
 /** Changes often come in bursts (check-in, then vitals); one refetch covers them. */
 const DEBOUNCE_MS = 300;
 
 /**
  * Keeps a live stream open and calls `refresh` when it reports a change, once when it
  * (re)connects, and every `fallbackMs` as a safety net. Reconnects with a growing delay;
- * `onFatal` stops it for errors a retry cannot fix (signed out, revoked screen).
+ * `isFatal` stops it for errors a retry cannot fix (signed out, revoked screen).
  * Returns a function that stops everything.
  */
 export function keepLive({
@@ -36,9 +38,10 @@ export function keepLive({
   const connect = () => {
     if (stopped) return;
     controller = new AbortController();
+    let readyAt: number | null = null;
     open(controller.signal, (event) => {
       if (event === 'ready') {
-        attempt = 0;
+        readyAt = Date.now();
         onConnection?.(true);
         soon();
       } else if (event === 'queue') {
@@ -55,6 +58,7 @@ export function keepLive({
       .finally(() => {
         if (stopped) return;
         onConnection?.(false);
+        if (readyAt !== null && Date.now() - readyAt >= STABLE_MS) attempt = 0;
         const delay = RETRY_MS[Math.min(attempt++, RETRY_MS.length - 1)]!;
         retry = setTimeout(connect, delay);
       });

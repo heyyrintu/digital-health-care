@@ -52,7 +52,7 @@ afterAll(async () => {
 });
 
 let token = 0;
-async function visitIn(org: 'a' | 'b', date = TODAY) {
+async function visitIn(org: 'a' | 'b', date = TODAY, clinicId?: string) {
   const c = clinics[org];
   const startAt = new Date(`${date}T04:30:00.000Z`);
   token += 1;
@@ -61,7 +61,7 @@ async function visitIn(org: 'a' | 'b', date = TODAY) {
       organisationId: c.org.id,
       patientId: c.patients[0]!.id,
       doctorUserId: c.doctor.userId,
-      clinicId: org === 'a' ? clinicA : clinicB,
+      clinicId: clinicId ?? (org === 'a' ? clinicA : clinicB),
       consultationTypeId: org === 'a' ? type : typeB,
       date: new Date(`${date}T00:00:00.000Z`),
       startAt,
@@ -84,6 +84,7 @@ async function open(path: string, init: RequestInit) {
   const decoder = new TextDecoder();
   let buffer = '';
   let ended = false;
+  let pending: ReturnType<typeof reader.read> | null = null;
   const next = async (ms = 3000): Promise<{ event: string; data: unknown } | null> => {
     const deadline = Date.now() + ms;
     for (;;) {
@@ -98,12 +99,18 @@ async function open(path: string, init: RequestInit) {
       }
       const left = deadline - Date.now();
       if (left <= 0) return null;
+      // A read that outlives a timeout is kept for the next call, so no chunk is lost.
+      pending ??= reader.read();
       const chunk = await Promise.race([
-        reader.read(),
+        pending,
         new Promise<null>((r) => setTimeout(() => r(null), left)),
       ]);
-      if (chunk?.done) ended = true;
-      if (!chunk || chunk.done) return null;
+      if (!chunk) return null;
+      pending = null;
+      if (chunk.done) {
+        ended = true;
+        return null;
+      }
       buffer += decoder.decode(chunk.value, { stream: true });
     }
   };
@@ -176,5 +183,71 @@ describe('live queue stream', () => {
 
     const refused = await fetch(`${base}/display/stream`, init);
     expect(refused.status).toBeGreaterThanOrEqual(400);
+  });
+
+  it('tells a waiting-room screen only about its own clinic', async () => {
+    const admin = await staffLogin(h, 'clinic-a', clinics.a.admin);
+    const created = await h.app.inject({
+      method: 'POST',
+      url: '/v1/display-screens',
+      headers: bearer(admin),
+      payload: { clinicId: clinicA, label: 'Reception TV' },
+    });
+    const screen = CreatedDisplayScreen.parse(created.json());
+    const body = JSON.stringify({ token: screen.link.split('#')[1] });
+    const stream = await open('/display/stream', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body,
+    });
+    expect((await stream.next())?.event).toBe('ready');
+
+    const annexe = await h.owner.clinic.create({
+      data: { organisationId: clinics.a.org.id, name: 'Annexe' },
+    });
+    await visitIn('a', TODAY, annexe.id);
+    expect(await stream.next(500)).toBeNull();
+    const own = await visitIn('a');
+    expect(await stream.next()).toEqual({ event: 'queue', data: { appointmentId: own.id } });
+    stream.close();
+  });
+
+  it('pushes a follow-up date to the day it asks the patient back', async () => {
+    const visit = await visitIn('a');
+    const stream = await open('/queue/stream?date=2026-10-13', { headers: bearer(doctorA) });
+    expect(await stream.next()).toEqual({ event: 'ready', data: { date: '2026-10-13' } });
+
+    await h.owner.consultation.create({
+      data: {
+        organisationId: clinics.a.org.id,
+        appointmentId: visit.id,
+        patientId: visit.patientId,
+        doctorUserId: visit.doctorUserId,
+        notesCipher: 'x',
+        followUpDate: new Date('2026-10-13T00:00:00.000Z'),
+      },
+    });
+    expect(await stream.next()).toEqual({ event: 'queue', data: { appointmentId: visit.id } });
+    stream.close();
+  });
+
+  it('pushes a priority tag on a waiting patient', async () => {
+    const visit = await visitIn('a');
+    const stream = await open('/queue/stream', { headers: bearer(doctorA) });
+    expect((await stream.next())?.event).toBe('ready');
+
+    const tag = await h.owner.tag.create({
+      data: { organisationId: clinics.a.org.id, name: 'Emergency', colour: '#DC2626' },
+    });
+    await h.owner.patientTag.create({
+      data: {
+        organisationId: clinics.a.org.id,
+        patientId: visit.patientId,
+        tagId: tag.id,
+        addedByUserId: visit.doctorUserId,
+      },
+    });
+    expect(await stream.next()).toEqual({ event: 'queue', data: { appointmentId: visit.id } });
+    stream.close();
   });
 });

@@ -275,7 +275,6 @@ export class QueueService {
     });
   }
 
-  /** Today's board for a screen: per doctor, the token being seen and the next few. */
   /** The live screen a token belongs to; a revoked or unknown token is refused. */
   async screen(token: string) {
     const screen = await withAuth(this.s.db, (tx) =>
@@ -285,6 +284,7 @@ export class QueueService {
     return screen;
   }
 
+  /** Today's board for a screen: per doctor, the token being seen and the next few. */
   async board(token: string): Promise<DisplayBoard> {
     const screen = await this.screen(token);
 
