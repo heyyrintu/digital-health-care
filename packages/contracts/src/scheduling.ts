@@ -86,6 +86,11 @@ export const BookingRules = z.object({
   sameDayCutoffMinutes: z.number().int().min(0).max(1440),
   /** Staff may book this many extra patients into taken slots per doctor per day. */
   overbookPerDay: z.number().int().min(0).max(50),
+  /**
+   * A booking nobody arrived for becomes a no-show this many minutes after its slot ends
+   * (PRD §5.2); null switches automatic no-shows off. Defaults to 30 when left out.
+   */
+  noShowAfterMinutes: z.number().int().min(0).max(720).nullable().default(30),
 });
 export type BookingRules = z.infer<typeof BookingRules>;
 
