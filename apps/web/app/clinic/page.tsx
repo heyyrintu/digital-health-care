@@ -12,6 +12,7 @@ import { useSession } from './session-provider';
 import { PracticeCard } from './practice-card';
 import { PriceListCard } from './price-list-card';
 import { ScreensCard } from './screens-card';
+import { PolicyCard } from './policy-card';
 import { SettingsCard } from './settings-card';
 import { ClinicShell } from './shell';
 import { StaffCard } from './staff-card';
@@ -32,6 +33,7 @@ export default function ClinicDashboard() {
                 <PriceListCard />
                 <ScreensCard />
                 <SettingsCard />
+                <PolicyCard />
               </div>
             )}
           </div>
@@ -178,6 +180,14 @@ function PatientSearch() {
                       >
                         {p.name}
                       </Link>
+                      {p.mergedIntoId && (
+                        <Link
+                          href={`/clinic/patients/${p.mergedIntoId}`}
+                          className="ml-2 text-xs font-semibold text-primary hover:underline"
+                        >
+                          {t('merge.mergedChip')}
+                        </Link>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       <AgeGender patient={p} />

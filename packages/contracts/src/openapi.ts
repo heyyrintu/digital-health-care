@@ -51,6 +51,7 @@ import {
 } from './billing';
 import { DashboardQuery, DashboardReport } from './dashboard';
 import { ErrorResponse } from './errors';
+import { OrganisationSettings, UpdateOrganisationSettingsBody } from './settings';
 import {
   LastPrescription,
   LastPrescriptionQuery,
@@ -99,6 +100,14 @@ import {
   UpdateMedicineBody,
 } from './medicines';
 import { HealthResponse } from './health';
+import {
+  ApprovePatientMergeBody,
+  CreatePatientMergeBody,
+  PatientMergeList,
+  PatientMergeQuery,
+  PatientMergeRequest,
+  RejectPatientMergeBody,
+} from './merges';
 import {
   CreatePatientBody,
   DuplicateCheckBody,
@@ -357,6 +366,21 @@ const operations: Operation[] = [
     summary: 'Set the UHID prefix and next number (clinic admin)',
     body: UpdateUhidSettingsBody,
     response: UhidSettings,
+  },
+  {
+    method: 'get',
+    path: '/organisation-settings',
+    operationId: 'getOrganisationSettings',
+    summary: 'Chart model, hidden safety rules and upload limits (staff)',
+    response: OrganisationSettings,
+  },
+  {
+    method: 'put',
+    path: '/organisation-settings',
+    operationId: 'updateOrganisationSettings',
+    summary: 'Set the chart model, hidden safety rules and upload limits (clinic admin)',
+    body: UpdateOrganisationSettingsBody,
+    response: OrganisationSettings,
   },
   {
     method: 'get',
@@ -808,6 +832,41 @@ const operations: Operation[] = [
     summary: 'Withdraw a decision; the name goes back to the queue',
     pathParams: ['id'],
     status: 204,
+  },
+  {
+    method: 'post',
+    path: '/patient-merges',
+    operationId: 'requestPatientMerge',
+    summary: 'Ask a clinic admin to merge a duplicate record into the one that stays',
+    body: CreatePatientMergeBody,
+    response: PatientMergeRequest,
+    status: 201,
+  },
+  {
+    method: 'get',
+    path: '/patient-merges',
+    operationId: 'listPatientMerges',
+    summary: 'Merge requests waiting for a decision, or the latest decided (clinic admin)',
+    query: PatientMergeQuery,
+    response: PatientMergeList,
+  },
+  {
+    method: 'post',
+    path: '/patient-merges/{id}/approve',
+    operationId: 'approvePatientMerge',
+    summary: 'Merge the duplicate into the kept record (clinic admin; cannot be undone)',
+    pathParams: ['id'],
+    body: ApprovePatientMergeBody,
+    response: PatientMergeRequest,
+  },
+  {
+    method: 'post',
+    path: '/patient-merges/{id}/reject',
+    operationId: 'rejectPatientMerge',
+    summary: 'Keep both records, with a reason (clinic admin)',
+    pathParams: ['id'],
+    body: RejectPatientMergeBody,
+    response: PatientMergeRequest,
   },
   {
     method: 'get',

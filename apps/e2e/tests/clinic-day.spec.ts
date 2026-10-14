@@ -207,9 +207,22 @@ test.describe('a clinic day', () => {
       .click();
     await expect(doctorPage.getByTestId('appointment-10001')).toHaveCount(0);
 
-    // Front desk: bills Neha and takes cash; the receipt is ready to print.
+    // Front desk: prints Neha's signed prescription from her card, bills her and takes
+    // cash; the receipt is ready to print.
     await desk.goto('/clinic/queue');
     await desk.getByRole('tab', { name: /Completed/ }).click();
+    const pdf = desk.waitForResponse(
+      (r) => r.request().method() === 'GET' && /\/prescriptions\/[^/]+\/pdf$/.test(r.url()),
+    );
+    const printTab = desk.waitForEvent('popup');
+    await desk
+      .getByTestId('appointment-10001')
+      .getByRole('button', { name: 'Print prescription DAY-00001' })
+      .click();
+    const printed = await pdf;
+    expect(printed.status()).toBe(200);
+    expect(printed.headers()['content-type']).toBe('application/pdf');
+    await (await printTab).close();
     await desk.getByTestId('appointment-10001').getByRole('link', { name: 'Bill' }).click();
     await expect(desk.getByRole('heading', { name: 'Bill for Neha Sharma' })).toBeVisible();
     await desk.getByRole('button', { name: 'Save bill' }).click();

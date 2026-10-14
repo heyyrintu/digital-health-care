@@ -10,6 +10,8 @@ import {
   type SafetyLine,
 } from '@dhc/safety';
 import { z } from 'zod';
+import { historyIds, liveId } from '../patients/merged';
+import { readSettings } from '../settings/service';
 
 const Steps = z.array(DoseStep);
 const num = (d: Prisma.Decimal | null) => (d === null ? null : Number(d));
@@ -34,8 +36,14 @@ export interface SafetyVisit {
  */
 async function loadInput(tx: Tx, visit: SafetyVisit, items: ItemRow[]): Promise<SafetyInput> {
   // One query at a time: a transaction's connection runs them in order anyway.
-  const patient = await tx.patient.findUniqueOrThrow({
+  // A visit of a merged duplicate is checked against the kept record's chart.
+  const visitPatient = await tx.patient.findUniqueOrThrow({
     where: { id: visit.patientId },
+    select: { id: true, mergedIntoId: true },
+  });
+  const patientId = liveId(visitPatient);
+  const patient = await tx.patient.findUniqueOrThrow({
+    where: { id: patientId },
     select: { dob: true },
   });
   const vitals = await tx.vitals.findUnique({
@@ -46,14 +54,14 @@ async function loadInput(tx: Tx, visit: SafetyVisit, items: ItemRow[]): Promise<
     where: { id: visit.consultationTypeId },
     select: { mode: true },
   });
-  const active = { patientId: visit.patientId, removedAt: null };
+  const active = { patientId, removedAt: null };
   const allergies = await tx.allergy.findMany({ where: active });
   const conditions = await tx.medicalCondition.findMany({ where: active });
   const medications = await tx.currentMedication.findMany({ where: active });
   // A follow-up (SR-19): the same doctor saw this patient at an earlier, completed visit.
   const earlier = await tx.appointment.count({
     where: {
-      patientId: visit.patientId,
+      patientId: { in: await historyIds(tx, patientId) },
       doctorUserId: visit.doctorUserId,
       status: 'completed',
       startAt: { lt: visit.startAt },
@@ -221,7 +229,10 @@ export async function checkAndRecord(
   },
 ): Promise<{ summary: SafetySummary; findings: SafetyFinding[] }> {
   const input = await loadInput(tx, opts.visit, opts.items);
-  const findings = checkPrescription(input);
+  // Safety tuning (PRD §9.2): the clinic may hide the non-critical "Visibility only" rules.
+  // The settings allow no others, so blocks and the locked rules always show.
+  const hidden = new Set<string>((await readSettings(tx, opts.organisationId)).hiddenSafetyRules);
+  const findings = checkPrescription(input).filter((f) => !hidden.has(f.ruleId));
   const version = input.facts.version;
   const existing = await tx.safetyAlert.findMany({
     where: { prescriptionId: opts.prescriptionId },
@@ -277,7 +288,8 @@ export async function checkAndRecord(
         where: { id: r.id },
         data: {
           resolvedAt: opts.now,
-          ...(r.action === null
+          // A rule hidden since it was shown was not resolved by the doctor's change.
+          ...(r.action === null && !hidden.has(r.ruleId)
             ? { action: 'changed', actionByUserId: opts.actorUserId, actionAt: opts.now }
             : {}),
         },

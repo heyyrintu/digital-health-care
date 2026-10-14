@@ -127,46 +127,60 @@ export class QueueService {
         orderBy: { appointment: { startAt: 'asc' } },
         take: 500,
       });
-      const later =
-        consultations.length === 0
-          ? []
-          : await tx.appointment.findMany({
-              where: {
-                patientId: { in: [...new Set(consultations.map((c) => c.patientId))] },
-                status: { in: GOING_AHEAD },
-                startAt: {
-                  gt: new Date(
-                    Math.min(...consultations.map((c) => c.appointment.startAt.getTime())),
-                  ),
-                },
-              },
-              select: {
-                id: true,
-                patientId: true,
-                doctorUserId: true,
-                date: true,
-                startAt: true,
-                status: true,
-              },
-              orderBy: { startAt: 'asc' },
-            });
-      return consultations.map((c) => ({
-        consultation: c,
-        booking:
-          later.find(
-            (b) =>
-              b.patientId === c.patientId &&
-              b.doctorUserId === c.appointment.doctorUserId &&
-              b.startAt > c.appointment.startAt,
-          ) ?? null,
-      }));
+      if (consultations.length === 0) return [];
+      // A visit to a duplicate merged since then belongs to the kept record (PRD §3.2): show
+      // that record, and count bookings made on it or on any record merged into it.
+      const liveOf = (p: { id: string; mergedIntoId: string | null }) => p.mergedIntoId ?? p.id;
+      const liveIds = [...new Set(consultations.map((c) => liveOf(c.appointment.patient)))];
+      const [livePatients, merged] = await Promise.all([
+        tx.patient.findMany({ where: { id: { in: liveIds } }, include: withTags }),
+        tx.patient.findMany({
+          where: { mergedIntoId: { in: liveIds } },
+          select: { id: true, mergedIntoId: true },
+        }),
+      ]);
+      const live = new Map(livePatients.map((p) => [p.id, p]));
+      const historyLive = new Map<string, string>(liveIds.map((id) => [id, id]));
+      for (const m of merged) historyLive.set(m.id, m.mergedIntoId!);
+      const later = await tx.appointment.findMany({
+        where: {
+          patientId: { in: [...historyLive.keys()] },
+          status: { in: GOING_AHEAD },
+          startAt: {
+            gt: new Date(Math.min(...consultations.map((c) => c.appointment.startAt.getTime()))),
+          },
+        },
+        select: {
+          id: true,
+          patientId: true,
+          doctorUserId: true,
+          date: true,
+          startAt: true,
+          status: true,
+        },
+        orderBy: { startAt: 'asc' },
+      });
+      return consultations.map((c) => {
+        const liveId = liveOf(c.appointment.patient);
+        return {
+          consultation: c,
+          patient: live.get(liveId) ?? c.appointment.patient,
+          booking:
+            later.find(
+              (b) =>
+                historyLive.get(b.patientId) === liveId &&
+                b.doctorUserId === c.appointment.doctorUserId &&
+                b.startAt > c.appointment.startAt,
+            ) ?? null,
+        };
+      });
     });
     const names = await this.doctorNames(rows.map((r) => r.consultation.appointment.doctorUserId));
-    return rows.map(({ consultation: c, booking }) => ({
+    return rows.map(({ consultation: c, patient, booking }) => ({
       visitAppointmentId: c.appointmentId,
       visitDate: fromDbDate(c.appointment.date),
       followUpDate: query.date,
-      patient: toSummary(c.appointment.patient),
+      patient: toSummary(patient),
       doctorUserId: c.appointment.doctorUserId,
       doctorName: names.get(c.appointment.doctorUserId) ?? null,
       clinicId: c.appointment.clinicId,

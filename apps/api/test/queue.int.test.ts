@@ -265,6 +265,30 @@ describe('follow-ups', () => {
     expect(QueueResponse.parse(otherDoctor.json()).followUps).toEqual([]);
   });
 
+  it('shows a merged duplicate’s follow-up under the kept record, with its booking', async () => {
+    const [asha] = clinics.a.patients.map((p) => p.id) as [string];
+    const duplicate = await h.owner.patient.create({
+      data: { organisationId: clinics.a.org.id, uhid: 'Q-DUP001', name: 'Asha V.' },
+    });
+    const visit = await book(duplicate.id, { startAt: at(TODAY, '11:00') });
+    await followUp(visit.id, duplicate.id, NEXT_TUE);
+    await h.owner.patient.update({
+      where: { id: duplicate.id },
+      data: { mergedIntoId: asha, mergedAt: h.clock.now() },
+    });
+    // Booked on the kept record after the merge.
+    const back = await book(asha, { startAt: at(NEXT_TUE, '10:30') });
+
+    const day = QueueResponse.parse((await call('GET', `/queue?date=${NEXT_TUE}`, desk)).json());
+    expect(day.followUps).toMatchObject([
+      {
+        visitAppointmentId: visit.id,
+        patient: { id: asha, name: 'Asha Verma' },
+        booking: { id: back.id, startTime: '10:30' },
+      },
+    ]);
+  });
+
   it('never shows another clinic’s follow-ups', async () => {
     const [asha] = clinics.a.patients.map((p) => p.id) as [string];
     const visit = await book(asha, { startAt: at(TODAY, '11:00') });
