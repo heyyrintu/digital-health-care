@@ -5,9 +5,10 @@ import { DisplayBoard } from '@dhc/contracts';
 import { t as translate, type MessageKey } from '@dhc/i18n';
 import { cn } from '@dhc/ui-web';
 import { useEffect, useMemo, useState } from 'react';
+import { keepLive } from '../../lib/live';
 
-/** How often the screen refreshes. */
-const REFRESH_MS = 10_000;
+/** Changes arrive live; this poll only covers a stream that has dropped. */
+const FALLBACK_REFRESH_MS = 60_000;
 
 /** Labels in English and Hindi together: a waiting room serves both. */
 const both = (key: MessageKey) => `${translate('en', key)} · ${translate('hi', key)}`;
@@ -51,10 +52,18 @@ export function DisplayBoardView({ apiBaseUrl }: { apiBaseUrl: string }) {
           }
         });
     void refresh();
-    const timer = setInterval(() => !stopped && void refresh(), REFRESH_MS);
+    const stop = keepLive({
+      open: (signal, onEvent) =>
+        api.stream('POST', '/display/stream', { body: { token }, signal, onEvent }),
+      refresh: () => !stopped && void refresh(),
+      fallbackMs: FALLBACK_REFRESH_MS,
+      onConnection: (connected) =>
+        setState((s) => (s.kind === 'board' ? { ...s, offline: !connected } : s)),
+      isFatal: (e) => e instanceof ApiError && e.status === 404,
+    });
     return () => {
       stopped = true;
-      clearInterval(timer);
+      stop();
     };
   }, [api]);
 

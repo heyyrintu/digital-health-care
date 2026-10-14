@@ -67,6 +67,7 @@ export function buildApp({
     reply.header('x-request-id', request.id);
   });
 
+  app.addHook('onClose', async () => services?.live.close());
   registerErrorHandling(app);
   // Bearer tokens only (no cookies), so credentials are never allowed cross-origin.
   app.register(cors, {

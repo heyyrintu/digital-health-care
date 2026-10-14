@@ -30,6 +30,7 @@ import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useCallback, useEffect, useState } from 'react';
 import { AppointmentRow } from '../appointments/appointment-row';
+import { keepLive } from '../../../lib/live';
 import { useSession } from '../session-provider';
 import { ClinicShell, canRegister } from '../shell';
 
@@ -37,8 +38,8 @@ const TABS = ['myOpd', 'booked', 'completed', 'closed'] as const;
 type Tab = (typeof TABS)[number];
 const MODES: ConsultationMode[] = ['in_person', 'video', 'audio'];
 
-/** How often the queue refreshes while the page is visible. */
-const REFRESH_MS = 15_000;
+/** Changes arrive live; this poll only covers a stream that has dropped. */
+const FALLBACK_REFRESH_MS = 60_000;
 
 /**
  * The live queue (PRD §5.1): My OPD, Booked, Completed and Closed for a day, shared by
@@ -104,18 +105,31 @@ function Queue({ me }: { me: MeResponse }) {
   useEffect(() => {
     setQueue(null);
     load().catch(handle);
-    const timer = setInterval(() => {
-      if (document.visibilityState === 'visible') load().catch(handle);
-    }, REFRESH_MS);
+    // Live: the API says when a visit changes; a slow poll covers a stream that drops.
+    const stop = keepLive({
+      open: (signal, onEvent) =>
+        api.stream('GET', '/queue/stream', { query: { date }, signal, onEvent }),
+      refresh: () => {
+        if (document.visibilityState === 'visible') load().catch(handle);
+      },
+      fallbackMs: FALLBACK_REFRESH_MS,
+      isFatal: (e) => {
+        if (e instanceof ApiError && e.status < 500) {
+          handle(e);
+          return true;
+        }
+        return false;
+      },
+    });
     const tick = setInterval(() => setNow(new Date()), 30_000);
     const onVisible = () => document.visibilityState === 'visible' && load().catch(handle);
     document.addEventListener('visibilitychange', onVisible);
     return () => {
-      clearInterval(timer);
+      stop();
       clearInterval(tick);
       document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [load, handle]);
+  }, [api, date, load, handle]);
 
   useEffect(() => {
     api

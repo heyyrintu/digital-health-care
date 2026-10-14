@@ -97,6 +97,30 @@ test.describe('queue and waiting-room screen', () => {
     await expect(rows.first()).toContainText('Kamla Devi');
   });
 
+  test('the queue updates live when a visit changes, without a reload', async ({
+    page,
+    clinic,
+    db,
+  }) => {
+    const { walkIn } = await setUp(db, clinic);
+    const first = await walkIn(0, 1, 10);
+
+    await setUpFromInvite(page, clinic.inviteLink('front_desk'), 'desk synthetic passphrase');
+    await page.getByRole('link', { name: 'Queue' }).click();
+    const rows = page.getByTestId('appointments').locator('li');
+    await expect(rows).toHaveCount(1);
+
+    // A walk-in registered elsewhere, then the first patient going in to the doctor: the
+    // fallback poll is a minute, so seeing both within seconds means the stream works.
+    await walkIn(1, 2, 0);
+    await expect(rows).toHaveCount(2, { timeout: 8_000 });
+    await db.appointment.update({
+      where: { id: first.id },
+      data: { status: 'in_consultation', consultationStartedAt: new Date() },
+    });
+    await expect(rows.nth(0)).toContainText('With the doctor', { timeout: 8_000 });
+  });
+
   test('a clinic admin creates a screen link; the screen shows tokens, never names', async ({
     page,
     browser,

@@ -254,6 +254,7 @@ model Organisation {
   billItems              BillItem[]
   payments               Payment[]
   receiptSettings        ReceiptSettings?
+  idempotencyKeys        IdempotencyKey[]
   safetyAlerts           SafetyAlert[]
   doctorProfiles         DoctorProfile[]
   medicineRequests       MedicineRequest[]
@@ -1208,4 +1209,24 @@ model AuditLog {
 
   @@index([organisationId, at])
   @@map("audit_logs")
+}
+
+/// A retryable write's first result, replayed for 24 hours when the same person sends the
+/// same Idempotency-Key again (API guide §2). A row without a status is still running.
+model IdempotencyKey {
+  organisationId String   @map("organisation_id") @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  key            String
+  method         String
+  path           String
+  requestHash    String   @map("request_hash")
+  statusCode     Int?     @map("status_code")
+  response       Json?
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+
+  @@id([organisationId, userId, key])
+  @@index([createdAt])
+  @@map("idempotency_keys")
 }

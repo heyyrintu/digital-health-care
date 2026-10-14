@@ -12,7 +12,7 @@ This guide explains conventions and lists the endpoint catalogue by module. Fiel
 | Format | JSON, UTF-8; dates ISO 8601 in UTC (clients display IST) |
 | Auth | `Authorization: Bearer <access token>` (short-lived) + rotating refresh token |
 | Tenant | Derived from the token; never sent by the client. Platform console uses a separate audience |
-| Idempotency | `Idempotency-Key` header required on retryable writes (check-in, vitals, notes, payments, bookings, uploads). Same key + same body → same result for 24 h |
+| Idempotency | `Idempotency-Key` header (8–100 letters, digits, `-`, `_`) on retryable writes. Same person, key and body → the first result, replayed for 24 h with `idempotent-replay: true`; built on bookings, appointment actions, bills, payments and the price list (§3o). Same key with a different body, or while the first request is still running → 409 |
 | Pagination | Cursor based: `?limit=50&cursor=<opaque>`; response `{ data, nextCursor }` |
 | Versioning | URL major version (`/v1`). Additive changes only within a version. Two latest mobile app versions must keep working |
 | Rate limits | Per user and per IP; stricter on OTP, login, upload, payment endpoints. `429` with `Retry-After` |
@@ -291,13 +291,33 @@ Implemented in Phase 1 (`apps/api/src/modules/medicines`, PRD §9.2). Everything
 - **Audit:** `medicine.created` (medicine ID and ingredient count) and `medicine.updated` (medicine ID, ingredient count and whether active), `medicine_request.approved` and `medicine_request.rejected` (request ID and medicine ID), `medicine_request.undone` (the decision undone). Never reasons or patient details.
 - **Not built yet:** the licensed drug database import with its own update process (§3g), and a reference request to the platform team to add a medicine for every clinic.
 
+## 3o. Idempotency keys and the live queue
+
+Implemented in Phase 1 (`apps/api/src/idempotency.ts`, `live.ts`, `sse.ts`).
+
+**Idempotency-Key** (§1) on `POST /appointments`, `POST /appointments/{id}/actions`, `PUT /appointments/{id}/bill`, `POST /bills/{id}/payments` and `POST /price-list`:
+- Keys are kept per clinic and person (`idempotency_keys`, row-level security) for 24 hours. A retry with the same key and body gets the stored status and body, with `idempotent-replay: true`; nothing runs twice.
+- The same key with a different body is 409 `fields.idempotencyKey = reused`. A retry while the first request is still running is 409 `in_progress`, so a double tap never books or charges twice. A badly formed key is 400 `invalid`.
+- A write that fails (4xx or 5xx) releases its key, so the client can correct and retry under the same key. Without the header the write runs as before; payments are also safe by their client-chosen `id`.
+
+**Live queue** (server-sent events, replacing 15-second polling):
+
+| Stream | Endpoint | Who |
+|---|---|---|
+| Staff queue | `GET /queue/stream?date` (IST day, default today) | Staff |
+| Waiting-room screen | `POST /display/stream` `{token}` (today) | Public; the screen token is the credential |
+
+- Events: `ready` `{date}` once listening, then `queue` `{appointmentId}` whenever that day's visit, its vitals, bill or prescription status changes. Clients refetch `/queue` or `/display/board`; events carry IDs only, never patient details. A comment line every 25 s keeps proxies open.
+- Database triggers (`notify_queue_change`) announce changes on the `dhc_queue` channel; each API process holds one `LISTEN` connection, so every instance behind a load balancer hears every change. Only the clinic's own changes reach a stream.
+- The web reconnects with a growing delay (1 to 30 s) and refetches every 60 s as a safety net. Streams use `fetch`, so the bearer token stays in a header. A revoked screen token is 404 and the screen stops.
+
 ## 4. Endpoint catalogue (by module)
 
 | Module | Main resources and actions |
 |---|---|
 | identity | `/auth/*`, `/me`, `/staff/invites` (built); `/me/devices` |
 | tenancy | `/organisations/current`, `/clinics` (built), `/consultation-types` (built), `/booking-rules` (built), `/doctors` (built), `/settings`, `/branding`, `/tags` (built), `/uhid-settings` (built) |
-| scheduling | `/availability/versions` (built), `/availability/exceptions` (built), `/slots?doctorId&clinicId&consultationTypeId&date&channel` (built), `/appointments` (book, walk-in, list, confirm, check-in, start, complete, cancel, no-show, reschedule; built), `/queue?date` (built), `/display-screens` (built), `/display/board` (built) |
+| scheduling | `/availability/versions` (built), `/availability/exceptions` (built), `/slots?doctorId&clinicId&consultationTypeId&date&channel` (built), `/appointments` (book, walk-in, list, confirm, check-in, start, complete, cancel, no-show, reschedule; built), `/queue?date` (built), `/queue/stream` (SSE; built), `/display-screens` (built), `/display/board` and `/display/stream` (built) |
 | patients | `/patients` (search by phone, name or UHID, filter by tag; register; built), `/patients/{id}` (demographics and family, each view audited; edit; built), `/patients/duplicate-check` (built), `/patients/{id}/tags` (built), `/patients/{id}/chart` and `/patients/{id}/allergies\|conditions\|medications` (built), `/patients/{id}/consents`, `/patients/merge-requests` |
 | clinical | `/appointments/{id}/consultation` (built), `/appointments/{id}/vitals` (built), `/scribe/sessions`, `/assessments/forms`, `/assessments`, `/patients/{id}/ask-ai` |
 | prescribing | `/medicines` (search; built), `/medicine-master`, `/drug-molecules` and `/medicine-requests` (clinic admin; built), `/prescription-templates` (built), `/appointments/{id}/prescription` (draft and lines; built), `/patients/{id}/last-prescription` (built), `/appointments/{id}/prescription/safety-actions` (built), `/appointments/{id}/prescription/preview\|sign\|amend\|void` (built), `/prescriptions/{id}/pdf` (built), `/verify` (public; built), `/doctor-profile` (built) |

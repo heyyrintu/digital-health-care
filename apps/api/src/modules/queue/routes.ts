@@ -12,6 +12,8 @@ import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { authOf, authenticate, requireRole } from '../../plugins/authenticate';
 import type { Services } from '../../services';
+import { streamQueue } from '../../sse';
+import { istDate } from '@dhc/domain';
 import { QueueService } from './service';
 
 const IdParams = z.object({ id: z.uuid() });
@@ -34,6 +36,13 @@ export const queueRoutes: FastifyPluginAsync<{ services: Services }> = async (
     return QueueResponse.parse(await queue.queue(authOf(request), query));
   });
 
+  // Server-sent events: a `queue` event names each visit that changed; refetch /queue.
+  app.get('/queue/stream', staff, async (request, reply) => {
+    const { date } = QueueQuery.parse(request.query);
+    const day = date ?? istDate(services.now());
+    await streamQueue(services, request, reply, authOf(request).organisationId, day);
+  });
+
   app.get('/display-screens', admin, async (request) =>
     DisplayScreenList.parse({ data: await queue.listScreens(authOf(request)) }),
   );
@@ -54,5 +63,12 @@ export const queueRoutes: FastifyPluginAsync<{ services: Services }> = async (
   app.post('/display/board', SCREEN_RATE_LIMIT, async (request) => {
     const { token } = DisplayTokenBody.parse(request.body);
     return DisplayBoard.parse(await queue.board(token));
+  });
+
+  // The screen's live stream: a `queue` event means fetch the board again.
+  app.post('/display/stream', SCREEN_RATE_LIMIT, async (request, reply) => {
+    const { token } = DisplayTokenBody.parse(request.body);
+    const screen = await queue.screen(token);
+    await streamQueue(services, request, reply, screen.organisationId, istDate(services.now()));
   });
 };
