@@ -55,7 +55,8 @@ export function MergePanel({
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!other) return;
-    const reason = String(new FormData(event.currentTarget).get('reason') ?? '');
+    const reason = String(new FormData(event.currentTarget).get('reason') ?? '').trim();
+    if (!reason) return setError(t('merge.reasonMissing'));
     setBusy(true);
     setError(null);
     try {

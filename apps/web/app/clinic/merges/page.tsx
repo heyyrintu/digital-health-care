@@ -69,12 +69,13 @@ function MergesScreen() {
         body: note ? { note } : {},
       });
       setOpen(null);
-      await load();
+      // The decision is applied; a failed reload must not hide that.
       setNotice(
         mode === 'approve'
           ? t('merge.approvedNotice', { duplicate: r.source.uhid, kept: r.target.uhid })
           : t('merge.rejectedNotice'),
       );
+      await load().catch(fail);
     } catch (e) {
       fail(e);
     } finally {

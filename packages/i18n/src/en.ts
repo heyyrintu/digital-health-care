@@ -850,6 +850,7 @@ export const en = {
     'After approval, {duplicate} closes: its allergies, conditions, medicines, tags, upcoming bookings and family links move to {kept}, and its past visits show there. This cannot be undone.',
   'merge.reason': 'Why are these the same person?',
   'merge.reasonHint': 'For example: same name, mobile and date of birth.',
+  'merge.reasonMissing': 'Say why these are the same person.',
   'merge.send': 'Send to clinic admin',
   'merge.chooseAnother': 'Choose another record',
   'merge.pending': 'Waiting for a clinic admin to merge {duplicate} into {kept}.',
