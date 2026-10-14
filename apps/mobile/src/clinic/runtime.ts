@@ -21,7 +21,7 @@ const send = outboxSender((method, path, options) => api.request(method, path, o
 
 let loaded: Promise<void> | null = null;
 /** The last sign-out's clean-up; the next session's first read waits for it. */
-let clearing: Promise<unknown> = Promise.resolve();
+let clearing: Promise<void> = Promise.resolve();
 
 /**
  * The body of a notes or vitals save still on this device for `path`, if any: waiting, or
@@ -32,11 +32,32 @@ export function waitingBody<T>(kind: 'notes' | 'vitals', path: string): T | null
   return item ? (item.body as T) : null;
 }
 
-/** Reads what this device saved, once. */
+/**
+ * Clears every store, trying a failed one once more. Rejects when one still fails, so the
+ * next session reads nothing rather than what the last person left behind.
+ */
+async function clearAll(): Promise<void> {
+  const stores = [outbox, today, medicines, visits];
+  const results = await Promise.allSettled(stores.map((s) => s.clear()));
+  const failed = stores.filter((_, i) => results[i]?.status === 'rejected');
+  await Promise.all(failed.map((s) => s.clear()));
+}
+
+/**
+ * Reads what this device saved, once. Rejects while the last sign-out's clean-up keeps
+ * failing; each later call tries that clean-up again first.
+ */
 export function loadOffline(): Promise<void> {
   loaded ??= clearing
+    .catch(() => (clearing = clearAll()))
     .then(() => Promise.all([outbox.load(), today.load(), medicines.load()]))
-    .then(() => undefined);
+    .then(
+      () => undefined,
+      (error: unknown) => {
+        loaded = null;
+        throw error;
+      },
+    );
   return loaded;
 }
 
@@ -45,7 +66,14 @@ export function loadOffline(): Promise<void> {
  * and fetch again so the screen shows the result; then the medicine copy for doctors.
  */
 export async function syncNow(messageOf: (error: unknown) => string): Promise<void> {
-  await loadOffline();
+  // The last person's data could not be cleared yet: touch nothing until it is.
+  if (
+    !(await loadOffline().then(
+      () => true,
+      () => false,
+    ))
+  )
+    return;
   const state = session.getState();
   if (state.status !== 'signed_in') return;
   const fetchToday = () => api.request('GET', '/sync/today', { schema: SyncTodayResponse });
@@ -76,12 +104,9 @@ session.subscribe(() => {
   const signedIn = session.getState().status === 'signed_in';
   if (wasSignedIn && !signedIn) {
     // Kept, not fire-and-forget: a late delete must not remove what the next person writes.
-    clearing = Promise.all([
-      outbox.clear(),
-      today.clear(),
-      medicines.clear(),
-      visits.clear(),
-    ]).catch(() => undefined);
+    clearing = clearAll();
+    // Handled by the next loadOffline(), which tries again; not an unhandled rejection.
+    clearing.catch(() => undefined);
     loaded = null;
   }
   wasSignedIn = signedIn;

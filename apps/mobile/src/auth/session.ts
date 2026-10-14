@@ -94,6 +94,9 @@ export class SessionManager {
       await this.completeSignIn(generation, organisation, tokens);
     } finally {
       this.signingIn -= 1;
+      // The last sign-in to settle: if none won, an overtaken one may have saved its tokens
+      // before a newer one failed. Nothing signed in, so nothing stays in the vault.
+      if (this.signingIn === 0 && !this.stored) await this.vault.clear().catch(() => undefined);
     }
   }
 
@@ -109,10 +112,9 @@ export class SessionManager {
     const stored = { organisation, refreshToken: tokens.refreshToken };
     await this.vault.save(stored);
     if (generation !== this.generation) {
-      // Overtaken while saving: put back what now holds the vault. A session that has started
-      // keeps its tokens; with none and no other sign-in still running, nothing is kept.
+      // Overtaken while saving: a session that has started keeps its tokens. With none, the
+      // vault is cleared once the last sign-in settles (signIn's finally).
       if (this.stored) await this.vault.save(this.stored).catch(() => undefined);
-      else if (this.signingIn === 1) await this.vault.clear().catch(() => undefined);
       return;
     }
     this.stored = stored;

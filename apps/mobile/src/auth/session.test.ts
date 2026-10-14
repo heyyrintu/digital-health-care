@@ -159,6 +159,29 @@ describe('SessionManager across sign-outs', () => {
     expect(manager.getState().status).toBe('signed_in');
   });
 
+  it('keeps nothing when an overtaken sign-in saved and the newer one then fails', async () => {
+    const { manager, api, vault, stored } = setup();
+    // A's keychain write is slow and lands after B has started.
+    const write = vi.mocked(vault.save).getMockImplementation()!;
+    let saved: () => void = () => undefined;
+    vi.mocked(vault.save).mockImplementationOnce(
+      (s) => new Promise<void>((resolve) => (saved = () => void write(s).then(resolve))),
+    );
+    let failB: (error: Error) => void = () => undefined;
+    const a = manager.signIn('demo-clinic', tokens(1));
+    await vi.waitFor(() => expect(vault.save).toHaveBeenCalled());
+    api.me.mockImplementationOnce(() => new Promise((_, reject) => (failB = reject)));
+    const b = manager.signIn('demo-clinic', tokens(2));
+    saved();
+    await a;
+    expect(stored()).toEqual({ organisation: 'demo-clinic', refreshToken: 'r1' });
+    failB(new TypeError('Network request failed'));
+    await expect(b).rejects.toThrow();
+    expect(vault.clear).toHaveBeenCalled();
+    expect(stored()).toBeNull();
+    expect(manager.getState().status).not.toBe('signed_in');
+  });
+
   it('keeps nothing when who signed in cannot be loaded', async () => {
     const { manager, api, stored } = setup();
     api.me.mockRejectedValueOnce(new TypeError('Network request failed'));

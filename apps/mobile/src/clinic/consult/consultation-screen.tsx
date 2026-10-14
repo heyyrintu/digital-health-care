@@ -43,11 +43,16 @@ export function ConsultationScreen({ appointmentId }: { appointmentId: string })
   // A reload after queued saves were sent that could not reach the server: retried when the
   // queue next reaches it.
   const reloadOwed = useRef(false);
+  const offlineOk = useRef(false);
   const load = useCallback(async (): Promise<void> => {
     const mine = ++loadSeq.current;
     setError(null);
     // Saves still waiting on the device are read first: the sections start from them.
-    await loadOffline().catch(() => undefined);
+    // While the last person's copies could not be cleared, the visit cache is left alone.
+    offlineOk.current = await loadOffline().then(
+      () => true,
+      () => false,
+    );
     try {
       const [v, p] = await Promise.all([
         api.request('GET', `/appointments/${appointmentId}/consultation`, {
@@ -71,7 +76,7 @@ export function ConsultationScreen({ appointmentId }: { appointmentId: string })
       setRx(p);
       setChart(c);
       setOffline(false);
-      await visits.put(v, c);
+      if (offlineOk.current) await visits.put(v, c);
     } catch (e) {
       if (mine !== loadSeq.current) return;
       if (isNetworkError(e)) {
@@ -82,7 +87,7 @@ export function ConsultationScreen({ appointmentId }: { appointmentId: string })
           reloadOwed.current = true;
           return;
         }
-        const saved = await visits.get(appointmentId);
+        const saved = offlineOk.current ? await visits.get(appointmentId) : null;
         if (mine !== loadSeq.current) return;
         if (saved) {
           setView(saved.view);
@@ -152,7 +157,7 @@ export function ConsultationScreen({ appointmentId }: { appointmentId: string })
     setView((prev) => {
       if (!prev) return prev;
       const next = patch(prev);
-      void visits.put(next, chartRef.current).catch(() => undefined);
+      if (offlineOk.current) void visits.put(next, chartRef.current).catch(() => undefined);
       return next;
     });
   };
@@ -166,7 +171,7 @@ export function ConsultationScreen({ appointmentId }: { appointmentId: string })
           onChange={(next) => {
             setChart(next);
             chartRef.current = next;
-            void visits.put(view, next).catch(() => undefined);
+            if (offlineOk.current) void visits.put(view, next).catch(() => undefined);
           }}
         />
       )}

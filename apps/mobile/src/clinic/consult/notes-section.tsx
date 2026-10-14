@@ -74,7 +74,9 @@ export function NotesSection({
   // Reported to the screen, which holds a reload back while any section has unsaved edits.
   const onDirtyRef = useRef(onDirty);
   onDirtyRef.current = onDirty;
-  useEffect(() => onDirtyRef.current(dirty), [dirty]);
+  // A diagnosis typed in the search but not yet added counts as an unsaved edit too.
+  const unsaved = dirty || dx.trim().length > 0;
+  useEffect(() => onDirtyRef.current(unsaved), [unsaved]);
   useEffect(() => () => onDirtyRef.current(false), []);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ tone: 'error' | 'info' | 'success'; text: string } | null>(

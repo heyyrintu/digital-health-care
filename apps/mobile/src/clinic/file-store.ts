@@ -29,7 +29,10 @@ export const fileStore: KeyValueStore = {
     await tmp.move(new File(Paths.document, `${key}.json`), { overwrite: true });
   },
   async remove(key) {
-    const file = new File(Paths.document, `${key}.json`);
-    if (file.exists) file.delete();
+    // The staged copy too: a save cut short leaves it behind, and it holds the same data.
+    for (const name of [`${key}.json`, `${key}.tmp.json`]) {
+      const file = new File(Paths.document, name);
+      if (file.exists) file.delete();
+    }
   },
 };
