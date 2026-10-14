@@ -291,6 +291,25 @@ Implemented in Phase 1 (`apps/api/src/modules/medicines`, PRD §9.2). Everything
 - **Audit:** `medicine.created` (medicine ID and ingredient count) and `medicine.updated` (medicine ID, ingredient count and whether active), `medicine_request.approved` and `medicine_request.rejected` (request ID and medicine ID), `medicine_request.undone` (the decision undone). Never reasons or patient details.
 - **Not built yet:** the licensed drug database import with its own update process (§3g), and a reference request to the platform team to add a medicine for every clinic.
 
+## 3q. Push devices and the offline cache
+
+Implemented for the Clinic app (`apps/api/src/modules/devices`, `apps/api/src/modules/sync`). The Patient app uses the same device endpoints.
+
+| Action | Endpoint | Who |
+|---|---|---|
+| Register this device | `POST /push-devices` `{platform: ios\|android, appVariant: clinic\|patient, expoPushToken, deviceName?}` → 201 | Anyone signed in |
+| My devices | `GET /push-devices` → `{data: [{id, platform, appVariant, deviceName, current, createdAt, lastSeenAt}]}` | Anyone signed in (own, this clinic) |
+| Remove one | `DELETE /push-devices/{id}` → 204 | Anyone signed in (own) |
+| Medicine cache | `GET /sync/medicines?cursor&limit` → `{data, cursor, hasMore, aliases}` | Doctor |
+| Today's working set | `GET /sync/today?clinicId` → `{serverTime, queue, templates}` | All staff |
+
+- **Devices belong to a session.** A device is registered under the access token's session and receives pushes only while that session is signed in. Logout, a refresh-token replay, removed access, an authenticator reset (clinic admin or platform support) and staff sign-out all stop the session's devices in the same transaction, through `revokePushDevicesForSessions(tx, sessionIds, reason, at)` in `devices/revoke.ts`; any new way of ending sessions must call it too. Senders use `pushTargets(tx, organisationId, userIds, now)`, which also skips devices whose session has ended or expired.
+- **One row per install.** `expoPushToken` is unique (`ExponentPushToken[…]` or `ExpoPushToken[…]`; anything else is 400). Registering the same token again refreshes `lastSeenAt`; on another session, such as someone else signing in on the reception iPad, it moves there so the previous person stops getting that device's notifications. Registrations of one token are serialised. The token is never returned. Devices are platform-level like sessions: only the sign-in role can read them, and a database trigger refuses a device whose person or clinic differs from its session's.
+- **Medicine cache** (ADR 0009). Without `cursor` it is the full download of active medicines the clinic can see (reference and its own), oldest change first, up to `limit` (default and maximum 500) per page; follow `hasMore` with the returned `cursor`. Store the last `cursor` and send it next time to get only what changed, inactive medicines included so the device drops them. Changes from the last 5 seconds are held back until the next call, so a transaction committing late is not skipped. `aliases` is always the clinic's full list of names linked to a medicine in the approval queue (§3k), for offline search. A cursor that cannot be read is 400 `cursor: invalid` (start again without one).
+- **Today's working set:** `queue` is `GET /queue` for today (IST): a doctor's own patients, everyone's for other staff, optionally one clinic. `templates` are the doctor's own (empty for other roles). `serverTime` lets the app show how old its copy is.
+- **Offline writes** (check-in, vitals, notes, tags, counter payments) are queued on the device and replayed through their normal endpoints with idempotency keys (§3o) when the network returns; signing, booking and online payments need a connection.
+- **Audit:** `push_device.registered` (platform, app and whether it moved from another session) and `push_device.removed`. Revocations with a session are covered by that session's own audit entry.
+
 ## 4. Endpoint catalogue (by module)
 
 | Module | Main resources and actions |

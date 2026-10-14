@@ -13,6 +13,7 @@ import { AppError } from '../../errors';
 import type { Services } from '../../services';
 import { writeAudit } from '../audit/write';
 import { INVITE_TTL_MS, toStaffInvite } from '../invites/service';
+import { liveSessionIds, revokePushDevicesForSessions } from '../devices/revoke';
 
 interface Actor {
   userId: string;
@@ -131,10 +132,12 @@ export class StaffService {
           lockedUntil: null,
         },
       });
+      const ending = await liveSessionIds(tx, { userId: targetUserId, staffOnly: true });
       const revoked = await tx.session.updateMany({
-        where: { userId: targetUserId, revokedAt: null, role: { not: 'patient' } },
+        where: { id: { in: ending }, revokedAt: null },
         data: { revokedAt: now, revokedReason: 'authenticator_reset' },
       });
+      await revokePushDevicesForSessions(tx, ending, 'authenticator_reset', now);
       await writeAudit(tx, request, {
         action: 'staff.authenticator.reset',
         organisationId: actor.organisationId,
