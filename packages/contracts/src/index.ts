@@ -14,4 +14,5 @@ export * from './patients';
 export * from './prescriptions';
 export * from './queue';
 export * from './scheduling';
+export * from './settings';
 export * from './tags';
