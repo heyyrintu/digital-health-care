@@ -21,11 +21,12 @@ const send = outboxSender((method, path, options) => api.request(method, path, o
 
 let loaded: Promise<void> | null = null;
 
-/** The body of a notes or vitals save still waiting on this device for `path`, if any. */
+/**
+ * The body of a notes or vitals save still on this device for `path`, if any: waiting, or
+ * refused by the server (kept so the doctor can fix it rather than lose it).
+ */
 export function waitingBody<T>(kind: 'notes' | 'vitals', path: string): T | null {
-  const item = [...outbox.getItems()]
-    .reverse()
-    .find((i) => i.status === 'pending' && i.kind === kind && i.path === path);
+  const item = [...outbox.getItems()].reverse().find((i) => i.kind === kind && i.path === path);
   return item ? (item.body as T) : null;
 }
 

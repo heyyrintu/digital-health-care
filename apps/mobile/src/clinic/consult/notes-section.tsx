@@ -65,7 +65,8 @@ export function NotesSection({
   const [followUp, setFollowUp] = useState(
     (waiting ? waiting.followUpDate : view.consultation?.followUpDate) ?? '',
   );
-  const [revision, setRevision] = useState(view.consultation?.revision ?? 0);
+  // A restored draft keeps the revision it started from, so it is still checked for staleness.
+  const [revision, setRevision] = useState(waiting?.revision ?? view.consultation?.revision ?? 0);
   const [dx, setDx] = useState('');
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);

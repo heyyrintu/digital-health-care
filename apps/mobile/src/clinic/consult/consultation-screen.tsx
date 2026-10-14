@@ -1,14 +1,15 @@
 import { ConsultationView, PatientChart, PrescriptionView } from '@dhc/contracts';
 import { Button, Notice, Screen, Text, useTheme } from '@dhc/ui-native';
 import { useRouter } from 'expo-router';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ScrollView, useWindowDimensions, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { api } from '../../api';
 import { errorMessage } from '../../errors';
 import { useLocale } from '../../locale/provider';
 import { TWO_PANE_MIN_WIDTH } from '../../variant';
-import { visits } from '../runtime';
+import { useOutbox } from '../hooks';
+import { loadOffline, visits } from '../runtime';
 import { isNetworkError } from '../today';
 import { ChartSection } from './chart-section';
 import { NotesSection } from './notes-section';
@@ -33,6 +34,8 @@ export function ConsultationScreen({ appointmentId }: { appointmentId: string })
 
   const load = useCallback(async () => {
     setError(null);
+    // Saves still waiting on the device are read first: the sections start from them.
+    await loadOffline().catch(() => undefined);
     try {
       const [v, p] = await Promise.all([
         api.request('GET', `/appointments/${appointmentId}/consultation`, {
@@ -65,6 +68,18 @@ export function ConsultationScreen({ appointmentId }: { appointmentId: string })
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Once this visit's waiting notes or vitals have been sent, reload: the server's revision
+  // and readings move on, and the next save must start from them, not be refused as stale.
+  const items = useOutbox();
+  const waiting = items.filter(
+    (i) => i.status === 'pending' && i.path.startsWith(`/appointments/${appointmentId}/`),
+  ).length;
+  const before = useRef(waiting);
+  useEffect(() => {
+    if (waiting < before.current) void load();
+    before.current = waiting;
+  }, [waiting, load]);
 
   const back = (
     <Button variant="ghost" label={t('mobile.clinic.back')} onPress={() => router.back()} />
@@ -105,7 +120,11 @@ export function ConsultationScreen({ appointmentId }: { appointmentId: string })
         view={view}
         onSaved={(record) => keep({ ...view, consultation: record })}
       />
-      <VitalsSection view={view} onSaved={(vitals) => keep({ ...view, vitals })} />
+      <VitalsSection
+        key={`vitals-${view.vitals?.updatedAt ?? 'none'}`}
+        view={view}
+        onSaved={(vitals) => keep({ ...view, vitals })}
+      />
     </>
   );
   const right = rx ? (

@@ -45,13 +45,15 @@ export function ChartSection({
       setReaction('');
     };
     try {
+      let base = chart;
       if (unsure) {
-        const latest = await api.request('GET', `/patients/${chart.patientId}/chart`, {
+        // The newest chart is the base either way, so changes made meanwhile are kept.
+        base = await api.request('GET', `/patients/${chart.patientId}/chart`, {
           schema: PatientChart,
         });
         const name = substance.trim().toLowerCase();
-        if (latest.allergies.some((a) => a.substance.toLowerCase() === name)) {
-          onChange(latest);
+        if (base.allergies.some((a) => a.substance.toLowerCase() === name)) {
+          onChange(base);
           done();
           return;
         }
@@ -61,7 +63,7 @@ export function ChartSection({
         body: { substance: substance.trim(), reaction: reaction.trim() || null, source: 'doctor' },
         idempotencyKey: newKey(),
       });
-      onChange({ ...chart, allergies: [...chart.allergies, allergy] });
+      onChange({ ...base, allergies: [...base.allergies, allergy] });
       done();
     } catch (error) {
       if (isNetworkError(error)) setUnsure(true);
@@ -98,14 +100,15 @@ export function ChartSection({
           <TextField
             label={t('chart.substance')}
             value={substance}
-            editable={!busy}
+            // Held while an attempt may have been saved, so the check looks for what was sent.
+            editable={!busy && !unsure}
             maxLength={120}
             onChangeText={setSubstance}
           />
           <TextField
             label={t('chart.reaction')}
             value={reaction}
-            editable={!busy}
+            editable={!busy && !unsure}
             maxLength={200}
             onChangeText={setReaction}
           />
@@ -120,7 +123,12 @@ export function ChartSection({
             variant="ghost"
             label={t('common.cancel')}
             disabled={busy}
-            onPress={() => setAdding(false)}
+            onPress={() => {
+              setAdding(false);
+              setUnsure(false);
+              setSubstance('');
+              setReaction('');
+            }}
           />
         </View>
       )}

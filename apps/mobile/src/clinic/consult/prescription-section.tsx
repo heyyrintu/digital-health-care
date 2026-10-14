@@ -135,6 +135,7 @@ export function PrescriptionSection({
   }
 
   async function answer(alert: SafetyAlert, action: 'acknowledge' | 'override', reason: string) {
+    if (busy !== null) return;
     setBusy(alert.key);
     setNotice(null);
     try {
@@ -440,7 +441,7 @@ function MedicineSearch({
         label={t('rx.search')}
         value={q}
         editable={!disabled}
-        maxLength={100}
+        maxLength={60}
         onChangeText={setQ}
         autoCorrect={false}
       />
@@ -494,6 +495,8 @@ function SafetyList({
           alert={alert}
           busy={busyKey === alert.key}
           editable={editable}
+          // One answer at a time: the lock that freezes the draft is a single key.
+          locked={busyKey !== null && busyKey !== alert.key}
           onAnswer={onAnswer}
         />
       ))}
@@ -506,11 +509,13 @@ function AlertRow({
   alert,
   busy,
   editable,
+  locked,
   onAnswer,
 }: {
   alert: SafetyAlert;
   busy: boolean;
   editable: boolean;
+  locked: boolean;
   onAnswer: (alert: SafetyAlert, action: 'acknowledge' | 'override', reason: string) => void;
 }) {
   const { t } = useLocale();
@@ -533,12 +538,18 @@ function AlertRow({
       {open && editable && (alert.severity === 'warn' || alert.overridable) && (
         <>
           {needsReason && (
-            <TextField label={t('safety.reason')} value={reason} onChangeText={setReason} />
+            <TextField
+              label={t('safety.reason')}
+              value={reason}
+              editable={!busy && !locked}
+              maxLength={300}
+              onChangeText={setReason}
+            />
           )}
           <Button
             variant={action === 'override' ? 'destructive' : 'secondary'}
             label={t(action === 'override' ? 'safety.override' : 'safety.acknowledge')}
-            disabled={needsReason && reason.trim() === ''}
+            disabled={locked || (needsReason && reason.trim() === '')}
             loading={busy}
             onPress={() => onAnswer(alert, action, reason)}
           />

@@ -209,6 +209,13 @@ describe('dosageRemarks in Hindi', () => {
         'hi',
       ),
     ).toBe('पतली परत दिन में दो बार, 5 दिन तक लगाएँ।');
+    // The web and app default dose for creams keeps its English article.
+    expect(
+      dosageRemarks(
+        line({ route: 'topical', timing: null }, [step({ dose: 'a thin layer', frequency: 'BD' })]),
+        'hi',
+      ),
+    ).toBe('पतली परत दिन में दो बार, 5 दिन तक लगाएँ।');
   });
 });
 

@@ -89,11 +89,10 @@ export class Outbox {
       attempts: 0,
       status: 'pending',
     };
-    // A later save of the same notes or vitals replaces the waiting one; it holds the latest.
+    // A later save of the same notes or vitals replaces the waiting or refused one; it holds
+    // the latest.
     if (item.kind === 'notes' || item.kind === 'vitals' || item.kind === 'tags') {
-      this.items = this.items.filter(
-        (i) => !(i.status === 'pending' && i.kind === item.kind && i.path === item.path),
-      );
+      this.items = this.items.filter((i) => !(i.kind === item.kind && i.path === item.path));
     }
     this.items = [...this.items, full];
     await this.save();
@@ -114,12 +113,13 @@ export class Outbox {
     await this.save();
   }
 
-  /** A newer save reached the server: an older one still waiting here must not replay. */
+  /**
+   * A newer save reached the server: an older one still here (waiting, or refused) must not
+   * replay or keep asking to be fixed.
+   */
   async dropPending(kind: OutboxKind, path: string): Promise<void> {
     await this.load();
-    const kept = this.items.filter(
-      (i) => !(i.status === 'pending' && i.kind === kind && i.path === path),
-    );
+    const kept = this.items.filter((i) => !(i.kind === kind && i.path === path));
     if (kept.length === this.items.length) return;
     this.items = kept;
     await this.save();

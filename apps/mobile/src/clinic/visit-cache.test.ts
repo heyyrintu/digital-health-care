@@ -31,17 +31,21 @@ describe('VisitCache across a sign-out', () => {
   it('does not bring a visit back when its write was still running at sign-out', async () => {
     const store = memoryStore();
     let release: () => void = () => undefined;
+    let started: () => void = () => undefined;
+    const reading = new Promise<void>((resolve) => (started = resolve));
     const slow = {
       ...store,
       get: async <T>(key: string) => {
+        started();
         await new Promise<void>((resolve) => (release = resolve));
         return store.get<T>(key);
       },
     };
     const cache = new VisitCache(slow, () => '2026-10-06');
     const writing = cache.put(view('a1', '2026-10-06'), null);
+    // The write is past its generation check and reading when the sign-out comes.
+    await reading;
     const clearing = cache.clear();
-    await new Promise((resolve) => setTimeout(resolve, 0));
     release();
     await Promise.all([writing, clearing]);
     expect(store.data.has('clinic.visits')).toBe(false);
