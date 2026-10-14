@@ -2,11 +2,12 @@ import type { Appointment, MeResponse } from '@dhc/contracts';
 import { appointmentActions, type QueueAction } from '@dhc/domain';
 import type { MessageKey } from '@dhc/i18n';
 import { Button, Card, Notice, Text, useTheme } from '@dhc/ui-native';
+import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { View } from 'react-native';
 import { errorMessage } from '../errors';
 import { useLocale } from '../locale/provider';
-import { runAction } from './actions';
+import { canConsult, runAction } from './actions';
 
 /**
  * One appointment with the actions this person may take. Cancelling (which needs a reason)
@@ -27,6 +28,7 @@ export function AppointmentDetailPane({
 }) {
   const { t } = useLocale();
   const theme = useTheme();
+  const router = useRouter();
   const [busy, setBusy] = useState<QueueAction | null>(null);
   const [notice, setNotice] = useState<{ tone: 'error' | 'info'; text: string } | null>(null);
   const actions = pendingCheckIn
@@ -84,6 +86,13 @@ export function AppointmentDetailPane({
             onPress={() => void act(action)}
           />
         ))}
+        {canConsult(a, me.role) && (
+          <Button
+            variant="secondary"
+            label={t('action.consult')}
+            onPress={() => router.push(`/consultation/${a.id}`)}
+          />
+        )}
       </View>
     </Card>
   );

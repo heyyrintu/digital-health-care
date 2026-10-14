@@ -20,7 +20,11 @@ Open **Availability** from the dashboard and pick the clinic and consultation ty
 - **Queue:** open **Queue** from the dashboard. It shows your patients by default and refreshes every 15 seconds. **My OPD** lists the patient with you first, then everyone checked in: patients tagged Emergency or Priority come first, then in order of arrival, each with their waiting time. **Booked** is everyone not yet arrived, **Completed** is today's finished visits (with your average consultation time), and **Cancelled and no-shows** is the rest. For a checked-in patient choose **Start consultation**, then **Complete** when you are done; the times are recorded. You can also check patients in, mark no-shows, book, reschedule and cancel. Once a patient has checked in, **Consultation** on their row opens the consultation screen. Signing and **Scribe** arrive in later updates.
 - **Patient sheet:** call, ABHA, tags, bill and payment link, vitals, records, assessment, refer, review link, video call.
 
-On the **Clinic app** your queue opens first, refreshes itself, and keeps working from a saved copy if the network drops; **Start consultation** and **Complete** need a connection. The consultation screen itself is coming to the app next; use the web for notes, the prescription and signing until then.
+On the **Clinic app** your queue opens first, refreshes itself, and keeps working from a saved copy if the network drops; **Start consultation** and **Complete** need a connection. Tap **Consultation** on a patient who has arrived: on an iPad the notes and vitals sit beside the prescription.
+- **Notes and vitals** save when you tap **Save**. Without a network they are kept on the device (*saved on this device*) and sync when the connection is back; if the notes were changed on another device meanwhile, the app tells you instead of overwriting them.
+- **Prescription:** search a medicine (offline, the copy of the medicine list on the device is searched) or add one that is not listed, set dose, frequency and duration, and **Save**: the safety checks run on save, and you acknowledge warnings or override blocks with a reason as on the web. Saving needs a connection.
+- **Signing:** **Sign prescription** asks for Face ID or your fingerprint, then your 6-digit signing PIN.
+- Repeat last, templates, tapering steps, amendments and voiding are on the web for now; the app keeps tapering steps you set there.
 
 ## Consultation
 Available now on the web: open **Consultation** from a checked-in patient's row in the queue.

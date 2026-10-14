@@ -6,6 +6,7 @@ import { MedicineCache } from './medicine-cache';
 import { Outbox } from './outbox';
 import { newKey, outboxSender } from './send';
 import { TodayStore } from './today';
+import { VisitCache } from './visit-cache';
 
 /** Medicine changes are rare; the copy is refreshed at most this often. */
 const MEDICINE_SYNC_MS = 6 * 60 * 60_000;
@@ -14,6 +15,7 @@ const MEDICINE_SYNC_MS = 6 * 60 * 60_000;
 export const outbox = new Outbox(fileStore, newKey);
 export const today = new TodayStore(fileStore, () => istDateKey(new Date()));
 export const medicines = new MedicineCache(fileStore);
+export const visits = new VisitCache(fileStore, () => istDateKey(new Date()));
 
 const send = outboxSender((method, path, options) => api.request(method, path, options));
 
@@ -60,7 +62,7 @@ let wasSignedIn = false;
 session.subscribe(() => {
   const signedIn = session.getState().status === 'signed_in';
   if (wasSignedIn && !signedIn) {
-    void Promise.all([outbox.clear(), today.clear(), medicines.clear()]);
+    void Promise.all([outbox.clear(), today.clear(), medicines.clear(), visits.clear()]);
   }
   wasSignedIn = signedIn;
 });
