@@ -186,7 +186,7 @@ function GuardianPicker({
         schema: PatientListResponse,
         query: { q, limit: 8 },
       });
-      setResults(found.data.filter((p) => p.id !== excludeId));
+      setResults(found.data.filter((p) => p.id !== excludeId && !p.mergedIntoId));
     } catch (e) {
       setError(e instanceof ApiError ? e.message : t('error.network'));
     }
