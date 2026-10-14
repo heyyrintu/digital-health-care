@@ -5,6 +5,7 @@
 import { CreatedDisplayScreen, type TokenResponse } from '@dhc/contracts';
 import type { AddressInfo } from 'node:net';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { sweepNoShows } from '../src/modules/appointments/no-shows';
 import { bearer, createHarness, resetDatabase, seedTwoClinics, staffLogin } from './harness';
 
 const TODAY = '2026-10-06';
@@ -118,6 +119,21 @@ describe('live queue stream', () => {
     expect(await stream.next()).toEqual({ event: 'queue', data: { appointmentId: visit.id } });
 
     await h.owner.appointment.update({ where: { id: visit.id }, data: { status: 'checked_in' } });
+    expect(await stream.next()).toEqual({ event: 'queue', data: { appointmentId: visit.id } });
+    expect(await stream.next(500)).toBeNull();
+    stream.close();
+  });
+
+  it('pushes automatic no-shows from the sweep, once', async () => {
+    const visit = await visitIn('a');
+    const stream = await open('/queue/stream', { headers: bearer(doctorA) });
+    expect(await stream.next()).toEqual({ event: 'ready', data: { date: TODAY } });
+
+    // 10:00–10:15 IST slot with the default 30 minutes' grace: due at 10:45.
+    h.clock.ms = Date.UTC(2026, 9, 6, 5, 15);
+    const source = { id: 'sweep-test', ip: 'scheduler', headers: { 'user-agent': 'sweep' } };
+    expect(await sweepNoShows(h.services, source)).toBe(1);
+    // The status change reaches the stream through the database trigger, and only once.
     expect(await stream.next()).toEqual({ event: 'queue', data: { appointmentId: visit.id } });
     expect(await stream.next(500)).toBeNull();
     stream.close();
