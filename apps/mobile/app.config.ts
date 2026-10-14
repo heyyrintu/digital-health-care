@@ -31,7 +31,14 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     // Permissions are added with the features that need them, never ahead of time.
     permissions: [],
   },
-  plugins: ['expo-router'],
+  plugins: [
+    'expo-router',
+    [
+      'expo-local-authentication',
+      { faceIDPermission: 'Face ID unlocks the Clinic app after it locks.' },
+    ],
+    'expo-notifications',
+  ],
   experiments: { typedRoutes: true },
   extra: { variant },
 });

@@ -849,4 +849,23 @@ export const hi: Record<MessageKey, string> = {
   'mobile.codeInvalid': 'SMS में आए 6 अंक डालें।',
   'mobile.unreachableTitle': 'कनेक्ट नहीं हो पा रहा',
   'mobile.switchLanguage': 'View in English',
+  'mobile.clinic.lockedTitle': 'क्लिनिक ऐप लॉक है',
+  'mobile.clinic.lockedBody':
+    'मरीज़ों की गोपनीयता के लिए ऐप 15 मिनट इस्तेमाल न होने पर लॉक हो जाता है। Face ID, फ़िंगरप्रिंट या डिवाइस पासकोड से खोलें।',
+  'mobile.clinic.unlock': 'खोलें',
+  'mobile.clinic.unlockPrompt': 'क्लिनिक ऐप खोलें',
+  'mobile.clinic.unlockFailed': 'नहीं हो पाया। फिर कोशिश करें, या साइन आउट करें।',
+  'mobile.clinic.noDeviceLock':
+    'पहले इस डिवाइस की सेटिंग में पासकोड लगाएँ। क्लिनिक ऐप सिर्फ़ स्क्रीन लॉक वाले डिवाइस पर खुलता है।',
+  'mobile.clinic.offlineCopy': 'आप ऑफ़लाइन हैं। यह {time} की कतार है।',
+  'mobile.clinic.waitingToSync': '{count} बदलाव इस डिवाइस पर सेव हैं, सिंक होने का इंतज़ार है।',
+  'mobile.clinic.syncFailed': 'सेव नहीं हुआ: {label}। {reason}',
+  'mobile.clinic.discard': 'यह बदलाव हटाएँ',
+  'mobile.clinic.pendingCheckIn': 'चेक-इन सिंक होने का इंतज़ार है',
+  'mobile.clinic.checkInQueued':
+    'इस डिवाइस पर चेक-इन हो गया। कनेक्शन लौटने पर यह कतार में पहुँचेगा।',
+  'mobile.clinic.needsConnection': 'इसके लिए कनेक्शन चाहिए। ऑनलाइन होने पर फिर कोशिश करें।',
+  'mobile.clinic.selectPatient': 'विवरण देखने के लिए मरीज़ चुनें।',
+  'mobile.clinic.back': 'कतार पर लौटें',
+  'mobile.clinic.reason': 'कारण: {reason}',
 };

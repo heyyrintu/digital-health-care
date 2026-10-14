@@ -1,0 +1,108 @@
+import { describe, expect, it } from 'vitest';
+import { Outbox, type OutboxItem, type SendOutcome } from './outbox';
+import { memoryStore } from './store';
+
+function setup() {
+  let n = 0;
+  const store = memoryStore();
+  const box = new Outbox(
+    store,
+    () => `key-${++n}`,
+    () => 1_000,
+  );
+  return { store, box };
+}
+
+const checkIn = (id: string, label = 'Asha Verma · 3') => ({
+  kind: 'check_in' as const,
+  method: 'POST' as const,
+  path: `/appointments/${id}/actions`,
+  body: { action: 'check_in' },
+  label,
+});
+
+describe('Outbox', () => {
+  it('keeps queued writes across restarts and sends them in order with their keys', async () => {
+    const { store, box } = setup();
+    await box.add(checkIn('a1'));
+    await box.add(checkIn('a2'));
+
+    const again = new Outbox(store, () => 'unused');
+    await again.load();
+    const sent: string[] = [];
+    await again.flush(async (item) => {
+      sent.push(`${item.id}:${item.path}`);
+      return { kind: 'sent' };
+    });
+    expect(sent).toEqual(['key-1:/appointments/a1/actions', 'key-2:/appointments/a2/actions']);
+    expect(again.getItems()).toEqual([]);
+  });
+
+  it('stops at a network failure and resumes from the same item, keeping its key', async () => {
+    const { box } = setup();
+    await box.add(checkIn('a1'));
+    await box.add(checkIn('a2'));
+    await box.flush(async () => ({ kind: 'retry' }));
+    expect(box.getItems().map((i) => [i.id, i.attempts])).toEqual([
+      ['key-1', 1],
+      ['key-2', 0],
+    ]);
+    await box.flush(async () => {
+      throw new TypeError('Network request failed');
+    });
+    expect(box.getItems()).toHaveLength(2);
+
+    const keys: string[] = [];
+    await box.flush(async (item) => {
+      keys.push(item.id);
+      return { kind: 'sent' };
+    });
+    expect(keys).toEqual(['key-1', 'key-2']);
+  });
+
+  it('marks a refused write failed with the reason and carries on with the rest', async () => {
+    const { box } = setup();
+    await box.add(checkIn('a1'));
+    await box.add(checkIn('a2'));
+    await box.flush(async (item): Promise<SendOutcome> =>
+      item.path.includes('a1')
+        ? { kind: 'rejected', message: 'This appointment is cancelled.' }
+        : { kind: 'sent' },
+    );
+    expect(box.getItems()).toMatchObject([
+      { id: 'key-1', status: 'failed', error: 'This appointment is cancelled.' },
+    ]);
+    await box.discard('key-1');
+    expect(box.getItems()).toEqual([]);
+  });
+
+  it('keeps only the latest waiting notes for a visit, and shares one run between callers', async () => {
+    const { box } = setup();
+    const notes = (text: string) => ({
+      kind: 'notes' as const,
+      method: 'PUT' as const,
+      path: '/appointments/a1/consultation',
+      body: { text },
+      label: 'Notes',
+    });
+    await box.add(notes('first'));
+    await box.add(notes('second'));
+    expect(box.getItems().map((i) => (i.body as { text: string }).text)).toEqual(['second']);
+
+    let calls = 0;
+    const send = async (_: OutboxItem): Promise<SendOutcome> => {
+      calls += 1;
+      return { kind: 'sent' };
+    };
+    await Promise.all([box.flush(send), box.flush(send)]);
+    expect(calls).toBe(1);
+  });
+
+  it('clears everything on sign-out', async () => {
+    const { store, box } = setup();
+    await box.add(checkIn('a1'));
+    await box.clear();
+    expect(box.getItems()).toEqual([]);
+    expect(store.data.size).toBe(0);
+  });
+});

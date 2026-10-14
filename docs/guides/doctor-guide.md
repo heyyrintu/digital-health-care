@@ -20,6 +20,8 @@ Open **Availability** from the dashboard and pick the clinic and consultation ty
 - **Queue:** open **Queue** from the dashboard. It shows your patients by default and refreshes every 15 seconds. **My OPD** lists the patient with you first, then everyone checked in: patients tagged Emergency or Priority come first, then in order of arrival, each with their waiting time. **Booked** is everyone not yet arrived, **Completed** is today's finished visits (with your average consultation time), and **Cancelled and no-shows** is the rest. For a checked-in patient choose **Start consultation**, then **Complete** when you are done; the times are recorded. You can also check patients in, mark no-shows, book, reschedule and cancel. Once a patient has checked in, **Consultation** on their row opens the consultation screen. Signing and **Scribe** arrive in later updates.
 - **Patient sheet:** call, ABHA, tags, bill and payment link, vitals, records, assessment, refer, review link, video call.
 
+On the **Clinic app** your queue opens first, refreshes itself, and keeps working from a saved copy if the network drops; **Start consultation** and **Complete** need a connection. The consultation screen itself is coming to the app next; use the web for notes, the prescription and signing until then.
+
 ## Consultation
 Available now on the web: open **Consultation** from a checked-in patient's row in the queue.
 - **Patient chart (left):** allergies (red), conditions and current medicines, and recent visits with their diagnoses. **Add** records a new entry; tick *Reported by the patient* if you have not confirmed it yet, and it shows as unverified. **Remove** asks for a reason; the entry is kept in the record. The chart is shared by the clinic's doctors.

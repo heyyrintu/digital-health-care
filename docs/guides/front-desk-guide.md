@@ -20,6 +20,12 @@ To book, open the patient's page and choose **Book appointment** (or **Appointme
 
 On the **Queue**: **Reschedule** moves a booking to another slot (the old one shows as Rescheduled); **Cancel appointment** asks for the reason; **Mark no-show** appears once the slot time has passed.
 
+## On the Clinic app (iPhone, iPad, Android)
+The **Queue** has the same tabs as the web. Tap a patient to see their booking and **Check in**, **Confirm** or **Mark no-show**; on an iPad or tablet the patient opens beside the list. Pull down to refresh. Cancelling and rescheduling are on the web for now.
+- **No network?** The app keeps showing the queue as it was, with the time, and you can still check patients in: they show *Check-in waiting to sync* and reach the queue on their own when the connection is back. If one can't be saved (say the visit was cancelled meanwhile), the app tells you why and you can discard it.
+- **Locking:** after 15 minutes without use, or when you open it again, the app asks for Face ID, your fingerprint or the device passcode. The device must have a screen lock.
+- Signing out removes everything the app saved on the device.
+
 ## Printing the prescription
 Once the doctor signs, the patient's card on the **Queue** shows **Print prescription** with its number (for example *Print prescription SG-00042*). It opens the signed PDF in a new tab; print it from there. If the doctor amends it, the button prints the newest signed version. If the doctor voids it, the button reads *Prescription … (void)* and opens the copy stamped VOID: do not hand that one over. You see only the number, never the prescription's contents, on the card.
 

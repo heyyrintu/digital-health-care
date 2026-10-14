@@ -7,3 +7,4 @@ export * from './clinical';
 export * from './icd10';
 export * from './dosage';
 export * from './billing';
+export * from './appointment-actions';
