@@ -4,13 +4,13 @@
 
 Conventions for every table: `id` (UUID), `organisationId` (except platform-level User/Device), `createdAt`, `updatedAt`, `deletedAt` where soft delete applies. Files are stored by S3 key, never by public URL. Fields marked *(encrypted)* use field-level encryption. Row-level security filters every query by `organisationId` (ADR 0014). Database columns are snake_case (`organisation_id`); this document uses the camelCase field names.
 
-**Implemented so far:** Organisation, User, Membership, StaffInvite, Session, OtpChallenge and AuditLog (Phase 0); Patient, UhidSettings, Tag and PatientTag (patient register); Clinic, ConsultationType, BookingRules, AvailabilityVersion and AvailabilityException (availability); Appointment and AppointmentStatusHistory (appointments); DisplayScreen (queue); PriceListItem, Bill, BillItem, Payment and ReceiptSettings (billing and counter payments) — see `packages/db/prisma/schema.prisma`. Everything else below is the target design.
+**Implemented so far:** Organisation, User, Membership, StaffInvite, Session, OtpChallenge and AuditLog (Phase 0); Patient, UhidSettings, Tag and PatientTag (patient register); Clinic, ConsultationType, BookingRules, AvailabilityVersion and AvailabilityException (availability); Appointment and AppointmentStatusHistory (appointments); DisplayScreen (queue); PriceListItem, Bill, BillItem, Payment and ReceiptSettings (billing and counter payments); OrganisationSettings (clinic admin settings) — see `packages/db/prisma/schema.prisma`. Everything else below is the target design.
 
 ## Platform and identity
 
 | Entity | Purpose | Key fields |
 |---|---|---|
-| Organisation | Practice or clinic group (tenant) | id, slug (unique, used in sign-in and clinic links), name, legalName, status, chartModel (shared\|own_patients), brandingId, settings (JSON) |
+| Organisation | Practice or clinic group (tenant) | id, slug (unique, used in sign-in and clinic links), name, legalName, status, brandingId; the chart model and other clinic admin settings are in OrganisationSettings |
 | Branding | Per-organisation look and senders | organisationId, displayName, logoKey, colours, customDomain, whatsappSender, smsSenderId, emailDomain, googleReviewUrl |
 | Clinic | Physical location (built: name unique per org, address, phone, timezone default Asia/Kolkata, active) | organisationId, name, address, geo, phone, gstin?, timezone, hfrId, active |
 | User | Platform-level login identity (no organisationId) | phone (unique), email (unique), displayName, status, passwordHash (staff, scrypt), mfaSecret (staff, encrypted), mfaPendingSecret (encrypted, set during invite acceptance until the first code), mfaLastUsedStep (TOTP replay guard), failedLoginCount, lockedUntil, lastLoginAt |
@@ -30,6 +30,7 @@ Conventions for every table: `id` (UUID), `organisationId` (except platform-leve
 |---|---|---|
 | Patient | Person receiving care | organisationId, accountUserId, uhid (unique per org), name, phone (E.164; family members may share one), dob, gender (female\|male\|other), email, address, bloodGroup, language (en\|hi), emergencyContactName, emergencyContactPhone, guardianPatientId (one level: a guardian has no guardian), createdByUserId, mergedIntoId (planned) |
 | UhidSettings | Per-organisation UHID numbering | organisationId (key), prefix (up to 8 letters or digits), nextNumber (default 10001); UHID = prefix + number, e.g. EK10001 |
+| OrganisationSettings | Clinic admin settings (PRD §9.2), one row per organisation; defaults until saved | organisationId (key), chartModel (shared\|own_patients, default shared), hiddenSafetyRules (only SR-06, SR-08, SR-15), maxUploadMb (1–25, default 10), uploadTypes (pdf, jpeg, png, heic; at least one; default pdf, jpeg, png) |
 | Tag / PatientTag | Configurable labels | Tag: organisationId, name (unique per org), colour (#rrggbb), sortToTop, archivedAt (archived, never deleted) · PatientTag: organisationId, patientId, tagId, addedByUserId, createdAt |
 | Allergy | Recorded allergy (built) | patientId, substance, reaction, source (doctor\|patient; patient = unverified), recordedByUserId, createdAt, removedAt, removedByUserId, removedReason (removed, never deleted) · planned: class/molecule link for the safety engine, severity |
 | MedicalCondition | Known condition (built) | patientId, name, icd10Code?, source, recordedByUserId, createdAt, removedAt, removedByUserId, removedReason · planned: since |

@@ -10,7 +10,11 @@
 - [ ] **UHID numbering:** under **Clinic settings**, set the prefix (for example `EK`) and the next number (for example 10001); the next patient registered gets EK10001. If you import patients, they keep their existing UHIDs and new numbers skip any already in use.
 - [ ] **Tags:** choose **Add the default tags** (Emergency, Priority, 2nd opinion, VIP, Insurance, Complaint), then add your own with a colour. Tick *Show these patients first in the queue* for urgent tags. Archive a tag you no longer use; it stays on the patients who have it.
 - [ ] **Waiting-room screens:** under **Waiting-room screens**, enter a name (for example *Reception TV*), choose the clinic and **Create screen link**. Open the link on the TV's browser; it is shown only once, so copy it straight away. The screen shows token numbers only. **Revoke** stops a link working (for example if it was shared by mistake), then create a new one.
-- [ ] Chart model (shared chart or own patients only).
+- [ ] **Chart, safety alerts and files:** on the dashboard, under **Chart, safety alerts and files**:
+  - *Who sees the chart*: **Shared chart** (the default) lets every doctor see a patient's full history. **Own patients only** opens a patient's chart, notes and prescriptions to a doctor once the patient has been checked in to them; until then the doctor sees a message instead.
+  - *Safety alerts doctors see*: untick an alert to hide it from doctors. Only three non-critical alerts can be hidden: moderate and minor drug interactions, two medicines of the same class, and medicines to use with care in adults 65 and over. Blocks, allergies and serious interactions always show.
+  - *Uploads*: the largest file (up to 25 MB; 10 MB to start) and the file types accepted (PDF, JPEG and PNG to start; tick iPhone photo (HEIC) for photos straight from an iPhone). These apply when patient and staff uploads arrive.
+  Each change shows in the audit log under *Settings*.
 - [ ] Staff accounts: on the dashboard, under **Staff → Invite staff**, enter their email or mobile number, name and role, then **Create invite link**. Share the link with them directly (it works once and expires in 72 hours). They open it, choose a password and add an authenticator app, and then appear in your staff list. Someone who already has a staff account at another clinic confirms with their current password and authenticator code instead of creating new ones. **Pending invites** shows links not yet used; **Revoke** cancels one. Creating a new invite for the same person and role replaces the old link.
 - [ ] **Medicines:** under **Medicines → Medicine list**, search the reference list (read-only) and add the products your doctors prescribe that are missing, with their molecules and strengths. **Edit** changes the clinic's own medicines; **Deactivate** hides one from doctors' search (prescriptions keep it). *Show inactive* finds them again.
 - [ ] Message templates (English and Hindi) and approval status.
@@ -18,7 +22,7 @@
 
 ## Daily and weekly
 - **Clinic at a glance** (top of the dashboard): appointments, completed visits, cancellations, no-shows with their rate, new patients, prescriptions signed and money collected for today, the last 7 or the last 30 days, with a row per day.
-- **Audit log** (in the menu): who did what and when, newest first. Filter by area (sign-in, staff, patients, appointments, chart views, notes, vitals, prescriptions, bills, payments, receipts), by staff member and by dates, and use **Load more** for older entries. Records are shown by ID; patient names never appear in the log.
+- **Audit log** (in the menu): who did what and when, newest first. Filter by area (sign-in, staff, patients, appointments, chart views, notes, vitals, prescriptions, bills, payments, receipts, settings), by staff member and by dates, and use **Load more** for older entries. Records are shown by ID; patient names never appear in the log.
 - **Collections** (in the menu): a day's payments by mode (cash, UPI, card) and by doctor, each with its receipt, and the visits still due. Reconciliation mismatches from Cashfree come with online payments.
 - Delivery log for failed messages.
 - Data-rights requests and merge requests.

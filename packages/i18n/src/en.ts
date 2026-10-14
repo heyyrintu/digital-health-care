@@ -834,6 +834,32 @@ export const en = {
   'medicines.perUnit': 'mg per tablet, capsule or drop',
   'medicines.perMl': 'mg per ml',
   'medicines.strength': 'mg',
+  'audit.area.settings': 'Settings',
+  'chart.restricted':
+    'This clinic opens a patient’s chart only to the doctors who have seen them. Check the patient in to you to open it.',
+  'policy.title': 'Chart, safety alerts and files',
+  'policy.chartTitle': 'Who sees the chart',
+  'policy.chartShared': 'Shared chart',
+  'policy.chartSharedHint': 'Every doctor in the clinic sees a patient’s full history.',
+  'policy.chartOwn': 'Own patients only',
+  'policy.chartOwnHint':
+    'A doctor sees the chart, notes and prescriptions once the patient has been checked in to them.',
+  'policy.safetyTitle': 'Safety alerts doctors see',
+  'policy.safetyHint':
+    'Only these non-critical alerts can be turned off. Blocks, allergy and serious interaction alerts always show.',
+  'policy.ruleSR06': 'Moderate and minor drug interactions',
+  'policy.ruleSR08': 'Two medicines of the same class (for example two NSAIDs)',
+  'policy.ruleSR15': 'Medicines to use with care in adults 65 and over',
+  'policy.filesTitle': 'Uploads',
+  'policy.maxUploadMb': 'Largest file (MB, up to {max})',
+  'policy.typesLabel': 'File types accepted',
+  'policy.typePdf': 'PDF',
+  'policy.typeJpeg': 'JPEG photo',
+  'policy.typePng': 'PNG image',
+  'policy.typeHeic': 'iPhone photo (HEIC)',
+  'policy.filesHint': 'Applies to reports and documents patients and staff upload.',
+  'policy.typesRequired': 'Choose at least one file type.',
+  'policy.saved': 'Saved.',
 } as const;
 
 export type MessageKey = keyof typeof en;
