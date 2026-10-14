@@ -138,6 +138,18 @@ describe('the account’s patients', () => {
     ]);
   });
 
+  it('leaves out records merged into another one', async () => {
+    const kept = await registerAtDesk({ name: 'Neha Kapoor', phone: '9876543210' });
+    const duplicate = await registerAtDesk({ name: 'Neha K', phone: '9876543210' });
+    await h.owner.patient.update({
+      where: { id: duplicate.id },
+      data: { mergedIntoId: kept.id, mergedAt: new Date() },
+    });
+    const tokens = await signedUp('9876543210');
+    const list = PortalPatientList.parse((await call('GET', '/portal/patients', tokens)).json());
+    expect(list.data.map((p) => p.id)).toEqual([kept.id]);
+  });
+
   it('never shows another account’s or another clinic’s records', async () => {
     await registerAtDesk({ name: 'Neha Kapoor', phone: '9876543210' });
     const other = await signedUp('9000000001');

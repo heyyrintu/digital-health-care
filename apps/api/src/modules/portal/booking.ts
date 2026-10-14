@@ -19,7 +19,7 @@ import { writeAudit } from '../audit/write';
 import { SigningService } from '../prescribing/signing';
 import { loadDaySlots } from '../scheduling/availability';
 import { DEFAULT_BOOKING_RULES, toRules } from '../scheduling/settings';
-import { accountPatientsWhere, accountPhone, ownPatient } from './account';
+import { accountHistoryWhere, accountPhone, ownHistory, ownPatient } from './account';
 import { PortalService } from './service';
 
 interface Actor {
@@ -44,7 +44,14 @@ const bookableType: Prisma.ConsultationTypeWhereInput = {
 };
 
 const appointmentInclude = {
-  patient: { select: { id: true, name: true, uhid: true } },
+  patient: {
+    select: {
+      id: true,
+      name: true,
+      uhid: true,
+      mergedInto: { select: { id: true, name: true, uhid: true } },
+    },
+  },
   clinic: { select: { name: true } },
   consultationType: { select: { name: true, mode: true } },
   prescriptions: {
@@ -210,7 +217,7 @@ export class PortalBookingService {
     return withTenant(this.s.db, actor.organisationId, async (tx) => {
       await this.portal.requireConsents(tx, actor);
       const rows = await tx.appointment.findMany({
-        where: { patient: accountPatientsWhere(phone), status: { not: 'rescheduled' } },
+        where: { patient: accountHistoryWhere(phone), status: { not: 'rescheduled' } },
         include: appointmentInclude,
         orderBy: { startAt: 'asc' },
         take: 200,
@@ -295,8 +302,8 @@ export class PortalBookingService {
     return withTenant(this.s.db, actor.organisationId, async (tx) => {
       await this.portal.requireConsents(tx, actor);
       const patients = await tx.patient.findMany({
-        where: accountPatientsWhere(phone),
-        select: { id: true, name: true },
+        where: accountHistoryWhere(phone),
+        select: { id: true, name: true, mergedInto: { select: { id: true, name: true } } },
       });
       const rows = await tx.prescription.findMany({
         where: {
@@ -310,7 +317,10 @@ export class PortalBookingService {
         where: { id: { in: [...new Set(rows.map((r) => r.appointmentId))] } },
         select: { id: true, date: true },
       });
-      const patientOf = new Map(patients.map((p) => [p.id, p]));
+      // A merged duplicate's prescriptions show under the record that was kept.
+      const patientOf = new Map(
+        patients.map((p) => [p.id, p.mergedInto ?? { id: p.id, name: p.name }]),
+      );
       const dateOf = new Map(visits.map((v) => [v.id, fromDbDate(v.date)]));
       const names = await doctorNames(
         this.s,
@@ -333,7 +343,7 @@ export class PortalBookingService {
     const phone = await accountPhone(this.s, actor.userId);
     return this.signing.pdf(request, { ...actor, role: 'patient' }, id, async (tx, patientId) => {
       await this.portal.requireConsents(tx, actor);
-      await ownPatient(tx, phone, patientId);
+      await ownHistory(tx, phone, patientId);
     });
   }
 
@@ -374,7 +384,12 @@ export class PortalBookingService {
     const prescription = r.prescriptions[0];
     return {
       id: r.id,
-      patient: r.patient,
+      // A merged duplicate's visits show under the record that was kept.
+      patient: r.patient.mergedInto ?? {
+        id: r.patient.id,
+        name: r.patient.name,
+        uhid: r.patient.uhid,
+      },
       doctorName: names.get(r.doctorUserId) ?? null,
       clinicName: r.clinic.name,
       consultationTypeName: r.consultationType.name,

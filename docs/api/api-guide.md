@@ -301,10 +301,28 @@ Implemented in Phase 1 (`apps/api/src/modules/settings`, PRD §9.2). One row per
 | Change | `PUT /organisation-settings` (the same four fields, all required) | Clinic admin |
 
 - **Defaults:** `chartModel: shared`, `hiddenSafetyRules: []`, `maxUploadMb: 10`, `uploadTypes: [pdf, jpeg, png]`.
-- **Chart model (PRD §3.2):** `shared` lets every doctor in the organisation read every chart. `own_patients` lets a doctor read a patient's chart, a visit's notes and prescription (view, preview, PDF) and "Repeat last" only once that patient has a visit with them that was checked in, in consultation or completed; a booking alone is not enough. Otherwise 403 `CHART_RESTRICTED`. A doctor's own visit is always open to them, but its chart still follows the rule, so the doctor checks the patient in first. Front desk vitals and printing are not affected. Internal referrals open the chart in phase 3.
+- **Chart model (PRD §3.2):** `shared` lets every doctor in the organisation read every chart. `own_patients` lets a doctor read a patient's chart, a visit's notes and prescription (view, preview, PDF) and "Repeat last" only once that patient has a visit with them that was checked in, in consultation or completed; a booking alone is not enough. Otherwise 403 `CHART_RESTRICTED`. A doctor's own visit is always open to them, but its chart still follows the rule, so the doctor checks the patient in first. Front desk vitals and printing are not affected. Internal referrals open the chart in phase 3. After a merge (§3m) a visit to the kept record or to any duplicate merged into it counts, whichever of those records the request names.
 - **Safety tuning (catalogue "Clinic can tune"):** `hiddenSafetyRules` takes only the "Visibility only" rules: `SR-06` (moderate and minor interactions), `SR-08` (duplicate class) and `SR-15` (older-adult caution); anything else is 400, and the database refuses it too. Hidden rules are left out of every check from then on. An alert of a hidden rule already in the safety log is closed without a doctor action. Blocks and the locked rules always show.
 - **Upload limits:** `maxUploadMb` 1–25 (the platform's ceiling), `uploadTypes` one or more of `pdf`, `jpeg`, `png` and `heic` (HEIC and HEIF), each once. `checkUpload` in `@dhc/contracts` applies them; the upload endpoints (§4 files) call it on the server once they are built.
 - **Audit:** `settings.updated` with each changed field's old and new value; saving the same values writes nothing.
+
+## 3m. Merging duplicate patient records
+
+Implemented in Phase 1 (`apps/api/src/modules/patients/merges.ts`, PRD §3.2, §5.3).
+
+| Action | Endpoint | Who |
+|---|---|---|
+| Ask | `POST /patient-merges` `{sourcePatientId, targetPatientId, reason}` → 201 | Front desk, doctor, clinic admin |
+| Requests | `GET /patient-merges?status=pending\|decided` → `{data}` (pending oldest first; the latest 50 decided) | Clinic admin |
+| Approve | `POST /patient-merges/{id}/approve` `{note?}` | Clinic admin |
+| Reject | `POST /patient-merges/{id}/reject` `{note}` | Clinic admin |
+
+- **Asking:** the source is the duplicate that closes, the target the record that stays. Both must be this clinic's live records (400 otherwise) and different; a record already in a pending request cannot be in another (409 `merge: pending`; one pending request per source is also enforced in the database). Each side comes back with UHID, name, mobile, date of birth, gender, registration time and completed visits, for the admin to compare. The patient page shows the waiting request (`pendingMerge`).
+- **Approving** (one decision at a time per clinic) moves the living record to the target in one transaction: chart entries (allergies, conditions, current medicines, including removed ones with their reasons), tags the target lacks, upcoming bookings nobody has started (pending or confirmed, without vitals or notes), dependants (their guardian becomes the target; a link from the target to the source is dropped), records previously merged into the source, and a patient-app account when the target has none. The source gets `mergedIntoId` and `mergedAt`. Past visits, notes, prescriptions and bills stay where they were written, because signed records never change; they count as the target's from then on. A merge cannot be undone; a decided request gives 409 `merge: decided`.
+- **Guardians** stay one level deep: if the source is someone's guardian and the target has a guardian of its own, the request is refused (409 `merge: guardian`) until the family links are changed.
+- **Merged records** are read-only: editing, tagging, chart entries and booking give 409 `PATIENT_MERGED` with `fields.patientId` (the record to use). Database triggers refuse anything new pointing at a merged record (visits, chart entries, tags, guardian links, merges). Search and duplicate checks leave merged records out, except a search for the exact old UHID, which returns the merged record with `mergedIntoId` so the client can open the kept one. Patient views carry `mergedInto` and `mergedFrom`.
+- **History under the kept record:** the chart, the patient's appointment list, Repeat last and the safety engine's follow-up check (SR-19) include the merged records' visits and prescriptions. A chart requested for a merged record returns the kept record's (`patientId` is the kept one), and an open visit of a merged record is checked against the kept record's chart.
+- **Audit:** `patient_merge.requested`, `patient_merge.rejected` and `patient.merged` (request, source and target IDs; for a merge, how many chart entries, tags, bookings and dependants moved). Never names or reasons.
 
 ## 3r. Patient account: consents and family
 
@@ -318,7 +336,7 @@ Implemented in Phase 2 (`apps/api/src/modules/portal`, PRD §4, §4.1). For the 
 | The account's patients | `GET /portal/patients` → `{data: [{id, uhid, name, dob, gender, language, relation, guardianPatientId}]}` | Patient |
 | Add a patient | `POST /portal/patients {name, dob, gender, language?, guardianPatientId?}` → 201 the patient | Patient |
 
-- **Account:** one phone number is one account, per organisation. Its patients are the records whose mobile is the number verified by OTP (`relation: account`: the person, or family sharing the number) and the dependants those records look after (`relation: dependant`). A record the clinic registered on that number is claimed simply by signing in; nothing has to be linked. Records of other numbers, and of other clinics, read as 404.
+- **Account:** one phone number is one account, per organisation. Its patients are the records whose mobile is the number verified by OTP (`relation: account`: the person, or family sharing the number) and the dependants those records look after (`relation: dependant`). A record the clinic registered on that number is claimed simply by signing in; nothing has to be linked. Records of other numbers, and of other clinics, read as 404. Records merged into another one are left out; the kept record carries their history.
 - **Consents:** `privacy_notice`, `terms` and `health_data`, each at the version in `CURRENT_CONSENT_VERSIONS` (`@dhc/contracts`); an older version is 409 with the kind in `fields`. Until all three are in force, health-data endpoints (`/portal/patients` and everything built on it) answer 403 `CONSENT_REQUIRED` with the missing kinds in `fields.consents`. Raising a version asks everyone again. Withdrawing health data closes those endpoints until it is accepted again; the privacy notice and terms are only withdrawn by closing the account (a data-rights request). Every acceptance and withdrawal stays on record.
 - **Adding:** without `guardianPatientId` the record takes the account's number; with it, a dependant without a number, looked after by an `account` patient (not by another dependant). Name and date of birth already on the account are 409. New records get the next UHID and show at the clinic like any other.
 - **Audit:** `consent.accepted` (kinds and versions), `consent.withdrawn` and `patient.created` with `source: patient_app`.
@@ -348,7 +366,7 @@ Implemented in Phase 2 (`apps/api/src/modules/portal`, PRD §4, §4.1). For the 
 | identity | `/auth/*`, `/me`, `/staff/invites` (built); `/me/devices` |
 | tenancy | `/organisations/current`, `/clinics` (built), `/consultation-types` (built), `/booking-rules` (built), `/doctors` (built), `/organisation-settings` (built), `/branding`, `/tags` (built), `/uhid-settings` (built) |
 | scheduling | `/availability/versions` (built), `/availability/exceptions` (built), `/slots?doctorId&clinicId&consultationTypeId&date&channel` (built), `/appointments` (book, walk-in, list, confirm, check-in, start, complete, cancel, no-show, reschedule; built), `/queue?date` (built), `/display-screens` (built), `/display/board` (built) |
-| patients | `/patients` (search by phone, name or UHID, filter by tag; register; built), `/patients/{id}` (demographics and family, each view audited; edit; built), `/patients/duplicate-check` (built), `/patients/{id}/tags` (built), `/patients/{id}/chart` and `/patients/{id}/allergies\|conditions\|medications` (built), `/patients/{id}/consents`, `/patients/merge-requests` |
+| patients | `/patients` (search by phone, name or UHID, filter by tag; register; built), `/patients/{id}` (demographics and family, each view audited; edit; built), `/patients/duplicate-check` (built), `/patients/{id}/tags` (built), `/patients/{id}/chart` and `/patients/{id}/allergies\|conditions\|medications` (built), `/patients/{id}/consents`, `/patient-merges` (ask, approve, reject; built) |
 | portal | `/portal/consents`, `/portal/patients`, `/portal/booking-options`, `/portal/slots`, `/portal/appointments` (book, list, cancel), `/portal/prescriptions` and `/portal/prescriptions/{id}/pdf` (all built) |
 | clinical | `/appointments/{id}/consultation` (built), `/appointments/{id}/vitals` (built), `/scribe/sessions`, `/assessments/forms`, `/assessments`, `/patients/{id}/ask-ai` |
 | prescribing | `/medicines` (search; built), `/medicine-master`, `/drug-molecules` and `/medicine-requests` (clinic admin; built), `/prescription-templates` (built), `/appointments/{id}/prescription` (draft and lines; built), `/patients/{id}/last-prescription` (built), `/appointments/{id}/prescription/safety-actions` (built), `/appointments/{id}/prescription/preview\|sign\|amend\|void` (built), `/prescriptions/{id}/pdf` (built), `/verify` (public; built), `/doctor-profile` (built) |
@@ -375,6 +393,7 @@ Implemented in Phase 2 (`apps/api/src/modules/portal`, PRD §4, §4.1). For the 
 | `SIGNING_UNAVAILABLE` | No signing service on this server (503) | Explain; signing waits |
 | `PAYMENT_PENDING` | Online consult without confirmed payment | Resume Cashfree checkout |
 | `CONSENT_REQUIRED` | Scribe or ABDM action without consent | Start consent flow |
+| `PATIENT_MERGED` | Writing to a record merged into another (409, `fields.patientId`) | Open the kept record |
 | `CHART_RESTRICTED` | "Own patients only" and the doctor has not seen the patient (403) | Explain; check the patient in to the doctor |
 
 ## 6. Change process
