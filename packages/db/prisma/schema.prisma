@@ -228,6 +228,7 @@ model Organisation {
   memberships            Membership[]
   patients               Patient[]
   sessions               Session[]
+  pushDevices            PushDevice[]
   invites                StaffInvite[]
   uhidSettings           UhidSettings?
   tags                   Tag[]
@@ -284,6 +285,7 @@ model User {
 
   memberships Membership[]
   sessions    Session[]
+  pushDevices PushDevice[]
   invites     StaffInvite[]
 
   @@map("users")
@@ -325,9 +327,47 @@ model Session {
 
   user         User         @relation(fields: [userId], references: [id])
   organisation Organisation @relation(fields: [organisationId], references: [id])
+  pushDevices  PushDevice[]
 
   @@index([userId])
   @@map("sessions")
+}
+
+enum DevicePlatform {
+  ios
+  android
+}
+
+enum AppVariant {
+  clinic
+  patient
+}
+
+/// A phone or tablet that receives push notifications for one signed-in session. One row
+/// per Expo push token: signing in on the device again moves the row to the new session.
+/// Platform-level like sessions (auth role only); it stops receiving when its session
+/// ends or it is removed.
+model PushDevice {
+  id             String         @id @default(uuid()) @db.Uuid
+  userId         String         @map("user_id") @db.Uuid
+  organisationId String         @map("organisation_id") @db.Uuid
+  sessionId      String         @map("session_id") @db.Uuid
+  platform       DevicePlatform
+  appVariant     AppVariant     @map("app_variant")
+  expoPushToken  String         @unique @map("expo_push_token")
+  deviceName     String?        @map("device_name")
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  lastSeenAt     DateTime       @default(now()) @map("last_seen_at") @db.Timestamptz(3)
+  revokedAt      DateTime?      @map("revoked_at") @db.Timestamptz(3)
+  revokedReason  String?        @map("revoked_reason")
+
+  user         User         @relation(fields: [userId], references: [id])
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+  session      Session      @relation(fields: [sessionId], references: [id])
+
+  @@index([sessionId])
+  @@index([userId])
+  @@map("push_devices")
 }
 
 /// Single-use link a clinic admin sends to a new staff member. The only way to set a staff
@@ -905,12 +945,15 @@ model Medicine {
   source         MedicineSource
   active         Boolean        @default(true)
   createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  /// Moves on every change, so the Clinic app can fetch only what changed (offline cache).
+  updatedAt      DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   organisation Organisation?        @relation(fields: [organisationId], references: [id], onDelete: Restrict)
   ingredients  MedicineIngredient[]
   requests     MedicineRequest[]
 
   @@index([organisationId])
+  @@index([updatedAt, id])
   @@map("medicines")
 }
 
