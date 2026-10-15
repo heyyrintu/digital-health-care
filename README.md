@@ -50,7 +50,7 @@ pnpm --filter @dhc/mobile start:patient   # or start:clinic
 
 The seed prints an invite link for each demo staff account. Open it in the browser (with the API and web app running) to set a password and add an authenticator app; you land signed in on the clinic dashboard. Later, sign in at http://localhost:3000/clinic/login with clinic ID `demo-clinic`. Patients sign in with a mobile code (printed in the API console when `OTP_DELIVERY=log`).
 
-The mobile apps use native modules, so run them in an Expo development build (EAS profiles `development-patient` / `development-clinic`), not Expo Go. They call the API at `EXPO_PUBLIC_API_BASE_URL` (default `http://localhost:4000/v1`; on an Android emulator use `http://10.0.2.2:4000/v1`). The Patient app signs in with a mobile code and the Clinic app with password and authenticator, both with clinic ID `demo-clinic`; a link such as `dhc-patient://sign-in?clinic=demo-clinic` fills the clinic ID in.
+The mobile apps use native modules, so run them in an Expo development build (EAS profiles `development-patient` / `development-clinic`), not Expo Go. They call the API at `EXPO_PUBLIC_API_BASE_URL` (default `http://localhost:4000/v1`; on an Android emulator use `http://10.0.2.2:4000/v1`). The Patient app signs in with a mobile code and the Clinic app with password and authenticator, both with clinic ID `demo-clinic`; a link such as `dhc-patient://sign-in?clinic=demo-clinic` fills the clinic ID in. Onboarding links to the privacy notice and terms at `EXPO_PUBLIC_PRIVACY_NOTICE_URL` and `EXPO_PUBLIC_TERMS_URL`; release builds must set both.
 
 ## Checks
 

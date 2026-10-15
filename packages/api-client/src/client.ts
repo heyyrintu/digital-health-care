@@ -259,8 +259,9 @@ export function createApiClient(options: ApiClientOptions) {
       request('GET', '/portal/slots', { schema: SlotsResponse, query: { ...query } }),
     portalAppointments: () =>
       request('GET', '/portal/appointments', { schema: PortalAppointmentList }),
-    bookPortalAppointment: (body: PortalBookBody) =>
-      request('POST', '/portal/appointments', { schema: PortalAppointment, body }),
+    /** Send the same `idempotencyKey` when retrying one booking attempt. */
+    bookPortalAppointment: (body: PortalBookBody, idempotencyKey?: string) =>
+      request('POST', '/portal/appointments', { schema: PortalAppointment, body, idempotencyKey }),
     cancelPortalAppointment: (id: string, reason?: string) =>
       request('POST', `/portal/appointments/${encodeURIComponent(id)}/cancel`, {
         schema: PortalAppointment,

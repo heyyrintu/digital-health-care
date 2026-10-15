@@ -58,6 +58,8 @@ test.describe('signing', () => {
     clinic,
     db,
   }) => {
+    // Doctor and front desk each sign in and work in their own browser: allow for slow CI runners.
+    test.setTimeout(120_000);
     await setUpFromInvite(page, clinic.inviteLink('doctor'), PASSWORD);
     const { org, doctor, visit } = await setUp(db, clinic);
 
