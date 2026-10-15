@@ -16,18 +16,20 @@ type Request = (
 export function outboxSender(request: Request) {
   return async (item: OutboxItem): Promise<SendOutcome> => {
     try {
-      await request(item.method, item.path, {
+      const result = await request(item.method, item.path, {
         schema: z.unknown(),
         body: item.body,
         idempotencyKey: item.id,
       });
-      return { kind: 'sent' };
+      return { kind: 'sent', result };
     } catch (error) {
       if (
         error instanceof ApiError &&
         error.status >= 400 &&
         error.status < 500 &&
-        ![401, 408, 429].includes(error.status)
+        ![401, 408, 429].includes(error.status) &&
+        // The first attempt with this key is still running on the server: ask again later.
+        error.fields.idempotencyKey !== 'in_progress'
       ) {
         return { kind: 'rejected', message: error.message };
       }

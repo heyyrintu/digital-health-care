@@ -21,6 +21,7 @@ export class MedicineCache {
   private saved: Saved = { cursor: null, medicines: {}, aliases: [], syncedAt: null };
   /** Bumped by clear(): a sync started before a sign-out never writes its result. */
   private generation = 0;
+  private syncing: Promise<void> | null = null;
 
   constructor(
     private readonly store: KeyValueStore,
@@ -41,8 +42,19 @@ export class MedicineCache {
     return Object.keys(this.saved.medicines).length;
   }
 
-  /** Pulls every page of changes. A failure keeps what was saved before it. */
-  async sync(fetch: FetchMedicines): Promise<void> {
+  /**
+   * Pulls every page of changes. A failure keeps what was saved before it. A sync asked for
+   * while one runs shares it, so two runs never start from the same copy and overwrite each
+   * other.
+   */
+  sync(fetch: FetchMedicines): Promise<void> {
+    this.syncing ??= this.pull(fetch).finally(() => {
+      this.syncing = null;
+    });
+    return this.syncing;
+  }
+
+  private async pull(fetch: FetchMedicines): Promise<void> {
     const generation = this.generation;
     let { cursor } = this.saved;
     const medicines = { ...this.saved.medicines };
@@ -60,6 +72,11 @@ export class MedicineCache {
     if (generation !== this.generation) return;
     const next = { cursor, medicines, aliases: aliases ?? [], syncedAt: this.now() };
     await this.store.set(KEY, next);
+    // Signed out while saving: the copy just written belongs to the previous person.
+    if (generation !== this.generation) {
+      await this.store.remove(KEY);
+      return;
+    }
     this.saved = next;
   }
 

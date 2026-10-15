@@ -146,6 +146,42 @@ describe('SessionManager across sign-outs', () => {
     await expect(manager.getAccessToken()).resolves.toBeNull();
   });
 
+  it('does not clear a newer sign-in’s saved session when an older one finishes late', async () => {
+    const { manager, api, stored } = setup();
+    let answerA: (value: MeResponse) => void = () => undefined;
+    api.me.mockImplementationOnce(() => new Promise((resolve) => (answerA = resolve)));
+    const a = manager.signIn('demo-clinic', tokens(1));
+    const b = manager.signIn('demo-clinic', tokens(2));
+    await b;
+    answerA(me);
+    await a;
+    expect(stored()).toEqual({ organisation: 'demo-clinic', refreshToken: 'r2' });
+    expect(manager.getState().status).toBe('signed_in');
+  });
+
+  it('keeps nothing when an overtaken sign-in saved and the newer one then fails', async () => {
+    const { manager, api, vault, stored } = setup();
+    // A's keychain write is slow and lands after B has started.
+    const write = vi.mocked(vault.save).getMockImplementation()!;
+    let saved: () => void = () => undefined;
+    vi.mocked(vault.save).mockImplementationOnce(
+      (s) => new Promise<void>((resolve) => (saved = () => void write(s).then(resolve))),
+    );
+    let failB: (error: Error) => void = () => undefined;
+    const a = manager.signIn('demo-clinic', tokens(1));
+    await vi.waitFor(() => expect(vault.save).toHaveBeenCalled());
+    api.me.mockImplementationOnce(() => new Promise((_, reject) => (failB = reject)));
+    const b = manager.signIn('demo-clinic', tokens(2));
+    saved();
+    await a;
+    expect(stored()).toEqual({ organisation: 'demo-clinic', refreshToken: 'r1' });
+    failB(new TypeError('Network request failed'));
+    await expect(b).rejects.toThrow();
+    expect(vault.clear).toHaveBeenCalled();
+    expect(stored()).toBeNull();
+    expect(manager.getState().status).not.toBe('signed_in');
+  });
+
   it('keeps nothing when who signed in cannot be loaded', async () => {
     const { manager, api, stored } = setup();
     api.me.mockRejectedValueOnce(new TypeError('Network request failed'));
@@ -168,16 +204,19 @@ describe('SessionManager across sign-outs', () => {
     await manager.signIn('demo-clinic', tokens(0));
     clock.advance(901_000);
     await manager.signOut();
+    expect(api.refresh).toHaveBeenCalledTimes(1);
     expect(api.refresh).toHaveBeenCalledWith('r0');
     expect(api.logout).toHaveBeenCalledWith('a1');
   });
 
   it('signs out on screen even when the keychain cannot be cleared', async () => {
-    const { manager, vault } = setup();
+    const { manager, vault, api } = setup();
     await manager.signIn('demo-clinic', tokens(0));
     vi.mocked(vault.clear).mockRejectedValueOnce(new Error('keychain'));
     await expect(manager.signOut()).rejects.toThrow('keychain');
     expect(manager.getState()).toEqual({ status: 'signed_out', reason: 'signed_out' });
+    // The server session still ends, so the token left in the keychain cannot resume it.
+    expect(api.logout).toHaveBeenCalledWith('a0');
   });
 
   it('starts from sign-in when the keychain cannot be read', async () => {

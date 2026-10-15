@@ -25,7 +25,7 @@ describe('outboxSender', () => {
       calls.push([method, path, options.idempotencyKey, options.body]);
       return undefined;
     });
-    expect(await send(item)).toEqual({ kind: 'sent' });
+    expect(await send(item)).toEqual({ kind: 'sent', result: undefined });
     expect(calls).toEqual([['POST', '/appointments/a1/actions', 'key-1', { action: 'check_in' }]]);
   });
 
@@ -39,6 +39,10 @@ describe('outboxSender', () => {
       expect(await failing(apiError(status))(item)).toEqual({ kind: 'retry' });
     }
     expect(await failing(new TypeError('Network request failed'))(item)).toEqual({ kind: 'retry' });
+    const stillRunning = new ApiError(409, 'CONFLICT', 'Still running.', undefined, {
+      idempotencyKey: 'in_progress',
+    });
+    expect(await failing(stillRunning)(item)).toEqual({ kind: 'retry' });
   });
 
   it('makes distinct keys', () => {

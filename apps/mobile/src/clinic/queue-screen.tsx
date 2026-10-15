@@ -9,10 +9,12 @@ import {
   FlatList,
   Pressable,
   RefreshControl,
+  ScrollView,
   useWindowDimensions,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { session } from '../api';
 import { errorMessage } from '../errors';
 import { useLocale } from '../locale/provider';
 import { TWO_PANE_MIN_WIDTH } from '../variant';
@@ -42,6 +44,7 @@ export function QueueScreen({ me }: { me: MeResponse }) {
   const [tab, setTab] = useState<Tab>('myOpd');
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const [now, setNow] = useState(() => new Date());
 
   const messageOf = useCallback((e: unknown) => errorMessage(e, t), [t]);
@@ -131,8 +134,11 @@ export function QueueScreen({ me }: { me: MeResponse }) {
             refreshing={refreshing}
             onRefresh={async () => {
               setRefreshing(true);
-              await refresh();
-              setRefreshing(false);
+              try {
+                await refresh();
+              } finally {
+                setRefreshing(false);
+              }
             }}
           />
         }
@@ -162,17 +168,29 @@ export function QueueScreen({ me }: { me: MeResponse }) {
           style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}
         >
           <Text variant="title">{t('queue.title')}</Text>
-          <Text variant="muted">
-            {me.organisation.name}
-            {state.fetchedAt && !state.offline
-              ? ` · ${t('queue.updated', { time: time(state.fetchedAt) })}`
-              : ''}
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing[2] }}>
+            <Text variant="muted">
+              {me.organisation.name}
+              {state.fetchedAt && !state.offline
+                ? ` · ${t('queue.updated', { time: time(state.fetchedAt) })}`
+                : ''}
+            </Text>
+            {/* Leaving a shared device: this also deletes what the app saved on it. */}
+            <Button
+              variant="ghost"
+              label={t('session.signOut')}
+              loading={signingOut}
+              onPress={async () => {
+                setSigningOut(true);
+                await session.signOut().catch(() => undefined);
+              }}
+            />
+          </View>
         </View>
         {twoPane ? (
           <View style={{ flex: 1, flexDirection: 'row', gap: theme.spacing[4] }}>
             <View style={{ flex: 2 }}>{list}</View>
-            <View style={{ flex: 3 }}>
+            <ScrollView style={{ flex: 3 }}>
               {selected ? (
                 <AppointmentDetailPane
                   a={selected}
@@ -186,7 +204,7 @@ export function QueueScreen({ me }: { me: MeResponse }) {
                   <Text variant="muted">{t('mobile.clinic.selectPatient')}</Text>
                 </Card>
               )}
-            </View>
+            </ScrollView>
           </View>
         ) : (
           list

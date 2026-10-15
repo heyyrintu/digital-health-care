@@ -8,7 +8,8 @@ import { variant } from '../../src/variant';
 export default function AppLayout() {
   useEffect(() => {
     if (variant !== 'clinic') return;
-    void loadOffline();
+    // A failed clean-up is retried by the next read.
+    loadOffline().catch(() => undefined);
     void registerForPush(null);
   }, []);
 

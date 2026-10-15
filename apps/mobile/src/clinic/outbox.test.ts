@@ -147,6 +147,42 @@ describe('Outbox across a sign-out', () => {
     expect(box.getItems()).toEqual([]);
   });
 
+  it('refuses a write that started before a sign-out', async () => {
+    const store = memoryStore();
+    let release: () => void = () => undefined;
+    const slow = {
+      ...store,
+      get: async <T>(key: string) => {
+        await new Promise<void>((resolve) => (release = resolve));
+        return store.get<T>(key);
+      },
+    };
+    const box = new Outbox(slow, () => 'k');
+    const adding = box.add(checkIn('a1'));
+    await box.clear();
+    release();
+    await expect(adding).rejects.toThrow();
+    expect(box.getItems()).toEqual([]);
+    expect(await store.get('clinic.outbox')).toBeNull();
+  });
+
+  it('reads again after a failed read', async () => {
+    const store = memoryStore();
+    await store.set('clinic.outbox', []);
+    let fail = true;
+    const flaky = {
+      ...store,
+      get: async <T>(key: string) => {
+        if (fail) throw new Error('disk');
+        return store.get<T>(key);
+      },
+    };
+    const box = new Outbox(flaky, () => 'k');
+    await expect(box.load()).rejects.toThrow('disk');
+    fail = false;
+    await expect(box.load()).resolves.toBeUndefined();
+  });
+
   it('shares one read between concurrent callers, so a queued item is never hidden', async () => {
     const { store, box } = setup();
     await Promise.all([box.load(), box.add(checkIn('a1')), box.load()]);
@@ -161,5 +197,47 @@ describe('Outbox across a sign-out', () => {
     await box.add({ ...checkIn('a2'), kind: 'notes', method: 'PUT', path: '/n' });
     await box.dropPending('notes', '/n');
     expect(box.getItems().map((i) => i.id)).toEqual(['first-attempt-key']);
+  });
+});
+
+describe('Outbox while a save is being sent', () => {
+  const notes = (revision: number, text: string) => ({
+    kind: 'notes' as const,
+    method: 'PUT' as const,
+    path: '/appointments/a1/consultation',
+    body: { notes: { plan: text }, followUpDate: null, revision },
+    label: 'Notes',
+  });
+
+  it('keeps a newer save and moves it onto the revision the send left', async () => {
+    const { box } = setup();
+    await box.add(notes(3, 'first'));
+    let release: () => void = () => undefined;
+    const flushing = box.flush(async () => {
+      await new Promise<void>((resolve) => (release = resolve));
+      return { kind: 'sent', result: { revision: 4 } };
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await box.add(notes(3, 'second'));
+    release();
+    await flushing;
+    expect(box.getItems().map((i) => i.body)).toEqual([
+      { notes: { plan: 'second' }, followUpDate: null, revision: 4 },
+    ]);
+  });
+
+  it('marks the one being sent failed when refused, and keeps the newer save', async () => {
+    const { box } = setup();
+    await box.add(notes(3, 'first'));
+    let release: () => void = () => undefined;
+    const flushing = box.flush(async () => {
+      await new Promise<void>((resolve) => (release = resolve));
+      return { kind: 'rejected', message: 'These notes were changed somewhere else.' };
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await box.add(notes(3, 'second'));
+    release();
+    await flushing;
+    expect(box.getItems().map((i) => i.status)).toEqual(['failed', 'pending']);
   });
 });

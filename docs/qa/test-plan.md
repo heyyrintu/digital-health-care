@@ -47,11 +47,11 @@ Testing effort follows risk. Highest risk: safety engine, signing and immutabili
 Per Build Plan §8.2: small and large iPhone (oldest and latest supported iOS), iPad and iPad Pro with keyboard, low-end Android (2–3 GB RAM, Android 9–11), mid-range Android, 10–11 inch Android tablet, Windows Chrome/Edge (front desk), Mac Safari, mobile browsers.
 
 ## 5a. Clinic app checks still to run on real devices
-The Clinic app's logic is unit tested and its iOS and Android bundles build, but these need a person with a device (iPhone, iPad, Android phone and tablet) before release:
+The Clinic app's logic is unit tested and its iOS and Android bundles were built locally with `expo export` (CI does not build them yet), but these need a person with a device (iPhone, iPad, Android phone and tablet) before release:
 - Face ID, Touch ID, Android fingerprint and the passcode fallback unlock the app; it locks after 15 minutes idle (including time in the background) and when opened on a saved session; a device without a screen lock is refused.
 - iPad and 10–11 inch tablets show the list and the selected patient side by side, in both orientations and in Split View; phones open the patient on its own screen.
 - Flight mode: the saved queue shows with its time; a check-in made offline shows "waiting to sync" and reaches the queue (once, on the web too) when the network returns; a check-in refused meanwhile (visit cancelled on the web) shows the reason and can be discarded.
-- Signing out, or a clinic admin's sign-out, removes the saved queue, medicine copy and queued changes from the device.
+- Signing out, a clinic admin's sign-out, or opening the app on an expired session removes the saved queue, medicine copy and queued changes from the device.
 - Push permission prompt; the device appears under `GET /push-devices`; a push reaches it once the sender exists (needs the EAS project ID and APNs/FCM credentials).
 
 ## 6. Entry and exit criteria

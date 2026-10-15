@@ -11,8 +11,14 @@ const idPrefix = process.env.BUNDLE_ID_PREFIX ?? 'dev.dhc';
 
 // Store and preview builds must call a real API, never the localhost development default.
 const profile = process.env.EAS_BUILD_PROFILE ?? '';
-if (/^(preview|production)-/.test(profile) && !process.env.EXPO_PUBLIC_API_BASE_URL?.trim()) {
-  throw new Error(`EXPO_PUBLIC_API_BASE_URL must be set for the ${profile} build`);
+const apiBaseUrl = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
+if (/^(preview|production)-/.test(profile)) {
+  if (!apiBaseUrl) throw new Error(`EXPO_PUBLIC_API_BASE_URL must be set for the ${profile} build`);
+  // A loopback address points the device at itself, not at the API.
+  const { hostname } = new URL(apiBaseUrl);
+  if (/^(localhost|127(?:\.\d{1,3}){3}|\[::1\])$/i.test(hostname)) {
+    throw new Error(`EXPO_PUBLIC_API_BASE_URL must not be a loopback address for ${profile}`);
+  }
 }
 
 const VARIANTS: Record<Variant, Pick<ExpoConfig, 'name' | 'slug' | 'scheme' | 'orientation'>> = {

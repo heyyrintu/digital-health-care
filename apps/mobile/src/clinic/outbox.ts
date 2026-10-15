@@ -24,7 +24,8 @@ export interface OutboxItem {
 
 /** What sending one item came to. */
 export type SendOutcome =
-  | { kind: 'sent' }
+  /** `result` is the server's answer, used to move a newer save of the same record onto it. */
+  | { kind: 'sent'; result?: unknown }
   /** The network is down or the server is unhealthy: stop and try again later. */
   | { kind: 'retry' }
   /** The server refused it (e.g. the visit was cancelled meanwhile): keep it for the person. */
@@ -44,6 +45,8 @@ export class Outbox {
   private flushing: Promise<void> | null = null;
   /** Bumped by clear(): work started before a sign-out must not touch what comes after. */
   private generation = 0;
+  /** The item being sent right now: a newer save of the same record waits behind it. */
+  private inFlight: string | null = null;
   private readonly listeners = new Set<() => void>();
 
   constructor(
@@ -61,8 +64,14 @@ export class Outbox {
 
   /** Reads the saved queue once; concurrent callers share the read. */
   load(): Promise<void> {
-    this.loading ??= this.read();
-    return this.loading;
+    if (this.loading) return this.loading;
+    const loading = this.read();
+    this.loading = loading;
+    // A failed read is tried again by the next caller, not remembered for good.
+    loading.catch(() => {
+      if (this.loading === loading) this.loading = null;
+    });
+    return loading;
   }
 
   private async read(): Promise<void> {
@@ -81,7 +90,10 @@ export class Outbox {
     item: Pick<OutboxItem, 'kind' | 'method' | 'path' | 'body' | 'label'>,
     id: string = this.newId(),
   ): Promise<OutboxItem> {
+    const generation = this.generation;
     await this.load();
+    // Signed out while the queue was read: this write belongs to the previous person.
+    if (generation !== this.generation) throw new Error('Signed out before the change was saved.');
     const full: OutboxItem = {
       ...item,
       id,
@@ -89,10 +101,11 @@ export class Outbox {
       attempts: 0,
       status: 'pending',
     };
-    // A later save of the same notes or vitals replaces the waiting one; it holds the latest.
+    // A later save of the same notes or vitals replaces the waiting or refused one; it holds
+    // the latest.
     if (item.kind === 'notes' || item.kind === 'vitals' || item.kind === 'tags') {
       this.items = this.items.filter(
-        (i) => !(i.status === 'pending' && i.kind === item.kind && i.path === item.path),
+        (i) => i.id === this.inFlight || !(i.kind === item.kind && i.path === item.path),
       );
     }
     this.items = [...this.items, full];
@@ -114,12 +127,13 @@ export class Outbox {
     await this.save();
   }
 
-  /** A newer save reached the server: an older one still waiting here must not replay. */
+  /**
+   * A newer save reached the server: an older one still here (waiting, or refused) must not
+   * replay or keep asking to be fixed.
+   */
   async dropPending(kind: OutboxKind, path: string): Promise<void> {
     await this.load();
-    const kept = this.items.filter(
-      (i) => !(i.status === 'pending' && i.kind === kind && i.path === path),
-    );
+    const kept = this.items.filter((i) => !(i.kind === kind && i.path === path));
     if (kept.length === this.items.length) return;
     this.items = kept;
     await this.save();
@@ -142,10 +156,13 @@ export class Outbox {
       if (item.status !== 'pending') continue;
       item.attempts += 1;
       let outcome: SendOutcome;
+      this.inFlight = item.id;
       try {
         outcome = await send(item);
       } catch {
         outcome = { kind: 'retry' };
+      } finally {
+        this.inFlight = null;
       }
       if (generation !== this.generation) return;
       if (outcome.kind === 'retry') {
@@ -153,7 +170,10 @@ export class Outbox {
         return;
       }
       if (outcome.kind === 'sent') {
-        this.items = this.items.filter((i) => i.id !== item.id);
+        const result = outcome.result;
+        this.items = this.items
+          .filter((i) => i.id !== item.id)
+          .map((i) => (i.kind === item.kind && i.path === item.path ? rebase(i, result) : i));
       } else {
         this.items = this.items.map((i) =>
           i.id === item.id ? { ...i, status: 'failed', error: outcome.message } : i,
@@ -171,4 +191,20 @@ export class Outbox {
   private emit(): void {
     for (const listener of this.listeners) listener();
   }
+}
+
+/**
+ * A newer save of notes or vitals queued while an older one was being sent was written on top
+ * of it, so it now starts from what that send left on the server, not from before it.
+ */
+function rebase(item: OutboxItem, result: unknown): OutboxItem {
+  const r = (result ?? {}) as { revision?: unknown; updatedAt?: unknown };
+  const body = item.body as Record<string, unknown>;
+  if (item.kind === 'notes' && typeof r.revision === 'number') {
+    return { ...item, body: { ...body, revision: r.revision } };
+  }
+  if (item.kind === 'vitals' && typeof r.updatedAt === 'string' && 'basedOn' in body) {
+    return { ...item, body: { ...body, basedOn: r.updatedAt } };
+  }
+  return item;
 }

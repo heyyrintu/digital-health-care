@@ -50,6 +50,8 @@ export class SessionManager {
   private refreshing: Promise<string | null> | null = null;
   /** Bumped whenever a session starts or ends, so late work from an earlier one is dropped. */
   private generation = 0;
+  /** Sign-ins still in flight, so a superseded one never clears a newer one's save. */
+  private signingIn = 0;
 
   constructor(
     private readonly vault: TokenVault,
@@ -87,14 +89,32 @@ export class SessionManager {
   /** After the OTP or authenticator step: keep the tokens and load who signed in. */
   async signIn(organisation: string, tokens: TokenResponse): Promise<void> {
     const generation = ++this.generation;
+    this.signingIn += 1;
+    try {
+      await this.completeSignIn(generation, organisation, tokens);
+    } finally {
+      this.signingIn -= 1;
+      // The last sign-in to settle: if none won, an overtaken one may have saved its tokens
+      // before a newer one failed. Nothing signed in, so nothing stays in the vault.
+      if (this.signingIn === 0 && !this.stored) await this.vault.clear().catch(() => undefined);
+    }
+  }
+
+  private async completeSignIn(
+    generation: number,
+    organisation: string,
+    tokens: TokenResponse,
+  ): Promise<void> {
     // Who signed in first: if that fails nothing is kept, so the screen and the session agree.
     const me = await this.api.me(tokens.accessToken);
+    // Started over (or another sign-in) meanwhile: this one does not win and saves nothing.
+    if (generation !== this.generation) return;
     const stored = { organisation, refreshToken: tokens.refreshToken };
     await this.vault.save(stored);
-    // Started over (or another sign-in) while this one was in flight: it does not win, and
-    // what it saved goes unless a newer sign-in has replaced it.
     if (generation !== this.generation) {
-      if (!this.stored) await this.vault.clear().catch(() => undefined);
+      // Overtaken while saving: a session that has started keeps its tokens. With none, the
+      // vault is cleared once the last sign-in settles (signIn's finally).
+      if (this.stored) await this.vault.save(this.stored).catch(() => undefined);
       return;
     }
     this.stored = stored;
@@ -129,7 +149,12 @@ export class SessionManager {
   async signOut(): Promise<void> {
     const access = this.access;
     const stored = this.stored;
-    await this.end('signed_out');
+    // The keychain delete can fail; the server session still ends below, so a token left
+    // there cannot resume it. The failure is reported once that is done.
+    const failed = await this.end('signed_out').then(
+      () => null,
+      (error: unknown) => ({ error }),
+    );
     // Best effort, after the local session is gone: end the server one too, refreshing first
     // when the access token has run out so the refresh token does not outlive the sign-out.
     try {
@@ -139,6 +164,7 @@ export class SessionManager {
     } catch {
       // Offline: the server session times out on its own.
     }
+    if (failed) throw failed.error;
   }
 
   /** The organisation of the saved session, to prefill the clinic ID after sign-out. */

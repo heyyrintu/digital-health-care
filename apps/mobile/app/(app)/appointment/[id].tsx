@@ -1,7 +1,7 @@
 import { istDateKey } from '@dhc/domain';
 import { Button, Screen, Text } from '@dhc/ui-native';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect, useMemo } from 'react';
 import { pendingCheckIns } from '../../../src/clinic/actions';
 import { AppointmentDetailPane } from '../../../src/clinic/appointment-detail';
 import { useOutbox, useToday } from '../../../src/clinic/hooks';
@@ -21,6 +21,11 @@ export default function AppointmentRoute() {
   const items = useOutbox();
   const pending = useMemo(() => pendingCheckIns(items), [items]);
   const refresh = useCallback(() => syncNow((e) => errorMessage(e, t)), [t]);
+  // Opened from a link, the queue may not be loaded yet: fetch it rather than say no match.
+  const loaded = today.data !== null;
+  useEffect(() => {
+    if (!loaded) void refresh();
+  }, [loaded, refresh]);
 
   if (state.status !== 'signed_in') return <Redirect href="/sign-in" />;
   const a = today.data ? findAppointment(today.data.queue, id) : null;
@@ -36,7 +41,7 @@ export default function AppointmentRoute() {
           onChanged={refresh}
         />
       ) : (
-        <Text variant="muted">{t('queue.noMatch')}</Text>
+        <Text variant="muted">{today.data ? t('queue.noMatch') : t('common.loading')}</Text>
       )}
     </Screen>
   );
