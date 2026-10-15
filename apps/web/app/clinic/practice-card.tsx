@@ -133,6 +133,11 @@ export function PracticeCard() {
             horizonDays: Number(data.get('horizonDays')),
             sameDayCutoffMinutes: Number(data.get('cutoff')),
             overbookPerDay: Number(data.get('overbook')),
+            maxActiveBookings: Number(data.get('maxActive')),
+            noShowLimit: Number(data.get('noShowLimit')),
+            noShowWindowDays: Number(data.get('noShowWindow')),
+            cancelCutoffMinutes: Number(data.get('cancelCutoff')),
+            autoConfirm: data.get('autoConfirm') === 'on',
             noShowAfterMinutes: data.get('noShow') === '' ? null : Number(data.get('noShow')),
           },
         }),
@@ -345,6 +350,71 @@ export function PracticeCard() {
               {t('practice.noShowHint')}
             </p>
           </div>
+          <div className={FIELD}>
+            <label className={LABEL} htmlFor="rules-max-active">
+              {t('practice.maxActive')}
+            </label>
+            <Input
+              id="rules-max-active"
+              name="maxActive"
+              type="number"
+              min={1}
+              max={10}
+              required
+              defaultValue={rules.maxActiveBookings}
+            />
+          </div>
+          <div className={FIELD}>
+            <label className={LABEL} htmlFor="rules-no-show-limit">
+              {t('practice.noShowLimit')}
+            </label>
+            <Input
+              id="rules-no-show-limit"
+              name="noShowLimit"
+              type="number"
+              min={0}
+              max={20}
+              required
+              defaultValue={rules.noShowLimit}
+            />
+          </div>
+          <div className={FIELD}>
+            <label className={LABEL} htmlFor="rules-no-show-window">
+              {t('practice.noShowWindow')}
+            </label>
+            <Input
+              id="rules-no-show-window"
+              name="noShowWindow"
+              type="number"
+              min={7}
+              max={365}
+              required
+              defaultValue={rules.noShowWindowDays}
+            />
+          </div>
+          <div className={FIELD}>
+            <label className={LABEL} htmlFor="rules-cancel-cutoff">
+              {t('practice.cancelCutoff')}
+            </label>
+            <Input
+              id="rules-cancel-cutoff"
+              name="cancelCutoff"
+              type="number"
+              min={0}
+              max={2880}
+              required
+              defaultValue={rules.cancelCutoffMinutes}
+            />
+          </div>
+          <label className="flex items-center gap-2 text-sm sm:col-span-2">
+            <input
+              type="checkbox"
+              name="autoConfirm"
+              defaultChecked={rules.autoConfirm}
+              className="size-4 accent-primary"
+            />
+            {t('practice.autoConfirm')}
+          </label>
           <Button type="submit" disabled={busy} className="sm:col-span-2 sm:justify-self-start">
             {t('common.save')}
           </Button>

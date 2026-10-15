@@ -1,6 +1,13 @@
 import {
   AcceptInviteResponse,
+  BookingOptions,
   ConsentStatus,
+  PortalAppointment,
+  PortalAppointmentList,
+  PortalPrescriptionList,
+  SlotsResponse,
+  type PortalBookBody,
+  type PortalSlotsQuery,
   PortalPatient,
   PortalPatientList,
   type AcceptConsentsBody,
@@ -247,6 +254,23 @@ export function createApiClient(options: ApiClientOptions) {
     portalPatients: () => request('GET', '/portal/patients', { schema: PortalPatientList }),
     addPortalPatient: (body: CreatePortalPatientBody) =>
       request('POST', '/portal/patients', { schema: PortalPatient, body }),
+    bookingOptions: () => request('GET', '/portal/booking-options', { schema: BookingOptions }),
+    portalSlots: (query: PortalSlotsQuery) =>
+      request('GET', '/portal/slots', { schema: SlotsResponse, query: { ...query } }),
+    portalAppointments: () =>
+      request('GET', '/portal/appointments', { schema: PortalAppointmentList }),
+    bookPortalAppointment: (body: PortalBookBody) =>
+      request('POST', '/portal/appointments', { schema: PortalAppointment, body }),
+    cancelPortalAppointment: (id: string, reason?: string) =>
+      request('POST', `/portal/appointments/${encodeURIComponent(id)}/cancel`, {
+        schema: PortalAppointment,
+        body: reason ? { reason } : {},
+      }),
+    portalPrescriptions: () =>
+      request('GET', '/portal/prescriptions', { schema: PortalPrescriptionList }),
+    /** The signed PDF of one of the family's prescriptions. */
+    portalPrescriptionPdf: (id: string) =>
+      requestFile('GET', `/portal/prescriptions/${encodeURIComponent(id)}/pdf`),
 
     /** Ends the session of the current access token. */
     logout: () => request('POST', '/auth/logout', { schema: NoContent }),

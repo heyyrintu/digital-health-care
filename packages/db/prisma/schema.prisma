@@ -607,6 +607,13 @@ model BookingRules {
   sameDayCutoffMinutes Int      @default(60) @map("same_day_cutoff_minutes")
   /// Staff may book this many extra patients into taken slots per doctor per day.
   overbookPerDay       Int      @default(2) @map("overbook_per_day")
+  /// Patient self-booking (PRD §4.3): upcoming bookings per patient, the no-show block,
+  /// how late a patient may cancel, and whether bookings wait for the front desk.
+  maxActiveBookings    Int      @default(2) @map("max_active_bookings")
+  noShowLimit          Int      @default(3) @map("no_show_limit")
+  noShowWindowDays     Int      @default(90) @map("no_show_window_days")
+  cancelCutoffMinutes  Int      @default(120) @map("cancel_cutoff_minutes")
+  autoConfirm          Boolean  @default(true) @map("auto_confirm")
   /// Bookings nobody arrived for become no-shows this many minutes after the slot ends;
   /// null switches automatic no-shows off.
   noShowAfterMinutes   Int?     @default(30) @map("no_show_after_minutes")

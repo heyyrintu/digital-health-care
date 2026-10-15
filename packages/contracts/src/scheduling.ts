@@ -86,6 +86,15 @@ export const BookingRules = z.object({
   sameDayCutoffMinutes: z.number().int().min(0).max(1440),
   /** Staff may book this many extra patients into taken slots per doctor per day. */
   overbookPerDay: z.number().int().min(0).max(50),
+  /** Patient self-booking: upcoming bookings one patient may hold at once. */
+  maxActiveBookings: z.number().int().min(1).max(10).default(2),
+  /** Patient self-booking stops after this many no-shows in the window; 0 turns it off. */
+  noShowLimit: z.number().int().min(0).max(20).default(3),
+  noShowWindowDays: z.number().int().min(7).max(365).default(90),
+  /** Patients may cancel up to this many minutes before the slot. */
+  cancelCutoffMinutes: z.number().int().min(0).max(2880).default(120),
+  /** Patient bookings are confirmed at once; otherwise they wait for the front desk. */
+  autoConfirm: z.boolean().default(true),
   /**
    * A booking nobody arrived for becomes a no-show this many minutes after its slot ends
    * (PRD §5.2); null switches automatic no-shows off. Defaults to 30 when left out.
