@@ -250,7 +250,7 @@ export class PortalService {
   }
 
   /** Health data needs every consent in force (PRD §4.1); the app sends people back to accept. */
-  private async requireConsents(tx: Tx, actor: Actor) {
+  async requireConsents(tx: Tx, actor: Actor) {
     const pending = await pendingConsents(tx, actor);
     if (pending.length > 0) {
       throw new AppError(

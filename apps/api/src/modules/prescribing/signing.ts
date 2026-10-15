@@ -6,7 +6,7 @@ import {
   type SignPrescriptionBody,
   type VoidPrescriptionBody,
 } from '@dhc/contracts';
-import { withAuth, withTenant, type Prisma } from '@dhc/db';
+import { withAuth, withTenant, type Prisma, type Tx } from '@dhc/db';
 import { ageFrom } from '@dhc/domain';
 import type { FastifyRequest } from 'fastify';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
@@ -425,10 +425,16 @@ export class SigningService {
    * A signed version's PDF for viewing and printing (doctors; front desk prints). After
    * voiding, the stamped copy. The stored file is checked against its recorded hash.
    */
+  /**
+   * The signed PDF (or the copy stamped VOID). Staff: front desk prints any, a doctor needs
+   * the chart. The patient portal passes `allowPatient`, which checks the record is the
+   * account's, and may also open earlier (superseded) versions.
+   */
   async pdf(
     request: FastifyRequest,
     actor: Actor,
     prescriptionId: string,
+    allowPatient?: (tx: Tx, patientId: string) => Promise<unknown>,
   ): Promise<{ file: Buffer; filename: string }> {
     return withTenant(this.s.db, actor.organisationId, async (tx) => {
       const row = await tx.prescription.findUnique({
@@ -436,8 +442,11 @@ export class SigningService {
         include: { items: true },
       });
       if (!row || row.status === 'draft') throw NOT_FOUND();
+      if (allowPatient) await allowPatient(tx, row.patientId);
       // Front desk prints any signed prescription; a doctor needs the chart.
-      if (row.doctorUserId !== actor.userId) await assertChartAccess(tx, actor, row.patientId);
+      else if (row.doctorUserId !== actor.userId) {
+        await assertChartAccess(tx, actor, row.patientId);
+      }
       const file =
         row.status === 'void' && row.voidPdfFileKey
           ? await this.s.files.get(row.voidPdfFileKey)
