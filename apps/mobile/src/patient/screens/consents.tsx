@@ -57,43 +57,49 @@ export function ConsentsScreen({ status }: { status: ConsentStatus }) {
       {error && <Notice tone="error">{error}</Notice>}
       <Card>
         {pending.map((kind) => (
-          <Pressable
-            key={kind}
-            accessibilityRole="checkbox"
-            accessibilityState={{ checked: ticked.has(kind) }}
-            onPress={() => toggle(kind)}
-            style={{
-              flexDirection: 'row',
-              gap: theme.spacing[3],
-              alignItems: 'flex-start',
-              minHeight: theme.minTouchTarget,
-            }}
-          >
-            <View
+          <View key={kind} style={{ gap: theme.spacing[1] }}>
+            <Pressable
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: ticked.has(kind) }}
+              onPress={() => toggle(kind)}
               style={{
-                width: 24,
-                height: 24,
-                marginTop: 2,
-                borderRadius: theme.radii.sm / 2,
-                borderWidth: 2,
-                borderColor: theme.colors.primary,
-                backgroundColor: ticked.has(kind) ? theme.colors.primary : 'transparent',
+                flexDirection: 'row',
+                gap: theme.spacing[3],
+                alignItems: 'flex-start',
+                minHeight: theme.minTouchTarget,
               }}
-            />
-            <View style={{ flex: 1, gap: theme.spacing[1] }}>
-              <Text>{t(`patient.consents.${kind}`)}</Text>
-              {kind === 'health_data' && (
-                <Text variant="caption">{t('patient.consents.healthDataHint')}</Text>
-              )}
-              {kind !== 'health_data' && DOCUMENT_URLS[kind] && (
-                <Button
-                  variant="ghost"
-                  label={t(`patient.consents.read.${kind}`)}
-                  onPress={() => void Linking.openURL(DOCUMENT_URLS[kind]!)}
-                />
-              )}
-            </View>
-          </Pressable>
+            >
+              <View
+                style={{
+                  width: 24,
+                  height: 24,
+                  marginTop: 2,
+                  borderRadius: theme.radii.sm / 2,
+                  borderWidth: 2,
+                  borderColor: theme.colors.primary,
+                  backgroundColor: ticked.has(kind) ? theme.colors.primary : 'transparent',
+                }}
+              />
+              <View style={{ flex: 1, gap: theme.spacing[1] }}>
+                <Text>{t(`patient.consents.${kind}`)}</Text>
+                {kind === 'health_data' && (
+                  <Text variant="caption">{t('patient.consents.healthDataHint')}</Text>
+                )}
+              </View>
+            </Pressable>
+            {/* Beside the checkbox, not inside it, so screen readers reach it on its own. */}
+            {kind !== 'health_data' && DOCUMENT_URLS[kind] && (
+              <Button
+                variant="ghost"
+                label={t(`patient.consents.read.${kind}`)}
+                onPress={() =>
+                  Linking.openURL(DOCUMENT_URLS[kind]!).catch((e: unknown) =>
+                    setError(errorMessage(e, t)),
+                  )
+                }
+              />
+            )}
+          </View>
         ))}
         <Button label={t('patient.consents.accept')} loading={busy} onPress={accept} />
       </Card>
