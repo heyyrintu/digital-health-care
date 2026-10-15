@@ -386,6 +386,22 @@ Implemented for the Clinic app (`apps/api/src/modules/devices`, `apps/api/src/mo
 - **Offline writes** (check-in, vitals, notes, tags, counter payments) are queued on the device and replayed through their normal endpoints with idempotency keys (§3o) when the network returns; signing, booking and online payments need a connection.
 - **Audit:** `push_device.registered` (platform, app and whether it moved from another session) and `push_device.removed`. Revocations with a session are covered by that session's own audit entry.
 
+## 3r. Patient account: consents and family
+
+Implemented in Phase 2 (`apps/api/src/modules/portal`, PRD §4, §4.1). For the Patient app and the web portal; every endpoint is for the `patient` role only.
+
+| Action | Endpoint | Who |
+|---|---|---|
+| Consents | `GET /portal/consents` → `{consents: [{kind, version, acceptedAt, withdrawnAt}], pending: [kind]}` | Patient |
+| Accept | `POST /portal/consents {accept: [{kind, version}]}` → the same shape | Patient |
+| Withdraw health data | `POST /portal/consents/health_data/withdraw` → the same shape | Patient |
+| The account's patients | `GET /portal/patients` → `{data: [{id, uhid, name, dob, gender, language, relation, guardianPatientId}]}` | Patient |
+| Add a patient | `POST /portal/patients {name, dob, gender, language?, guardianPatientId?}` → 201 the patient | Patient |
+
+- **Account:** one phone number is one account, per organisation. Its patients are the records whose mobile is the number verified by OTP (`relation: account`: the person, or family sharing the number) and the dependants those records look after (`relation: dependant`). A record the clinic registered on that number is claimed simply by signing in; nothing has to be linked. Records of other numbers, and of other clinics, read as 404. Records merged into another one are left out; the kept record carries their history.
+- **Consents:** `privacy_notice`, `terms` and `health_data`, each at the version in `CURRENT_CONSENT_VERSIONS` (`@dhc/contracts`); an older version is 409 with the kind in `fields`. Until all three are in force, health-data endpoints (`/portal/patients` and everything built on it) answer 403 `CONSENT_REQUIRED` with the missing kinds in `fields.consents`. Raising a version asks everyone again. Withdrawing health data closes those endpoints until it is accepted again; the privacy notice and terms are only withdrawn by closing the account (a data-rights request). Every acceptance and withdrawal stays on record.
+- **Adding:** without `guardianPatientId` the record takes the account's number; with it, a dependant without a number, looked after by an `account` patient (not by another dependant). Name and date of birth already on the account are 409. New records get the next UHID and show at the clinic like any other.
+- **Audit:** `consent.accepted` (kinds and versions), `consent.withdrawn` and `patient.created` with `source: patient_app`.
 ## 4. Endpoint catalogue (by module)
 
 | Module | Main resources and actions |
@@ -394,6 +410,7 @@ Implemented for the Clinic app (`apps/api/src/modules/devices`, `apps/api/src/mo
 | tenancy | `/organisations/current`, `/clinics` (built), `/consultation-types` (built), `/booking-rules` (built), `/doctors` (built), `/organisation-settings` (built), `/branding`, `/tags` (built), `/uhid-settings` (built) |
 | scheduling | `/availability/versions` (built), `/availability/exceptions` (built), `/slots?doctorId&clinicId&consultationTypeId&date&channel` (built), `/appointments` (book, walk-in, list, confirm, check-in, start, complete, cancel, no-show, reschedule; built), `/queue?date` (built), `/queue/stream` (SSE; built), `/display-screens` (built), `/display/board` and `/display/stream` (built) |
 | patients | `/patients` (search by phone, name or UHID, filter by tag; register; built), `/patients/{id}` (demographics and family, each view audited; edit; built), `/patients/duplicate-check` (built), `/patients/{id}/tags` (built), `/patients/{id}/chart` and `/patients/{id}/allergies\|conditions\|medications` (built), `/patients/{id}/consents`, `/patient-merges` (ask, approve, reject; built) |
+| portal | `/portal/consents` (built), `/portal/patients` (built) |
 | clinical | `/appointments/{id}/consultation` (built), `/appointments/{id}/vitals` (built), `/scribe/sessions`, `/assessments/forms`, `/assessments`, `/patients/{id}/ask-ai` |
 | prescribing | `/medicines` (search; built), `/medicine-master`, `/drug-molecules` and `/medicine-requests` (clinic admin; built), `/prescription-templates` (built), `/appointments/{id}/prescription` (draft and lines; built), `/patients/{id}/last-prescription` (built), `/appointments/{id}/prescription/safety-actions` (built), `/appointments/{id}/prescription/preview\|sign\|amend\|void` (built), `/prescriptions/{id}/pdf` (built), `/verify` (public; built), `/doctor-profile` (built) |
 | orders | `/test-orders`, `/test-orders/{id}/results`, `/referrals`, `/attachments` |

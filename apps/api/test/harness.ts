@@ -141,3 +141,21 @@ export async function staffLogin(
 export const bearer = (tokens: TokenResponse) => ({
   authorization: `Bearer ${tokens.accessToken}`,
 });
+
+/** Signs a patient in by SMS code (the harness keeps the codes it would have sent). */
+export async function patientLogin(h: Harness, organisation: string, phone: string) {
+  const requested = await h.app.inject({
+    method: 'POST',
+    url: '/v1/auth/otp/request',
+    payload: { organisation, phone },
+  });
+  if (requested.statusCode !== 200) throw new Error(`OTP request failed: ${requested.body}`);
+  const { challengeId } = requested.json() as { challengeId: string };
+  const verified = await h.app.inject({
+    method: 'POST',
+    url: '/v1/auth/otp/verify',
+    payload: { challengeId, code: h.sentCodes.findLast((c) => c.phone.endsWith(phone))!.code },
+  });
+  if (verified.statusCode !== 200) throw new Error(`OTP verify failed: ${verified.body}`);
+  return verified.json() as TokenResponse;
+}

@@ -913,6 +913,7 @@ export const hi: Record<MessageKey, string> = {
   'devices.signedOutAll': '{name} को {count} डिवाइस से साइन आउट कर दिया गया।',
   'audit.area.settings': 'सेटिंग्स',
   'audit.area.merges': 'मरीज़ रिकॉर्ड जोड़ना',
+  'audit.area.consent': 'मरीज़ की सहमति',
   'chart.restricted':
     'यह क्लिनिक मरीज़ का चार्ट केवल उन डॉक्टरों के लिए खोलता है जिन्होंने उन्हें देखा है। इसे खोलने के लिए मरीज़ को अपने पास चेक-इन करें।',
   'policy.title': 'चार्ट, सुरक्षा चेतावनियाँ और फ़ाइलें',
