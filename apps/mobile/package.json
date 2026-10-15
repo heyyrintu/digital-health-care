@@ -8,17 +8,21 @@
     "start:patient": "APP_VARIANT=patient expo start",
     "start:clinic": "APP_VARIANT=clinic expo start",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@dhc/api-client": "workspace:*",
     "@dhc/contracts": "workspace:*",
     "@dhc/i18n": "workspace:*",
     "@dhc/tokens": "workspace:*",
+    "@dhc/ui-native": "workspace:*",
     "expo": "~57.0.27",
     "expo-constants": "~57.0.21",
     "expo-linking": "~57.0.12",
+    "expo-localization": "~57.0.2",
     "expo-router": "~57.0.25",
+    "expo-secure-store": "~57.0.4",
     "expo-status-bar": "~57.0.1",
     "react": "19.2.3",
     "react-dom": "19.2.3",

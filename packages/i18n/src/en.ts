@@ -935,6 +935,18 @@ export const en = {
   'policy.filesHint': 'Applies to reports and documents patients and staff upload.',
   'policy.typesRequired': 'Choose at least one file type.',
   'policy.saved': 'Saved.',
+  'mobile.patientSignIn.title': 'Sign in',
+  'mobile.patientSignIn.intro': 'We’ll send a 6-digit code by SMS to your mobile number.',
+  'mobile.patientSignIn.phone': 'Mobile number',
+  'mobile.patientSignIn.phoneHint': 'The number your clinic has, for example 98765 43210.',
+  'mobile.patientSignIn.sendCode': 'Send code',
+  'mobile.patientSignIn.codeSent': 'We sent a code to {phone}.',
+  'mobile.patientSignIn.codeLabel': '6-digit code from the SMS',
+  'mobile.patientSignIn.resend': 'Send a new code',
+  'mobile.patientSignIn.changeNumber': 'Use a different number',
+  'mobile.codeInvalid': 'Enter the 6 digits from the SMS.',
+  'mobile.unreachableTitle': 'Can’t connect',
+  'mobile.switchLanguage': 'हिन्दी में देखें',
 } as const;
 
 export type MessageKey = keyof typeof en;

@@ -141,4 +141,28 @@ describe('staff invite calls', () => {
     expect(url).toBe('https://api.test/v1/staff/invites/inv-1/revoke');
     expect(init.method).toBe('POST');
   });
+
+  it('signs a patient in with an SMS code', async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        json(200, {
+          challengeId: '0b9f3f7e-8f0e-4b8e-9d55-0d3f0c1a2b3c',
+          expiresAt: '2026-10-14T10:05:00Z',
+        }),
+      )
+      .mockResolvedValueOnce(
+        json(200, { tokenType: 'Bearer', accessToken: 'a', expiresIn: 900, refreshToken: 'r' }),
+      );
+    const client = createApiClient({ baseUrl: 'https://api.test/v1', fetch });
+
+    const { challengeId } = await client.requestOtp('demo-clinic', '+919800000001');
+    await expect(client.verifyOtp(challengeId, '123456')).resolves.toMatchObject({
+      accessToken: 'a',
+      refreshToken: 'r',
+    });
+    const [url, init] = fetch.mock.calls[1] as unknown as [string, RequestInit];
+    expect(url).toBe('https://api.test/v1/auth/otp/verify');
+    expect(JSON.parse(init.body as string)).toEqual({ challengeId, code: '123456' });
+  });
 });
