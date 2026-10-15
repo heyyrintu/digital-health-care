@@ -1,0 +1,30 @@
+{
+  "name": "@dhc/ui-native",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Design system components for the mobile apps: the shared theme as React Native styles.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@dhc/tokens": "workspace:*"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0",
+    "react-native": ">=0.86.0",
+    "react-native-safe-area-context": ">=5.7.0"
+  },
+  "devDependencies": {
+    "@dhc/config": "workspace:*",
+    "@types/react": "~19.2.18",
+    "react": "19.2.3",
+    "react-native": "0.86.3",
+    "react-native-safe-area-context": "~5.7.0"
+  }
+}

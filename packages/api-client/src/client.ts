@@ -15,7 +15,11 @@ import {
   ErrorResponse,
   HealthResponse,
   InviteDetails,
+  LoginResponse,
+  MeResponse,
+  OtpRequestResponse,
   TokenResponse,
+  type LoginBody,
   type ErrorCode,
 } from '@dhc/contracts';
 import { z } from 'zod';
@@ -160,6 +164,24 @@ export function createApiClient(options: ApiClientOptions) {
     stream,
     getHealth: (signal?: AbortSignal) =>
       request('GET', '/health', { schema: HealthResponse, signal }),
+
+    // Sign-in for the mobile apps (web signs in through its own session routes, ADR 0015).
+    /** Patient: text a 6-digit code to this mobile number. */
+    requestOtp: (organisation: string, phone: string) =>
+      request('POST', '/auth/otp/request', {
+        schema: OtpRequestResponse,
+        body: { organisation, phone },
+      }),
+    verifyOtp: (challengeId: string, code: string) =>
+      request('POST', '/auth/otp/verify', { schema: TokenResponse, body: { challengeId, code } }),
+    /** Staff: password first; the authenticator code follows with `verifyMfa`. */
+    login: (body: LoginBody) => request('POST', '/auth/login', { schema: LoginResponse, body }),
+    verifyMfa: (mfaToken: string, code: string) =>
+      request('POST', '/auth/mfa/verify', { schema: TokenResponse, body: { mfaToken, code } }),
+    /** Single use: keep the new refresh token from the response. */
+    refresh: (refreshToken: string) =>
+      request('POST', '/auth/refresh', { schema: TokenResponse, body: { refreshToken } }),
+    me: (signal?: AbortSignal) => request('GET', '/me', { schema: MeResponse, signal }),
 
     // Staff invite links (the token comes from the invite URL fragment).
     inspectInvite: (token: string) =>
