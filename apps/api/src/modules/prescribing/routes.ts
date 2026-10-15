@@ -29,7 +29,7 @@ const IdParams = z.object({ id: z.uuid() });
 /** Public QR checks: enough for a busy pharmacy counter, too few to walk through codes. */
 const VERIFY_RATE_LIMIT = { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } };
 
-const sendPdf = (reply: FastifyReply, file: Buffer, filename: string) =>
+export const sendPdf = (reply: FastifyReply, file: Buffer, filename: string) =>
   reply
     .type('application/pdf')
     .header('Content-Disposition', `inline; filename="${filename}"`)

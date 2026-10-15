@@ -1,5 +1,7 @@
 import { z } from 'zod';
+import { AppointmentStatus } from './appointments';
 import { Gender, Language } from './patients';
+import { ConsultationMode, SlotsQuery } from './scheduling';
 
 /**
  * The Patient app and web portal (PRD §4): one phone number is one account, and an account
@@ -89,3 +91,90 @@ export const CreatePortalPatientBody = z.object({
   guardianPatientId: z.uuid().optional(),
 });
 export type CreatePortalPatientBody = z.infer<typeof CreatePortalPatientBody>;
+
+// ---- Booking, appointments and prescriptions (PRD §4.3, §4.4) -------------------------
+
+/** What a patient can book: in-person consultations without payment at booking, for now. */
+export const BookingOptions = z.object({
+  doctors: z.array(z.object({ userId: z.uuid(), displayName: z.string().nullable() })),
+  clinics: z.array(z.object({ id: z.uuid(), name: z.string(), address: z.string().nullable() })),
+  consultationTypes: z.array(
+    z.object({
+      id: z.uuid(),
+      name: z.string(),
+      mode: ConsultationMode,
+      defaultDurationMin: z.number().int(),
+      feePaise: z.number().int(),
+    }),
+  ),
+  horizonDays: z.number().int(),
+  cancelCutoffMinutes: z.number().int(),
+  maxActiveBookings: z.number().int(),
+});
+export type BookingOptions = z.infer<typeof BookingOptions>;
+
+export const PortalSlotsQuery = SlotsQuery.omit({ channel: true });
+export type PortalSlotsQuery = z.infer<typeof PortalSlotsQuery>;
+
+export const PortalBookBody = z.object({
+  patientId: z.uuid(),
+  doctorUserId: z.uuid(),
+  clinicId: z.uuid(),
+  consultationTypeId: z.uuid(),
+  startAt: z.iso.datetime(),
+  reason: z.string().trim().min(1).max(300).optional(),
+});
+export type PortalBookBody = z.infer<typeof PortalBookBody>;
+
+export const PortalCancelBody = z.object({
+  reason: z.string().trim().min(1).max(300).optional(),
+});
+export type PortalCancelBody = z.infer<typeof PortalCancelBody>;
+
+export const PortalPrescriptionRef = z.object({
+  id: z.uuid(),
+  number: z.string(),
+  version: z.number().int(),
+  status: z.enum(['signed', 'superseded', 'void']),
+});
+
+export const PortalAppointment = z.object({
+  id: z.uuid(),
+  patient: z.object({ id: z.uuid(), name: z.string(), uhid: z.string() }),
+  doctorName: z.string().nullable(),
+  clinicName: z.string(),
+  consultationTypeName: z.string(),
+  mode: ConsultationMode,
+  /** `YYYY-MM-DD` (IST) */
+  date: z.iso.date(),
+  startAt: z.iso.datetime(),
+  /** IST `HH:MM` */
+  startTime: z.string(),
+  tokenNumber: z.number().int(),
+  status: AppointmentStatus,
+  reason: z.string().nullable(),
+  /** The patient may still cancel it themselves (booked, and before the cutoff). */
+  canCancel: z.boolean(),
+  /** The current signed (or voided) prescription of the visit. */
+  prescription: PortalPrescriptionRef.nullable(),
+});
+export type PortalAppointment = z.infer<typeof PortalAppointment>;
+
+export const PortalAppointmentList = z.object({
+  /** Upcoming first (soonest first), then past (most recent first). */
+  upcoming: z.array(PortalAppointment),
+  past: z.array(PortalAppointment),
+});
+export type PortalAppointmentList = z.infer<typeof PortalAppointmentList>;
+
+export const PortalPrescription = PortalPrescriptionRef.extend({
+  patient: z.object({ id: z.uuid(), name: z.string() }),
+  doctorName: z.string().nullable(),
+  /** Visit date, `YYYY-MM-DD` (IST). */
+  date: z.iso.date(),
+  signedAt: z.iso.datetime().nullable(),
+});
+export type PortalPrescription = z.infer<typeof PortalPrescription>;
+
+export const PortalPrescriptionList = z.object({ data: z.array(PortalPrescription) });
+export type PortalPrescriptionList = z.infer<typeof PortalPrescriptionList>;

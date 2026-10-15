@@ -24,7 +24,7 @@ import type { FastifyRequest } from 'fastify';
 import { AppError } from '../../errors';
 import type { Services } from '../../services';
 import { writeAudit } from '../audit/write';
-import { DEFAULT_BOOKING_RULES, type Actor } from './settings';
+import { DEFAULT_BOOKING_RULES, toRules, type Actor } from './settings';
 
 interface ScheduleActor extends Actor {
   role: Role;
@@ -380,14 +380,7 @@ export async function loadDaySlots(
   const type = await tx.consultationType.findUnique({ where: { id: consultationTypeId } });
   const rules = await tx.bookingRules.findUnique({ where: { organisationId } });
   if (!clinic || !type) return null;
-  const bookingRules = rules
-    ? {
-        horizonDays: rules.horizonDays,
-        sameDayCutoffMinutes: rules.sameDayCutoffMinutes,
-        overbookPerDay: rules.overbookPerDay,
-        noShowAfterMinutes: rules.noShowAfterMinutes,
-      }
-    : DEFAULT_BOOKING_RULES;
+  const bookingRules = rules ? toRules(rules) : DEFAULT_BOOKING_RULES;
   if (!clinic.active || !type.active) {
     return { day: { date, slots: [], closed: 'no_schedule' } as SlotsResponse, type, bookingRules };
   }

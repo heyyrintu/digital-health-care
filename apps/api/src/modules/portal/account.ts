@@ -34,3 +34,21 @@ export async function ownPatient(tx: Tx, phone: string, patientId: string) {
   if (!patient) throw NOT_FOUND();
   return patient;
 }
+
+/**
+ * Records whose visits and prescriptions the account sees: its patients, and duplicates
+ * merged into them (the kept record carries their history).
+ */
+export function accountHistoryWhere(phone: string): Prisma.PatientWhereInput {
+  const own = accountPatientsWhere(phone);
+  return { OR: [own, { mergedInto: own }] };
+}
+
+/** One of the account's patients or a record merged into one, or 404. */
+export async function ownHistory(tx: Tx, phone: string, patientId: string) {
+  const patient = await tx.patient.findFirst({
+    where: { AND: [{ id: patientId }, accountHistoryWhere(phone)] },
+    select: { id: true },
+  });
+  if (!patient) throw NOT_FOUND();
+}
