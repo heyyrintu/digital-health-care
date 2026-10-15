@@ -64,8 +64,14 @@ export class Outbox {
 
   /** Reads the saved queue once; concurrent callers share the read. */
   load(): Promise<void> {
-    this.loading ??= this.read();
-    return this.loading;
+    if (this.loading) return this.loading;
+    const loading = this.read();
+    this.loading = loading;
+    // A failed read is tried again by the next caller, not remembered for good.
+    loading.catch(() => {
+      if (this.loading === loading) this.loading = null;
+    });
+    return loading;
   }
 
   private async read(): Promise<void> {
@@ -84,7 +90,10 @@ export class Outbox {
     item: Pick<OutboxItem, 'kind' | 'method' | 'path' | 'body' | 'label'>,
     id: string = this.newId(),
   ): Promise<OutboxItem> {
+    const generation = this.generation;
     await this.load();
+    // Signed out while the queue was read: this write belongs to the previous person.
+    if (generation !== this.generation) throw new Error('Signed out before the change was saved.');
     const full: OutboxItem = {
       ...item,
       id,

@@ -98,16 +98,21 @@ export async function syncNow(messageOf: (error: unknown) => string): Promise<vo
 }
 
 // What one person saved or queued is never shown to, or sent as, the next person to sign
-// in on a shared device.
-let wasSignedIn = session.getState().status === 'signed_in';
-session.subscribe(() => {
-  const signedIn = session.getState().status === 'signed_in';
-  if (wasSignedIn && !signedIn) {
+// in on a shared device. Cleared whenever the app reaches signed-out: after a sign-out, an
+// expired or revoked session, and also on a launch whose saved session is gone or can't be
+// read, since the app may have been killed before an earlier clean-up finished.
+let wasSignedOut = false;
+function onSession() {
+  const signedOut = session.getState().status === 'signed_out';
+  if (signedOut && !wasSignedOut) {
     // Kept, not fire-and-forget: a late delete must not remove what the next person writes.
     clearing = clearAll();
     // Handled by the next loadOffline(), which tries again; not an unhandled rejection.
     clearing.catch(() => undefined);
     loaded = null;
   }
-  wasSignedIn = signedIn;
-});
+  wasSignedOut = signedOut;
+}
+// Also checked now: the session may have reached signed-out before this module loaded.
+onSession();
+session.subscribe(onSession);

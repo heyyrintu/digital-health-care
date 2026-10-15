@@ -147,6 +147,42 @@ describe('Outbox across a sign-out', () => {
     expect(box.getItems()).toEqual([]);
   });
 
+  it('refuses a write that started before a sign-out', async () => {
+    const store = memoryStore();
+    let release: () => void = () => undefined;
+    const slow = {
+      ...store,
+      get: async <T>(key: string) => {
+        await new Promise<void>((resolve) => (release = resolve));
+        return store.get<T>(key);
+      },
+    };
+    const box = new Outbox(slow, () => 'k');
+    const adding = box.add(checkIn('a1'));
+    await box.clear();
+    release();
+    await expect(adding).rejects.toThrow();
+    expect(box.getItems()).toEqual([]);
+    expect(await store.get('clinic.outbox')).toBeNull();
+  });
+
+  it('reads again after a failed read', async () => {
+    const store = memoryStore();
+    await store.set('clinic.outbox', []);
+    let fail = true;
+    const flaky = {
+      ...store,
+      get: async <T>(key: string) => {
+        if (fail) throw new Error('disk');
+        return store.get<T>(key);
+      },
+    };
+    const box = new Outbox(flaky, () => 'k');
+    await expect(box.load()).rejects.toThrow('disk');
+    fail = false;
+    await expect(box.load()).resolves.toBeUndefined();
+  });
+
   it('shares one read between concurrent callers, so a queued item is never hidden', async () => {
     const { store, box } = setup();
     await Promise.all([box.load(), box.add(checkIn('a1')), box.load()]);

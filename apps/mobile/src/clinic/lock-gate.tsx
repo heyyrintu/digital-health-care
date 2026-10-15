@@ -1,6 +1,6 @@
 import { Button, Card, Notice, Screen, Text } from '@dhc/ui-native';
 import * as LocalAuthentication from 'expo-local-authentication';
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { AppState, View } from 'react-native';
 import { session } from '../api';
 import { useLocale } from '../locale/provider';
@@ -38,7 +38,8 @@ export function LockGate({ children }: { children: ReactNode }) {
   }, [lock]);
 
   useEffect(() => {
-    const timer = setInterval(check, 30_000);
+    // Often enough that the lock lands within seconds of the 15-minute limit.
+    const timer = setInterval(check, 5_000);
     const sub = AppState.addEventListener('change', (next) => {
       if (next === 'active') check();
     });
@@ -72,9 +73,17 @@ export function LockGate({ children }: { children: ReactNode }) {
     }
   }, [lock, t]);
 
-  // Ask straight away when the lock screen appears.
+  // Ask straight away when the lock screen appears, once per lock: `unlock` changes when the
+  // saved language loads, and that must not ask a second time.
+  const asked = useRef(false);
   useEffect(() => {
-    if (locked) void unlock();
+    if (!locked) {
+      asked.current = false;
+      return;
+    }
+    if (asked.current) return;
+    asked.current = true;
+    void unlock();
   }, [locked, unlock]);
 
   if (!locked) {

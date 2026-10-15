@@ -27,7 +27,9 @@ export function outboxSender(request: Request) {
         error instanceof ApiError &&
         error.status >= 400 &&
         error.status < 500 &&
-        ![401, 408, 429].includes(error.status)
+        ![401, 408, 429].includes(error.status) &&
+        // The first attempt with this key is still running on the server: ask again later.
+        error.fields.idempotencyKey !== 'in_progress'
       ) {
         return { kind: 'rejected', message: error.message };
       }

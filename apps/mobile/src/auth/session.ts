@@ -149,7 +149,12 @@ export class SessionManager {
   async signOut(): Promise<void> {
     const access = this.access;
     const stored = this.stored;
-    await this.end('signed_out');
+    // The keychain delete can fail; the server session still ends below, so a token left
+    // there cannot resume it. The failure is reported once that is done.
+    const failed = await this.end('signed_out').then(
+      () => null,
+      (error: unknown) => ({ error }),
+    );
     // Best effort, after the local session is gone: end the server one too, refreshing first
     // when the access token has run out so the refresh token does not outlive the sign-out.
     try {
@@ -159,6 +164,7 @@ export class SessionManager {
     } catch {
       // Offline: the server session times out on its own.
     }
+    if (failed) throw failed.error;
   }
 
   /** The organisation of the saved session, to prefill the clinic ID after sign-out. */

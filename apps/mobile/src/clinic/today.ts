@@ -26,6 +26,8 @@ export class TodayStore {
   private state: TodayState = { data: null, fetchedAt: null, offline: false, error: null };
   /** Bumped by clear(): a refresh started before a sign-out is dropped when it answers. */
   private generation = 0;
+  /** Numbers each refresh: only the latest one's answer is shown and kept. */
+  private seq = 0;
   private readonly listeners = new Set<() => void>();
 
   constructor(
@@ -53,11 +55,12 @@ export class TodayStore {
   /** Returns whether the server answered. */
   async refresh(fetch: FetchToday, messageOf: (error: unknown) => string): Promise<boolean> {
     const generation = this.generation;
+    const mine = ++this.seq;
     let data: SyncTodayResponse;
     try {
       data = await fetch();
     } catch (error) {
-      if (generation !== this.generation) return false;
+      if (generation !== this.generation || mine !== this.seq) return false;
       // Past midnight the copy kept from yesterday is not today's queue.
       const stale = this.state.data && this.state.data.queue.date !== this.today();
       this.set({
@@ -68,7 +71,10 @@ export class TodayStore {
       });
       return false;
     }
-    if (generation !== this.generation) return false;
+    // A newer refresh overtook this one, or this answer is from before midnight: the
+    // screen and the saved copy keep the newer, today's, queue.
+    if (generation !== this.generation || mine !== this.seq) return false;
+    if (data.queue.date !== this.today()) return false;
     const fetchedAt = this.now();
     this.set({ data, fetchedAt, offline: false, error: null });
     // The server answered; failing to keep a copy only costs the offline fallback.

@@ -957,7 +957,7 @@ export const en = {
   'mobile.clinic.noDeviceLock':
     'Set a passcode on this device first, in its settings. The Clinic app only opens on a device with a screen lock.',
   'mobile.clinic.offlineCopy': 'You are offline. This is the queue as it was at {time}.',
-  'mobile.clinic.waitingToSync': '{count} change(s) saved on this device, waiting to sync.',
+  'mobile.clinic.waitingToSync': 'Changes saved on this device and waiting to sync: {count}.',
   'mobile.clinic.syncFailed': 'Not saved: {label}. {reason}',
   'mobile.clinic.discard': 'Discard this change',
   'mobile.clinic.pendingCheckIn': 'Check-in waiting to sync',

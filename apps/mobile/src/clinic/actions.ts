@@ -1,3 +1,4 @@
+import { ApiError } from '@dhc/api-client';
 import { AppointmentDetail, type Appointment } from '@dhc/contracts';
 import type { QueueAction } from '@dhc/domain';
 import type { ZodType } from 'zod';
@@ -24,20 +25,31 @@ export async function runAction(a: Appointment, action: QueueAction): Promise<Ac
     });
     return 'done';
   } catch (error) {
+    // A timeout or an unhealthy server may or may not have applied the check-in; the outbox
+    // retries it with the same key, so it is applied once either way.
+    const retryable = error instanceof ApiError && (error.status === 408 || error.status >= 500);
+    if (action === 'check_in' && retryable) return queueCheckIn(a, body, key);
     if (!isNetworkError(error)) throw error;
-    if (action !== 'check_in') return 'needs_connection';
-    await outbox.add(
-      {
-        kind: 'check_in',
-        method: 'POST',
-        path: `/appointments/${a.id}/actions`,
-        body,
-        label: `${a.patient.name} · ${a.tokenNumber}`,
-      },
-      key,
-    );
-    return 'queued';
+    return action === 'check_in' ? queueCheckIn(a, body, key) : 'needs_connection';
   }
+}
+
+async function queueCheckIn(
+  a: Appointment,
+  body: { action: QueueAction; reason: null },
+  key: string,
+): Promise<ActionResult> {
+  await outbox.add(
+    {
+      kind: 'check_in',
+      method: 'POST',
+      path: `/appointments/${a.id}/actions`,
+      body,
+      label: `${a.patient.name} · ${a.tokenNumber}`,
+    },
+    key,
+  );
+  return 'queued';
 }
 
 /** Appointment IDs with a check-in waiting on this device. */

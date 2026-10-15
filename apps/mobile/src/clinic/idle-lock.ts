@@ -37,7 +37,9 @@ export class IdleLock {
 
   /** Call on a timer and when the app returns to the foreground; true if it just locked. */
   check(now: number): boolean {
-    if (this.locked || now - this.lastActive < this.limitMs) return false;
+    // A clock set back (now before the last touch) can't prove the device was attended: lock.
+    const idle = now - this.lastActive;
+    if (this.locked || (idle >= 0 && idle < this.limitMs)) return false;
     this.locked = true;
     return true;
   }

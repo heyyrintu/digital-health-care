@@ -34,4 +34,10 @@ describe('IdleLock on launch', () => {
     lock.unlock(10);
     expect(lock.isLocked).toBe(false);
   });
+
+  it('locks when the clock is set back before the last touch', () => {
+    const lock = new IdleLock(0);
+    lock.activity(60_000);
+    expect(lock.check(59_999)).toBe(true);
+  });
 });

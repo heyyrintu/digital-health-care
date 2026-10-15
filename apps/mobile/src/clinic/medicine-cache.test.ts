@@ -86,4 +86,35 @@ describe('MedicineCache', () => {
     expect(cache.size).toBe(0);
     expect(await store.get('clinic.medicines')).toBeNull();
   });
+
+  it('shares one sync between overlapping calls', async () => {
+    const cache = new MedicineCache(memoryStore(), () => 1);
+    let calls = 0;
+    const fetch = async () => {
+      calls += 1;
+      return page([med('m1', 'Paracetamol')], 'c1');
+    };
+    await Promise.all([cache.sync(fetch), cache.sync(fetch)]);
+    expect(calls).toBe(1);
+  });
+
+  it('removes a copy whose save finished after a sign-out', async () => {
+    const inner = memoryStore();
+    let release: () => void = () => undefined;
+    const store = {
+      ...inner,
+      set: async (key: string, value: unknown) => {
+        await new Promise<void>((resolve) => (release = resolve));
+        await inner.set(key, value);
+      },
+    };
+    const cache = new MedicineCache(store, () => 1);
+    const syncing = cache.sync(async () => page([med('m1', 'Paracetamol')], 'c1'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const clearing = cache.clear();
+    release();
+    await Promise.all([syncing, clearing]);
+    expect(cache.size).toBe(0);
+    expect(await inner.get('clinic.medicines')).toBeNull();
+  });
 });

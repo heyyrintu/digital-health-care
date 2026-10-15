@@ -66,6 +66,26 @@ describe('TodayStore', () => {
 });
 
 describe('TodayStore across a sign-out and midnight', () => {
+  it('keeps the newer queue when an older refresh answers last', async () => {
+    const store = memoryStore();
+    const today = new TodayStore(store, () => '2026-10-06');
+    let answerOld: (value: SyncTodayResponse) => void = () => undefined;
+    const older = today.refresh(() => new Promise((resolve) => (answerOld = resolve)), String);
+    const newer = snapshot('2026-10-06');
+    expect(await today.refresh(async () => newer, String)).toBe(true);
+    answerOld({ ...snapshot('2026-10-06'), serverTime: '2026-10-06T04:00:00.000Z' });
+    expect(await older).toBe(false);
+    expect(today.getState().data).toBe(newer);
+  });
+
+  it('drops an answer for yesterday that arrives after midnight', async () => {
+    const store = memoryStore();
+    const today = new TodayStore(store, () => '2026-10-07');
+    expect(await today.refresh(async () => snapshot('2026-10-06'), String)).toBe(false);
+    expect(today.getState().data).toBeNull();
+    expect(await store.get('clinic.today')).toBeNull();
+  });
+
   it('drops a refresh that answers after the person signed out', async () => {
     const store = memoryStore();
     const today = new TodayStore(store, () => '2026-10-06');

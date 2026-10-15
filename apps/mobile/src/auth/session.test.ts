@@ -204,16 +204,19 @@ describe('SessionManager across sign-outs', () => {
     await manager.signIn('demo-clinic', tokens(0));
     clock.advance(901_000);
     await manager.signOut();
+    expect(api.refresh).toHaveBeenCalledTimes(1);
     expect(api.refresh).toHaveBeenCalledWith('r0');
     expect(api.logout).toHaveBeenCalledWith('a1');
   });
 
   it('signs out on screen even when the keychain cannot be cleared', async () => {
-    const { manager, vault } = setup();
+    const { manager, vault, api } = setup();
     await manager.signIn('demo-clinic', tokens(0));
     vi.mocked(vault.clear).mockRejectedValueOnce(new Error('keychain'));
     await expect(manager.signOut()).rejects.toThrow('keychain');
     expect(manager.getState()).toEqual({ status: 'signed_out', reason: 'signed_out' });
+    // The server session still ends, so the token left in the keychain cannot resume it.
+    expect(api.logout).toHaveBeenCalledWith('a0');
   });
 
   it('starts from sign-in when the keychain cannot be read', async () => {
