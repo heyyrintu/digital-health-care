@@ -23,6 +23,7 @@ const AREAS = [
   { prefix: 'receipt.', label: 'audit.area.receipt' },
   { prefix: 'settings.', label: 'audit.area.settings' },
   { prefix: 'patient_merge.', label: 'audit.area.merges' },
+  { prefix: 'consent.', label: 'audit.area.consent' },
 ] as const;
 
 const TH = 'px-3 py-2 text-left text-xs font-semibold text-muted-foreground';

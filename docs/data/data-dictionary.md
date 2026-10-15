@@ -2,9 +2,9 @@
 
 **Status:** Draft · **Owner:** Backend lead · **Update:** with every migration.
 
-Conventions for every table: `id` (UUID), `organisationId` (except platform-level User/Device), `createdAt`, `updatedAt`, `deletedAt` where soft delete applies. Files are stored by S3 key, never by public URL. Fields marked *(encrypted)* use field-level encryption. Row-level security filters every query by `organisationId` (ADR 0014). Database columns are snake_case (`organisation_id`); this document uses the camelCase field names.
+Conventions for every table: `id` (UUID), `organisationId` (except platform-level User/Device), `createdAt`, `updatedAt`, `deletedAt` where soft delete applies; append-only evidence tables such as AccountConsent carry their own event times instead (`acceptedAt`, `withdrawnAt`). Files are stored by S3 key, never by public URL. Fields marked *(encrypted)* use field-level encryption. Row-level security filters every query by `organisationId` (ADR 0014). Database columns are snake_case (`organisation_id`); this document uses the camelCase field names.
 
-**Implemented so far:** Organisation, User, Membership, StaffInvite, Session, OtpChallenge and AuditLog (Phase 0); Patient, UhidSettings, Tag and PatientTag (patient register); Clinic, ConsultationType, BookingRules, AvailabilityVersion and AvailabilityException (availability); Appointment and AppointmentStatusHistory (appointments); DisplayScreen (queue); PriceListItem, Bill, BillItem, Payment and ReceiptSettings (billing and counter payments); OrganisationSettings (clinic admin settings) — see `packages/db/prisma/schema.prisma`. Everything else below is the target design.
+**Implemented so far:** Organisation, User, Membership, StaffInvite, Session, OtpChallenge and AuditLog (Phase 0); Patient, UhidSettings, Tag and PatientTag (patient register); Clinic, ConsultationType, BookingRules, AvailabilityVersion and AvailabilityException (availability); Appointment and AppointmentStatusHistory (appointments); DisplayScreen (queue); PriceListItem, Bill, BillItem, Payment and ReceiptSettings (billing and counter payments); OrganisationSettings (clinic admin settings); AccountConsent (patient onboarding consents) — see `packages/db/prisma/schema.prisma`. Everything else below is the target design.
 
 ## Platform and identity
 
@@ -36,7 +36,8 @@ Conventions for every table: `id` (UUID), `organisationId` (except platform-leve
 | Allergy | Recorded allergy (built) | patientId, substance, reaction, source (doctor\|patient; patient = unverified), recordedByUserId, createdAt, removedAt, removedByUserId, removedReason (removed, never deleted) · planned: class/molecule link for the safety engine, severity |
 | MedicalCondition | Known condition (built) | patientId, name, icd10Code?, source, recordedByUserId, createdAt, removedAt, removedByUserId, removedReason · planned: since |
 | CurrentMedication | Ongoing medicine from elsewhere (built) | patientId, name, dose?, source, recordedByUserId, createdAt, removedAt, removedByUserId, removedReason · planned: moleculeId, since |
-| Consent | Recorded consent | patientId, type (data_processing\|telemedicine\|guardian\|scribe\|abdm), version, givenBy, givenAt, withdrawnAt, context (consultationId?) |
+| AccountConsent | A patient account's acceptance of the privacy notice, terms or health-data consent at onboarding (built); one row per acceptance, never deleted | organisationId, userId (the account), kind (privacy_notice\|terms\|health_data), version, acceptedAt, withdrawnAt (only health data is withdrawn on its own; only this column may change) |
+| Consent | Per-patient consent for a purpose (telemedicine, guardian, scribe, ABDM); onboarding consents are AccountConsent | patientId, type (data_processing\|telemedicine\|guardian\|scribe\|abdm), version, givenBy, givenAt, withdrawnAt, context (consultationId?) |
 | MessagingOptIn | Channel opt-in | patientId, channel (whatsapp\|sms\|email\|push), status, source, at |
 | AbhaLink | ABHA linked to patient | patientId, abhaNumber (encrypted), abhaAddress, linkedVia, verifiedAt, status |
 

@@ -910,6 +910,7 @@ export const en = {
   'devices.signedOutAll': 'Signed {name} out of {count} devices.',
   'audit.area.settings': 'Settings',
   'audit.area.merges': 'Patient merges',
+  'audit.area.consent': 'Patient consents',
   'chart.restricted':
     'This clinic opens a patient’s chart only to the doctors who have seen them. Check the patient in to you to open it.',
   'policy.title': 'Chart, safety alerts and files',
