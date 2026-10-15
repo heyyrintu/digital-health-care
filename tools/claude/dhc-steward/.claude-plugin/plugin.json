@@ -1,0 +1,9 @@
+{
+  "name": "dhc-steward",
+  "version": "0.1.0",
+  "description": "Maintains and builds the Digital Healthcare monorepo against its build plan: plan pane, checks, guards and an orchestrated /dhc-next.",
+  "types": "./types/index.d.ts",
+  "author": {
+    "name": "Rintu M"
+  }
+}

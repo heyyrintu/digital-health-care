@@ -1,0 +1,11 @@
+{
+  "name": "digital-health-care",
+  "owner": { "name": "Rintu M" },
+  "plugins": [
+    {
+      "name": "dhc-steward",
+      "source": "./tools/claude/dhc-steward",
+      "description": "Build-plan pane, CI-equivalent checks, repo guards and an orchestrated /dhc-next for this monorepo."
+    }
+  ]
+}
