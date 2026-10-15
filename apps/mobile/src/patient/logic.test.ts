@@ -34,5 +34,8 @@ describe('patient app helpers', () => {
     expect(isValidDob('2026-02-30', '2026-10-07')).toBe(false);
     expect(isValidDob('2027-01-01', '2026-10-07')).toBe(false);
     expect(isValidDob('23/11/1997', '2026-10-07')).toBe(false);
+    expect(isValidDob('1896-01-01', '2026-10-07')).toBe(true);
+    expect(isValidDob('1895-12-31', '2026-10-07')).toBe(false);
+    expect(isValidDob('2026-10-07', '2026-10-07')).toBe(true);
   });
 });

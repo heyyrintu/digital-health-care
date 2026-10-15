@@ -1,7 +1,7 @@
 import type { MeResponse, PortalAppointment } from '@dhc/contracts';
 import { Button, Card, Screen, Text, useTheme } from '@dhc/ui-native';
-import { router, type Href } from 'expo-router';
-import { useState } from 'react';
+import { router, useFocusEffect, type Href } from 'expo-router';
+import { useCallback, useRef, useState } from 'react';
 import { View } from 'react-native';
 import { api, patientAccount, session } from '../../api';
 import { useLocale } from '../../locale/provider';
@@ -17,6 +17,14 @@ export function PatientHome({ me, account }: { me: MeResponse; account: ReadyAcc
   const [busy, setBusy] = useState(false);
   const { state, reload } = useLoad(() => api.portalAppointments(), []);
   const { selected } = account;
+  // Back from booking or cancelling: show the next visit as it is now.
+  const shown = useRef(false);
+  useFocusEffect(
+    useCallback(() => {
+      if (shown.current) void reload();
+      shown.current = true;
+    }, [reload]),
+  );
 
   const next: PortalAppointment | undefined =
     state.status === 'ready'
@@ -47,10 +55,9 @@ export function PatientHome({ me, account }: { me: MeResponse; account: ReadyAcc
                 {shortDate(next.date, locale)} · {next.startTime}
               </Text>
               <Text variant="muted">
-                {t('patient.home.with', {
-                  doctor: next.doctorName ?? '',
-                  clinic: next.clinicName,
-                })}
+                {next.doctorName
+                  ? t('patient.home.with', { doctor: next.doctorName, clinic: next.clinicName })
+                  : next.clinicName}
               </Text>
               <Text variant="muted">
                 {t('queue.token', { token: next.tokenNumber })} · {t(`status.${next.status}`)}

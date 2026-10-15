@@ -1,10 +1,14 @@
+import type { Locale } from '@dhc/i18n';
 import { Card, Notice, Text, useTheme } from '@dhc/ui-native';
 import { View } from 'react-native';
 import { api } from '../../api';
 import { useLocale } from '../../locale/provider';
 import { useLoad } from '../../use-load';
-import { shortDate } from '../logic';
+import { istToday, shortDate } from '../logic';
 import { LoadError, Loading, PatientScreen } from '../parts';
+
+/** The IST day a version was signed: an amendment can be signed days after the visit. */
+const signedOn = (at: string, locale: Locale) => shortDate(istToday(new Date(at)), locale);
 
 /** PRD §4.4: every signed version; revised and cancelled ones are labelled. */
 export function PrescriptionsScreen() {
@@ -28,8 +32,14 @@ export function PrescriptionsScreen() {
                   {rx.number} · {t('patient.rx.version', { version: rx.version })}
                 </Text>
                 <Text variant="muted">
-                  {rx.doctorName ?? ''} · {shortDate(rx.date, locale)}
+                  {rx.doctorName ? `${rx.doctorName} · ` : ''}
+                  {shortDate(rx.date, locale)}
                 </Text>
+                {rx.signedAt && (
+                  <Text variant="caption">
+                    {t('patient.rx.signed', { date: signedOn(rx.signedAt, locale) })}
+                  </Text>
+                )}
                 {rx.status === 'superseded' && (
                   <Text variant="caption">{t('patient.rx.superseded')}</Text>
                 )}

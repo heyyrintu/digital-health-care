@@ -14,6 +14,9 @@ import { ChoiceRow, LoadError, Loading, PatientPicker, PatientScreen } from '../
 
 const PARTS: DayPart[] = ['morning', 'afternoon', 'evening'];
 
+const newAttemptKey = () =>
+  `book-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
+
 /** PRD §4.3: patient → doctor → clinic → consultation → date → slot → reason → book. */
 export function BookScreen({ account }: { account: ReadyAccount }) {
   const { t } = useLocale();
@@ -41,7 +44,11 @@ function BookForm({ options, account }: { options: BookingOptions; account: Read
   const [doctorId, setDoctorId] = useState(options.doctors[0]!.userId);
   const [clinicId, setClinicId] = useState(options.clinics[0]!.id);
   const [typeId, setTypeId] = useState(options.consultationTypes[0]!.id);
-  const days = useMemo(() => bookingDays(istToday(new Date()), options.horizonDays), [options]);
+  // Every day the clinic takes bookings for; the row wraps.
+  const days = useMemo(
+    () => bookingDays(istToday(new Date()), options.horizonDays, options.horizonDays + 1),
+    [options],
+  );
   const [date, setDate] = useState(days[0]!);
   const [slot, setSlot] = useState<Slot | null>(null);
   const [reason, setReason] = useState('');
@@ -55,6 +62,11 @@ function BookForm({ options, account }: { options: BookingOptions; account: Read
   );
   useEffect(() => setSlot(null), [doctorId, clinicId, typeId, date]);
   const type = options.consultationTypes.find((c) => c.id === typeId)!;
+  // One key per booking attempt, so a retry after a lost response never books twice.
+  const attempt = useMemo(
+    () => newAttemptKey(),
+    [patientId, doctorId, clinicId, typeId, slot?.start, reason],
+  );
 
   const book = async () => {
     if (!slot) return;
@@ -62,19 +74,25 @@ function BookForm({ options, account }: { options: BookingOptions; account: Read
     setError(null);
     try {
       setBooked(
-        await api.bookPortalAppointment({
-          patientId,
-          doctorUserId: doctorId,
-          clinicId,
-          consultationTypeId: typeId,
-          startAt: slot.start,
-          ...(reason.trim() ? { reason: reason.trim() } : {}),
-        }),
+        await api.bookPortalAppointment(
+          {
+            patientId,
+            doctorUserId: doctorId,
+            clinicId,
+            consultationTypeId: typeId,
+            startAt: slot.start,
+            ...(reason.trim() ? { reason: reason.trim() } : {}),
+          },
+          attempt,
+        ),
       );
     } catch (e) {
       setError(errorMessage(e, t));
       // Someone took the slot meanwhile: show the day as it is now.
-      if (e instanceof ApiError && e.code === 'SLOT_TAKEN') void slots.reload();
+      if (e instanceof ApiError && e.code === 'SLOT_TAKEN') {
+        setSlot(null);
+        void slots.reload();
+      }
     } finally {
       setBusy(false);
     }
@@ -108,10 +126,10 @@ function BookForm({ options, account }: { options: BookingOptions; account: Read
       />
       {options.doctors.length > 1 && (
         <ChoiceRow label={t('patient.book.doctor')}>
-          {options.doctors.map((d) => (
+          {options.doctors.map((d, i) => (
             <Choice
               key={d.userId}
-              label={d.displayName ?? t('patient.book.doctor')}
+              label={d.displayName ?? `${t('patient.book.doctor')} ${i + 1}`}
               selected={d.userId === doctorId}
               onPress={() => setDoctorId(d.userId)}
             />

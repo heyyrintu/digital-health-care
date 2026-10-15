@@ -10,7 +10,7 @@
 
 **Where is my prescription?** In the app under Prescriptions, and as a link on WhatsApp/SMS. It is digitally signed; pharmacies can scan the QR code to check it.
 
-**Can I manage my family's records?** Yes. Everyone the clinic registered on your mobile number appears in the app when you sign in with it, with the children they look after. Add others under Family: adults who share your number, or a child you look after. Children's records are managed by their guardian.
+**Can I manage my family's records?** Yes. Everyone the clinic registered on your mobile number appears in the app when you sign in with it, with the children they look after. Add others under Family: adults who share your number, or someone you look after, such as a child or an elderly parent. Children's records are managed by their guardian.
 
 **Can I take back my consent?** Yes. Under Privacy and consents you can withdraw the health-data consent at any time; the app then stops showing health records until you accept it again. The clinic keeps the records it needs by law.
 

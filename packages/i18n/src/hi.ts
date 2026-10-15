@@ -969,6 +969,8 @@ export const hi: Record<MessageKey, string> = {
   'patient.consents.updated': 'कुछ दस्तावेज़ बदले गए हैं। कृपया नए संस्करण स्वीकार करें।',
   'patient.consents.accept': 'स्वीकार करें और आगे बढ़ें',
   'patient.consents.all': 'आगे बढ़ने के लिए हर एक पर टिक करें।',
+  'patient.consents.read.privacy_notice': 'गोपनीयता सूचना पढ़ें',
+  'patient.consents.read.terms': 'उपयोग की शर्तें पढ़ें',
   'patient.profile.title': 'आपके बारे में',
   'patient.profile.intro':
     'आपके क्लिनिक के पास इस नंबर पर अभी कोई रिकॉर्ड नहीं है। बुक करने के लिए अपना विवरण जोड़ें।',

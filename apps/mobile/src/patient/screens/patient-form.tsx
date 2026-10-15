@@ -36,6 +36,7 @@ export function PatientForm({
         ? undefined
         : t('patient.profile.dobInvalid'),
     };
+    setError(null);
     setErrors(next);
     if (next.name || next.dob || !gender) return;
     if (!guardianId && !isAdult(dob.trim(), istToday(new Date()))) {
@@ -43,7 +44,6 @@ export function PatientForm({
       return;
     }
     setBusy(true);
-    setError(null);
     try {
       const created = await api.addPortalPatient({
         name: name.trim(),
@@ -103,7 +103,10 @@ export function PatientForm({
               key={g.id}
               label={g.name}
               selected={guardianId === g.id}
-              onPress={() => setGuardianId(g.id)}
+              onPress={() => {
+                setGuardianId(g.id);
+                setError(null);
+              }}
             />
           ))}
         </ChoiceRow>

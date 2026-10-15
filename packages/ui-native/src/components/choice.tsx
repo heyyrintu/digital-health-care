@@ -19,7 +19,7 @@ export function Choice({ label, selected, onPress, disabled = false, hint }: Cho
       accessibilityRole="radio"
       accessibilityLabel={label}
       accessibilityHint={hint}
-      accessibilityState={{ selected, disabled }}
+      accessibilityState={{ checked: selected, disabled }}
       disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => ({

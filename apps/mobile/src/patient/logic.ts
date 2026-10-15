@@ -45,12 +45,12 @@ export function dayPart(startTime: string): DayPart {
   return hour < 12 ? 'morning' : hour < 17 ? 'afternoon' : 'evening';
 }
 
-/** A real calendar date, not in the future and not before 1900. */
 /** 18 or older on `today` (both `YYYY-MM-DD`), as the API decides who may be a guardian. */
 export function isAdult(dob: string, today: string): boolean {
   return dob <= `${Number(today.slice(0, 4)) - 18}${today.slice(4)}`;
 }
 
+/** A real calendar date, not in the future and at most 130 years back, as the API allows. */
 export function isValidDob(value: string, today: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const parsed = new Date(`${value}T00:00:00Z`);
@@ -58,6 +58,6 @@ export function isValidDob(value: string, today: string): boolean {
     !Number.isNaN(parsed.getTime()) &&
     parsed.toISOString().slice(0, 10) === value &&
     value <= today &&
-    value >= '1900-01-01'
+    value >= `${Number(today.slice(0, 4)) - 130}-01-01`
   );
 }

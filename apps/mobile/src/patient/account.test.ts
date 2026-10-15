@@ -69,4 +69,24 @@ describe('PatientAccount', () => {
     account.reset();
     expect(account.getState()).toEqual({ status: 'loading' });
   });
+
+  it('ignores a load that was still running at sign-out', async () => {
+    const answers: ((c: ConsentStatus) => void)[] = [];
+    const api = {
+      consents: vi.fn(() => new Promise<ConsentStatus>((resolve) => answers.push(resolve))),
+      patients: vi.fn(async () => [neha]),
+    };
+    const account = new PatientAccount(api);
+    const first = account.ensureLoaded();
+    account.reset();
+    // A new sign-in loads afresh instead of reusing the old request.
+    const second = account.ensureLoaded();
+    expect(api.consents).toHaveBeenCalledTimes(2);
+    answers[0]!(accepted);
+    await first;
+    expect(account.getState()).toEqual({ status: 'loading' });
+    answers[1]!(accepted);
+    await second;
+    expect(account.getState()).toMatchObject({ status: 'ready' });
+  });
 });

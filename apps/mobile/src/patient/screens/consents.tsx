@@ -6,8 +6,9 @@ import {
 } from '@dhc/contracts';
 import { Button, Card, Notice, Text, useTheme } from '@dhc/ui-native';
 import { useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { Linking, Pressable, View } from 'react-native';
 import { api, patientAccount } from '../../api';
+import { DOCUMENT_URLS } from '../../config';
 import { errorMessage } from '../../errors';
 import { useLocale } from '../../locale/provider';
 import { LanguageSwitch } from '../../screens/language-switch';
@@ -21,7 +22,8 @@ export function ConsentsScreen({ status }: { status: ConsentStatus }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const pending = ACCOUNT_CONSENT_KINDS.filter((k) => status.pending.includes(k));
-  const updating = status.consents.length > 0;
+  // A new version of something already accepted, rather than a first visit.
+  const updating = pending.some((k) => status.consents.some((c) => c.kind === k));
   const all = pending.every((k) => ticked.has(k));
 
   const toggle = (kind: AccountConsentKind) =>
@@ -82,6 +84,13 @@ export function ConsentsScreen({ status }: { status: ConsentStatus }) {
               <Text>{t(`patient.consents.${kind}`)}</Text>
               {kind === 'health_data' && (
                 <Text variant="caption">{t('patient.consents.healthDataHint')}</Text>
+              )}
+              {kind !== 'health_data' && DOCUMENT_URLS[kind] && (
+                <Button
+                  variant="ghost"
+                  label={t(`patient.consents.read.${kind}`)}
+                  onPress={() => void Linking.openURL(DOCUMENT_URLS[kind]!)}
+                />
               )}
             </View>
           </Pressable>

@@ -967,6 +967,8 @@ export const en = {
   'patient.consents.updated': 'Some documents have changed. Please accept the new versions.',
   'patient.consents.accept': 'Accept and continue',
   'patient.consents.all': 'Tick each one to continue.',
+  'patient.consents.read.privacy_notice': 'Read the privacy notice',
+  'patient.consents.read.terms': 'Read the terms of use',
   'patient.profile.title': 'About you',
   'patient.profile.intro':
     'Your clinic has no record on this number yet. Add your details to book.',

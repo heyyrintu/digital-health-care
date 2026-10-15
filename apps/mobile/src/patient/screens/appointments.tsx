@@ -14,6 +14,8 @@ export function AppointmentsScreen() {
   const { t } = useLocale();
   const { state, reload } = useLoad(() => api.portalAppointments(), []);
   const [notice, setNotice] = useState<{ tone: 'success' | 'error'; text: string } | null>(null);
+  // The visit being cancelled, until the list has refreshed: one tap sends one request.
+  const [cancelling, setCancelling] = useState<string | null>(null);
 
   const cancel = (appointment: PortalAppointment) =>
     Alert.alert(t('patient.appts.cancelConfirm'), undefined, [
@@ -22,6 +24,7 @@ export function AppointmentsScreen() {
         text: t('patient.appts.cancel'),
         style: 'destructive',
         onPress: async () => {
+          setCancelling(appointment.id);
           try {
             await api.cancelPortalAppointment(appointment.id);
             setNotice({ tone: 'success', text: t('patient.appts.cancelled') });
@@ -29,6 +32,7 @@ export function AppointmentsScreen() {
             setNotice({ tone: 'error', text: errorMessage(e, t) });
           }
           await reload();
+          setCancelling(null);
         },
       },
     ]);
@@ -41,7 +45,7 @@ export function AppointmentsScreen() {
       {state.status === 'ready' && (
         <>
           <Text variant="heading">{t('patient.appts.upcoming')}</Text>
-          <List items={state.data.upcoming} onCancel={cancel} />
+          <List items={state.data.upcoming} onCancel={cancel} cancelling={cancelling} />
           <Text variant="heading">{t('patient.appts.past')}</Text>
           <List items={state.data.past} />
         </>
@@ -53,9 +57,11 @@ export function AppointmentsScreen() {
 function List({
   items,
   onCancel,
+  cancelling = null,
 }: {
   items: PortalAppointment[];
   onCancel?: (a: PortalAppointment) => void;
+  cancelling?: string | null;
 }) {
   const { t, locale } = useLocale();
   const theme = useTheme();
@@ -69,7 +75,9 @@ function List({
             {shortDate(a.date, locale)} · {a.startTime} · {t(`status.${a.status}`)}
           </Text>
           <Text variant="muted">
-            {t('patient.home.with', { doctor: a.doctorName ?? '', clinic: a.clinicName })}
+            {a.doctorName
+              ? t('patient.home.with', { doctor: a.doctorName, clinic: a.clinicName })
+              : a.clinicName}
           </Text>
           <Text variant="muted">
             {a.consultationTypeName} · {t('queue.token', { token: a.tokenNumber })}
@@ -79,11 +87,18 @@ function List({
               {t('patient.appts.prescription', { number: a.prescription.number })}
             </Text>
           )}
+          {a.prescription?.status === 'void' && (
+            <Text variant="caption" style={{ color: theme.colors.destructive }}>
+              {t('patient.rx.void')}
+            </Text>
+          )}
           {onCancel &&
             (a.canCancel ? (
               <Button
                 variant="secondary"
                 label={t('patient.appts.cancel')}
+                loading={cancelling === a.id}
+                disabled={cancelling !== null}
                 onPress={() => onCancel(a)}
               />
             ) : (

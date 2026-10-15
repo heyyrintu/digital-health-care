@@ -23,6 +23,8 @@ export class PatientAccount {
   private readonly listeners = new Set<() => void>();
   private loading: Promise<void> | null = null;
   private loaded = false;
+  /** Bumped by `reset`, so a load started before sign-out cannot fill the store after it. */
+  private generation = 0;
 
   constructor(private readonly api: AccountApi) {}
 
@@ -40,9 +42,12 @@ export class PatientAccount {
   }
 
   reload(): Promise<void> {
-    this.loading ??= this.load().finally(() => {
-      this.loading = null;
-    });
+    if (!this.loading) {
+      const loading = this.load(this.generation).finally(() => {
+        if (this.loading === loading) this.loading = null;
+      });
+      this.loading = loading;
+    }
     return this.loading;
   }
 
@@ -54,18 +59,23 @@ export class PatientAccount {
 
   /** Signed out: forget the family. */
   reset() {
+    this.generation += 1;
+    this.loading = null;
     this.loaded = false;
     this.setState({ status: 'loading' });
   }
 
-  private async load() {
+  private async load(generation: number) {
+    const current = () => generation === this.generation;
     if (this.state.status !== 'ready') this.setState({ status: 'loading' });
     try {
       const consents = await this.api.consents();
+      if (!current()) return;
       if (consents.pending.length > 0) {
         this.setState({ status: 'consents', consents });
       } else {
         const patients = await this.api.patients();
+        if (!current()) return;
         if (patients.length === 0) {
           this.setState({ status: 'profile' });
         } else {
@@ -76,7 +86,7 @@ export class PatientAccount {
       }
       this.loaded = true;
     } catch (error) {
-      this.setState({ status: 'error', error });
+      if (current()) this.setState({ status: 'error', error });
     }
   }
 
