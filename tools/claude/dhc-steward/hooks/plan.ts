@@ -27,7 +27,7 @@ export function parseProgress(markdown: string): PlanPhase[] {
     const match = /^(\d+(?:\s*to\s*\d+)?)\s*(.*)$/.exec(phase);
     phases.push({
       id: match?.[1] ?? phase,
-      name: match?.[2] ? match[2] : `Phases ${phase}`,
+      name: match?.[2] ? match[2] : '(later phases)',
       state,
       status: statusOf(state),
     });

@@ -24,7 +24,7 @@ describe('plan', () => {
   test('reads the progress table and finds the current phase', async () => {
     const phases = parseProgress(PLAN);
     expect(phases.map((phase) => phase.status)).toEqual(['done', 'done', 'active', 'todo']);
-    expect(phases[3]?.name).toBe('Phases 3 to 6');
+    expect(phases[3]?.name).toBe('(later phases)');
     expect(currentPhase(phases)?.id).toBe('2');
   });
 
