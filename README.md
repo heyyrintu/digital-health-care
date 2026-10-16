@@ -61,7 +61,7 @@ pnpm build && pnpm test:e2e   # browser tests (Playwright) against E2E_DATABASE_
 pnpm format             # Prettier
 ```
 
-CI (`.github/workflows/ci.yml`) runs on every pull request: the format check and `turbo run lint typecheck test build`; the integration suites against a Postgres service; and the browser tests, which start the built API and web app against their own Postgres and upload screenshots and traces when a test fails.
+CI (`.github/workflows/ci.yml`) runs on every pull request: the format check and `turbo run lint typecheck test build`; the integration suites against a Postgres service; a bundle of each mobile app (Patient and Clinic) for iOS and Android; and the browser tests, which start the built API and web app against their own Postgres and upload screenshots and traces when a test fails.
 
 Browser tests live in `apps/e2e`. Each test creates its own clinic and invite links directly in the database, so tests are independent and can run in parallel. Locally, create the database once (`docker compose exec postgres createdb -U dhc dhc_e2e`) and install Chromium with `pnpm --filter @dhc/e2e exec playwright install chromium`.
 

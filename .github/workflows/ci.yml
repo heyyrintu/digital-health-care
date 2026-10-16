@@ -38,6 +38,35 @@ jobs:
           EXPO_NO_TELEMETRY: '1'
           NEXT_TELEMETRY_DISABLED: '1'
 
+  mobile:
+    name: Mobile bundles (${{ matrix.variant }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [patient, clinic]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      # Bundles the app's JavaScript for iOS and Android as an EAS build would, without store
+      # credentials: catches imports of missing native modules and bundler errors before a build.
+      - name: Bundle iOS and Android
+        run: pnpm --filter @dhc/mobile bundle
+        env:
+          APP_VARIANT: ${{ matrix.variant }}
+          CI: '1'
+          EXPO_NO_TELEMETRY: '1'
+
   integration:
     name: Integration and tenant isolation
     runs-on: ubuntu-latest
