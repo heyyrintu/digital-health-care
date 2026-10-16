@@ -546,8 +546,8 @@ Week 1 starts when the team is hired and the open decisions in §11 are closed. 
 | Phase | State |
 |---|---|
 | 0 Foundations | Done: monorepo, CI, staff and patient sign-in, tenancy with row-level security, audit log, ADRs. |
-| 1 Core clinic on web | Exit criterion met: the full simulated clinic day passes in the browser (`apps/e2e/tests/clinic-day.spec.ts`). Built: scheduling and slots, patients, tags and UHID, queue and waiting-room screen, consultation and vitals, prescription builder, safety engine, signing with PDF and QR, billing and counter payments, clinic admin dashboard, audit log, medicine list, staff devices, clinic settings (chart model, safety tuning, upload limits), patient merges. Next: idempotency keys and live queue updates. |
-| 2 Mobile apps | Starting: shared React Native components and the mobile foundation, then the Clinic and Patient apps. |
+| 1 Core clinic on web | Exit criterion met: the full simulated clinic day passes in the browser (`apps/e2e/tests/clinic-day.spec.ts`). Built: scheduling and slots, patients, tags and UHID, queue and waiting-room screen, consultation and vitals, prescription builder, safety engine, signing with PDF and QR, billing and counter payments, clinic admin dashboard, audit log, medicine list, staff devices, clinic settings (chart model, safety tuning, upload limits), patient merges, follow-ups and automatic no-shows, idempotency keys and live queue updates over server-sent events. |
+| 2 Mobile apps | In progress: code for both apps is merged. Built: shared React Native components (`@dhc/ui-native`), secure sessions and sign-in; Clinic app queue with the two-pane iPad layout, idle lock with biometrics, offline queue and check-in, push registration, and the consultation (notes, vitals, prescription with safety alerts, signing); Patient app onboarding and consents, family, booking, appointments, prescriptions and privacy. Exit criterion still open: store builds on TestFlight and Play internal testing (needs store accounts, the EAS project ID and push credentials) and a doctor's day on iPad and phone. |
 | 3 to 6 | Not started. |
 
 ### 9.2 Sprint rhythm
