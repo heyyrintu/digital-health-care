@@ -65,6 +65,10 @@ CI (`.github/workflows/ci.yml`) runs on every pull request: the format check and
 
 Browser tests live in `apps/e2e`. Each test creates its own clinic and invite links directly in the database, so tests are independent and can run in parallel. Locally, create the database once (`docker compose exec postgres createdb -U dhc dhc_e2e`) and install Chromium with `pnpm --filter @dhc/e2e exec playwright install chromium`.
 
+## Claude Code mod
+
+`tools/claude/dhc-steward` is a Claude Code mod for maintaining and building this repository against the build plan: a plan pane (`/dhc`), CI-equivalent checks (`/dhc-check`), an orchestrated next increment with builder and reviewer agents (`/dhc-next`), and guards for applied migrations and pushes to `main`. Install it with `/plugin install dhc-steward --marketplace heyyrintu/digital-health-care`; see [its README](tools/claude/dhc-steward/README.md).
+
 ## Rules
 
 - A pull request that changes behaviour updates the relevant document in `docs/` in the same pull request.
