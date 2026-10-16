@@ -306,4 +306,27 @@ describe('the account’s patients', () => {
     });
     expect(res.statusCode).toBe(400);
   });
+
+  it('accepts a baby born today in India, before it is today in UTC', async () => {
+    const saved = h.clock.ms;
+    // 00:30 IST on 7 Oct is still 6 Oct in UTC.
+    h.clock.ms = Date.UTC(2026, 9, 6, 19, 0);
+    try {
+      const tokens = await signedUp('9876543210');
+      const mother = await call('POST', '/portal/patients', tokens, {
+        name: 'Neha Kapoor',
+        dob: '1997-11-23',
+        gender: 'female',
+      });
+      const baby = await call('POST', '/portal/patients', tokens, {
+        name: 'Baby Kapoor',
+        dob: '2026-10-07',
+        gender: 'female',
+        guardianPatientId: mother.json().id,
+      });
+      expect(baby.statusCode, baby.body).toBe(201);
+    } finally {
+      h.clock.ms = saved;
+    }
+  });
 });

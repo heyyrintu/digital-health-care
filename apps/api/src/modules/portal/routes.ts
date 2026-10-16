@@ -16,6 +16,7 @@ import {
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { authOf, authenticate, requireRole } from '../../plugins/authenticate';
+import { idempotent } from '../../idempotency';
 import type { Services } from '../../services';
 import { sendPdf } from '../prescribing/routes';
 import { PortalBookingService } from './booking';
@@ -70,8 +71,11 @@ export const portalRoutes: FastifyPluginAsync<{ services: Services }> = async (
 
   app.post('/portal/appointments', patientOnly, async (request, reply) => {
     const body = PortalBookBody.parse(request.body);
-    const created = await booking.book(request, authOf(request), body);
-    return reply.status(201).send(PortalAppointment.parse(created));
+    // A phone on a weak network retries the same booking with the same key.
+    return idempotent(services, request, reply, async () => {
+      const created = await booking.book(request, authOf(request), body);
+      return { status: 201, body: PortalAppointment.parse(created) };
+    });
   });
 
   app.post('/portal/appointments/:id/cancel', patientOnly, async (request) => {
