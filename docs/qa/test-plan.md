@@ -56,7 +56,7 @@ The Clinic app's logic is unit tested and its iOS and Android bundles were built
 - Push permission prompt; the device appears under `GET /push-devices`; a push reaches it once the sender exists (needs the EAS project ID and APNs/FCM credentials).
 
 ## 5b. Patient app checks still to run on real devices
-- Prescriptions: **Open PDF** on a signed, a superseded and a void version (the void copy is stamped VOID) opens the PDF in the iOS share sheet / Android chooser, shows a spinner while it downloads, and a clear message when nothing can open it or the download fails; the copy in the app cache is gone after the sheet closes and after signing out, and a viewer opened from the Android chooser can still read it.
+- Prescriptions: **View or share PDF** on a signed, a superseded and a void version (the void copy is stamped VOID) opens the PDF in the iOS share sheet / Android chooser, shows a spinner while it downloads, and a clear message when nothing can open it or the download fails; on iOS the copy in the app cache is gone after the sheet closes; on Android a viewer or chat app chosen from the chooser can still read it, and the copy is gone after opening another PDF; on both, it is gone after signing out and after relaunching on an expired session; two quick taps open one sheet; on iPad the sheet appears (its position near the button is not yet set).
 
 ## 6. Entry and exit criteria
 - **Enter system test:** feature complete on staging, unit/integration green, test data seeded.

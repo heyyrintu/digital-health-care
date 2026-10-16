@@ -1,73 +1,73 @@
-import { Directory, File, Paths } from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
-import { PDF_FOLDER } from './pdf-name';
+/** A PDF written to the app's cache, ready to hand to the OS share sheet. */
+export interface WrittenPdf {
+  uri: string;
+  /** Deletes this file; never throws. */
+  remove(): void;
+}
+
+export interface PdfCacheDeps {
+  /** Writes the bytes as `name` in the cache folder. */
+  write(name: string, bytes: Uint8Array): WrittenPdf;
+  /** Deletes the whole cache folder; never throws. */
+  clearAll(): void;
+  /** False where the OS has no share sheet to hand a file to. */
+  canShare(): Promise<boolean>;
+  /** Opens the share sheet; resolves when it closes (Android: when the chooser hands off). */
+  share(uri: string, title: string): Promise<void>;
+  /**
+   * Android resolves the share as soon as the chooser hands the file to an app, which may read
+   * it later, so the copy is kept until the next open or sign-out instead of deleted at once.
+   */
+  keepAfterShare: boolean;
+}
+
+export type OpenResult = 'shared' | 'busy' | 'cannot-share' | 'signed-out';
 
 /**
- * Signed prescription PDFs the patient opens, kept only while they look at them (threat
- * model T13): written to a folder in the app's cache, handed to the OS viewer or share sheet,
- * and deleted when the sheet closes; signing out empties the folder.
+ * Signed prescription PDFs the patient views or shares. A patient's phone may be lost or
+ * shared (threat model T24), so at most one copy exists: it lives only in the app's cache,
+ * is deleted when the sheet closes (iOS) or when the next PDF is opened (Android), and
+ * signing out empties the folder.
  */
-const folder = () => new Directory(Paths.cache, PDF_FOLDER);
+export class PdfCache {
+  /** Bumped by clear(), so a download that finishes after sign-out is never written. */
+  private generation = 0;
+  /** Set synchronously, so a second tap in the same frame cannot start another share. */
+  private busy = false;
 
-/** Bumped by `clearPrescriptionPdfs`, so a download that finishes after sign-out is dropped. */
-let generation = 0;
+  constructor(private readonly deps: PdfCacheDeps) {}
 
-/** False where the OS has no viewer or share sheet to hand a file to. */
-export const canOpenPdfs = (): Promise<boolean> => Sharing.isAvailableAsync();
-
-/**
- * Downloads a PDF, writes it as `name` and opens it in the OS viewer or share sheet; resolves
- * once the sheet closes and the copy is deleted. Resolves without opening when the person
- * signed out meanwhile.
- */
-export async function openPdf(
-  name: string,
-  download: () => Promise<Blob>,
-  dialogTitle: string,
-): Promise<void> {
-  const started = generation;
-  const bytes = await blobBytes(await download());
-  if (started !== generation) return;
-  const dir = folder();
-  dir.create({ idempotent: true, intermediates: true });
-  const file = new File(dir, name);
-  try {
-    file.write(bytes);
-    await Sharing.shareAsync(file.uri, {
-      mimeType: 'application/pdf',
-      UTI: 'com.adobe.pdf',
-      dialogTitle,
-    });
-  } finally {
-    // Best effort: signing out deletes anything left behind.
+  async open(
+    name: string,
+    download: () => Promise<Uint8Array>,
+    title: string,
+  ): Promise<OpenResult> {
+    if (this.busy) return 'busy';
+    this.busy = true;
     try {
-      if (file.exists) file.delete();
-    } catch {
-      // Left for clearPrescriptionPdfs.
+      if (!(await this.deps.canShare())) return 'cannot-share';
+      const started = this.generation;
+      const bytes = await download();
+      if (started !== this.generation) return 'signed-out';
+      // Only the newest copy is ever on disk: the one Android kept from the last open goes now.
+      this.deps.clearAll();
+      const file = this.deps.write(name, bytes);
+      let shared = false;
+      try {
+        await this.deps.share(file.uri, title);
+        shared = true;
+      } finally {
+        if (!shared || !this.deps.keepAfterShare) file.remove();
+      }
+      return 'shared';
+    } finally {
+      this.busy = false;
     }
   }
-}
 
-/** Signed out: delete every PDF this app wrote. Never throws. */
-export function clearPrescriptionPdfs(): void {
-  generation += 1;
-  try {
-    const dir = folder();
-    if (dir.exists) dir.delete();
-  } catch {
-    // The OS may already have cleared the cache; nothing else to do.
+  /** Signed out (or the app started without a session): delete every PDF this app wrote. */
+  clear(): void {
+    this.generation += 1;
+    this.deps.clearAll();
   }
-}
-
-/** React Native's Blob has no `arrayBuffer()`; its FileReader can read one. */
-function blobBytes(blob: Blob): Promise<Uint8Array> {
-  if (typeof blob.arrayBuffer === 'function') {
-    return blob.arrayBuffer().then((buffer) => new Uint8Array(buffer));
-  }
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(new Uint8Array(reader.result as ArrayBuffer));
-    reader.onerror = () => reject(reader.error ?? new Error('Could not read the PDF.'));
-    reader.readAsArrayBuffer(blob);
-  });
 }

@@ -1058,10 +1058,10 @@ export const en = {
   'patient.rx.superseded': 'Revised later',
   'patient.rx.void': 'Cancelled by the doctor',
   'patient.rx.signed': 'Signed {date}',
-  'patient.rx.openPdf': 'Open PDF',
+  'patient.rx.openPdf': 'View or share PDF',
   'patient.rx.pdfTitle': 'Prescription {number}',
   'patient.rx.cannotOpen':
-    'This phone has no app to open the PDF. Install a PDF viewer, or use the link in your clinic’s message.',
+    'This phone can’t share files from the app. Use the link in your clinic’s message instead.',
   'patient.family.intro': 'Everyone on this mobile number, and the children they look after.',
   'patient.family.sharesNumber': 'Uses this mobile number',
   'patient.family.lookedAfterBy': 'Looked after by {name}',

@@ -9,7 +9,7 @@ import { useLocale } from '../../locale/provider';
 import { useLoad } from '../../use-load';
 import { istToday, shortDate } from '../logic';
 import { LoadError, Loading, PatientScreen } from '../parts';
-import { canOpenPdfs, openPdf } from '../pdf-cache';
+import { blobBytes, prescriptionPdfs } from '../pdf-native';
 import { prescriptionPdfName } from '../pdf-name';
 
 /** The IST day a version was signed: an amendment can be signed days after the visit. */
@@ -28,15 +28,12 @@ export function PrescriptionsScreen() {
     setOpening(rx.id);
     setFailure(null);
     try {
-      if (!(await canOpenPdfs())) {
-        setFailure({ id: rx.id, text: t('patient.rx.cannotOpen') });
-        return;
-      }
-      await openPdf(
+      const result = await prescriptionPdfs.open(
         prescriptionPdfName(rx.number, rx.version),
-        () => api.portalPrescriptionPdf(rx.id),
+        async () => blobBytes(await api.portalPrescriptionPdf(rx.id)),
         t('patient.rx.pdfTitle', { number: rx.number }),
       );
+      if (result === 'cannot-share') setFailure({ id: rx.id, text: t('patient.rx.cannotOpen') });
     } catch (e) {
       setFailure({ id: rx.id, text: errorMessage(e, t) });
     } finally {
