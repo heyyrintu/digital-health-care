@@ -2,11 +2,12 @@ import { MeResponse, OtpRequestResponse, TokenResponse } from '@dhc/contracts';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { totpAt } from '../src/auth/totp';
 import { hashPassword } from '../src/auth/password';
+import type * as PasswordModule from '../src/auth/password';
 
 /** Runs, when set, at the start of every password check. */
 const passwordCheck = vi.hoisted(() => ({ hook: undefined as (() => Promise<void>) | undefined }));
 vi.mock('../src/auth/password', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../src/auth/password')>();
+  const actual = await importOriginal<typeof PasswordModule>();
   return {
     ...actual,
     verifyPassword: async (password: string, stored: string) => {
