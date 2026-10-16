@@ -42,7 +42,7 @@ Implemented in Phase 0 (`apps/api/src/modules/auth`). Sign-in requests name the 
 |---|---|
 | Patient OTP | `POST /auth/otp/request` `{organisation, phone}` → `POST /auth/otp/verify` `{challengeId, code}` → tokens. Creates the account and patient membership on first sign-in |
 | Staff invite (admin) | `POST /staff/invites` `{identifier, role, displayName?}` → `inviteUrl` (shown once), `GET /staff/invites`, `POST /staff/invites/{id}/revoke` — clinic admin only |
-| Staff invite (invitee) | `POST /auth/invites/inspect` `{token}` → `POST /auth/invites/accept` `{token, password}` → `{status: setup_required, otpauthUri}` or `{status: confirm_required}` (409 if the account was reset or finished enrolling meanwhile: open the link again) → `POST /auth/invites/complete` `{token, code}` → tokens |
+| Staff invite (invitee) | `POST /auth/invites/inspect` `{token}` → `POST /auth/invites/accept` `{token, password}` → `{status: setup_required, otpauthUri}` or `{status: confirm_required}` (409 if account setup changed meanwhile; restart with the current invite link) → `POST /auth/invites/complete` `{token, code}` → tokens |
 | Staff list and reset (admin) | `GET /staff/members` (team, roles, whether sign-in is set up); `POST /staff/members/{id}/reset-authenticator` `{role?}` → new setup link (shown once) — clinic admin only |
 | Staff login | `POST /auth/login` `{organisation, identifier, password, role?}` → `{status: mfa_required, mfaToken}` → `POST /auth/mfa/verify` `{mfaToken, code}` → tokens |
 | Refresh / logout | `POST /auth/refresh` `{refreshToken}` (rotates), `POST /auth/logout` (ends this session) |

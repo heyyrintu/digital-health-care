@@ -37,7 +37,7 @@ const ACCOUNT_CHANGED = () =>
   new AppError(
     409,
     'CONFLICT',
-    'Your account changed while this was being set up. Open your invite link again.',
+    'Your account changed while this was being set up. Open the newest invite link you were sent.',
   );
 
 const INVALID_INVITE = () =>

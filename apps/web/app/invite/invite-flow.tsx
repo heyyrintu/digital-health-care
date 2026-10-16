@@ -69,7 +69,6 @@ export function InviteFlow({ apiBaseUrl }: { apiBaseUrl: string }) {
   function messageFor(e: unknown, fallback: MessageKey = 'error.generic'): string {
     if (e instanceof ApiError) {
       if (e.status === 404) return t('invite.invalid');
-      if (e.status === 409) return t('invite.accountChanged');
       if (e.fields.password) return t('invite.passwordTooShort');
       return e.message;
     }
@@ -106,6 +105,8 @@ export function InviteFlow({ apiBaseUrl }: { apiBaseUrl: string }) {
         setStep({ kind: 'scan', details, secret, qr });
       } catch (e) {
         if (e instanceof ApiError && e.status === 404) return setStep({ kind: 'invalid' });
+        // Only accept's 409 means the account changed; complete's 409 has its own message.
+        if (e instanceof ApiError && e.status === 409) return setError(t('invite.accountChanged'));
         setError(messageFor(e));
       }
     });
