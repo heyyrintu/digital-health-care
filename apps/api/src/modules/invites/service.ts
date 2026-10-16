@@ -29,6 +29,9 @@ import {
 
 export const INVITE_TTL_MS = 72 * 3600_000;
 
+/** The field-error code a new password that fails NewPassword gets. */
+const WEAK_PASSWORD_CODE = 'too_weak';
+
 const INVALID_INVITE = () =>
   new AppError(
     404,
@@ -222,7 +225,7 @@ export class InviteService {
       if (!valid.success) {
         const message = valid.error.issues[0]?.message ?? 'Choose a longer password.';
         return {
-          error: new AppError(400, 'VALIDATION_FAILED', message, { password: 'too_weak' }),
+          error: new AppError(400, 'VALIDATION_FAILED', message, { password: WEAK_PASSWORD_CODE }),
         };
       }
       return { inviteId: invite.id, existing: false as const };
