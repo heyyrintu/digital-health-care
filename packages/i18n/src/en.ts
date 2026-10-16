@@ -954,6 +954,25 @@ export const en = {
   'mobile.codeInvalid': 'Enter the 6 digits from the SMS.',
   'mobile.unreachableTitle': 'Can’t connect',
   'mobile.switchLanguage': 'हिन्दी में देखें',
+  'mobile.clinic.lockedTitle': 'Clinic app locked',
+  'mobile.clinic.lockedBody':
+    'For patient privacy the app locks after 15 minutes without use. Unlock with Face ID, your fingerprint or the device passcode.',
+  'mobile.clinic.unlock': 'Unlock',
+  'mobile.clinic.unlockPrompt': 'Unlock the Clinic app',
+  'mobile.clinic.unlockFailed': 'That didn’t work. Try again, or sign out.',
+  'mobile.clinic.noDeviceLock':
+    'Set a passcode on this device first, in its settings. The Clinic app only opens on a device with a screen lock.',
+  'mobile.clinic.offlineCopy': 'You are offline. This is the queue as it was at {time}.',
+  'mobile.clinic.waitingToSync': 'Changes saved on this device and waiting to sync: {count}.',
+  'mobile.clinic.syncFailed': 'Not saved: {label}. {reason}',
+  'mobile.clinic.discard': 'Discard this change',
+  'mobile.clinic.pendingCheckIn': 'Check-in waiting to sync',
+  'mobile.clinic.checkInQueued':
+    'Checked in on this device. It will reach the queue when the connection is back.',
+  'mobile.clinic.needsConnection': 'This needs a connection. Try again when you are back online.',
+  'mobile.clinic.selectPatient': 'Choose a patient to see their details.',
+  'mobile.clinic.back': 'Back to the queue',
+  'mobile.clinic.reason': 'Reason: {reason}',
   'common.back': 'Back',
   'patient.consents.title': 'Before you start',
   'patient.consents.intro':

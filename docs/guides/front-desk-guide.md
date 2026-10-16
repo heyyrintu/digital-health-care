@@ -22,6 +22,12 @@ On the **Queue**: **Reschedule** moves a booking to another slot (the old one sh
 
 **Follow-ups** on the Queue lists patients the doctor asked to come back that day, with the visit they came from. If they have booked, the row shows when; if not, it says *Not booked yet* and **Book follow-up** opens the booking page for them on that day.
 
+## On the Clinic app (iPhone, iPad, Android)
+The **Queue** has **My OPD**, **Booked**, **Completed** and **Cancelled and no-shows**, as on the web; **Follow-ups** is on the web only for now. Tap a patient to see their booking and **Check in**, **Confirm** or **Mark no-show**; on an iPad or tablet the patient opens beside the list. Pull down to refresh. Cancelling and rescheduling are on the web for now.
+- **No network?** While you're signed in, the app keeps showing today's queue as it last loaded, with the time, and you can still check patients in: they show *Check-in waiting to sync* and reach the queue on their own when the connection is back. If one can't be saved (say the visit was cancelled meanwhile), the app tells you why and you can discard it. Opening the app again while offline asks you to reconnect first.
+- **Locking:** after 15 minutes without use, or when you open it again, the app asks for Face ID, your fingerprint or the device passcode. The device must have a screen lock.
+- **Sign out** (top of the Queue) removes everything the app saved on the device. So does an expired session or a clinic admin signing the device out.
+
 ## Printing the prescription
 Once the doctor signs, the patient's card on the **Queue** shows **Print prescription** with its number (for example *Print prescription SG-00042*). It opens the signed PDF in a new tab; print it from there. If the doctor amends it, the button prints the newest signed version. If the doctor voids it, the button reads *Prescription … (void)* and opens the copy stamped VOID: do not hand that one over. You see only the number, never the prescription's contents, on the card.
 

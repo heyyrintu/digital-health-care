@@ -26,7 +26,10 @@ export function PatientSignIn({ initialOrganisation, notice }: Props) {
     setBusy(true);
     setError(null);
     try {
-      const { challengeId } = await publicApi.requestOtp(organisation.trim(), phone.trim());
+      const { challengeId } = await publicApi.requestOtp(
+        organisation.trim().toLowerCase(),
+        phone.trim(),
+      );
       setChallenge(challengeId);
       setCode('');
     } catch (e) {
@@ -43,7 +46,7 @@ export function PatientSignIn({ initialOrganisation, notice }: Props) {
     setError(null);
     try {
       const tokens = await publicApi.verifyOtp(challenge, code);
-      await session.signIn(organisation.trim(), tokens);
+      await session.signIn(organisation.trim().toLowerCase(), tokens);
     } catch (e) {
       setError(errorMessage(e, t));
       setBusy(false);

@@ -17,7 +17,9 @@ import { variant } from '../../src/variant';
 export default function SignInRoute() {
   const { t } = useLocale();
   const state = useSession();
-  const { clinic } = useLocalSearchParams<{ clinic?: string }>();
+  const params = useLocalSearchParams<{ clinic?: string | string[] }>();
+  // A link with the clinic twice arrives as a list; the first one counts.
+  const clinic = Array.isArray(params.clinic) ? params.clinic[0] : params.clinic;
   const [saved, setSaved] = useState<string | null | undefined>(undefined);
 
   useEffect(() => {
