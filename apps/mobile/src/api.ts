@@ -2,6 +2,7 @@ import { createApiClient } from '@dhc/api-client';
 import { API_BASE_URL } from './config';
 import { expiringFetch, SessionManager } from './auth/session';
 import { secureVault } from './auth/vault';
+import { PatientAccount } from './patient/account';
 
 /** Sign-in calls, which carry no session. */
 export const publicApi = createApiClient({ baseUrl: API_BASE_URL });
@@ -20,4 +21,14 @@ export const api = createApiClient({
   baseUrl: API_BASE_URL,
   getAccessToken: () => session.getAccessToken(),
   fetch: expiringFetch(globalThis.fetch.bind(globalThis), (token) => void session.expire(token)),
+});
+
+/** The signed-in patient's account and family (Patient app). */
+export const patientAccount = new PatientAccount({
+  consents: () => api.portalConsents(),
+  patients: async () => (await api.portalPatients()).data,
+});
+// A new sign-in starts with a fresh family.
+session.subscribe(() => {
+  if (session.getState().status !== 'signed_in') patientAccount.reset();
 });

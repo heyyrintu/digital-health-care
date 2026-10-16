@@ -155,6 +155,29 @@ describe('booking', () => {
     expect(list.json().data.map((a: { id: string }) => a.id)).toContain(appt.id);
   });
 
+  it('books once when the app retries with the same idempotency key', async () => {
+    const send = () =>
+      h.app.inject({
+        method: 'POST',
+        url: '/v1/portal/appointments',
+        headers: { ...bearer(patient), 'idempotency-key': 'book-attempt-1' },
+        payload: {
+          patientId: neha,
+          doctorUserId: clinics.a.doctor.userId,
+          clinicId,
+          consultationTypeId: typeId,
+          startAt: at(WED, '10:00'),
+        },
+      });
+    const first = await send();
+    expect(first.statusCode, first.body).toBe(201);
+    const again = await send();
+    expect(again.statusCode).toBe(201);
+    expect(again.headers['idempotent-replay']).toBe('true');
+    expect(again.json().id).toBe(first.json().id);
+    expect(await h.owner.appointment.count({ where: { patientId: neha } })).toBe(1);
+  });
+
   it('waits for the front desk when the clinic confirms bookings itself', async () => {
     const rules = (await call('GET', '/booking-rules', adminA)).json();
     await call('PUT', '/booking-rules', adminA, { ...rules, autoConfirm: false });

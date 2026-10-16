@@ -271,11 +271,11 @@ export class PortalService {
     return dob.toISOString().slice(0, 10) <= `${year - 18}${rest}`;
   }
 
+  /** Compared as IST calendar dates, so a baby born today can be added straight away. */
   private dob(raw: string): Date {
-    const dob = new Date(`${raw}T00:00:00Z`);
-    const now = this.s.now();
-    const oldest = new Date(Date.UTC(now.getUTCFullYear() - 130, 0, 1));
-    if (dob > now || dob < oldest) throw invalid('dob', 'Enter a real date of birth.');
-    return dob;
+    const today = istDate(this.s.now());
+    const oldest = `${Number(today.slice(0, 4)) - 130}-01-01`;
+    if (raw > today || raw < oldest) throw invalid('dob', 'Enter a real date of birth.');
+    return new Date(`${raw}T00:00:00Z`);
   }
 }
