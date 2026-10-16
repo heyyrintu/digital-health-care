@@ -34,6 +34,8 @@ export const en = {
   'invite.passwordConfirm': 'Type the password again',
   'invite.passwordExisting': 'Your current password',
   'invite.passwordTooShort': 'Use at least 12 characters.',
+  'invite.accountChanged':
+    'Your account changed while this was being set up. Open your invite link again.',
   'invite.passwordMismatch': 'The passwords do not match.',
   'invite.scanTitle': 'Add an authenticator app',
   'invite.scanHelp':

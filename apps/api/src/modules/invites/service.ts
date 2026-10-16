@@ -32,6 +32,14 @@ export const INVITE_TTL_MS = 72 * 3600_000;
 /** The field-error code a new password that fails NewPassword gets. */
 const WEAK_PASSWORD_CODE = 'too_weak';
 
+/** The account was reset or finished enrolling while the password was being checked. */
+const ACCOUNT_CHANGED = () =>
+  new AppError(
+    409,
+    'CONFLICT',
+    'Your account changed while this was being set up. Open your invite link again.',
+  );
+
 const INVALID_INVITE = () =>
   new AppError(
     404,
@@ -249,8 +257,10 @@ export class InviteService {
 
       if (found.existing) {
         if (user.lockedUntil && user.lockedUntil > now) return { error: LOCKED() };
-        // A password (or account reset) changed meanwhile counts as a wrong attempt.
-        if (!passwordOk || !user.mfaSecret || user.passwordHash !== found.checkedHash) {
+        // An admin reset the authenticator meanwhile: not a wrong password, so not counted.
+        if (!user.mfaSecret) return { error: ACCOUNT_CHANGED() };
+        // A password changed meanwhile counts as a wrong attempt.
+        if (!passwordOk || user.passwordHash !== found.checkedHash) {
           await recordFailure(tx, user.id, now);
           await writeAudit(tx, request, {
             action: 'staff.invite.password_failed',
@@ -271,15 +281,7 @@ export class InviteService {
         where: { id: user.id, mfaSecret: null },
         data: { passwordHash: newHash, mfaPendingSecret: this.s.cipher.encrypt(secret) },
       });
-      if (set.count !== 1) {
-        return {
-          error: new AppError(
-            409,
-            'CONFLICT',
-            'Your account changed while this was being set up. Open your invite link again.',
-          ),
-        };
-      }
+      if (set.count !== 1) return { error: ACCOUNT_CHANGED() };
       const account = user.email ?? user.phone ?? user.id;
       return {
         response: {

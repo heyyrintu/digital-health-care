@@ -426,6 +426,18 @@ describe('while the password is checked or hashed', () => {
       ).toBe(1);
     });
 
+    it('does not count an authenticator reset meanwhile as a wrong password', async () => {
+      const { token } = await inviteDoctorB();
+      passwordCheck.hook = async () => {
+        await h.owner.user.update({
+          where: { id: doctorB().userId },
+          data: { mfaSecret: null, passwordHash: null },
+        });
+      };
+      expect((await accept(token, STAFF_PASSWORD)).statusCode).toBe(409);
+      expect((await doctorBRow()).failedLoginCount).toBe(0);
+    });
+
     it('refuses an account locked meanwhile', async () => {
       const { token } = await inviteDoctorB();
       passwordCheck.hook = async () => {

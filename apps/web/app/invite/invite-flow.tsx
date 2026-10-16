@@ -69,6 +69,7 @@ export function InviteFlow({ apiBaseUrl }: { apiBaseUrl: string }) {
   function messageFor(e: unknown, fallback: MessageKey = 'error.generic'): string {
     if (e instanceof ApiError) {
       if (e.status === 404) return t('invite.invalid');
+      if (e.status === 409) return t('invite.accountChanged');
       if (e.fields.password) return t('invite.passwordTooShort');
       return e.message;
     }
