@@ -252,6 +252,61 @@ describe('staff sign-in with password and authenticator', () => {
       expect(res.statusCode).toBe(password === STAFF_PASSWORD ? 200 : 401);
       expect(open).toEqual([0]);
     });
+
+    const login = () =>
+      post('/auth/login', {
+        organisation: 'clinic-a',
+        identifier: clinics.a.doctor.email,
+        password: STAFF_PASSWORD,
+      });
+    const doctorRow = () =>
+      h.owner.user.findUniqueOrThrow({ where: { id: clinics.a.doctor.userId } });
+
+    it('refuses a password changed meanwhile and counts it as a failure', async () => {
+      passwordCheck.hook = async () => {
+        await h.owner.user.update({
+          where: { id: clinics.a.doctor.userId },
+          data: { passwordHash: await hashPassword('another-Passw0rd!') },
+        });
+      };
+      expect((await login()).statusCode).toBe(401);
+      expect((await doctorRow()).failedLoginCount).toBe(1);
+    });
+
+    it('refuses an account locked meanwhile', async () => {
+      passwordCheck.hook = async () => {
+        await h.owner.user.update({
+          where: { id: clinics.a.doctor.userId },
+          data: { lockedUntil: new Date(h.clock.now().getTime() + 60_000) },
+        });
+      };
+      expect((await login()).statusCode).toBe(429);
+    });
+
+    it('refuses a clinic suspended meanwhile', async () => {
+      passwordCheck.hook = async () => {
+        await h.owner.organisation.update({
+          where: { slug: 'clinic-a' },
+          data: { status: 'suspended' },
+        });
+      };
+      expect((await login()).statusCode).toBe(401);
+    });
+  });
+
+  it('locks the account when wrong passwords arrive at the same time', async () => {
+    const results = await Promise.all(
+      Array.from({ length: 8 }, () =>
+        post('/auth/login', {
+          organisation: 'clinic-a',
+          identifier: clinics.a.doctor.email,
+          password: 'wrong',
+        }),
+      ),
+    );
+    expect(results.every((r) => r.statusCode === 401 || r.statusCode === 429)).toBe(true);
+    const row = await h.owner.user.findUniqueOrThrow({ where: { id: clinics.a.doctor.userId } });
+    expect(row.lockedUntil?.getTime()).toBeGreaterThan(h.clock.now().getTime());
   });
 
   it('writes sign-in events to the audit log', async () => {

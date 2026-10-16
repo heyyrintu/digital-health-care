@@ -218,7 +218,7 @@ export class InviteService {
         // password here and the current authenticator in the next step.
         if (user.lockedUntil && user.lockedUntil > now) return { error: LOCKED() };
         if (!user.passwordHash || !(await verifyPassword(password, user.passwordHash))) {
-          await recordFailure(tx, user.id, user.failedLoginCount, now);
+          await recordFailure(tx, user.id, now);
           await writeAudit(tx, request, {
             action: 'staff.invite.password_failed',
             organisationId: invite.organisationId,
@@ -275,7 +275,7 @@ export class InviteService {
 
       const step = matchTotpStep(this.s.cipher.decrypt(encrypted), code, now.getTime());
       if (step === null || (user.mfaLastUsedStep !== null && step <= user.mfaLastUsedStep)) {
-        await recordFailure(tx, user.id, user.failedLoginCount, now);
+        await recordFailure(tx, user.id, now);
         await writeAudit(tx, request, {
           action: 'staff.invite.code_failed',
           organisationId: invite.organisationId,

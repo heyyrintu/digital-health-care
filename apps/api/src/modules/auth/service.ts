@@ -183,8 +183,10 @@ export class AuthService {
     const passwordOk = await verifyPassword(body.password, checkedHash ?? DUMMY_PASSWORD_HASH);
 
     const outcome = await withAuth(this.s.db, async (tx) => {
-      const { org } = found;
-      // Re-read: lockout and failure count may have changed while the password was checked.
+      // Re-read both: the clinic, lockout and failure count may have changed while the
+      // password was checked.
+      const current = found.org ? await activeOrganisation(tx, body.organisation) : null;
+      const org = current?.id === found.org?.id ? current : null;
       const user =
         org && checkedHash && found.user
           ? await tx.user.findUnique({ where: { id: found.user.id } })
@@ -206,7 +208,7 @@ export class AuthService {
         return { error: LOCKED() };
       }
       if (!passwordOk || user.passwordHash !== checkedHash) {
-        await recordFailure(tx, user.id, user.failedLoginCount, now);
+        await recordFailure(tx, user.id, now);
         await writeAudit(tx, request, {
           action: 'auth.login.failed',
           organisationId: org.id,
@@ -286,7 +288,7 @@ export class AuthService {
 
       const step = matchTotpStep(this.s.cipher.decrypt(user.mfaSecret), code, now.getTime());
       if (step === null || (user.mfaLastUsedStep !== null && step <= user.mfaLastUsedStep)) {
-        await recordFailure(tx, user.id, user.failedLoginCount, now);
+        await recordFailure(tx, user.id, now);
         await writeAudit(tx, request, {
           action: 'auth.mfa.failed',
           organisationId: claims.organisationId,
@@ -485,15 +487,22 @@ export async function findByPhone(tx: Tx, raw: string) {
   return phone ? tx.user.findUnique({ where: { phone } }) : null;
 }
 
-export async function recordFailure(tx: Tx, userId: string, previousFailures: number, now: Date) {
-  const failures = previousFailures + 1;
-  await tx.user.update({
+/**
+ * Counts a failed password or code. The increment is atomic, so concurrent wrong guesses
+ * cannot all read the same count and stay under the limit; the one that reaches it locks.
+ */
+export async function recordFailure(tx: Tx, userId: string, now: Date) {
+  const { failedLoginCount } = await tx.user.update({
     where: { id: userId },
-    data:
-      failures >= MAX_FAILED_LOGINS
-        ? { failedLoginCount: 0, lockedUntil: new Date(now.getTime() + LOCKOUT_MS) }
-        : { failedLoginCount: failures },
+    data: { failedLoginCount: { increment: 1 } },
+    select: { failedLoginCount: true },
   });
+  if (failedLoginCount >= MAX_FAILED_LOGINS) {
+    await tx.user.update({
+      where: { id: userId },
+      data: { failedLoginCount: 0, lockedUntil: new Date(now.getTime() + LOCKOUT_MS) },
+    });
+  }
 }
 
 function safeEqual(a: string, b: string): boolean {
