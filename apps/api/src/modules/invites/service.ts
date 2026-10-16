@@ -208,16 +208,46 @@ export class InviteService {
     password: string,
   ): Promise<AcceptInviteResponse> {
     const now = this.s.now();
-    const outcome = await withAuth(this.s.db, async (tx) => {
+    const found = await withAuth(this.s.db, async (tx) => {
       const open = await this.openInvite(tx, token);
       if (!open) return { error: INVALID_INVITE() };
       const { invite, user } = open;
-
       if (user.mfaSecret) {
         // Existing staff account (e.g. works at another clinic): prove it with the current
         // password here and the current authenticator in the next step.
         if (user.lockedUntil && user.lockedUntil > now) return { error: LOCKED() };
-        if (!user.passwordHash || !(await verifyPassword(password, user.passwordHash))) {
+        return { inviteId: invite.id, existing: true as const, checkedHash: user.passwordHash };
+      }
+      const valid = NewPassword.safeParse(password);
+      if (!valid.success) {
+        const message = valid.error.issues[0]?.message ?? 'Choose a longer password.';
+        return {
+          error: new AppError(400, 'VALIDATION_FAILED', message, { password: 'too_weak' }),
+        };
+      }
+      return { inviteId: invite.id, existing: false as const };
+    });
+    if ('error' in found) throw found.error;
+
+    // scrypt runs between transactions: it is slow by design, and on a busy CPU it can
+    // outlast the interactive-transaction timeout (a 500) while holding a pooled
+    // connection. The second transaction re-reads everything it depends on.
+    const passwordOk =
+      found.existing && found.checkedHash
+        ? await verifyPassword(password, found.checkedHash)
+        : false;
+    const newHash = found.existing ? null : await hashPassword(password);
+
+    const outcome = await withAuth(this.s.db, async (tx) => {
+      // The invite may have been used, revoked or expired meanwhile.
+      const open = await this.openInvite(tx, token);
+      if (!open || open.invite.id !== found.inviteId) return { error: INVALID_INVITE() };
+      const { invite, user } = open;
+
+      if (found.existing) {
+        if (user.lockedUntil && user.lockedUntil > now) return { error: LOCKED() };
+        // A password (or account reset) changed meanwhile counts as a wrong attempt.
+        if (!passwordOk || !user.mfaSecret || user.passwordHash !== found.checkedHash) {
           await recordFailure(tx, user.id, now);
           await writeAudit(tx, request, {
             action: 'staff.invite.password_failed',
@@ -231,22 +261,22 @@ export class InviteService {
         return { response: { status: 'confirm_required' as const } };
       }
 
-      const valid = NewPassword.safeParse(password);
-      if (!valid.success) {
-        const message = valid.error.issues[0]?.message ?? 'Choose a longer password.';
+      // Starting again from the link replaces an unfinished password and authenticator, but
+      // never the password of an account that finished enrolling meanwhile.
+      const secret = generateTotpSecret();
+      const set = await tx.user.updateMany({
+        where: { id: user.id, mfaSecret: null },
+        data: { passwordHash: newHash, mfaPendingSecret: this.s.cipher.encrypt(secret) },
+      });
+      if (set.count !== 1) {
         return {
-          error: new AppError(400, 'VALIDATION_FAILED', message, { password: 'too_weak' }),
+          error: new AppError(
+            409,
+            'CONFLICT',
+            'Your account changed while this was being set up. Open your invite link again.',
+          ),
         };
       }
-      // Starting again from the link replaces an unfinished password and authenticator.
-      const secret = generateTotpSecret();
-      await tx.user.update({
-        where: { id: user.id },
-        data: {
-          passwordHash: await hashPassword(password),
-          mfaPendingSecret: this.s.cipher.encrypt(secret),
-        },
-      });
       const account = user.email ?? user.phone ?? user.id;
       return {
         response: {

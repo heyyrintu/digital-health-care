@@ -14,9 +14,24 @@ import {
 } from '@dhc/contracts';
 import { seedSampleMedicines } from '@dhc/db';
 import { createHash, randomUUID } from 'node:crypto';
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { hashPassword } from '../src/auth/password';
+import type * as PasswordModule from '../src/auth/password';
 import { supportVerifyDoctor } from '../src/modules/support/verify-doctor';
 import type { TestKeySigner } from '../src/signing/signer';
+
+/** Runs, when set, at the start of every password or PIN check. */
+const passwordCheck = vi.hoisted(() => ({ hook: undefined as (() => Promise<void>) | undefined }));
+vi.mock('../src/auth/password', async (importOriginal) => {
+  const actual = await importOriginal<typeof PasswordModule>();
+  return {
+    ...actual,
+    verifyPassword: async (password: string, stored: string) => {
+      await passwordCheck.hook?.();
+      return actual.verifyPassword(password, stored);
+    },
+  };
+});
 import {
   addStaff,
   bearer,
@@ -469,6 +484,86 @@ describe('signing', () => {
     );
     h.clock.advance(15 * 60 + 1);
     expect((await signed(id, draft.revision)).status).toBe('signed');
+  });
+});
+
+describe('while the signing PIN is checked', () => {
+  afterEach(() => {
+    passwordCheck.hook = undefined;
+  });
+
+  const profileRow = () =>
+    h.owner.doctorProfile.findFirstOrThrow({ where: { userId: clinics.a.doctor.userId } });
+  const draftVisit = async () => {
+    await readyToSign();
+    const id = await visit();
+    return { id, draft: await saved(id, [await line('Paracetamol 500')]) };
+  };
+
+  // scrypt is slow by design; inside a transaction a busy CPU pushed it past Prisma's
+  // 5 s interactive-transaction timeout and signing failed with a 500.
+  it.each([
+    ['the right PIN', PIN, 200],
+    ['a wrong PIN', '111111', 400],
+  ])('keeps no transaction open (%s)', async (_, pin, status) => {
+    const { id, draft } = await draftVisit();
+    const open: number[] = [];
+    passwordCheck.hook = async () => {
+      const [row] = await h.owner.$queryRaw<{ n: number }[]>`
+        SELECT count(*)::int AS n FROM pg_stat_activity
+        WHERE datname = current_database() AND state LIKE 'idle in transaction%'`;
+      open.push(row!.n);
+    };
+    expect((await sign(id, draft.revision, pin)).statusCode).toBe(status);
+    expect(open).toEqual([0]);
+  });
+
+  it('refuses a PIN changed meanwhile and counts it as a wrong attempt', async () => {
+    const { id, draft } = await draftVisit();
+    const changed = await hashPassword(h.services.pepperPin(clinics.a.doctor.userId, '730215'));
+    passwordCheck.hook = async () => {
+      await h.owner.doctorProfile.updateMany({
+        where: { userId: clinics.a.doctor.userId },
+        data: { signingPinHash: changed },
+      });
+    };
+    const res = await sign(id, draft.revision);
+    expect(res.statusCode).toBe(400);
+    expect(res.json().error.fields).toEqual({ pin: 'wrong' });
+    expect((await profileRow()).pinFailedCount).toBe(1);
+    expect((await view(id)).prescription?.status).toBe('draft');
+  });
+
+  it('refuses while signing was paused meanwhile', async () => {
+    const { id, draft } = await draftVisit();
+    passwordCheck.hook = async () => {
+      await h.owner.doctorProfile.updateMany({
+        where: { userId: clinics.a.doctor.userId },
+        data: { pinLockedUntil: new Date(h.clock.now().getTime() + 60_000) },
+      });
+    };
+    const res = await sign(id, draft.revision);
+    expect(res.statusCode).toBe(429);
+    expect(res.json().error.fields).toEqual({ pin: 'locked' });
+    expect((await view(id)).prescription?.status).toBe('draft');
+  });
+
+  it('pauses signing when the fifth wrong PIN lands after others arrived meanwhile', async () => {
+    const { id, draft } = await draftVisit();
+    passwordCheck.hook = async () => {
+      passwordCheck.hook = undefined;
+      await h.owner.doctorProfile.updateMany({
+        where: { userId: clinics.a.doctor.userId },
+        data: { pinFailedCount: 4 },
+      });
+    };
+    expect((await sign(id, draft.revision, '111111')).statusCode).toBe(429);
+    const row = await profileRow();
+    expect(row.pinFailedCount).toBe(0);
+    expect(row.pinLockedUntil?.getTime()).toBeGreaterThan(h.clock.now().getTime());
+    expect(await h.owner.auditLog.count({ where: { action: 'doctor.signing_pin_locked' } })).toBe(
+      1,
+    );
   });
 });
 
