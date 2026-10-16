@@ -1,7 +1,20 @@
 import { MeResponse, OtpRequestResponse, TokenResponse } from '@dhc/contracts';
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { totpAt } from '../src/auth/totp';
 import { hashPassword } from '../src/auth/password';
+
+/** Runs, when set, at the start of every password check. */
+const passwordCheck = vi.hoisted(() => ({ hook: undefined as (() => Promise<void>) | undefined }));
+vi.mock('../src/auth/password', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/auth/password')>();
+  return {
+    ...actual,
+    verifyPassword: async (password: string, stored: string) => {
+      await passwordCheck.hook?.();
+      return actual.verifyPassword(password, stored);
+    },
+  };
+});
 import {
   STAFF_PASSWORD,
   bearer,
@@ -210,6 +223,34 @@ describe('staff sign-in with password and authenticator', () => {
     expect(ambiguous.statusCode).toBe(400);
     expect(ambiguous.json().error.fields.role).toContain('doctor');
     expect((await post('/auth/login', { ...body, role: 'clinic_admin' })).statusCode).toBe(200);
+  });
+
+  describe('while the password is checked', () => {
+    afterEach(() => {
+      passwordCheck.hook = undefined;
+    });
+
+    // scrypt is slow by design; inside a transaction a busy CPU pushed it past Prisma's
+    // 5 s interactive-transaction timeout and sign-in failed with a 500.
+    it.each([
+      ['the right password', STAFF_PASSWORD],
+      ['a wrong password', 'wrong'],
+    ])('keeps no transaction open (%s)', async (_, password) => {
+      const open: number[] = [];
+      passwordCheck.hook = async () => {
+        const [row] = await h.owner.$queryRaw<{ n: number }[]>`
+          SELECT count(*)::int AS n FROM pg_stat_activity
+          WHERE datname = current_database() AND state LIKE 'idle in transaction%'`;
+        open.push(row!.n);
+      };
+      const res = await post('/auth/login', {
+        organisation: 'clinic-a',
+        identifier: clinics.a.doctor.email,
+        password,
+      });
+      expect(res.statusCode).toBe(password === STAFF_PASSWORD ? 200 : 401);
+      expect(open).toEqual([0]);
+    });
   });
 
   it('writes sign-in events to the audit log', async () => {

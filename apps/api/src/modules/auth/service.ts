@@ -169,15 +169,27 @@ export class AuthService {
 
   async login(request: FastifyRequest, body: LoginBody): Promise<LoginResponse> {
     const now = this.s.now();
-    const outcome = await withAuth(this.s.db, async (tx) => {
-      const org = await activeOrganisation(tx, body.organisation);
-      const identifier = body.identifier.trim();
-      const user = identifier.includes('@')
+    const identifier = body.identifier.trim();
+    const found = await withAuth(this.s.db, async (tx) => ({
+      org: await activeOrganisation(tx, body.organisation),
+      user: identifier.includes('@')
         ? await tx.user.findUnique({ where: { email: identifier.toLowerCase() } })
-        : await findByPhone(tx, identifier);
+        : await findByPhone(tx, identifier),
+    }));
+    // The password is checked between transactions: scrypt is slow by design, and on a
+    // busy CPU it can outlast the interactive-transaction timeout (a 500) while holding a
+    // pooled connection. Unknown users get a dummy check so the timing is the same.
+    const checkedHash = found.org ? found.user?.passwordHash : undefined;
+    const passwordOk = await verifyPassword(body.password, checkedHash ?? DUMMY_PASSWORD_HASH);
 
+    const outcome = await withAuth(this.s.db, async (tx) => {
+      const { org } = found;
+      // Re-read: lockout and failure count may have changed while the password was checked.
+      const user =
+        org && checkedHash && found.user
+          ? await tx.user.findUnique({ where: { id: found.user.id } })
+          : null;
       if (!org || !user?.passwordHash) {
-        await verifyPassword(body.password, DUMMY_PASSWORD_HASH); // equal timing for unknown users
         await writeAudit(tx, request, {
           action: 'auth.login.failed',
           organisationId: org?.id,
@@ -193,7 +205,7 @@ export class AuthService {
         });
         return { error: LOCKED() };
       }
-      if (!(await verifyPassword(body.password, user.passwordHash))) {
+      if (!passwordOk || user.passwordHash !== checkedHash) {
         await recordFailure(tx, user.id, user.failedLoginCount, now);
         await writeAudit(tx, request, {
           action: 'auth.login.failed',
