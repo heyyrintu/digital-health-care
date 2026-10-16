@@ -1,7 +1,21 @@
 import { MeResponse, OtpRequestResponse, TokenResponse } from '@dhc/contracts';
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { totpAt } from '../src/auth/totp';
 import { hashPassword } from '../src/auth/password';
+import type * as PasswordModule from '../src/auth/password';
+
+/** Runs, when set, at the start of every password check. */
+const passwordCheck = vi.hoisted(() => ({ hook: undefined as (() => Promise<void>) | undefined }));
+vi.mock('../src/auth/password', async (importOriginal) => {
+  const actual = await importOriginal<typeof PasswordModule>();
+  return {
+    ...actual,
+    verifyPassword: async (password: string, stored: string) => {
+      await passwordCheck.hook?.();
+      return actual.verifyPassword(password, stored);
+    },
+  };
+});
 import {
   STAFF_PASSWORD,
   bearer,
@@ -210,6 +224,89 @@ describe('staff sign-in with password and authenticator', () => {
     expect(ambiguous.statusCode).toBe(400);
     expect(ambiguous.json().error.fields.role).toContain('doctor');
     expect((await post('/auth/login', { ...body, role: 'clinic_admin' })).statusCode).toBe(200);
+  });
+
+  describe('while the password is checked', () => {
+    afterEach(() => {
+      passwordCheck.hook = undefined;
+    });
+
+    // scrypt is slow by design; inside a transaction a busy CPU pushed it past Prisma's
+    // 5 s interactive-transaction timeout and sign-in failed with a 500.
+    it.each([
+      ['the right password', STAFF_PASSWORD],
+      ['a wrong password', 'wrong'],
+    ])('keeps no transaction open (%s)', async (_, password) => {
+      const open: number[] = [];
+      passwordCheck.hook = async () => {
+        const [row] = await h.owner.$queryRaw<{ n: number }[]>`
+          SELECT count(*)::int AS n FROM pg_stat_activity
+          WHERE datname = current_database() AND state LIKE 'idle in transaction%'`;
+        open.push(row!.n);
+      };
+      const res = await post('/auth/login', {
+        organisation: 'clinic-a',
+        identifier: clinics.a.doctor.email,
+        password,
+      });
+      expect(res.statusCode).toBe(password === STAFF_PASSWORD ? 200 : 401);
+      expect(open).toEqual([0]);
+    });
+
+    const login = () =>
+      post('/auth/login', {
+        organisation: 'clinic-a',
+        identifier: clinics.a.doctor.email,
+        password: STAFF_PASSWORD,
+      });
+    const doctorRow = () =>
+      h.owner.user.findUniqueOrThrow({ where: { id: clinics.a.doctor.userId } });
+
+    it('refuses a password changed meanwhile and counts it as a failure', async () => {
+      passwordCheck.hook = async () => {
+        await h.owner.user.update({
+          where: { id: clinics.a.doctor.userId },
+          data: { passwordHash: await hashPassword('another-Passw0rd!') },
+        });
+      };
+      expect((await login()).statusCode).toBe(401);
+      expect((await doctorRow()).failedLoginCount).toBe(1);
+    });
+
+    it('refuses an account locked meanwhile', async () => {
+      passwordCheck.hook = async () => {
+        await h.owner.user.update({
+          where: { id: clinics.a.doctor.userId },
+          data: { lockedUntil: new Date(h.clock.now().getTime() + 60_000) },
+        });
+      };
+      expect((await login()).statusCode).toBe(429);
+    });
+
+    it('refuses a clinic suspended meanwhile', async () => {
+      passwordCheck.hook = async () => {
+        await h.owner.organisation.update({
+          where: { slug: 'clinic-a' },
+          data: { status: 'suspended' },
+        });
+      };
+      expect((await login()).statusCode).toBe(401);
+    });
+  });
+
+  it('locks the account when wrong passwords arrive at the same time', async () => {
+    const results = await Promise.all(
+      Array.from({ length: 8 }, () =>
+        post('/auth/login', {
+          organisation: 'clinic-a',
+          identifier: clinics.a.doctor.email,
+          password: 'wrong',
+        }),
+      ),
+    );
+    expect(results.every((r) => r.statusCode === 401 || r.statusCode === 429)).toBe(true);
+    const row = await h.owner.user.findUniqueOrThrow({ where: { id: clinics.a.doctor.userId } });
+    expect(row.lockedUntil?.getTime()).toBeGreaterThan(h.clock.now().getTime());
   });
 
   it('writes sign-in events to the audit log', async () => {
