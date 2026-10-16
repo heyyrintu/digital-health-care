@@ -8,7 +8,7 @@
 
 **I paid but it shows unpaid.** It usually updates within a minute. If not, contact the clinic with your payment reference; any failed payment is normally returned by your bank.
 
-**Where is my prescription?** In the app under Prescriptions, and as a link on WhatsApp/SMS. It is digitally signed; pharmacies can scan the QR code to check it.
+**Where is my prescription?** In the app under Prescriptions, and as a link on WhatsApp/SMS. Tap **Open PDF** to view, save or share the signed copy; revised and cancelled versions open too and say so. It is digitally signed; pharmacies can scan the QR code to check it. The app keeps no copy of the PDF once you close it or sign out.
 
 **Can I manage my family's records?** Yes. Everyone the clinic registered on your mobile number appears in the app when you sign in with it, with the children they look after. Add others under Family: adults who share your number, or someone you look after, such as a child or an elderly parent. Children's records are managed by their guardian.
 

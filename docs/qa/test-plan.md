@@ -55,6 +55,9 @@ The Clinic app's logic is unit tested and its iOS and Android bundles were built
 - Consultation: notes and vitals saved in flight mode sync on reconnect; notes edited on the web meanwhile come back as stale, not overwritten; medicine search falls back to the device copy offline; a penicillin allergy blocks amoxicillin and a warning needs acknowledging before **Sign prescription** is enabled; signing asks for biometrics then the PIN, and a wrong PIN is refused; the two-pane layout on iPad.
 - Push permission prompt; the device appears under `GET /push-devices`; a push reaches it once the sender exists (needs the EAS project ID and APNs/FCM credentials).
 
+## 5b. Patient app checks still to run on real devices
+- Prescriptions: **Open PDF** on a signed, a superseded and a void version (the void copy is stamped VOID) opens the PDF in the iOS share sheet / Android chooser, shows a spinner while it downloads, and a clear message when nothing can open it or the download fails; the copy in the app cache is gone after the sheet closes and after signing out, and a viewer opened from the Android chooser can still read it.
+
 ## 6. Entry and exit criteria
 - **Enter system test:** feature complete on staging, unit/integration green, test data seeded.
 - **Exit to pilot:** all PRD v3.0 §12.2 acceptance criteria pass; no open critical or high defects; pen-test critical/high fixed; clinical sign-off on safety pack; simulated clinic day passed.

@@ -1061,8 +1061,10 @@ export const hi: Record<MessageKey, string> = {
   'patient.rx.superseded': 'बाद में संशोधित',
   'patient.rx.void': 'डॉक्टर ने रद्द किया',
   'patient.rx.signed': '{date} को हस्ताक्षरित',
-  'patient.rx.pdfLater':
-    'हस्ताक्षरित PDF अभी क्लिनिक के संदेश से खुलती है; ऐप में देखने की सुविधा आ रही है।',
+  'patient.rx.openPdf': 'PDF खोलें',
+  'patient.rx.pdfTitle': 'पर्चा {number}',
+  'patient.rx.cannotOpen':
+    'इस फ़ोन पर PDF खोलने वाला कोई ऐप नहीं है। कोई PDF व्यूअर इंस्टॉल करें, या क्लिनिक के संदेश वाला लिंक इस्तेमाल करें।',
   'patient.family.intro': 'इस मोबाइल नंबर पर सभी लोग, और वे बच्चे जिनकी वे देखभाल करते हैं।',
   'patient.family.sharesNumber': 'यही मोबाइल नंबर इस्तेमाल करते हैं',
   'patient.family.lookedAfterBy': 'देखभाल: {name}',

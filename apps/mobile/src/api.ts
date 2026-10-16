@@ -3,6 +3,7 @@ import { API_BASE_URL } from './config';
 import { expiringFetch, SessionManager } from './auth/session';
 import { secureVault } from './auth/vault';
 import { PatientAccount } from './patient/account';
+import { clearPrescriptionPdfs } from './patient/pdf-cache';
 
 /** Sign-in calls, which carry no session. */
 export const publicApi = createApiClient({ baseUrl: API_BASE_URL });
@@ -28,7 +29,11 @@ export const patientAccount = new PatientAccount({
   consents: () => api.portalConsents(),
   patients: async () => (await api.portalPatients()).data,
 });
-// A new sign-in starts with a fresh family.
+// A new sign-in starts with a fresh family, and no PDF opened in the last session is left
+// in the cache (threat model T13).
 session.subscribe(() => {
-  if (session.getState().status !== 'signed_in') patientAccount.reset();
+  if (session.getState().status !== 'signed_in') {
+    patientAccount.reset();
+    clearPrescriptionPdfs();
+  }
 });
