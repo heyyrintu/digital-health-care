@@ -23,6 +23,11 @@ export function outboxSender(request: Request) {
       });
       return { kind: 'sent', result };
     } catch (error) {
+      // The first attempt with this key made its change but its answer was lost: it is
+      // applied, so it is done here; the queue refresh after sending shows the result.
+      if (error instanceof ApiError && error.fields.idempotencyKey === 'unknown') {
+        return { kind: 'sent' };
+      }
       if (
         error instanceof ApiError &&
         error.status >= 400 &&

@@ -86,6 +86,26 @@ describe('TodayStore across a sign-out and midnight', () => {
     expect(await store.get('clinic.today')).toBeNull();
   });
 
+  it('removes a copy whose save finished after a sign-out', async () => {
+    const inner = memoryStore();
+    let release: () => void = () => undefined;
+    const store = {
+      ...inner,
+      set: async (key: string, value: unknown) => {
+        await new Promise<void>((resolve) => (release = resolve));
+        await inner.set(key, value);
+      },
+    };
+    const today = new TodayStore(store, () => '2026-10-06');
+    const refreshing = today.refresh(async () => snapshot('2026-10-06'), String);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const clearing = today.clear();
+    release();
+    expect(await refreshing).toBe(false);
+    await clearing;
+    expect(await inner.get('clinic.today')).toBeNull();
+  });
+
   it('drops a refresh that answers after the person signed out', async () => {
     const store = memoryStore();
     const today = new TodayStore(store, () => '2026-10-06');
