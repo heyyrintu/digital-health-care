@@ -202,7 +202,8 @@ const HINDI_DOSE_WORDS: [RegExp, string, string][] = [
   [/\bpuffs?\b/gi, 'पफ़', 'पफ़'],
   [/\bsachets?\b/gi, 'पाउच', 'पाउच'],
   [/\bteaspoons?\b/gi, 'चम्मच', 'चम्मच'],
-  [/\bthin layer\b/gi, 'पतली परत', 'पतली परत'],
+  // The English article goes with it: "a thin layer" is one Hindi phrase.
+  [/\b(?:an? )?thin layer\b/gi, 'पतली परत', 'पतली परत'],
 ];
 
 /** True for a dose that starts with a number above one ("2 tablets", "1.5 tablets"). */
@@ -360,4 +361,26 @@ export function dosageRemarks(input: RemarkInput, lang: RemarkLanguage): string 
   const body = steps.map((s) => stepText(s, input.timing, lang));
   if (lang === 'en') return `${verb} ${body.join(', then ')}.`;
   return `${body.join(', फिर ')} ${verb}।`;
+}
+
+/** A sensible first dose for the medicine's form; the doctor changes it as needed. */
+export function defaultDose(form: string | null): string {
+  switch (form) {
+    case 'tablet':
+      return '1 tablet';
+    case 'capsule':
+      return '1 capsule';
+    case 'syrup':
+      return '5 ml';
+    case 'gel':
+    case 'cream':
+    case 'ointment':
+      return 'a thin layer';
+    case 'sachet':
+      return '1 sachet';
+    case 'drops':
+      return '1 drop';
+    default:
+      return '';
+  }
 }

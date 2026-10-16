@@ -7,7 +7,7 @@ import { Button, Input, Label, NativeSelect } from '@dhc/ui-web';
 import { useState, type FormEvent } from 'react';
 import { useSession } from './session-provider';
 
-type NumberField = Exclude<keyof VitalsBody, 'pregnancyStatus'>;
+type NumberField = Exclude<keyof VitalsBody, 'pregnancyStatus' | 'basedOn'>;
 
 const FIELDS: { key: NumberField; label: string; step: string }[] = [
   { key: 'bpSystolic', label: 'vitals.systolic', step: '1' },

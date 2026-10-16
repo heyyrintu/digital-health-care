@@ -14,6 +14,7 @@ import {
   type PrescriptionItem,
   type TemplateItem,
 } from '@dhc/contracts';
+import { defaultDose } from '@dhc/domain';
 import { Button, Input, Label, NativeSelect, cn } from '@dhc/ui-web';
 import { Copy, Search } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
@@ -27,28 +28,6 @@ const AUTOSAVE_MS = 1200;
 const MAX_LINES = 30;
 
 type SaveState = 'idle' | 'dirty' | 'saving' | 'saved' | 'stale' | 'error';
-
-/** A sensible first dose for the medicine's form; the doctor changes it as needed. */
-function defaultDose(form: string | null): string {
-  switch (form) {
-    case 'tablet':
-      return '1 tablet';
-    case 'capsule':
-      return '1 capsule';
-    case 'syrup':
-      return '5 ml';
-    case 'gel':
-    case 'cream':
-    case 'ointment':
-      return 'a thin layer';
-    case 'sachet':
-      return '1 sachet';
-    case 'drops':
-      return '1 drop';
-    default:
-      return '';
-  }
-}
 
 function lineFromMedicine(m: Medicine): PrescriptionItem {
   const oral = m.defaultRoute === 'oral';

@@ -975,6 +975,20 @@ export const hi: Record<MessageKey, string> = {
   'mobile.clinic.selectPatient': 'विवरण देखने के लिए मरीज़ चुनें।',
   'mobile.clinic.back': 'कतार पर लौटें',
   'mobile.clinic.reason': 'कारण: {reason}',
+  'mobile.clinic.savedOnDevice': 'इस डिवाइस पर सेव हो गया। कनेक्शन लौटने पर सिंक होगा।',
+  'mobile.clinic.followUpInvalid': 'फ़ॉलो-अप की तारीख़ YYYY-MM-DD में लिखें, या ख़ाली छोड़ें।',
+  'mobile.clinic.vitalsStale':
+    'ये वाइटल्स किसी दूसरे डिवाइस पर बदले गए हैं। नई रीडिंग देखने के लिए विज़िट फिर से खोलें।',
+  'mobile.clinic.signNeedsBiometrics':
+    'यहाँ साइन करने के लिए इस डिवाइस पर Face ID या फ़िंगरप्रिंट सेट होना चाहिए। आप वेब पर भी साइन कर सकते हैं।',
+  'mobile.clinic.vitalsInvalid': 'रीडिंग जाँचें: एक संभव सीमा से बाहर है।',
+  'mobile.clinic.offlineMedicines': 'ऑफ़लाइन: इस डिवाइस पर रखी दवा सूची में खोज रहे हैं।',
+  'mobile.clinic.signPrompt': 'यह पर्चा साइन करने के लिए पुष्टि करें कि यह आप हैं',
+  'mobile.clinic.offlineVisit':
+    'आप ऑफ़लाइन हैं। यह पिछली बार खोली गई विज़िट है; सेव किए नोट्स और वाइटल्स बाद में सिंक होंगे।',
+  'mobile.clinic.rxNeedsConnection':
+    'पर्चे के लिए कनेक्शन चाहिए। नोट्स और वाइटल्स फिर भी सेव हो सकते हैं।',
+  'mobile.clinic.templateApplied': 'टेम्पलेट “{name}” जोड़ा गया (पंक्तियाँ: {count})।',
   'common.back': 'वापस',
   'patient.consents.title': 'शुरू करने से पहले',
   'patient.consents.intro':

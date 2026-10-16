@@ -68,6 +68,9 @@ export function LockGate({ children }: { children: ReactNode }) {
       } else if (result.error !== 'user_cancel' && result.error !== 'system_cancel') {
         setError(t('mobile.clinic.unlockFailed'));
       }
+    } catch {
+      // The device couldn't run the check: say so rather than leave the screen silent.
+      setError(t('mobile.clinic.unlockFailed'));
     } finally {
       setBusy(false);
     }

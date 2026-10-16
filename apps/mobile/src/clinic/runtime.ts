@@ -6,6 +6,7 @@ import { MedicineCache } from './medicine-cache';
 import { Outbox } from './outbox';
 import { newKey, outboxSender } from './send';
 import { TodayStore } from './today';
+import { VisitCache } from './visit-cache';
 
 /** Medicine changes are rare; the copy is refreshed at most this often. */
 const MEDICINE_SYNC_MS = 6 * 60 * 60_000;
@@ -14,6 +15,7 @@ const MEDICINE_SYNC_MS = 6 * 60 * 60_000;
 export const outbox = new Outbox(fileStore, newKey);
 export const today = new TodayStore(fileStore, () => istDateKey(new Date()));
 export const medicines = new MedicineCache(fileStore);
+export const visits = new VisitCache(fileStore, () => istDateKey(new Date()));
 
 const send = outboxSender((method, path, options) => api.request(method, path, options));
 
@@ -22,11 +24,20 @@ let loaded: Promise<void> | null = null;
 let clearing: Promise<void> = Promise.resolve();
 
 /**
+ * The body of a notes or vitals save still on this device for `path`, if any: waiting, or
+ * refused by the server (kept so the doctor can fix it rather than lose it).
+ */
+export function waitingBody<T>(kind: 'notes' | 'vitals', path: string): T | null {
+  const item = [...outbox.getItems()].reverse().find((i) => i.kind === kind && i.path === path);
+  return item ? (item.body as T) : null;
+}
+
+/**
  * Clears every store, trying a failed one once more. Rejects when one still fails, so the
  * next session reads nothing rather than what the last person left behind.
  */
 async function clearAll(): Promise<void> {
-  const stores = [outbox, today, medicines];
+  const stores = [outbox, today, medicines, visits];
   const results = await Promise.allSettled(stores.map((s) => s.clear()));
   const failed = stores.filter((_, i) => results[i]?.status === 'rejected');
   await Promise.all(failed.map((s) => s.clear()));

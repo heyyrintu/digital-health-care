@@ -244,6 +244,39 @@ describe('vitals', () => {
     expect(replaced).toMatchObject({ pulse: 80, weightKg: 71.5, bpSystolic: null, bmi: null });
   });
 
+  it('refuses a save based on readings that changed meanwhile, when it says what it saw', async () => {
+    const id = await visit();
+    const first = await call('PUT', `/appointments/${id}/vitals`, desk, {
+      pulse: 72,
+      basedOn: null,
+    });
+    expect(first.statusCode, first.body).toBe(200);
+    const seen = Vitals.parse(first.json()).updatedAt;
+    // Someone else records new readings; an edit started from the first set is now stale.
+    expect(
+      (await call('PUT', `/appointments/${id}/vitals`, doctorA, { pulse: 90 })).statusCode,
+    ).toBe(200);
+    const stale = await call('PUT', `/appointments/${id}/vitals`, desk, {
+      pulse: 74,
+      basedOn: seen,
+    });
+    expect(stale.statusCode).toBe(409);
+    expect(stale.json().error.fields).toEqual({ basedOn: 'stale' });
+    expect(
+      (await call('PUT', `/appointments/${id}/vitals`, desk, { pulse: 74, basedOn: null }))
+        .statusCode,
+    ).toBe(409);
+    const latest = Vitals.parse(
+      (await call('GET', `/appointments/${id}/vitals`, desk)).json().vitals,
+    );
+    expect(latest.pulse).toBe(90);
+    const ok = await call('PUT', `/appointments/${id}/vitals`, desk, {
+      pulse: 74,
+      basedOn: latest.updatedAt,
+    });
+    expect(ok.statusCode, ok.body).toBe(200);
+  });
+
   it('rejects impossible readings, clinic admins and visits that did not happen', async () => {
     const id = await visit();
     expect((await call('PUT', `/appointments/${id}/vitals`, desk, { spo2: 140 })).statusCode).toBe(

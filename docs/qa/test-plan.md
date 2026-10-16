@@ -52,6 +52,7 @@ The Clinic app's logic is unit tested and its iOS and Android bundles were built
 - iPad and 10–11 inch tablets show the list and the selected patient side by side, in both orientations and in Split View; phones open the patient on its own screen.
 - Flight mode: the saved queue shows with its time; a check-in made offline shows "waiting to sync" and reaches the queue (once, on the web too) when the network returns; a check-in refused meanwhile (visit cancelled on the web) shows the reason and can be discarded.
 - Signing out, a clinic admin's sign-out, or opening the app on an expired session removes the saved queue, medicine copy and queued changes from the device.
+- Consultation: notes and vitals saved in flight mode sync on reconnect; notes edited on the web meanwhile come back as stale, not overwritten; medicine search falls back to the device copy offline; a penicillin allergy blocks amoxicillin and a warning needs acknowledging before **Sign prescription** is enabled; signing asks for biometrics then the PIN, and a wrong PIN is refused; the two-pane layout on iPad.
 - Push permission prompt; the device appears under `GET /push-devices`; a push reaches it once the sender exists (needs the EAS project ID and APNs/FCM credentials).
 
 ## 6. Entry and exit criteria

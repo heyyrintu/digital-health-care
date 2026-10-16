@@ -25,3 +25,4 @@ export function t(
 export function placeholdersOf(template: string): string[] {
   return [...template.matchAll(/\{(\w+)\}/g)].map((m) => m[1]!).sort();
 }
+export { alertText, type AlertWording } from './safety';

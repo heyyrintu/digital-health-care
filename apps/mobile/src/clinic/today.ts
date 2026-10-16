@@ -79,7 +79,12 @@ export class TodayStore {
     this.set({ data, fetchedAt, offline: false, error: null });
     // The server answered; failing to keep a copy only costs the offline fallback.
     await this.store.set(KEY, { data, fetchedAt }).catch(() => undefined);
-    return generation === this.generation;
+    if (generation !== this.generation) {
+      // Signed out while saving: the copy just written belongs to the previous person.
+      await this.store.remove(KEY).catch(() => undefined);
+      return false;
+    }
+    return true;
   }
 
   async clear(): Promise<void> {

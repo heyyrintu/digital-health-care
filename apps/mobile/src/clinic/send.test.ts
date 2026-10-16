@@ -43,6 +43,10 @@ describe('outboxSender', () => {
       idempotencyKey: 'in_progress',
     });
     expect(await failing(stillRunning)(item)).toEqual({ kind: 'retry' });
+    const answerLost = new ApiError(409, 'CONFLICT', 'Response lost.', undefined, {
+      idempotencyKey: 'unknown',
+    });
+    expect(await failing(answerLost)(item)).toEqual({ kind: 'sent' });
   });
 
   it('makes distinct keys', () => {

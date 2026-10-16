@@ -1,37 +1,13 @@
 'use client';
 
 import type { SafetyAlert, SafetySummary } from '@dhc/contracts';
-import type { MessageKey } from '@dhc/i18n';
+import { alertText } from '@dhc/i18n';
 import { Button, Chip, cn, Input, Label } from '@dhc/ui-web';
 import { useState } from 'react';
 import { useSession } from '../session-provider';
 
-type Translate = ReturnType<typeof useSession>['t'];
-
-/** The alert in the clinic's language, from its rule and the names and numbers it carries. */
-export function alertText(alert: SafetyAlert, t: Translate): string {
-  const p = alert.params;
-  // SR-11 while breastfeeding words a contraindication more strongly than a caution.
-  const variant =
-    alert.ruleId === 'SR-11'
-      ? p.status === 'breastfeeding' && p.risk === 'contraindicated'
-        ? '.breastfeedingAvoid'
-        : `.${p.status}`
-      : alert.ruleId === 'SR-13'
-        ? `.${p.direction}`
-        : '';
-  const params =
-    alert.ruleId === 'SR-20'
-      ? {
-          ...p,
-          fields: String(p.fields)
-            .split(',')
-            .map((f) => t(`safety.field.${f}` as MessageKey))
-            .join(', '),
-        }
-      : p;
-  return t(`safety.${alert.ruleId}${variant}` as MessageKey, params);
-}
+/** The alert in the clinic's language (shared with the Clinic app). */
+export { alertText };
 
 export type SafetyAct = (
   key: string,
