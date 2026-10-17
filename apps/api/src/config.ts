@@ -38,14 +38,30 @@ const Env = z
      */
     TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(1),
     /**
+     * Comma-separated networks of those proxies (the load balancer's subnets). When set,
+     * X-Forwarded-For is trusted only from a peer inside them. When unset, TRUST_PROXY_HOPS
+     * must be 0 unless the API port can be reached only from the load balancer.
+     */
+    TRUSTED_PROXY_CIDRS: z
+      .string()
+      .default('')
+      .refine((raw) => parseCidrs(raw) !== null, 'Use CIDRs like 10.0.0.0/16, comma-separated'),
+    /**
      * Comma-separated networks (CIDR, IPv4 or IPv6, or single addresses) that may reach the
-     * platform console's `/platform/*` endpoints (PRD §3.3). Empty: none in production,
-     * any in development and test.
+     * platform console's `/platform/*` endpoints (PRD §3.3). `*` allows any address outside
+     * production (local development). Empty allows nobody, except under NODE_ENV=test.
      */
     PLATFORM_ALLOWED_CIDRS: z
       .string()
       .default('')
-      .refine((raw) => parseCidrs(raw) !== null, 'Use CIDRs like 203.0.113.0/24, comma-separated'),
+      .refine(
+        (raw) => raw.trim() === '*' || parseCidrs(raw) !== null,
+        'Use CIDRs like 203.0.113.0/24, comma-separated, or * outside production',
+      ),
+  })
+  .refine((env) => !(env.NODE_ENV === 'production' && env.PLATFORM_ALLOWED_CIDRS.trim() === '*'), {
+    message: 'PLATFORM_ALLOWED_CIDRS=* is not allowed in production',
+    path: ['PLATFORM_ALLOWED_CIDRS'],
   })
   .refine((env) => !(env.NODE_ENV === 'production' && env.OTP_DELIVERY === 'log'), {
     message: 'OTP_DELIVERY=log is not allowed in production',
@@ -68,13 +84,37 @@ export function corsOrigins(config: Pick<Config, 'CORS_ORIGINS' | 'WEB_BASE_URL'
     .map((o) => new URL(o).origin);
 }
 
-/** Who may reach `/platform/*`: the configured networks; with none, nobody in production. */
+/**
+ * Who may reach `/platform/*`: the configured networks. `*` is everyone (refused in
+ * production); an empty list is nobody, except under NODE_ENV=test.
+ */
 export function platformAllowlist(
   config: Pick<Config, 'NODE_ENV' | 'PLATFORM_ALLOWED_CIDRS'>,
 ): IpAllowlist {
-  const cidrs = parseCidrs(config.PLATFORM_ALLOWED_CIDRS) ?? [];
+  const raw = config.PLATFORM_ALLOWED_CIDRS.trim();
+  if (raw === '*') return config.NODE_ENV === 'production' ? IpAllowlist.none() : IpAllowlist.any();
+  const cidrs = parseCidrs(raw) ?? [];
   if (cidrs.length > 0) return IpAllowlist.of(cidrs);
-  return config.NODE_ENV === 'production' ? IpAllowlist.none() : IpAllowlist.any();
+  return config.NODE_ENV === 'test' ? IpAllowlist.any() : IpAllowlist.none();
+}
+
+export interface ProxyTrust {
+  /** How many proxy hops of X-Forwarded-For to trust. */
+  hops: number;
+  /** When set, a hop is trusted only if that peer's address is inside these networks. */
+  proxies?: IpAllowlist;
+}
+
+/** Which proxies' X-Forwarded-For entries to believe: production only, never all of them. */
+export function proxyTrust(
+  config: Pick<Config, 'NODE_ENV' | 'TRUST_PROXY_HOPS' | 'TRUSTED_PROXY_CIDRS'>,
+): ProxyTrust | false {
+  if (config.NODE_ENV !== 'production' || config.TRUST_PROXY_HOPS === 0) return false;
+  const cidrs = parseCidrs(config.TRUSTED_PROXY_CIDRS) ?? [];
+  return {
+    hops: config.TRUST_PROXY_HOPS,
+    ...(cidrs.length > 0 ? { proxies: IpAllowlist.of(cidrs) } : {}),
+  };
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {

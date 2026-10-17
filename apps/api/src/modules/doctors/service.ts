@@ -87,10 +87,11 @@ export class DoctorProfileService {
           );
         }
       }
-      const reverify =
-        existing?.verification === 'verified' &&
+      const registrationChanged =
+        !!existing &&
         (existing.registrationNumber !== body.registrationNumber ||
           existing.council !== body.council);
+      const reverify = existing?.verification === 'verified' && registrationChanged;
       const data = {
         registrationNumber: body.registrationNumber,
         council: body.council,
@@ -98,14 +99,11 @@ export class DoctorProfileService {
         specialty: body.specialty || null,
         rxPrefix: body.rxPrefix,
         paperSize: body.paperSize,
-        // Back in the platform team's queue, as of now.
+        // Back in the platform team's queue, as of now: a check of the old details (even
+        // one in progress) no longer applies.
+        ...(registrationChanged ? { submittedAt: this.s.now() } : {}),
         ...(reverify
-          ? {
-              verification: 'pending' as const,
-              verifiedAt: null,
-              verifiedBy: null,
-              submittedAt: this.s.now(),
-            }
+          ? { verification: 'pending' as const, verifiedAt: null, verifiedBy: null }
           : {}),
       };
       let row: ProfileRow;

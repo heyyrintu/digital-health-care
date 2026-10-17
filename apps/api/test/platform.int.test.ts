@@ -11,7 +11,12 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { totpAt } from '../src/auth/totp';
 import { maskIdentifier } from '../src/modules/invites/service';
-import { createPlatformOperator, disablePlatformOperator } from '../src/modules/platform/operators';
+import {
+  createPlatformOperator,
+  disablePlatformOperator,
+  enablePlatformOperator,
+  resetPlatformOperatorAuthenticator,
+} from '../src/modules/platform/operators';
 import { supportVerifyDoctor } from '../src/modules/support/verify-doctor';
 import { IpAllowlist, parseCidrs } from '../src/plugins/ip-allowlist';
 import {
@@ -94,6 +99,19 @@ function expectNoClinicalData(body: string) {
   }
 }
 
+/** What the console sends: the ticket and the details the queue showed. */
+const checked = (
+  profile: { registrationNumber: string | null; council: string | null; submittedAt: string },
+  ticket = 'SUP-1',
+) => ({
+  ticket,
+  expected: {
+    registrationNumber: profile.registrationNumber,
+    council: profile.council,
+    submittedAt: profile.submittedAt,
+  },
+});
+
 const profileBody = {
   registrationNumber: 'TEST-12345',
   council: 'Test Medical Council',
@@ -144,7 +162,6 @@ describe('sign-in', () => {
   });
 
   it('locks the operator for 15 minutes after 5 wrong passwords or codes', async () => {
-    // A correct password resets the count, so take the password step first.
     const step = await passwordStep(op.email);
     expect(step.statusCode).toBe(200);
     // Four wrong passwords, then a wrong code: both count.
@@ -164,9 +181,57 @@ describe('sign-in', () => {
     expect(await h.owner.auditLog.count({ where: { action: 'platform.auth.login.locked' } })).toBe(
       1,
     );
+    // A code while locked is refused and audited too.
+    const lockedCode = await call('POST', '/platform/auth/mfa/verify', null, {
+      mfaToken: step.json().mfaToken,
+      code: totpAt(op.totpSecret, h.clock.ms / 1000),
+    });
+    expect(lockedCode.statusCode).toBe(429);
+    expect(
+      await h.owner.auditLog.count({
+        where: { action: 'platform.auth.login.locked', metadata: { equals: { step: 'mfa' } } },
+      }),
+    ).toBe(1);
 
     h.clock.advance(15 * 60 + 1);
     await expect(platformLogin(h, op)).resolves.toMatchObject({ tokenType: 'Bearer' });
+  });
+
+  it('locks after wrong codes even when each sign-in starts with the right password', async () => {
+    // Someone who knows the password guesses one code per sign-in: the password step must
+    // not wipe the count.
+    for (let i = 0; i < 5; i++) {
+      const step = await passwordStep(op.email);
+      expect(step.statusCode, `attempt ${i + 1}`).toBe(200);
+      const res = await call('POST', '/platform/auth/mfa/verify', null, {
+        mfaToken: step.json().mfaToken,
+        code: WRONG_CODE,
+      });
+      expect(res.statusCode).toBe(401);
+    }
+    expect((await passwordStep(op.email)).statusCode).toBe(429);
+  });
+
+  it('a right code resets the count', async () => {
+    for (let i = 0; i < 4; i++) {
+      expect((await passwordStep(op.email, WRONG_PASSWORD)).statusCode).toBe(401);
+    }
+    await platformLogin(h, op);
+    const row = await h.owner.platformOperator.findUniqueOrThrow({ where: { id: op.operatorId } });
+    expect(row.failedLoginCount).toBe(0);
+  });
+
+  it('accepts one code once, even when two requests race with it', async () => {
+    const [first, second] = await Promise.all([passwordStep(op.email), passwordStep(op.email)]);
+    h.clock.advance(30);
+    const code = totpAt(op.totpSecret, h.clock.ms / 1000);
+    const results = await Promise.all(
+      [first!, second!].map((step) =>
+        call('POST', '/platform/auth/mfa/verify', null, { mfaToken: step.json().mfaToken, code }),
+      ),
+    );
+    expect(results.map((r) => r.statusCode).sort()).toEqual([200, 401]);
+    expect(await h.owner.platformSession.count()).toBe(1);
   });
 
   it('counts concurrent wrong passwords atomically', async () => {
@@ -223,6 +288,7 @@ describe('sign-in', () => {
       displayName: 'New Operator',
       password: STAFF_PASSWORD,
       totpSecret: TOTP_SECRET,
+      confirmedStep: Math.floor(h.clock.ms / 30_000),
       ticket: 'SUP-10',
       operator: 'lead@platform.test',
     };
@@ -235,6 +301,55 @@ describe('sign-in', () => {
     const row = await h.owner.platformOperator.findUniqueOrThrow({ where: { id: created.id } });
     expect(row.mfaSecret).not.toContain(base.totpSecret);
     expect(row.passwordHash).toMatch(/^scrypt\$/);
+
+    // The code that confirmed the authenticator at the terminal cannot sign in.
+    const fixture = { operatorId: created.id, email: created.email, totpSecret: TOTP_SECRET };
+    const step = await passwordStep(fixture.email);
+    const reuse = await call('POST', '/platform/auth/mfa/verify', null, {
+      mfaToken: step.json().mfaToken,
+      code: totpAt(TOTP_SECRET, h.clock.ms / 1000),
+    });
+    expect(reuse.statusCode).toBe(401);
+    await expect(platformLogin(h, fixture)).resolves.toMatchObject({ tokenType: 'Bearer' });
+  });
+
+  it('replaces a lost authenticator and enables the operator again, both audited', async () => {
+    const tokens = await platformLogin(h, op);
+    const trail = { email: op.email, ticket: 'SUP-11', operator: 'lead@platform.test' };
+    await disablePlatformOperator(h.services, source, trail);
+    const reset = await resetPlatformOperatorAuthenticator(h.services, source, {
+      ...trail,
+      totpSecret: TOTP_SECRET,
+      confirmedStep: Math.floor(h.clock.ms / 30_000),
+    });
+    expect(reset.sessionsRevoked).toBe(0);
+    // Still disabled until enabled.
+    expect((await passwordStep(op.email)).statusCode).toBe(401);
+    expect(await enablePlatformOperator(h.services, source, trail)).toMatchObject({
+      alreadyActive: false,
+    });
+    // The old authenticator no longer works; the new one does.
+    const step = await passwordStep(op.email);
+    h.clock.advance(30);
+    const old = await call('POST', '/platform/auth/mfa/verify', null, {
+      mfaToken: step.json().mfaToken,
+      code: totpAt(op.totpSecret, h.clock.ms / 1000),
+    });
+    expect(old.statusCode).toBe(401);
+    await expect(platformLogin(h, { ...op, totpSecret: TOTP_SECRET })).resolves.toMatchObject({
+      tokenType: 'Bearer',
+    });
+    expect((await call('GET', '/platform/me', tokens)).statusCode).toBe(401);
+    const actions = (
+      await h.owner.auditLog.findMany({
+        where: { action: { startsWith: 'platform.operator.' }, entityId: op.operatorId },
+      })
+    ).map((a) => a.action);
+    expect(actions.sort()).toEqual([
+      'platform.operator.authenticator_reset',
+      'platform.operator.disabled',
+      'platform.operator.enabled',
+    ]);
   });
 });
 
@@ -410,6 +525,13 @@ describe('organisations', () => {
       expect(entry.metadata).toMatchObject({ operatorId: op.operatorId, operator: op.email });
     }
     expect(audit.map((a) => a.action)).toContain('staff.invite.accepted');
+    // And in the operator's own trail, with no organisation.
+    expect(
+      await h.owner.auditLog.findFirst({
+        where: { action: 'platform.organisation.created', organisationId: null },
+      }),
+    ).toMatchObject({ entityId: op.operatorId, metadata: { organisationId: orgId } });
+    const usersBefore = await h.owner.user.count();
 
     // The slug is taken now: nothing more is created.
     const again = await call('POST', '/platform/organisations', tokens, {
@@ -420,6 +542,17 @@ describe('organisations', () => {
     });
     expect(again.statusCode).toBe(409);
     expect(again.json().error.fields).toEqual({ slug: 'taken' });
+    // Refused before anything was created, the admin's account included; and audited.
+    expect(await h.owner.user.count()).toBe(usersBefore);
+    expect(
+      await h.owner.auditLog.findFirst({
+        where: { action: 'platform.organisation.create_refused' },
+      }),
+    ).toMatchObject({
+      organisationId: null,
+      entityId: op.operatorId,
+      metadata: { reason: 'slug_taken', slug: 'gupta-bone' },
+    });
     expect(await h.owner.organisation.count()).toBe(3);
     expect(await h.owner.clinic.count({ where: { organisationId: orgId } })).toBe(1);
   });
@@ -440,7 +573,9 @@ describe('doctor verification', () => {
     const res = await call('GET', '/platform/doctors?status=pending', tokens);
     expect(res.statusCode).toBe(200);
     expectNoClinicalData(res.body);
-    const queue = PlatformDoctorList.parse(res.json()).data;
+    const list = PlatformDoctorList.parse(res.json());
+    expect(list.hasMore).toBe(false);
+    const queue = list.data;
     expect(queue.map((d) => [d.organisation.slug, d.registrationNumber])).toEqual([
       ['clinic-a', 'TEST-12345'],
       ['clinic-b', 'B-1'],
@@ -454,9 +589,12 @@ describe('doctor verification', () => {
     });
 
     // The console verifies clinic A's doctor; the CLI verifies clinic B's.
-    const verify = await call('POST', `/platform/doctors/${queue[0]!.profileId}/verify`, tokens, {
-      ticket: 'SUP-1',
-    });
+    const verify = await call(
+      'POST',
+      `/platform/doctors/${queue[0]!.profileId}/verify`,
+      tokens,
+      checked(queue[0]!),
+    );
     expect(verify.statusCode, verify.body).toBe(200);
     expect(VerifiedPlatformDoctor.parse(verify.json())).toMatchObject({
       verification: 'verified',
@@ -505,11 +643,27 @@ describe('doctor verification', () => {
       'registrationNumber',
       'ticket',
     ]);
+    // The operator's own trail has it too, with no organisation.
+    expect(
+      await h.owner.auditLog.findFirst({
+        where: { action: 'platform.doctor.verified', organisationId: null },
+      }),
+    ).toMatchObject({
+      entityId: op.operatorId,
+      metadata: {
+        profileId: queue[0]!.profileId,
+        ticket: 'SUP-1',
+        organisationId: clinics.a.org.id,
+      },
+    });
 
     // Verified once: again changes nothing.
-    const twice = await call('POST', `/platform/doctors/${queue[0]!.profileId}/verify`, tokens, {
-      ticket: 'SUP-3',
-    });
+    const twice = await call(
+      'POST',
+      `/platform/doctors/${queue[0]!.profileId}/verify`,
+      tokens,
+      checked(queue[0]!, 'SUP-3'),
+    );
     expect(twice.json().alreadyVerified).toBe(true);
     expect(await h.owner.auditLog.count({ where: { action: 'support.doctor.verified' } })).toBe(2);
 
@@ -526,7 +680,7 @@ describe('doctor verification', () => {
       (await call('GET', '/platform/doctors', tokens)).json(),
     ).data;
     const verify = (id: string, ticket = 'SUP-1') =>
-      call('POST', `/platform/doctors/${id}/verify`, tokens, { ticket });
+      call('POST', `/platform/doctors/${id}/verify`, tokens, checked(profile!, ticket));
 
     expect((await verify(randomUUID())).statusCode).toBe(404);
     expect((await verify('not-a-uuid')).statusCode).toBe(400);
@@ -537,6 +691,118 @@ describe('doctor verification', () => {
     });
     expect((await verify(profile!.profileId)).statusCode).toBe(404);
     expect(await h.owner.auditLog.count({ where: { action: 'support.doctor.verified' } })).toBe(0);
+    expect(
+      await h.owner.auditLog.count({
+        where: { action: 'platform.doctor.verify_refused', entityId: op.operatorId },
+      }),
+    ).toBe(2);
+  });
+
+  it('refuses to verify a registration that changed after the operator saw it', async () => {
+    const doctorA = await staffLogin(h, 'clinic-a', clinics.a.doctor);
+    await call('PUT', '/doctor-profile', doctorA, profileBody);
+    const tokens = await platformLogin(h, op);
+    const [shown] = PlatformDoctorList.parse(
+      (await call('GET', '/platform/doctors', tokens)).json(),
+    ).data;
+
+    // While the operator checks TEST-12345 on the register, the doctor changes it.
+    h.clock.advance(60);
+    await call('PUT', '/doctor-profile', doctorA, {
+      ...profileBody,
+      registrationNumber: 'OTHER-9',
+    });
+    const res = await call(
+      'POST',
+      `/platform/doctors/${shown!.profileId}/verify`,
+      tokens,
+      checked(shown!),
+    );
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.fields).toEqual({ profile: 'changed' });
+    expect((await call('GET', '/doctor-profile', doctorA)).json().verification).toBe('pending');
+    expect(await h.owner.auditLog.count({ where: { action: 'support.doctor.verified' } })).toBe(0);
+    expect(
+      await h.owner.auditLog.findFirst({ where: { action: 'platform.doctor.verify_refused' } }),
+    ).toMatchObject({ metadata: { reason: 'changed', profileId: shown!.profileId } });
+
+    // Changed back to the same number: submitted again, so the earlier check is stale too.
+    h.clock.advance(60);
+    await call('PUT', '/doctor-profile', doctorA, profileBody);
+    const sameAgain = await call(
+      'POST',
+      `/platform/doctors/${shown!.profileId}/verify`,
+      tokens,
+      checked(shown!),
+    );
+    expect(sameAgain.statusCode).toBe(409);
+
+    // Reloaded, the current details verify.
+    const [current] = (await call('GET', '/platform/doctors', tokens)).json().data;
+    expect(
+      (
+        await call(
+          'POST',
+          `/platform/doctors/${current.profileId}/verify`,
+          tokens,
+          checked(current),
+        )
+      ).statusCode,
+    ).toBe(200);
+  });
+
+  it('the support command also refuses a profile that changed since its dry run', async () => {
+    const doctorA = await staffLogin(h, 'clinic-a', clinics.a.doctor);
+    await call('PUT', '/doctor-profile', doctorA, profileBody);
+    const params = {
+      identifier: clinics.a.doctor.email,
+      clinic: 'clinic-a',
+      ticket: 'SUP-4',
+      operator: 'ops@platform.test',
+    };
+    const plan = await supportVerifyDoctor(h.services, source, { ...params, dryRun: true });
+    h.clock.advance(60);
+    await call('PUT', '/doctor-profile', doctorA, { ...profileBody, council: 'Another Council' });
+    await expect(
+      supportVerifyDoctor(h.services, source, {
+        ...params,
+        expected: {
+          registrationNumber: plan.registrationNumber,
+          council: plan.council,
+          submittedAt: plan.submittedAt,
+        },
+      }),
+    ).rejects.toMatchObject({ statusCode: 409, fields: { profile: 'changed' } });
+  });
+
+  it('says when the queue holds more than one page', async () => {
+    const users = Array.from({ length: 201 }, (_, i) => ({
+      id: randomUUID(),
+      email: `doctor${i}@clinic-b.test`,
+    }));
+    await h.owner.user.createMany({ data: users });
+    await h.owner.membership.createMany({
+      data: users.map((u) => ({
+        organisationId: clinics.b.org.id,
+        userId: u.id,
+        role: 'doctor' as const,
+      })),
+    });
+    await h.owner.doctorProfile.createMany({
+      data: users.map((u, i) => ({
+        organisationId: clinics.b.org.id,
+        userId: u.id,
+        registrationNumber: `B-${i}`,
+        council: 'Test Medical Council',
+        qualifications: 'MBBS',
+        submittedAt: new Date(h.clock.ms + i * 1000),
+      })),
+    });
+    const tokens = await platformLogin(h, op);
+    const page = PlatformDoctorList.parse((await call('GET', '/platform/doctors', tokens)).json());
+    expect(page.data).toHaveLength(200);
+    expect(page.hasMore).toBe(true);
+    expect(page.data[0]!.registrationNumber).toBe('B-0');
   });
 
   it('puts a profile back in the queue, as of now, when the registration changes', async () => {
@@ -544,7 +810,13 @@ describe('doctor verification', () => {
     await call('PUT', '/doctor-profile', doctorA, profileBody);
     const tokens = await platformLogin(h, op);
     const [first] = (await call('GET', '/platform/doctors', tokens)).json().data;
-    await call('POST', `/platform/doctors/${first.profileId}/verify`, tokens, { ticket: 'SUP-1' });
+    const verified = await call(
+      'POST',
+      `/platform/doctors/${first.profileId}/verify`,
+      tokens,
+      checked(first),
+    );
+    expect(verified.statusCode).toBe(200);
     h.clock.advance(3600);
     await call('PUT', '/doctor-profile', doctorA, { ...profileBody, registrationNumber: 'NEW-1' });
     const [again] = (await call('GET', '/platform/doctors', tokens)).json().data;
@@ -724,6 +996,39 @@ describe('in the database (dhc_platform)', () => {
     ).rejects.toThrow(/row-level security/);
   });
 
+  it('has no privilege on any table but its own, besides inserting audit entries', async () => {
+    const tables = await h.owner.$queryRaw<
+      { table: string; any: boolean; read: boolean; insert: boolean }[]
+    >`
+      SELECT c.relname AS table,
+             has_table_privilege('dhc_platform', c.oid, 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') AS any,
+             has_table_privilege('dhc_platform', c.oid, 'SELECT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') AS read,
+             has_table_privilege('dhc_platform', c.oid, 'INSERT') AS insert
+      FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace AND n.nspname = 'public'
+      WHERE c.relkind IN ('r', 'p', 'v', 'm', 'f') AND c.relname NOT LIKE 'platform\\_%'
+      ORDER BY 1`;
+    expect(tables.length).toBeGreaterThan(40);
+    const granted = tables.filter((t) => (t.table === 'audit_logs' ? t.read : t.any));
+    expect(granted.map((t) => t.table)).toEqual([]);
+    expect(tables.find((t) => t.table === 'audit_logs')?.insert).toBe(true);
+  });
+
+  it('can run no SECURITY DEFINER function but its own, nor send queue notifications', async () => {
+    const definers = await h.owner.$queryRaw<{ name: string }[]>`
+      SELECT p.proname AS name
+      FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace AND n.nspname = 'public'
+      WHERE p.prosecdef AND has_function_privilege('dhc_platform', p.oid, 'EXECUTE')
+        AND p.proname NOT LIKE 'platform\\_%'`;
+    expect(definers).toEqual([]);
+    await expect(
+      asPlatform((tx) =>
+        tx.$queryRawUnsafe(
+          `SELECT queue_notify('${clinics.a.org.id}'::uuid, NULL, current_date, NULL)`,
+        ),
+      ),
+    ).rejects.toThrow(/permission denied/);
+  });
+
   it('keeps operators out of reach of the clinic roles, and the functions to itself', async () => {
     await expect(withAuth(h.services.db, (tx) => tx.platformOperator.count())).rejects.toThrow(
       /permission denied/,
@@ -744,6 +1049,7 @@ describe('in the database (dhc_platform)', () => {
       'platform_create_organisation',
       'platform_doctor_profiles',
       'platform_mask_identifier',
+      'platform_organisation_slug_taken',
       'platform_organisation_summaries',
       'platform_usage',
     ]);

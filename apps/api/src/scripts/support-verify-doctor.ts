@@ -81,7 +81,15 @@ try {
       rl.close();
       if (answer.trim() !== 'VERIFY') fail('Cancelled: nothing was changed.');
     }
-    await supportVerifyDoctor(deps, source, params);
+    // Only what was shown above: if the doctor changes it meanwhile, nothing is verified.
+    await supportVerifyDoctor(deps, source, {
+      ...params,
+      expected: {
+        registrationNumber: plan.registrationNumber,
+        council: plan.council,
+        submittedAt: plan.submittedAt,
+      },
+    });
     console.error(
       `\nVerified; audit run ID ${runId} (ticket ${params.ticket}). They can now sign.`,
     );

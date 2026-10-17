@@ -24,6 +24,7 @@ import {
   type CreatePlatformOrganisationBody,
   type PlatformLoginBody,
   type PlatformUsageQuery,
+  type VerifyPlatformDoctorBody,
   InviteDetails,
   LoginResponse,
   MeResponse,
@@ -311,10 +312,11 @@ export function createApiClient(options: ApiClientOptions) {
         request('POST', '/platform/organisations', { schema: CreatedPlatformOrganisation, body }),
       doctors: (status: 'pending' | 'verified' = 'pending') =>
         request('GET', '/platform/doctors', { schema: PlatformDoctorList, query: { status } }),
-      verifyDoctor: (profileId: string, ticket: string) =>
+      /** `expected`: the registration details the queue showed and the operator checked. */
+      verifyDoctor: (profileId: string, body: VerifyPlatformDoctorBody) =>
         request('POST', `/platform/doctors/${encodeURIComponent(profileId)}/verify`, {
           schema: VerifiedPlatformDoctor,
-          body: { ticket },
+          body,
         }),
       usage: (query: PlatformUsageQuery = {}) =>
         request('GET', '/platform/usage', { schema: PlatformUsageReport, query: { ...query } }),

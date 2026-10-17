@@ -117,10 +117,8 @@ export class PlatformAuthService {
         });
         return { error: INVALID_LOGIN() };
       }
-      await tx.platformOperator.update({
-        where: { id: operator.id },
-        data: { failedLoginCount: 0, lockedUntil: null },
-      });
+      // The failure count is not reset here: only a correct authenticator code resets it,
+      // so someone who knows the password cannot keep guessing codes across sign-ins.
       const mfaToken = await this.s.platformTokens.createMfaToken(operator.id);
       return { response: { status: 'mfa_required' as const, mfaToken } };
     });
@@ -138,7 +136,12 @@ export class PlatformAuthService {
     const outcome = await withPlatform(this.s.db, async (tx) => {
       const operator = await tx.platformOperator.findUnique({ where: { id: claims.operatorId } });
       if (!operator || operator.status !== 'active') return { error: INVALID_LOGIN() };
-      if (operator.lockedUntil && operator.lockedUntil > now) return { error: LOCKED() };
+      if (operator.lockedUntil && operator.lockedUntil > now) {
+        await auditOperator(tx, request, 'platform.auth.login.locked', operator.id, {
+          step: 'mfa',
+        });
+        return { error: LOCKED() };
+      }
 
       const step = matchTotpStep(this.s.cipher.decrypt(operator.mfaSecret), code, now.getTime());
       if (
@@ -149,10 +152,21 @@ export class PlatformAuthService {
         await auditOperator(tx, request, 'platform.auth.mfa.failed', operator.id);
         return { error: INVALID_CODE() };
       }
-      await tx.platformOperator.update({
-        where: { id: operator.id },
-        data: { mfaLastUsedStep: step, failedLoginCount: 0, lastLoginAt: now },
+      // Conditional: of two requests racing with the same code, only one moves the step on.
+      const accepted = await tx.platformOperator.updateMany({
+        where: {
+          id: operator.id,
+          OR: [{ mfaLastUsedStep: null }, { mfaLastUsedStep: { lt: step } }],
+        },
+        data: { mfaLastUsedStep: step, failedLoginCount: 0, lockedUntil: null, lastLoginAt: now },
       });
+      if (accepted.count !== 1) {
+        await recordOperatorFailure(tx, operator.id, now);
+        await auditOperator(tx, request, 'platform.auth.mfa.failed', operator.id, {
+          reason: 'code_reused',
+        });
+        return { error: INVALID_CODE() };
+      }
 
       const refreshToken = newRefreshToken();
       const session = await tx.platformSession.create({

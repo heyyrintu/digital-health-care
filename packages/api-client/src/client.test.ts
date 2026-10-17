@@ -175,6 +175,12 @@ describe('staff invite calls', () => {
 });
 
 describe('platform console calls', () => {
+  const expected = {
+    registrationNumber: 'TEST-12345',
+    council: 'Test Medical Council',
+    submittedAt: '2026-10-06T04:30:00.000Z',
+  };
+
   it('posts the verification ticket for a profile and parses the result', async () => {
     const fetch = vi.fn(async () =>
       json(200, {
@@ -203,13 +209,16 @@ describe('platform console calls', () => {
       fetch,
     });
     await expect(
-      client.platform.verifyDoctor('6a0c8a8e-4b1a-4c6f-9d43-2f1f5f6c7a10', 'SUP-1'),
+      client.platform.verifyDoctor('6a0c8a8e-4b1a-4c6f-9d43-2f1f5f6c7a10', {
+        ticket: 'SUP-1',
+        expected,
+      }),
     ).resolves.toMatchObject({ verification: 'verified' });
     const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe(
       'https://api.test/v1/platform/doctors/6a0c8a8e-4b1a-4c6f-9d43-2f1f5f6c7a10/verify',
     );
-    expect(JSON.parse(init.body as string)).toEqual({ ticket: 'SUP-1' });
+    expect(JSON.parse(init.body as string)).toEqual({ ticket: 'SUP-1', expected });
   });
 
   it('asks for usage over a range', async () => {

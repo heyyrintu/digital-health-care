@@ -96,7 +96,10 @@ export const PlatformDoctorQuery = z.object({
 });
 export type PlatformDoctorQuery = z.infer<typeof PlatformDoctorQuery>;
 
-/** An active doctor's registration details, oldest submission first (at most 200). */
+/** Most rows the verification queue returns at once; `hasMore` says there are more. */
+export const PLATFORM_DOCTOR_PAGE = 200;
+
+/** An active doctor's registration details, oldest submission first. */
 export const PlatformDoctor = z.object({
   profileId: z.uuid(),
   organisation: z.object({ id: z.uuid(), slug: z.string(), name: z.string() }),
@@ -116,7 +119,11 @@ export const PlatformDoctor = z.object({
 });
 export type PlatformDoctor = z.infer<typeof PlatformDoctor>;
 
-export const PlatformDoctorList = z.object({ data: z.array(PlatformDoctor) });
+export const PlatformDoctorList = z.object({
+  data: z.array(PlatformDoctor),
+  /** More than PLATFORM_DOCTOR_PAGE profiles wait: work the oldest first, then reload. */
+  hasMore: z.boolean(),
+});
 export type PlatformDoctorList = z.infer<typeof PlatformDoctorList>;
 
 export const SupportTicket = z
@@ -127,6 +134,15 @@ export const SupportTicket = z
 export const VerifyPlatformDoctorBody = z.object({
   /** The ticket recording the registration check (council register, certificate). */
   ticket: SupportTicket,
+  /**
+   * The details the operator checked, as the queue showed them. If the doctor changed
+   * their registration since, verifying is refused (409 `profile: changed`).
+   */
+  expected: z.object({
+    registrationNumber: z.string().min(1).max(40),
+    council: z.string().min(1).max(120),
+    submittedAt: z.iso.datetime(),
+  }),
 });
 export type VerifyPlatformDoctorBody = z.infer<typeof VerifyPlatformDoctorBody>;
 

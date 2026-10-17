@@ -254,6 +254,12 @@ CREATE FUNCTION platform_usage(p_from date, p_to date)
   END
   $$;
 
+-- Whether a slug is taken, so onboarding can refuse before creating anything.
+CREATE FUNCTION platform_organisation_slug_taken(p_slug text) RETURNS boolean
+  LANGUAGE sql STABLE SECURITY DEFINER
+  SET search_path = public, pg_temp
+  AS $$ SELECT EXISTS (SELECT 1 FROM organisations WHERE slug = p_slug) $$;
+
 -- Write function ---------------------------------------------------------------------
 -- Creates an organisation (onboarding step 1) and returns its ID, or NULL when the slug is
 -- taken. The rest of onboarding (first clinic, invite) runs as dhc_app inside it.
@@ -273,8 +279,19 @@ REVOKE ALL ON FUNCTION platform_organisation_summaries() FROM PUBLIC;
 REVOKE ALL ON FUNCTION platform_doctor_profiles(text, uuid, int) FROM PUBLIC;
 REVOKE ALL ON FUNCTION platform_usage(date, date) FROM PUBLIC;
 REVOKE ALL ON FUNCTION platform_create_organisation(text, text, timestamptz) FROM PUBLIC;
+REVOKE ALL ON FUNCTION platform_organisation_slug_taken(text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION platform_organisation_slug_taken(text) TO dhc_platform;
 GRANT EXECUTE ON FUNCTION platform_mask_identifier(text) TO dhc_platform;
 GRANT EXECUTE ON FUNCTION platform_organisation_summaries() TO dhc_platform;
 GRANT EXECUTE ON FUNCTION platform_doctor_profiles(text, uuid, int) TO dhc_platform;
 GRANT EXECUTE ON FUNCTION platform_usage(date, date) TO dhc_platform;
 GRANT EXECUTE ON FUNCTION platform_create_organisation(text, text, timestamptz) TO dhc_platform;
+
+-- Existing functions anyone could call ------------------------------------------------
+-- Functions are executable by PUBLIC unless revoked, and dhc_platform is part of PUBLIC.
+-- queue_notify sends the live-queue notifications the API relays to clinic screens, so
+-- only the clinic roles (whose triggers call it) keep it. push_devices_match_session is
+-- a SECURITY DEFINER trigger function: triggers fire without EXECUTE, so nobody needs it.
+REVOKE ALL ON FUNCTION queue_notify(uuid, uuid, date, uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION queue_notify(uuid, uuid, date, uuid) TO dhc_app, dhc_auth;
+REVOKE ALL ON FUNCTION push_devices_match_session() FROM PUBLIC;

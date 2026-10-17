@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildApp } from '../app';
-import { loadConfig, platformAllowlist } from '../config';
+import { loadConfig, platformAllowlist, proxyTrust } from '../config';
 import { IpAllowlist, parseCidrs } from './ip-allowlist';
 
 describe('parseCidrs', () => {
@@ -32,11 +32,24 @@ describe('IpAllowlist', () => {
     expect(list.allows('not-an-ip')).toBe(false);
   });
 
-  it('denies everyone in production when no list is set, and allows everyone in development', () => {
-    const production = platformAllowlist(loadConfig({ NODE_ENV: 'production' }));
-    expect(production.allows('127.0.0.1')).toBe(false);
-    const development = platformAllowlist(loadConfig({ NODE_ENV: 'development' }));
-    expect(development.allows('127.0.0.1')).toBe(true);
+  it('allows nobody with an empty list, except under NODE_ENV=test', () => {
+    for (const NODE_ENV of ['production', 'development', undefined]) {
+      expect(platformAllowlist(loadConfig({ NODE_ENV })).allows('127.0.0.1'), NODE_ENV).toBe(false);
+    }
+    expect(platformAllowlist(loadConfig({ NODE_ENV: 'test' })).allows('127.0.0.1')).toBe(true);
+  });
+
+  it('allows everyone with * outside production, and refuses * in production', () => {
+    const local = platformAllowlist(
+      loadConfig({ NODE_ENV: 'development', PLATFORM_ALLOWED_CIDRS: '*' }),
+    );
+    expect(local.allows('127.0.0.1')).toBe(true);
+    expect(() => loadConfig({ NODE_ENV: 'production', PLATFORM_ALLOWED_CIDRS: '*' })).toThrow(
+      /not allowed in production/,
+    );
+  });
+
+  it('uses the configured networks in any environment', () => {
     const configured = platformAllowlist(
       loadConfig({ NODE_ENV: 'production', PLATFORM_ALLOWED_CIDRS: '203.0.113.0/24' }),
     );
@@ -52,27 +65,46 @@ describe('IpAllowlist', () => {
 });
 
 describe('client address behind the load balancer', () => {
-  it('ignores X-Forwarded-For entries the client wrote itself', async () => {
-    const app = buildApp({ config: { LOG_LEVEL: 'silent', APP_VERSION: 'test' }, trustProxy: 1 });
+  const clientIp = async (
+    trustProxy: Parameters<typeof buildApp>[0]['trustProxy'],
+    peer: string,
+  ) => {
+    const app = buildApp({ config: { LOG_LEVEL: 'silent', APP_VERSION: 'test' }, trustProxy });
     app.get('/ip', async (request) => ({ ip: request.ip }));
     // The client claims an allowed address; the load balancer appends the real one.
     const res = await app.inject({
       method: 'GET',
       url: '/ip',
-      remoteAddress: '10.0.0.2',
+      remoteAddress: peer,
       headers: { 'x-forwarded-for': '10.1.2.3, 203.0.113.9' },
     });
-    expect(res.json()).toEqual({ ip: '203.0.113.9' });
-    expect(platformAllowlist(loadConfig({})).allows('203.0.113.9')).toBe(true);
+    await app.close();
+    return (res.json() as { ip: string }).ip;
+  };
+
+  it('ignores X-Forwarded-For entries the client wrote itself', async () => {
+    const ip = await clientIp({ hops: 1 }, '10.0.0.2');
+    expect(ip).toBe('203.0.113.9');
     expect(
       platformAllowlist(
         loadConfig({ NODE_ENV: 'production', PLATFORM_ALLOWED_CIDRS: '10.0.0.0/8' }),
-      ).allows(res.json().ip),
+      ).allows(ip),
     ).toBe(false);
-    await app.close();
   });
 
-  it('trusts one proxy hop by default in production', () => {
-    expect(loadConfig({}).TRUST_PROXY_HOPS).toBe(1);
+  it('believes X-Forwarded-For only from peers inside TRUSTED_PROXY_CIDRS', async () => {
+    const trust = proxyTrust(
+      loadConfig({ NODE_ENV: 'production', TRUSTED_PROXY_CIDRS: '10.0.0.0/24' }),
+    );
+    expect(await clientIp(trust, '10.0.0.2')).toBe('203.0.113.9');
+    // Someone reaching the API port directly: their header is ignored.
+    expect(await clientIp(trust, '198.51.100.7')).toBe('198.51.100.7');
+  });
+
+  it('trusts no proxy outside production or with no hops', () => {
+    expect(proxyTrust(loadConfig({ NODE_ENV: 'development' }))).toBe(false);
+    expect(proxyTrust(loadConfig({ NODE_ENV: 'production', TRUST_PROXY_HOPS: '0' }))).toBe(false);
+    expect(proxyTrust(loadConfig({ NODE_ENV: 'production' }))).toEqual({ hops: 1 });
+    expect(() => loadConfig({ TRUSTED_PROXY_CIDRS: 'lb.internal' })).toThrow(/TRUSTED_PROXY_CIDRS/);
   });
 });

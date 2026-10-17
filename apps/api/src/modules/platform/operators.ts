@@ -46,6 +46,8 @@ export interface CreateOperatorParams extends SupportTrail {
   password: string;
   /** Base32 secret the new operator has already confirmed with a code from their app. */
   totpSecret: string;
+  /** The TOTP step of that confirming code, so it cannot be used again to sign in. */
+  confirmedStep: number;
 }
 
 /**
@@ -82,6 +84,7 @@ export async function createPlatformOperator(
         displayName,
         passwordHash,
         mfaSecret: s.cipher.encrypt(params.totpSecret),
+        mfaLastUsedStep: params.confirmedStep,
         createdAt: now,
       },
       select: { id: true, email: true },
@@ -120,5 +123,77 @@ export async function disablePlatformOperator(
       metadata: { ...trail, sessionsRevoked: revoked.count },
     });
     return { id: operator.id, sessionsRevoked: revoked.count };
+  });
+}
+
+export interface ResetOperatorAuthenticatorParams extends SupportTrail {
+  email: string;
+  /** New base32 secret, already confirmed with a code from the operator's new app. */
+  totpSecret: string;
+  confirmedStep: number;
+}
+
+/**
+ * A new authenticator for an operator (lost or replaced phone), confirmed at the terminal.
+ * Ends their console sessions and clears any lockout; their status and password stay as
+ * they are, so a disabled operator stays disabled until `enablePlatformOperator`.
+ */
+export async function resetPlatformOperatorAuthenticator(
+  s: Pick<Services, 'db' | 'now'> & { cipher: FieldCipher },
+  source: AuditSource,
+  params: ResetOperatorAuthenticatorParams,
+): Promise<{ id: string; sessionsRevoked: number }> {
+  const trail = checkTrail(params);
+  const email = normaliseOperatorEmail(params.email);
+  const now = s.now();
+  return withPlatform(s.db, async (tx) => {
+    const operator = await tx.platformOperator.findUnique({ where: { email } });
+    if (!operator) throw new AppError(404, 'NOT_FOUND', 'No operator with that email.');
+    await tx.platformOperator.update({
+      where: { id: operator.id },
+      data: {
+        mfaSecret: s.cipher.encrypt(params.totpSecret),
+        mfaLastUsedStep: params.confirmedStep,
+        failedLoginCount: 0,
+        lockedUntil: null,
+      },
+    });
+    const revoked = await tx.platformSession.updateMany({
+      where: { operatorId: operator.id, revokedAt: null },
+      data: { revokedAt: now, revokedReason: 'authenticator_reset' },
+    });
+    await writeAudit(tx, source, {
+      action: 'platform.operator.authenticator_reset',
+      entityType: 'platform_operator',
+      entityId: operator.id,
+      metadata: { ...trail, sessionsRevoked: revoked.count },
+    });
+    return { id: operator.id, sessionsRevoked: revoked.count };
+  });
+}
+
+/** Lets a disabled operator sign in again (after a lost phone is replaced, or a return). */
+export async function enablePlatformOperator(
+  s: Pick<Services, 'db' | 'now'>,
+  source: AuditSource,
+  params: SupportTrail & { email: string },
+): Promise<{ id: string; alreadyActive: boolean }> {
+  const trail = checkTrail(params);
+  const email = normaliseOperatorEmail(params.email);
+  return withPlatform(s.db, async (tx) => {
+    const operator = await tx.platformOperator.findUnique({ where: { email } });
+    if (!operator) throw new AppError(404, 'NOT_FOUND', 'No operator with that email.');
+    if (operator.status === 'active') return { id: operator.id, alreadyActive: true };
+    await tx.platformOperator.update({
+      where: { id: operator.id },
+      data: { status: 'active', failedLoginCount: 0, lockedUntil: null },
+    });
+    await writeAudit(tx, source, {
+      action: 'platform.operator.enabled',
+      entityType: 'platform_operator',
+      entityId: operator.id,
+      metadata: { ...trail },
+    });
+    return { id: operator.id, alreadyActive: false };
   });
 }

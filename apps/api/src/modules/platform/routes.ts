@@ -89,16 +89,16 @@ export const platformRoutes: FastifyPluginAsync<PlatformRoutesOptions> = async (
 
   app.get('/doctors', operator, async (request) => {
     const { status } = PlatformDoctorQuery.parse(request.query);
-    return PlatformDoctorList.parse({
-      data: await platform.listDoctors(request, platformAuthOf(request), status),
-    });
+    return PlatformDoctorList.parse(
+      await platform.listDoctors(request, platformAuthOf(request), status),
+    );
   });
 
   app.post('/doctors/:profileId/verify', operator, async (request) => {
     const { profileId } = ProfileParams.parse(request.params);
-    const { ticket } = VerifyPlatformDoctorBody.parse(request.body);
+    const body = VerifyPlatformDoctorBody.parse(request.body);
     return VerifiedPlatformDoctor.parse(
-      await platform.verifyDoctor(request, platformAuthOf(request), profileId, ticket),
+      await platform.verifyDoctor(request, platformAuthOf(request), profileId, body),
     );
   });
 

@@ -2,7 +2,7 @@ import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import { randomUUID } from 'node:crypto';
 import Fastify, { type FastifyServerOptions } from 'fastify';
-import type { Config } from './config';
+import type { Config, ProxyTrust } from './config';
 import { registerErrorHandling } from './errors';
 import { appointmentRoutes } from './modules/appointments/routes';
 import { auditRoutes } from './modules/audit/routes';
@@ -32,11 +32,11 @@ export interface BuildAppOptions {
   /** Without services only the system routes are mounted (health, OpenAPI). */
   services?: Services;
   /**
-   * Behind a load balancer, how many proxy hops of X-Forwarded-For to trust for client IPs
-   * (rate limits, the platform allowlist). Never `true`: that would trust entries the
-   * client wrote itself.
+   * Behind a load balancer: which proxies' X-Forwarded-For entries to trust for client IPs
+   * (rate limits, the platform allowlist), by hop count and, when given, by the proxies'
+   * networks. Never "all": that would trust entries the client wrote itself.
    */
-  trustProxy?: false | number;
+  trustProxy?: ProxyTrust | false;
   /** Sign-in requests per IP per minute (default 10). */
   signInRateLimit?: number;
   /** Browser origins allowed to call the API (web app). None means no CORS headers. */
@@ -69,9 +69,13 @@ export function buildApp({
 
   const app = Fastify({
     logger,
-    // Trust the first `trustProxy` hops from the socket (proxy-addr's own rule for a hop
-    // count, which Fastify's types do not accept as a number).
-    trustProxy: trustProxy === false ? false : (_address: string, hop: number) => hop < trustProxy,
+    // A function, so the hop count and the proxies' networks both apply: hop 0 is the
+    // socket peer; each trusted hop lets the next X-Forwarded-For entry to the left count.
+    trustProxy:
+      trustProxy === false
+        ? false
+        : (address: string, hop: number) =>
+            hop < trustProxy.hops && (trustProxy.proxies?.allows(address) ?? true),
     // Request IDs are always ours; a client-supplied ID is never trusted.
     requestIdHeader: false,
     genReqId: () => `req_${randomUUID()}`,

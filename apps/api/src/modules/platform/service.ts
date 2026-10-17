@@ -1,5 +1,6 @@
 import {
   MAX_USAGE_DAYS,
+  PLATFORM_DOCTOR_PAGE,
   type CreatePlatformOrganisationBody,
   type CreatedPlatformOrganisation,
   type PlatformDoctor,
@@ -8,6 +9,7 @@ import {
   type PlatformUsageQuery,
   type PlatformUsageReport,
   type VerifiedPlatformDoctor,
+  type VerifyPlatformDoctorBody,
 } from '@dhc/contracts';
 import { withAuth, withNewOrganisation, withPlatform, type Tx } from '@dhc/db';
 import { addDays, istDateKey } from '@dhc/domain';
@@ -22,7 +24,7 @@ import {
   maskIdentifier,
   parseIdentifier,
 } from '../invites/service';
-import { verifyDoctorProfile } from '../support/verify-doctor';
+import { verifyDoctorProfile, type VerifyDoctorResult } from '../support/verify-doctor';
 
 interface OrganisationSummaryRow {
   id: string;
@@ -161,10 +163,30 @@ export class PlatformService {
     const operator = await this.operator(claims);
     const identity = parseIdentifier(body.admin.identifier);
     const now = this.s.now();
+    const by = { operatorId: operator.id, operator: operator.email };
+    const slugTaken = async () => {
+      await withPlatform(this.s.db, (tx) =>
+        auditOperator(tx, request, 'platform.organisation.create_refused', operator.id, {
+          reason: 'slug_taken',
+          slug: body.slug,
+        }),
+      );
+      return new AppError(409, 'CONFLICT', 'Another organisation already uses that ID.', {
+        slug: 'taken',
+      });
+    };
+
+    // Refuse a taken slug before creating the admin's account; the insert below checks
+    // again, for two onboardings racing for one slug.
+    const [{ taken } = { taken: false }] = await withPlatform(
+      this.s.db,
+      (tx) => tx.$queryRaw<{ taken: boolean }[]>`
+        SELECT platform_organisation_slug_taken(${body.slug}) AS taken`,
+    );
+    if (taken) throw await slugTaken();
     const user = await withAuth(this.s.db, (tx) =>
       findOrCreateInvitee(tx, identity, body.admin.displayName),
     );
-    const by = { operatorId: operator.id, operator: operator.email };
 
     const created = await withNewOrganisation(
       this.s.db,
@@ -208,11 +230,14 @@ export class PlatformService {
         return { organisationId, clinic, invite, inviteUrl };
       },
     );
-    if (!created) {
-      throw new AppError(409, 'CONFLICT', 'Another organisation already uses that ID.', {
-        slug: 'taken',
-      });
-    }
+    if (!created) throw await slugTaken();
+    // The operator's own trail, beside the entry in the organisation's log.
+    await withPlatform(this.s.db, (tx) =>
+      auditOperator(tx, request, 'platform.organisation.created', operator.id, {
+        organisationId: created.organisationId,
+        slug: body.slug,
+      }),
+    );
     return {
       organisation: { id: created.organisationId, slug: body.slug, name: body.name },
       clinic: { id: created.clinic.id, name: created.clinic.name },
@@ -231,42 +256,95 @@ export class PlatformService {
     request: FastifyRequest,
     claims: PlatformAccessClaims,
     status: 'pending' | 'verified',
-  ): Promise<PlatformDoctor[]> {
+  ): Promise<{ data: PlatformDoctor[]; hasMore: boolean }> {
     const rows = await withPlatform(this.s.db, async (tx) => {
-      const rows = await this.doctorRows(tx, { status });
+      // One more than a page, to tell whether more wait.
+      const rows = await this.doctorRows(tx, { status }, PLATFORM_DOCTOR_PAGE + 1);
       await auditOperator(tx, request, 'platform.doctors.listed', claims.operatorId, {
         status,
-        count: rows.length,
+        count: Math.min(rows.length, PLATFORM_DOCTOR_PAGE),
       });
       return rows;
     });
-    return rows.map(toPlatformDoctor);
+    return {
+      data: rows.slice(0, PLATFORM_DOCTOR_PAGE).map(toPlatformDoctor),
+      hasMore: rows.length > PLATFORM_DOCTOR_PAGE,
+    };
   }
 
   /**
    * Verifies a doctor's registration from the console: the same change and audit entry
-   * (`support.doctor.verified`) as the support command, with the signed-in operator.
+   * (`support.doctor.verified`) as the support command, with the signed-in operator. Only
+   * the registration the operator was shown (`expected`) is verified.
    */
   async verifyDoctor(
     request: FastifyRequest,
     claims: PlatformAccessClaims,
     profileId: string,
-    ticket: string,
+    body: VerifyPlatformDoctorBody,
   ): Promise<VerifiedPlatformDoctor> {
     const operator = await this.operator(claims);
-    const [row] = await withPlatform(this.s.db, (tx) => this.doctorRows(tx, { profileId }));
-    if (!row) throw PROFILE_NOT_FOUND();
-    const result = await verifyDoctorProfile(
-      this.s,
-      request,
-      { organisationId: row.organisation_id, userId: row.user_id },
-      { ticket, operator: operator.email, operatorId: operator.id },
-    );
-    // The profile the queue showed must be the one verified.
-    if (result.profileId !== profileId) throw PROFILE_NOT_FOUND();
-    const [after] = await withPlatform(this.s.db, (tx) => this.doctorRows(tx, { profileId }));
-    if (!after) throw PROFILE_NOT_FOUND();
-    return { ...toPlatformDoctor(after), alreadyVerified: result.alreadyVerified };
+    const audit = (action: string, metadata: Record<string, string>) =>
+      withPlatform(this.s.db, (tx) =>
+        auditOperator(tx, request, action, operator.id, {
+          profileId,
+          ticket: body.ticket,
+          ...metadata,
+        }),
+      );
+    const [row] = await withPlatform(this.s.db, (tx) => this.doctorRows(tx, { profileId }, 1));
+    if (!row) {
+      await audit('platform.doctor.verify_refused', { reason: 'not_found' });
+      throw PROFILE_NOT_FOUND();
+    }
+    let result: VerifyDoctorResult;
+    try {
+      result = await verifyDoctorProfile(
+        this.s,
+        request,
+        { organisationId: row.organisation_id, userId: row.user_id },
+        { ticket: body.ticket, operator: operator.email, operatorId: operator.id },
+        {
+          expected: {
+            registrationNumber: body.expected.registrationNumber,
+            council: body.expected.council,
+            submittedAt: new Date(body.expected.submittedAt),
+          },
+        },
+      );
+      // The profile the queue showed must be the one verified.
+      if (result.profileId !== profileId) throw PROFILE_NOT_FOUND();
+    } catch (error) {
+      if (error instanceof AppError) {
+        await audit('platform.doctor.verify_refused', {
+          organisationId: row.organisation_id,
+          reason: error.fields?.profile ?? error.code.toLowerCase(),
+        });
+      }
+      throw error;
+    }
+    if (!result.alreadyVerified) {
+      await audit('platform.doctor.verified', {
+        organisationId: row.organisation_id,
+        registrationNumber: result.registrationNumber,
+      });
+    }
+    // From the verifying transaction's own read: a change a moment later cannot alter it.
+    return {
+      profileId: result.profileId,
+      organisation: result.organisation,
+      displayName: result.displayName,
+      identifier: result.identifier,
+      registrationNumber: result.registrationNumber,
+      council: result.council,
+      qualifications: result.qualifications,
+      specialty: result.specialty,
+      verification: result.verification,
+      submittedAt: result.submittedAt.toISOString(),
+      verifiedAt: result.verifiedAt?.toISOString() ?? null,
+      verifiedBy: result.verifiedBy,
+      alreadyVerified: result.alreadyVerified,
+    };
   }
 
   /** Usage per organisation over IST days (default: the last 30 days). Counts only. */
@@ -309,11 +387,12 @@ export class PlatformService {
   private async doctorRows(
     tx: Tx,
     by: { status: 'pending' | 'verified' } | { profileId: string },
+    limit: number,
   ): Promise<DoctorProfileRow[]> {
     const status = 'status' in by ? by.status : null;
     const profileId = 'profileId' in by ? by.profileId : null;
     return tx.$queryRaw<DoctorProfileRow[]>`
-      SELECT * FROM platform_doctor_profiles(${status}::text, ${profileId}::uuid, 200)`;
+      SELECT * FROM platform_doctor_profiles(${status}::text, ${profileId}::uuid, ${limit}::int)`;
   }
 
   private async operator(claims: PlatformAccessClaims) {

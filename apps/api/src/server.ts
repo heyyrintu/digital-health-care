@@ -1,5 +1,5 @@
 import { buildApp } from './app';
-import { corsOrigins, loadConfig, platformAllowlist } from './config';
+import { corsOrigins, loadConfig, platformAllowlist, proxyTrust } from './config';
 import { scheduleNoShowSweep } from './modules/appointments/no-shows';
 import { createServices } from './services';
 
@@ -8,11 +8,21 @@ const services = createServices(config);
 const app = buildApp({
   config,
   services,
-  trustProxy: config.NODE_ENV === 'production' ? config.TRUST_PROXY_HOPS : false,
+  trustProxy: proxyTrust(config),
   corsOrigins: corsOrigins(config),
   signInRateLimit: config.SIGN_IN_RATE_LIMIT,
   platformAllowlist: platformAllowlist(config),
 });
+
+if (
+  config.NODE_ENV === 'production' &&
+  config.TRUST_PROXY_HOPS > 0 &&
+  !config.TRUSTED_PROXY_CIDRS
+) {
+  app.log.warn(
+    'TRUST_PROXY_HOPS is set without TRUSTED_PROXY_CIDRS: safe only if the API port can be reached from the load balancer alone',
+  );
+}
 
 const stopSweep = scheduleNoShowSweep(services, config.NO_SHOW_SWEEP_SECONDS, app.log);
 
