@@ -45,7 +45,7 @@ const OTHER_PASSWORD = 'another synthetic passphrase';
 const WRONG_PASSWORD = 'not the synthetic passphrase';
 const SHORT_PASSWORD = 'short';
 // Leading and trailing spaces are part of the password: sign-in never trims it.
-const PADDED_PASSWORD = '  padded synthetic passphrase  ';
+const PADDED_PASSWORD = `  ${OTHER_PASSWORD}  `;
 const WRONG_CODE = '000000';
 const TOTP_SECRET = 'JBSWY3DPEHPK3PXP';
 
