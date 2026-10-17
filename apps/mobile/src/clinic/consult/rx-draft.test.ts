@@ -7,6 +7,7 @@ import {
   lineFromMedicine,
   previewRemarks,
   signBlocker,
+  testRows,
   toSaveBody,
 } from './rx-draft';
 
@@ -91,10 +92,19 @@ describe('prescription draft', () => {
   });
 
   it('explains what stops signing, in order', () => {
-    const base = { dirty: false, lines: 2, openBlocks: 0, openWarnings: 0, missing: [] };
+    const base = {
+      dirty: false,
+      lines: 2,
+      tests: 0,
+      openBlocks: 0,
+      openWarnings: 0,
+      missing: [],
+    };
     expect(signBlocker(base)).toBeNull();
     expect(signBlocker({ ...base, dirty: true, openBlocks: 1 })).toBe('unsaved');
     expect(signBlocker({ ...base, lines: 0 })).toBe('empty');
+    // Tests alone are a prescription too.
+    expect(signBlocker({ ...base, lines: 0, tests: 1 })).toBeNull();
     expect(signBlocker({ ...base, openBlocks: 1, openWarnings: 2 })).toBe('blocks');
     expect(signBlocker({ ...base, openWarnings: 2 })).toBe('warnings');
     expect(signBlocker({ ...base, missing: ['pin'] })).toBe('setup');
@@ -121,5 +131,33 @@ describe('prescription draft', () => {
     ]);
     expect(once.lines[0]).toMatchObject({ name: 'Paracetamol 650', frequency: 'BD' });
     expect(appendLines(once.lines, [item, item], next, 3).added).toBe(1);
+  });
+});
+
+describe('testRows', () => {
+  it('lists the visit’s tests as they print, marking those already ordered', () => {
+    const tests = [
+      {
+        id: '66666666-6666-4666-8666-666666666666',
+        name: 'MRI',
+        region: 'Knee',
+        side: 'right' as const,
+        views: [],
+        orderedAt: '2026-10-06T10:00:00.000Z',
+      },
+      {
+        id: '77777777-7777-4777-8777-777777777777',
+        name: 'X-ray',
+        region: 'Knee',
+        side: 'both' as const,
+        views: ['AP', 'Lateral'],
+        orderedAt: null,
+      },
+    ];
+    expect(testRows(tests, 'en')).toEqual([
+      { id: tests[0]!.id, label: 'MRI knee, right', ordered: true },
+      { id: tests[1]!.id, label: 'X-ray knee, both sides (AP, Lateral)', ordered: false },
+    ]);
+    expect(testRows(tests, 'hi')[0]!.label).toBe('MRI knee, दायाँ');
   });
 });

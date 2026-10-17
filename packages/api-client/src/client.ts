@@ -2,9 +2,14 @@ import {
   AcceptInviteResponse,
   BookingOptions,
   ConsentStatus,
+  AwaitingReviewList,
+  PatientTestOrderList,
   PortalAppointment,
   PortalAppointmentList,
   PortalPrescriptionList,
+  PortalTestOrderList,
+  TestCatalogueList,
+  TestOrder,
   SlotsResponse,
   type PortalBookBody,
   type PortalSlotsQuery,
@@ -148,13 +153,20 @@ export function createApiClient(options: ApiClientOptions) {
     }
   }
 
-  /** A file response (a PDF); errors come back as the usual JSON error shape. */
+  /**
+   * A file response: a PDF, or an uploaded result (pass a wider `accept`). Errors come back
+   * as the usual JSON error shape.
+   */
   async function requestFile(
     method: 'GET' | 'POST',
     path: string,
-    { body, signal }: { body?: unknown; signal?: AbortSignal } = {},
+    {
+      body,
+      signal,
+      accept = 'application/pdf, application/json',
+    }: { body?: unknown; signal?: AbortSignal; accept?: string } = {},
   ): Promise<Blob> {
-    const headers: Record<string, string> = { accept: 'application/pdf, application/json' };
+    const headers: Record<string, string> = { accept };
     if (body !== undefined) headers['content-type'] = 'application/json';
     const token = await options.getAccessToken?.();
     if (token) headers.authorization = `Bearer ${token}`;
@@ -170,9 +182,37 @@ export function createApiClient(options: ApiClientOptions) {
     return response.blob();
   }
 
+  /**
+   * Sends a file as the request body (an uploaded result: PDF, JPEG, PNG or HEIC), typed by
+   * the file's own type, and parses the JSON answer. Check `checkUpload` first so people
+   * hear about the clinic's limits before a long upload.
+   */
+  async function uploadFile<T extends z.ZodType>(
+    path: string,
+    file: Blob,
+    { schema, signal }: { schema: T; signal?: AbortSignal },
+  ): Promise<z.infer<T>> {
+    const headers: Record<string, string> = {
+      accept: 'application/json',
+      'content-type': file.type || 'application/octet-stream',
+    };
+    const token = await options.getAccessToken?.();
+    if (token) headers.authorization = `Bearer ${token}`;
+    const response = await fetchImpl(buildUrl(baseUrl, path, undefined), {
+      method: 'POST',
+      headers,
+      body: file,
+      signal,
+    });
+    const payload: unknown = await response.json().catch(() => undefined);
+    if (!response.ok) throw toApiError(response, payload);
+    return schema.parse(payload);
+  }
+
   return {
     request,
     requestFile,
+    uploadFile,
     stream,
     getHealth: (signal?: AbortSignal) =>
       request('GET', '/health', { schema: HealthResponse, signal }),
@@ -254,6 +294,30 @@ export function createApiClient(options: ApiClientOptions) {
         schema: NoContent,
       }),
 
+    // Test orders (PRD §7.1). Lines are written with the prescription draft (`tests`).
+    /** Doctor: the clinic's test catalogue, optionally filtered by name. */
+    testCatalogue: (q?: string) =>
+      request('GET', '/test-catalogue', { schema: TestCatalogueList, query: { q } }),
+    /** Doctor or front desk: a patient's ordered tests (front desk: without notes). */
+    patientTestOrders: (patientId: string) =>
+      request('GET', `/patients/${encodeURIComponent(patientId)}/test-orders`, {
+        schema: PatientTestOrderList,
+      }),
+    /** Doctor: their results waiting for review. */
+    testResultsAwaitingReview: () =>
+      request('GET', '/test-orders/awaiting-review', { schema: AwaitingReviewList }),
+    /** Doctor or front desk: upload a result (the file's own type) for an ordered test. */
+    uploadTestResult: (orderId: string, file: Blob) =>
+      uploadFile(`/test-orders/${encodeURIComponent(orderId)}/results`, file, {
+        schema: TestOrder,
+      }),
+    /** Doctor: mark the uploaded result reviewed. */
+    reviewTestOrder: (orderId: string) =>
+      request('POST', `/test-orders/${encodeURIComponent(orderId)}/review`, { schema: TestOrder }),
+    /** Doctor: one result's file. */
+    testResultFile: (resultId: string) =>
+      requestFile('GET', `/test-results/${encodeURIComponent(resultId)}/file`, { accept: '*/*' }),
+
     /** Doctor: set or change the signing PIN, confirmed with the account password. */
     setSigningPin: (password: string, pin: string) =>
       request('PUT', '/doctor-profile/signing-pin', { schema: NoContent, body: { password, pin } }),
@@ -284,6 +348,17 @@ export function createApiClient(options: ApiClientOptions) {
     /** The signed PDF of one of the family's prescriptions. */
     portalPrescriptionPdf: (id: string) =>
       requestFile('GET', `/portal/prescriptions/${encodeURIComponent(id)}/pdf`),
+
+    /** The family's ordered tests, with Upload result. */
+    portalTestOrders: () => request('GET', '/portal/test-orders', { schema: PortalTestOrderList }),
+    uploadPortalTestResult: (orderId: string, file: Blob) =>
+      uploadFile(`/portal/test-orders/${encodeURIComponent(orderId)}/results`, file, {
+        schema: TestOrder,
+      }),
+    portalTestResultFile: (resultId: string) =>
+      requestFile('GET', `/portal/test-results/${encodeURIComponent(resultId)}/file`, {
+        accept: '*/*',
+      }),
 
     /** Ends the session of the current access token. */
     logout: () => request('POST', '/auth/logout', { schema: NoContent }),

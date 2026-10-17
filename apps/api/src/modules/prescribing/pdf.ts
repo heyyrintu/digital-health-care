@@ -6,7 +6,8 @@ import PDFDocument from 'pdfkit';
 import QRCode from 'qrcode';
 
 /** Bumped whenever the layout changes; stored with each signed prescription. */
-export const PDF_TEMPLATE_VERSION = 'rx-1';
+/** `rx-2`: ordered tests print under "Prescribed tests" (PRD §7.1). */
+export const PDF_TEMPLATE_VERSION = 'rx-2';
 
 const require = createRequire(import.meta.url);
 // Read once: every document registers the fonts again (pdfkit parses them per document).
@@ -71,6 +72,9 @@ export interface RxDocument {
     instructions: string | null;
     remarks: string;
   }[];
+  /** Ordered tests, as `testOrderLabel` writes them (e.g. "MRI knee, right"), in order. */
+  tests: { label: string; notes: string | null }[];
+  /** The free-text "tests advised" from the notes, printed after the ordered tests. */
   testsAdvised: string;
   advice: string;
   followUpDate: string | null;
@@ -268,8 +272,8 @@ export async function renderPrescriptionPdf(doc: RxDocument): Promise<Buffer> {
     { bold: doc.allergies.length > 0 },
   );
 
-  // ---- Medicines ----
-  section(`Rx  ${L('pdf.medicines')}`);
+  // ---- Medicines (a prescription may order tests only) ----
+  if (doc.items.length) section(`Rx  ${L('pdf.medicines')}`);
   doc.items.forEach((item, i) => {
     pdf.moveDown(0.25);
     write(`${i + 1}. ${item.name}`, { bold: true });
@@ -294,9 +298,17 @@ export async function renderPrescriptionPdf(doc: RxDocument): Promise<Buffer> {
       });
   });
 
-  if (doc.testsAdvised.trim()) {
+  if (doc.tests.length || doc.testsAdvised.trim()) {
     section(L('pdf.tests'));
-    write(doc.testsAdvised.trim());
+    doc.tests.forEach((test, i) => {
+      pdf.moveDown(0.15);
+      write(`${i + 1}. ${test.label}`);
+      if (test.notes) write(test.notes, { x: left + 12, width: width - 12, color: GREY });
+    });
+    if (doc.testsAdvised.trim()) {
+      if (doc.tests.length) pdf.moveDown(0.25);
+      write(doc.testsAdvised.trim());
+    }
   }
   if (doc.advice.trim()) {
     section(L('pdf.advice'));

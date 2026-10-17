@@ -9,6 +9,8 @@ import {
   PlatformHealth,
   QUEUES,
   QUEUE_NAMES,
+  SavePrescriptionBody,
+  TestOrderLine,
   buildOpenApiDocument,
   checkUpload,
   page,
@@ -225,5 +227,45 @@ describe('PlatformHealth', () => {
         .success,
     ).toBe(false);
     expect(withQueues({ status: 'slow', items: [] })).toBe(false);
+  });
+});
+
+describe('TestOrderLine', () => {
+  const line = (over: Record<string, unknown> = {}) => ({
+    id: '00000000-0000-4000-8000-000000000001',
+    catalogueItemId: null,
+    kind: 'mri',
+    name: 'MRI',
+    region: 'Knee',
+    side: 'right',
+    views: [],
+    notes: null,
+    ...over,
+  });
+  const fails = (over: Record<string, unknown>) =>
+    TestOrderLine.safeParse(line(over)).error?.issues.map((i) => i.path.join('.'));
+
+  it('takes imaging with a region and side, X-ray views, and blood tests without either', () => {
+    expect(TestOrderLine.parse(line()).side).toBe('right');
+    expect(TestOrderLine.safeParse(line({ kind: 'xray', views: ['AP', 'Lateral'] })).success).toBe(
+      true,
+    );
+    expect(
+      TestOrderLine.safeParse(line({ kind: 'blood', name: 'CBC', region: null, side: 'na' }))
+        .success,
+    ).toBe(true);
+  });
+
+  it('refuses a region or side on a blood test, views off an X-ray, and repeated views', () => {
+    expect(fails({ kind: 'blood', side: 'na' })).toEqual(['region']);
+    expect(fails({ kind: 'other', region: null })).toEqual(['side']);
+    expect(fails({ views: ['AP'] })).toEqual(['views']);
+    expect(fails({ kind: 'xray', views: ['AP', 'AP'] })).toEqual(['views']);
+  });
+
+  it('is optional on a prescription save, so older clients keep their tests', () => {
+    const body = { language: 'en', items: [], revision: 0 };
+    expect(SavePrescriptionBody.parse(body).tests).toBeUndefined();
+    expect(SavePrescriptionBody.parse({ ...body, tests: [line()] }).tests).toHaveLength(1);
   });
 });

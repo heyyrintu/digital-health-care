@@ -210,6 +210,31 @@ enum PaymentMode {
   card
 }
 
+/// Test orders (PRD §7.1): what kind of test, which side of the body for imaging, and
+/// where the order is: ordered (printed on a signed prescription), a result uploaded, or
+/// reviewed by a doctor.
+enum TestKind {
+  blood
+  xray
+  mri
+  ct
+  other
+}
+
+enum TestSide {
+  left
+  right
+  both
+  /// Not applicable: a blood test, or a region with no side (brain, chest).
+  na
+}
+
+enum TestOrderStatus {
+  ordered
+  result_uploaded
+  reviewed
+}
+
 enum MembershipStatus {
   /// Created by a staff invite; becomes active when the invite is completed.
   invited
@@ -263,6 +288,9 @@ model Organisation {
   verifications          PrescriptionVerification[]
   patientMergeRequests   PatientMergeRequest[]
   accountConsents        AccountConsent[]
+  testCatalogueItems     TestCatalogueItem[]
+  testOrders             TestOrder[]
+  testResults            TestResult[]
 
   @@map("organisations")
 }
@@ -718,6 +746,7 @@ model Appointment {
   consultation     Consultation?
   prescriptions    Prescription[]
   bill             Bill?
+  testOrders       TestOrder[]
 
   @@unique([doctorUserId, clinicId, date, tokenNumber])
   @@index([organisationId, date])
@@ -1079,6 +1108,7 @@ model Prescription {
   items        PrescriptionItem[]
   safetyAlerts SafetyAlert[]
   verification PrescriptionVerification?
+  testOrders   TestOrder[]
 
   @@unique([appointmentId, version])
   @@unique([organisationId, number, version])
@@ -1312,6 +1342,90 @@ model SafetyAlert {
 
   @@unique([prescriptionId, key])
   @@map("safety_alerts")
+}
+
+/// A test doctors can order (PRD §7.1), per organisation. Every organisation starts with
+/// a default set (a database trigger seeds it). Imaging lists the body regions and, for
+/// X-rays, the views a doctor picks from; an order snapshots what was picked.
+model TestCatalogueItem {
+  id             String   @id @default(uuid()) @db.Uuid
+  organisationId String   @map("organisation_id") @db.Uuid
+  kind           TestKind
+  name           String
+  regions        String[] @default([])
+  views          String[] @default([])
+  active         Boolean  @default(true)
+  sortOrder      Int      @map("sort_order")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+  orders       TestOrder[]
+
+  @@unique([organisationId, name])
+  @@map("test_catalogue_items")
+}
+
+/// One test a doctor ordered at a visit (PRD §7.1). Written with the visit's prescription
+/// draft and locked when a version is signed: `orderedAt` and `prescriptionId` (the version
+/// that first printed it) are set then, and from then on only the status moves:
+/// ordered → result_uploaded → reviewed. The ID is chosen by the client, like a line's.
+model TestOrder {
+  id               String          @id @db.Uuid
+  organisationId   String          @map("organisation_id") @db.Uuid
+  appointmentId    String          @map("appointment_id") @db.Uuid
+  patientId        String          @map("patient_id") @db.Uuid
+  doctorUserId     String          @map("doctor_user_id") @db.Uuid
+  catalogueItemId  String?         @map("catalogue_item_id") @db.Uuid
+  kind             TestKind
+  /// Snapshot of the catalogue name, or free text.
+  name             String
+  region           String?
+  side             TestSide        @default(na)
+  views            String[]        @default([])
+  notes            String?
+  sortOrder        Int             @map("sort_order")
+  status           TestOrderStatus @default(ordered)
+  prescriptionId   String?         @map("prescription_id") @db.Uuid
+  orderedAt        DateTime?       @map("ordered_at") @db.Timestamptz(3)
+  resultUploadedAt DateTime?       @map("result_uploaded_at") @db.Timestamptz(3)
+  reviewedAt       DateTime?       @map("reviewed_at") @db.Timestamptz(3)
+  reviewedByUserId String?         @map("reviewed_by_user_id") @db.Uuid
+  createdAt        DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organisation  Organisation       @relation(fields: [organisationId], references: [id])
+  appointment   Appointment        @relation(fields: [appointmentId], references: [id], onDelete: Restrict)
+  catalogueItem TestCatalogueItem? @relation(fields: [catalogueItemId], references: [id], onDelete: Restrict)
+  prescription  Prescription?      @relation(fields: [prescriptionId], references: [id], onDelete: Restrict)
+  results       TestResult[]
+
+  @@index([appointmentId])
+  @@index([patientId])
+  @@index([organisationId, doctorUserId, status])
+  @@map("test_orders")
+}
+
+/// An uploaded result for an order (PRD §7.1, §4.4): the file is stored by key (never a
+/// public URL) with its type, size and SHA-256. Append-only.
+model TestResult {
+  id               String   @id @default(uuid()) @db.Uuid
+  organisationId   String   @map("organisation_id") @db.Uuid
+  testOrderId      String   @map("test_order_id") @db.Uuid
+  fileKey          String   @map("file_key")
+  mediaType        String   @map("media_type")
+  sizeBytes        Int      @map("size_bytes")
+  sha256           String
+  uploadedByUserId String   @map("uploaded_by_user_id") @db.Uuid
+  /// patient (the Patient app or portal), front_desk or doctor.
+  uploadedByRole   Role     @map("uploaded_by_role")
+  uploadedAt       DateTime @default(now()) @map("uploaded_at") @db.Timestamptz(3)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+  testOrder    TestOrder    @relation(fields: [testOrderId], references: [id], onDelete: Restrict)
+
+  @@index([testOrderId])
+  @@map("test_results")
 }
 
 model AuditLog {

@@ -5,8 +5,9 @@ import type {
   PrescriptionItem,
   SavePrescriptionBody,
   TemplateItem,
+  TestOrder,
 } from '@dhc/contracts';
-import { defaultDose, dosageRemarks } from '@dhc/domain';
+import { defaultDose, dosageRemarks, testOrderLabel } from '@dhc/domain';
 
 /**
  * The prescription as the doctor edits it on the device: plain lines, saved to the server
@@ -155,14 +156,32 @@ export function toSaveBody(
 export function signBlocker(input: {
   dirty: boolean;
   lines: number;
+  /** The visit's tests (PRD §7.1): a prescription may order tests alone. */
+  tests: number;
   openBlocks: number;
   openWarnings: number;
   missing: string[];
 }): 'unsaved' | 'empty' | 'blocks' | 'warnings' | 'setup' | null {
   if (input.dirty) return 'unsaved';
-  if (input.lines === 0) return 'empty';
+  if (input.lines === 0 && input.tests === 0) return 'empty';
   if (input.openBlocks > 0) return 'blocks';
   if (input.openWarnings > 0) return 'warnings';
   if (input.missing.length > 0) return 'setup';
   return null;
+}
+
+/**
+ * The visit's tests as the Clinic app lists them (read-only; they are written on the web):
+ * how each prints, e.g. "MRI knee, right", and whether a signed version already ordered it.
+ * Signing sends every ID shown here, so the server knows the doctor saw them.
+ */
+export function testRows(
+  tests: Pick<TestOrder, 'id' | 'name' | 'region' | 'side' | 'views' | 'orderedAt'>[],
+  language: Language,
+): { id: string; label: string; ordered: boolean }[] {
+  return tests.map((t) => ({
+    id: t.id,
+    label: testOrderLabel(t, language),
+    ordered: t.orderedAt !== null,
+  }));
 }

@@ -13,6 +13,7 @@ import { clinicalRoutes } from './modules/clinical/routes';
 import { deviceRoutes } from './modules/devices/routes';
 import { doctorRoutes } from './modules/doctors/routes';
 import { medicineRoutes } from './modules/medicines/routes';
+import { orderRoutes } from './modules/orders/routes';
 import { prescribingRoutes } from './modules/prescribing/routes';
 import { billingRoutes } from './modules/billing/routes';
 import { queueRoutes } from './modules/queue/routes';
@@ -110,6 +111,7 @@ export function buildApp({
     app.register(doctorRoutes, { prefix: '/v1', services, signInRateLimit });
     app.register(medicineRoutes, { prefix: '/v1', services });
     app.register(billingRoutes, { prefix: '/v1', services });
+    app.register(orderRoutes, { prefix: '/v1', services });
     app.register(staffRoutes, { prefix: '/v1', services });
     app.register(auditRoutes, { prefix: '/v1', services });
     app.register(reportRoutes, { prefix: '/v1', services });

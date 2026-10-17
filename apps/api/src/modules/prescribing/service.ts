@@ -21,6 +21,7 @@ import { assertChartAccess } from '../clinical/access';
 import { lockVisit, NOTE_STATUSES } from '../clinical/service';
 import { historyIds, liveId } from '../patients/merged';
 import { findProfile, signingGaps } from '../doctors/service';
+import { saveDraftTests, visitOrders } from '../orders/lines';
 import { checkAndRecord, summarise, type SafetyVisit } from './safety';
 import {
   auditVisit,
@@ -119,8 +120,9 @@ export class PrescribingService {
         select: { id: true, version: true, status: true, number: true, signedAt: true },
         orderBy: { version: 'desc' },
       });
+      const tests = row ? await visitOrders(tx, appointmentId) : [];
       return {
-        prescription: row && safety ? prescriptionOut(row, safety, this.s.webBaseUrl) : null,
+        prescription: row && safety ? prescriptionOut(row, safety, this.s.webBaseUrl, tests) : null,
         defaultLanguage: appointment.patient.language,
         canEdit:
           ownVisit &&
@@ -202,15 +204,18 @@ export class PrescribingService {
         }
         throw error;
       }
+      if (body.tests) await saveDraftTests(tx, request, actor, appointment, body.tests);
       const saved = (await currentPrescription(tx, appointmentId))!;
       const safety = await this.safety(tx, actor, appointment, saved, true);
+      const tests = await visitOrders(tx, appointmentId);
       await auditVisit(tx, request, actor, 'prescription.saved', appointmentId, {
         revision: prescription.revision,
         lines: body.items.length,
+        tests: tests.length,
         openBlocks: safety.openBlocks,
         openWarnings: safety.openWarnings,
       });
-      return prescriptionOut(saved, safety, this.s.webBaseUrl);
+      return prescriptionOut(saved, safety, this.s.webBaseUrl, tests);
     });
   }
 

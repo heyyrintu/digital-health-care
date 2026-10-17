@@ -159,6 +159,18 @@ function Found({
           ))}
         </ol>
       </div>
+      {check.tests.length > 0 && (
+        <div className="space-y-1.5 border-t border-border pt-4" data-testid="verify-tests">
+          <p className="m-0 text-sm text-muted-foreground">{t('verify.tests')}</p>
+          <ol className="m-0 list-decimal space-y-1 pl-5 text-sm">
+            {check.tests.map((test, i) => (
+              <li key={i} className="font-medium">
+                {test.label}
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
       <p className="text-xs text-muted-foreground">{t('verify.note')}</p>
     </>
   );

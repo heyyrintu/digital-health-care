@@ -20,6 +20,7 @@ export function SignPanel({
   view,
   prescription,
   revision,
+  testIds,
   blocked,
   onChanged,
   onError,
@@ -30,6 +31,8 @@ export function SignPanel({
   prescription: Prescription | null;
   /** The saved revision of the draft on screen. */
   revision: number;
+  /** The tests on screen: signing names them, so only tests the doctor saw are ordered. */
+  testIds: string[];
   /** Why signing must wait (unsaved changes, open alerts, no lines), or null. */
   blocked: string | null;
   /** After signing, amending or voiding: reload the card (and the visit record). */
@@ -77,7 +80,7 @@ export function SignPanel({
       const path = `/appointments/${appointmentId}/prescription/${mode}`;
       const body =
         mode === 'sign'
-          ? { revision, pin }
+          ? { revision, pin, testIds }
           : mode === 'void'
             ? { reason: reason.trim(), pin }
             : { reason: reason.trim() };

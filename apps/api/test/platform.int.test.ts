@@ -12,6 +12,8 @@ import { Queue, Worker } from 'bullmq';
 import type { FastifyRequest } from 'fastify';
 import { Redis } from 'ioredis';
 import { randomUUID } from 'node:crypto';
+import { readdirSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { totpAt } from '../src/auth/totp';
 import { maskIdentifier } from '../src/modules/invites/service';
@@ -1258,7 +1260,14 @@ describe('system health', () => {
       database: { status: 'ok', latestMigration: await latestMigration() },
       queues: { status: 'not_configured', items: [] },
     });
-    expect(health.database.latestMigration).toMatch(/^\d{14}_platform_health$/);
+    // The newest migration folder in the repository, which the suite has just applied.
+    const onDisk = readdirSync(
+      fileURLToPath(new URL('../../../packages/db/prisma/migrations', import.meta.url)),
+    )
+      .filter((name) => /^\d{14}_/.test(name))
+      .sort()
+      .at(-1);
+    expect(health.database.latestMigration).toBe(onDisk);
     expect(health.database.latencyMs).toBeGreaterThanOrEqual(0);
     expect(health.api.uptimeSeconds).toBeGreaterThanOrEqual(0);
     expectNoClinicalData(res.body);

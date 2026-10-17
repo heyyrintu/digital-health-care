@@ -46,6 +46,7 @@ const doc = (over: Partial<RxDocument> = {}): RxDocument => ({
       remarks: 'Take 1 tablet twice a day for 5 days.',
     },
   ],
+  tests: [],
   testsAdvised: '',
   advice: '',
   followUpDate: null,
@@ -111,6 +112,25 @@ describe('renderPrescriptionPdf', { timeout: 30_000 }, () => {
     const item = doc().items[0]!;
     const pdf = await renderPrescriptionPdf(doc({ items: Array.from({ length: 30 }, () => item) }));
     expect(pages(pdf)).toBeGreaterThan(1);
+  });
+
+  it('prints ordered tests under "Prescribed tests", in English and Hindi, with only tests', async () => {
+    const tests = [
+      { label: 'MRI knee, right', notes: 'Rule out ACL tear' },
+      { label: 'X-ray knee, both sides (AP, Lateral)', notes: null },
+    ];
+    const plain = await renderPrescriptionPdf(doc());
+    const ordered = await renderPrescriptionPdf(doc({ tests }));
+    const hindi = await renderPrescriptionPdf(
+      doc({ language: 'hi', tests: [{ label: 'MRI knee, दायाँ', notes: null }] }),
+    );
+    const testsOnly = await renderPrescriptionPdf(doc({ items: [], tests }));
+    for (const pdf of [ordered, hindi, testsOnly]) {
+      expect(pdf.subarray(0, 5).toString()).toBe('%PDF-');
+      expect(pages(pdf)).toBe(1);
+    }
+    expect(ordered.equals(plain)).toBe(false);
+    expect(ordered.equals(await renderPrescriptionPdf(doc({ tests })))).toBe(true);
   });
 
   it('renders an unsigned preview without a QR', async () => {

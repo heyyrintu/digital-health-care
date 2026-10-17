@@ -11,15 +11,20 @@ import {
   PortalPatientList,
   PortalPrescriptionList,
   PortalSlotsQuery,
+  PortalTestOrderList,
   SlotsResponse,
+  TestOrder,
 } from '@dhc/contracts';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { authOf, authenticate, requireRole } from '../../plugins/authenticate';
 import { idempotent } from '../../idempotency';
 import type { Services } from '../../services';
+import { sendResultFile } from '../orders/routes';
+import { registerUploadParser, uploadedFile, uploadRateLimit } from '../orders/upload';
 import { sendPdf } from '../prescribing/routes';
 import { PortalBookingService } from './booking';
+import { PortalOrdersService } from './orders';
 import { PortalService } from './service';
 
 const IdParams = z.object({ id: z.uuid() });
@@ -31,6 +36,8 @@ export const portalRoutes: FastifyPluginAsync<{ services: Services }> = async (
 ) => {
   const portal = new PortalService(services);
   const booking = new PortalBookingService(services);
+  const orders = new PortalOrdersService(services);
+  registerUploadParser(app);
   const patientOnly = { preHandler: [authenticate(services), requireRole('patient')] };
 
   app.get('/portal/consents', patientOnly, async (request) =>
@@ -92,5 +99,26 @@ export const portalRoutes: FastifyPluginAsync<{ services: Services }> = async (
     const { id } = IdParams.parse(request.params);
     const { file, filename } = await booking.prescriptionPdf(request, authOf(request), id);
     return sendPdf(reply, file, filename);
+  });
+
+  // Test orders (PRD §4.4, §7.1): what was ordered, and results uploaded against it.
+  app.get('/portal/test-orders', patientOnly, async (request) =>
+    PortalTestOrderList.parse({ data: await orders.list(request, authOf(request)) }),
+  );
+
+  app.post(
+    '/portal/test-orders/:id/results',
+    // Authenticated before the body is read (see orders/routes.ts).
+    { onRequest: [uploadRateLimit(app, services), authenticate(services), requireRole('patient')] },
+    async (request, reply) => {
+      const { id } = IdParams.parse(request.params);
+      const order = await orders.upload(request, authOf(request), id, uploadedFile(request));
+      return reply.status(201).send(TestOrder.parse(order));
+    },
+  );
+
+  app.get('/portal/test-results/:id/file', patientOnly, async (request, reply) => {
+    const { id } = IdParams.parse(request.params);
+    return sendResultFile(reply, await orders.resultFile(request, authOf(request), id));
   });
 };
