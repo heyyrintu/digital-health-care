@@ -4,6 +4,7 @@ import {
   MfaVerifyBody,
   PlatformDoctorList,
   PlatformDoctorQuery,
+  PlatformHealth,
   PlatformLoginBody,
   PlatformMeResponse,
   PlatformOrganisationList,
@@ -26,17 +27,20 @@ export interface PlatformRoutesOptions {
   signInRateLimit: number;
   /** Networks that may reach any of these routes, sign-in included (PRD §3.3). */
   allowlist: IpAllowlist;
+  /** This server's version (APP_VERSION), for system health. */
+  version: string;
 }
 
 const ProfileParams = z.object({ profileId: z.uuid() });
 
 /**
  * The platform console API, mounted at `/v1/platform`. Its own sign-in and token
- * audience; organisations, doctor verification and usage only, never clinical data.
+ * audience; organisations, doctor verification, usage and system health only, never
+ * clinical data.
  */
 export const platformRoutes: FastifyPluginAsync<PlatformRoutesOptions> = async (
   app,
-  { services, signInRateLimit, allowlist },
+  { services, signInRateLimit, allowlist, version },
 ) => {
   const auth = new PlatformAuthService(services);
   const platform = new PlatformService(services);
@@ -110,5 +114,9 @@ export const platformRoutes: FastifyPluginAsync<PlatformRoutesOptions> = async (
         PlatformUsageQuery.parse(request.query),
       ),
     ),
+  );
+
+  app.get('/health', operator, async (request) =>
+    PlatformHealth.parse(await platform.health(request, platformAuthOf(request), version)),
   );
 };

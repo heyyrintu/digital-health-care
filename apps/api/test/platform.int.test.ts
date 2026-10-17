@@ -1,14 +1,18 @@
 import {
   CreatedPlatformOrganisation,
   PlatformDoctorList,
+  PlatformHealth,
   PlatformOrganisationList,
   PlatformUsageReport,
   VerifiedPlatformDoctor,
   type TokenResponse,
 } from '@dhc/contracts';
-import { withAuth, withPlatform, withTenant, type Tx } from '@dhc/db';
+import { withAuth, withPlatform, withTenant, type Db, type Tx } from '@dhc/db';
+import { Queue, Worker } from 'bullmq';
+import type { FastifyRequest } from 'fastify';
+import { Redis } from 'ioredis';
 import { randomUUID } from 'node:crypto';
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { totpAt } from '../src/auth/totp';
 import { maskIdentifier } from '../src/modules/invites/service';
 import {
@@ -18,6 +22,8 @@ import {
   resetPlatformOperatorAuthenticator,
   resetPlatformOperatorPassword,
 } from '../src/modules/platform/operators';
+import { RedisQueueProbe } from '../src/modules/platform/queue-health';
+import { PlatformService } from '../src/modules/platform/service';
 import { supportVerifyDoctor } from '../src/modules/support/verify-doctor';
 import { IpAllowlist, parseCidrs } from '../src/plugins/ip-allowlist';
 import {
@@ -520,7 +526,12 @@ describe('separate audiences', () => {
 
   it('refuses clinic tokens, and clinic sign-in steps, on platform endpoints', async () => {
     const admin = await staffLogin(h, 'clinic-a', clinics.a.admin);
-    for (const url of ['/platform/me', '/platform/organisations', '/platform/doctors']) {
+    for (const url of [
+      '/platform/me',
+      '/platform/organisations',
+      '/platform/doctors',
+      '/platform/health',
+    ]) {
       expect((await call('GET', url, admin)).statusCode, url).toBe(401);
     }
     expect(
@@ -585,6 +596,13 @@ describe('IP allowlist', () => {
       headers: bearer(tokens),
     });
     expect(fromOutside.statusCode).toBe(403);
+    const healthFromOutside = await restricted.app.inject({
+      method: 'GET',
+      url: '/v1/platform/health',
+      remoteAddress: '198.51.100.1',
+      headers: bearer(tokens),
+    });
+    expect(healthFromOutside.statusCode).toBe(403);
 
     // No list in production: nobody.
     expect((await login('10.1.2.3', denied.app)).statusCode).toBe(403);
@@ -1220,6 +1238,172 @@ describe('usage', () => {
   });
 });
 
+describe('system health', () => {
+  const latestMigration = async () =>
+    (
+      await h.owner.$queryRaw<{ name: string }[]>`
+        SELECT migration_name AS name FROM _prisma_migrations
+        WHERE finished_at IS NOT NULL AND rolled_back_at IS NULL
+        ORDER BY migration_name DESC LIMIT 1`
+    )[0]!.name;
+
+  it('reports the API, the database and, without REDIS_URL, queues not configured', async () => {
+    const tokens = await platformLogin(h, op);
+    const res = await call('GET', '/platform/health', tokens);
+    expect(res.statusCode).toBe(200);
+    const health = PlatformHealth.parse(res.json());
+    expect(health).toMatchObject({
+      checkedAt: new Date(h.clock.ms).toISOString(),
+      api: { version: 'test' },
+      database: { status: 'ok', latestMigration: await latestMigration() },
+      queues: { status: 'not_configured', items: [] },
+    });
+    expect(health.database.latestMigration).toMatch(/^\d{14}_platform_health$/);
+    expect(health.database.latencyMs).toBeGreaterThanOrEqual(0);
+    expect(health.api.uptimeSeconds).toBeGreaterThanOrEqual(0);
+    expectNoClinicalData(res.body);
+    for (const c of [clinics.a, clinics.b]) {
+      expect(res.body).not.toContain(c.org.id);
+      expect(res.body).not.toContain(c.org.slug);
+    }
+  });
+
+  it('audits each view with no organisation, naming the operator', async () => {
+    const tokens = await platformLogin(h, op);
+    await call('GET', '/platform/health', tokens);
+    await call('GET', '/platform/health', tokens);
+    const entries = await h.owner.auditLog.findMany({
+      where: { action: 'platform.health.viewed' },
+    });
+    expect(entries).toHaveLength(2);
+    expect(entries[0]).toMatchObject({
+      organisationId: null,
+      actorUserId: null,
+      entityType: 'platform_operator',
+      entityId: op.operatorId,
+      metadata: { database: 'ok', queues: 'not_configured' },
+    });
+  });
+
+  it('needs a platform session', async () => {
+    expect((await call('GET', '/platform/health', null)).statusCode).toBe(401);
+    const admin = await staffLogin(h, 'clinic-a', clinics.a.admin);
+    expect((await call('GET', '/platform/health', admin)).statusCode).toBe(401);
+    expect(await h.owner.auditLog.count({ where: { action: 'platform.health.viewed' } })).toBe(0);
+  });
+
+  it('reports Redis that refuses connections as down, and still answers', async () => {
+    const down = createHarness({ queues: new RedisQueueProbe('redis://127.0.0.1:1', 500) });
+    try {
+      const tokens = await platformLogin(down, op);
+      const res = await down.app.inject({
+        method: 'GET',
+        url: '/v1/platform/health',
+        headers: bearer(tokens),
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({
+        database: { status: 'ok' },
+        queues: { status: 'down', items: [] },
+      });
+      expect(
+        await h.owner.auditLog.findFirst({ where: { action: 'platform.health.viewed' } }),
+      ).toMatchObject({ metadata: { database: 'ok', queues: 'down' } });
+    } finally {
+      await down.app.close();
+      await down.owner.$disconnect();
+    }
+  });
+
+  it('reports a database that does not answer as down, without throwing', async () => {
+    const failing = {
+      $transaction: () => Promise.reject(new Error('connection refused')),
+    } as unknown as Db;
+    const service = new PlatformService({ ...h.services, db: failing });
+    const warn = vi.fn();
+    const request = {
+      id: 'req_test',
+      ip: '127.0.0.1',
+      headers: {},
+      log: { warn },
+    } as unknown as FastifyRequest;
+    const health = await service.health(
+      request,
+      { operatorId: op.operatorId, sessionId: randomUUID() } as never,
+      'test',
+    );
+    expect(health.database).toEqual({ status: 'down', latencyMs: null, latestMigration: null });
+    expect(health.queues.status).toBe('not_configured');
+    // The entry could not be written; that is logged instead.
+    expect(warn).toHaveBeenCalledOnce();
+  });
+
+  // Only where a Redis is available (TEST_REDIS_URL; CI's integration job has one). It must
+  // be a database of its own, such as `redis://localhost:6379/15` in CI, never the one
+  // development workers use: the test empties its queue. Its keys also carry a test-only
+  // prefix, so real queues are never touched.
+  it.runIf(process.env.TEST_REDIS_URL)(
+    'counts each queue’s jobs, failed ones included, and never their contents',
+    async () => {
+      const url = process.env.TEST_REDIS_URL!;
+      const redis = new Redis(url, { maxRetriesPerRequest: null });
+      const prefix = 'dhc-test';
+      const messaging = new Queue('messaging', { connection: redis, prefix });
+      await messaging.obliterate({ force: true });
+      const withRedis = createHarness({ queues: new RedisQueueProbe(url, 1_500, prefix) });
+      try {
+        const patientId = clinics.a.patients[0]!.id;
+        // One job fails for good (its only attempt), as after a worker's last retry.
+        await messaging.add('broken', { patientId }, { attempts: 1 });
+        const worker = new Worker(
+          'messaging',
+          async () => {
+            throw new Error('synthetic failure');
+          },
+          { connection: new Redis(url, { maxRetriesPerRequest: null }), prefix },
+        );
+        await new Promise((failed) => worker.once('failed', failed));
+        await worker.close();
+        await worker.disconnect();
+        await messaging.add('send', { patientId });
+        await messaging.add('later', { patientId }, { delay: 60_000 });
+
+        const tokens = await platformLogin(withRedis, op);
+        const res = await withRedis.app.inject({
+          method: 'GET',
+          url: '/v1/platform/health',
+          headers: bearer(tokens),
+        });
+        const health = PlatformHealth.parse(res.json());
+        expect(health.queues.status).toBe('ok');
+        expect(health.queues.items.map((q) => q.name)).toEqual([
+          'system',
+          'messaging',
+          'documents',
+          'webhooks',
+          'abdm',
+          'imports',
+          'reconciliation',
+        ]);
+        expect(health.queues.items.find((q) => q.name === 'messaging')).toEqual({
+          name: 'messaging',
+          waiting: 1,
+          active: 0,
+          delayed: 1,
+          failed: 1,
+        });
+        expect(res.body).not.toContain(patientId);
+      } finally {
+        await messaging.obliterate({ force: true });
+        await messaging.close();
+        redis.disconnect();
+        await withRedis.app.close();
+        await withRedis.owner.$disconnect();
+      }
+    },
+  );
+});
+
 describe('in the database (dhc_platform)', () => {
   const asPlatform = <T>(fn: (tx: Tx) => Promise<T>) => withPlatform(h.services.db, fn);
 
@@ -1239,6 +1423,7 @@ describe('in the database (dhc_platform)', () => {
     'users',
     'sessions',
     'audit_logs',
+    '_prisma_migrations',
   ])('cannot read %s', async (table) => {
     await expect(
       asPlatform((tx) => tx.$queryRawUnsafe(`SELECT 1 FROM ${table} LIMIT 1`)),
@@ -1305,6 +1490,7 @@ describe('in the database (dhc_platform)', () => {
     expect(functions.map((f) => f.name)).toEqual([
       'platform_create_organisation',
       'platform_doctor_profiles',
+      'platform_latest_migration',
       'platform_mask_identifier',
       'platform_organisation_slug_taken',
       'platform_organisation_summaries',

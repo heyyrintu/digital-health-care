@@ -56,6 +56,9 @@ export default defineConfig({
         SIGN_IN_RATE_LIMIT: '100000',
         // The platform console answers the test runner's address (local and CI only; production refuses `*`).
         PLATFORM_ALLOWED_CIDRS: '*',
+        // No Redis, whatever the developer's shell has: system health shows the queues as
+        // not configured, as in CI.
+        REDIS_URL: '',
       },
     },
     {

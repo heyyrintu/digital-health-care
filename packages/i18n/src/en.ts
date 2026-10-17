@@ -1101,6 +1101,7 @@ export const en = {
   'platform.nav.organisations': 'Organisations',
   'platform.nav.verification': 'Doctor verification',
   'platform.nav.usage': 'Usage',
+  'platform.nav.health': 'System health',
   'platform.orgs.title': 'Organisations',
   'platform.orgs.sub':
     'Every organisation with its clinics, staff and doctor verification. No patient or clinical data.',
@@ -1196,6 +1197,46 @@ export const en = {
   'platform.usage.scribeMinutes': 'Scribe minutes',
   'platform.usage.notBuilt':
     '— Messages and scribe minutes are not counted yet: messaging and the AI scribe are not built.',
+  'platform.health.title': 'System health',
+  'platform.health.sub': 'The API, the database and the background queues. Status and counts only.',
+  'platform.health.refresh': 'Refresh',
+  'platform.health.checkedAt': 'Last checked {time}',
+  'platform.health.api': 'API',
+  'platform.health.database': 'Database',
+  'platform.health.queues': 'Background queues',
+  'platform.health.status.ok': 'OK',
+  'platform.health.status.down': 'Down',
+  'platform.health.status.not_configured': 'Not configured',
+  'platform.health.version': 'Version {version}',
+  'platform.health.uptimeDays': 'Running for {days} d {hours} h',
+  'platform.health.uptimeHours': 'Running for {hours} h {minutes} min',
+  'platform.health.uptimeMinutes': 'Running for {minutes} min',
+  'platform.health.latency': 'Answered in {ms} ms',
+  'platform.health.migration': 'Latest migration: {name}',
+  'platform.health.noMigration': 'No migration recorded',
+  'platform.health.databaseDown': 'The database did not answer within 2 seconds.',
+  'platform.health.queuesDown':
+    'Redis did not answer within 1.5 seconds. Jobs cannot be counted and may not be running.',
+  'platform.health.queuesNotConfigured':
+    'This API server has no REDIS_URL, so the queues are not checked.',
+  'platform.health.queuesOk': 'Every queue answered.',
+  'platform.health.queue': 'Queue',
+  'platform.health.waiting': 'Waiting',
+  'platform.health.active': 'Running',
+  'platform.health.delayed': 'Delayed',
+  'platform.health.failed': 'Failed',
+  'platform.health.failedNotice':
+    'Jobs have failed after every retry in: {queues}. See the platform operators runbook.',
+  'platform.health.unavailable':
+    'System health could not be checked: the API or its database is not answering. Try again in a minute; if it lasts, raise an incident.',
+  'platform.health.countsOnly': 'Counts only: job contents are never shown here.',
+  'platform.health.queue.system': 'System',
+  'platform.health.queue.messaging': 'Messaging',
+  'platform.health.queue.documents': 'Documents',
+  'platform.health.queue.webhooks': 'Webhooks',
+  'platform.health.queue.abdm': 'ABDM',
+  'platform.health.queue.imports': 'Imports',
+  'platform.health.queue.reconciliation': 'Payment reconciliation',
 } as const;
 
 export type MessageKey = keyof typeof en;

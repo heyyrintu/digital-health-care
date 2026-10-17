@@ -3,9 +3,11 @@ import {
   MAX_USAGE_DAYS,
   SupportTicket,
   type PlatformDoctor,
+  type PlatformHealth,
+  type QueueName,
   type VerifyPlatformDoctorBody,
 } from '@dhc/contracts';
-import { addDays, istDateKey } from '@dhc/domain';
+import { CLINIC_TIME_ZONE, addDays, istDateKey } from '@dhc/domain';
 import type { MessageKey } from '@dhc/i18n';
 
 /**
@@ -136,3 +138,82 @@ export function usageRangeProblem(from: string, to: string): MessageKey | null {
 /** Usage figures that are not built yet (messages, scribe minutes) come back null. */
 export const countOrDash = (value: number | null, locale: 'en' | 'hi') =>
   value === null ? '—' : new Intl.NumberFormat(locale === 'hi' ? 'hi-IN' : 'en-IN').format(value);
+
+/**
+ * The system health page's message for a failed check. A 5xx (502 and 503 from a proxy
+ * included) usually means the database is fully down: the API's sign-in check reads it
+ * before the health check can run, so the page says so rather than "something went wrong".
+ */
+export function healthErrorKey(e: unknown): MessageKey | null {
+  if (e instanceof ApiError && e.status >= 500 && !unreachable(e)) {
+    return 'platform.health.unavailable';
+  }
+  return platformErrorKey(e, 'page');
+}
+
+/** Any status on the system health page: the database's, the queues' or the API's (`ok`). */
+export type HealthStatus = PlatformHealth['queues']['status'];
+
+const HEALTH_STATUS_KEYS: Record<HealthStatus, MessageKey> = {
+  ok: 'platform.health.status.ok',
+  down: 'platform.health.status.down',
+  not_configured: 'platform.health.status.not_configured',
+};
+
+export const healthStatusKey = (status: HealthStatus): MessageKey => HEALTH_STATUS_KEYS[status];
+
+/** The colours for a status: green for OK, red for down, plain for not configured. */
+export function healthTone(status: HealthStatus): 'ok' | 'danger' | 'neutral' {
+  if (status === 'ok') return 'ok';
+  if (status === 'down') return 'danger';
+  return 'neutral';
+}
+
+/** What the queues card says under its status. */
+export function queuesNoteKey(status: HealthStatus): MessageKey {
+  if (status === 'ok') return 'platform.health.queuesOk';
+  if (status === 'down') return 'platform.health.queuesDown';
+  return 'platform.health.queuesNotConfigured';
+}
+
+const QUEUE_LABEL_KEYS: Record<QueueName, MessageKey> = {
+  system: 'platform.health.queue.system',
+  messaging: 'platform.health.queue.messaging',
+  documents: 'platform.health.queue.documents',
+  webhooks: 'platform.health.queue.webhooks',
+  abdm: 'platform.health.queue.abdm',
+  imports: 'platform.health.queue.imports',
+  reconciliation: 'platform.health.queue.reconciliation',
+};
+
+export const queueLabelKey = (name: QueueName): MessageKey => QUEUE_LABEL_KEYS[name];
+
+/** The queues holding jobs that failed after every retry, in the report's order. */
+export const queuesWithFailures = (health: PlatformHealth): QueueName[] =>
+  health.queues.items.filter((q) => q.failed > 0).map((q) => q.name);
+
+/** How long the API server has been running, as a message: days and hours, or hours and minutes. */
+export function uptimeMessage(seconds: number): {
+  key: MessageKey;
+  params: Record<string, number>;
+} {
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+  if (days > 0) return { key: 'platform.health.uptimeDays', params: { days, hours: hours % 24 } };
+  if (hours > 0) {
+    return { key: 'platform.health.uptimeHours', params: { hours, minutes: minutes % 60 } };
+  }
+  return { key: 'platform.health.uptimeMinutes', params: { minutes } };
+}
+
+/** When health was checked, in IST to the second: a refresh a moment later reads differently. */
+export const formatCheckedAt = (iso: string, locale: 'en' | 'hi') =>
+  new Intl.DateTimeFormat(locale === 'hi' ? 'hi-IN' : 'en-IN', {
+    timeZone: CLINIC_TIME_ZONE,
+    day: 'numeric',
+    month: 'short',
+    hour: 'numeric',
+    minute: '2-digit',
+    second: '2-digit',
+  }).format(new Date(iso));

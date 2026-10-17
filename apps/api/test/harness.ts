@@ -7,6 +7,7 @@ import { buildApp } from '../src/app';
 import { hashPassword } from '../src/auth/password';
 import { generateTotpSecret, totpAt } from '../src/auth/totp';
 import { LocalFileStore } from '../src/files';
+import type { QueueProbe } from '../src/modules/platform/queue-health';
 import { IpAllowlist } from '../src/plugins/ip-allowlist';
 import { createServices, type Services } from '../src/services';
 import { TestKeySigner } from '../src/signing/signer';
@@ -24,7 +25,9 @@ export class Clock {
   }
 }
 
-export function createHarness(options: { platformAllowlist?: IpAllowlist } = {}) {
+export function createHarness(
+  options: { platformAllowlist?: IpAllowlist; queues?: QueueProbe } = {},
+) {
   const url = process.env.TEST_DATABASE_URL!;
   const clock = new Clock();
   const sentCodes: { phone: string; code: string }[] = [];
@@ -41,6 +44,7 @@ export function createHarness(options: { platformAllowlist?: IpAllowlist } = {})
       now: clock.now,
       signer: new TestKeySigner(JWT_SECRET),
       files: new LocalFileStore(mkdtempSync(join(tmpdir(), 'dhc-files-'))),
+      ...(options.queues ? { queues: options.queues } : {}),
     },
   );
   const app = buildApp({

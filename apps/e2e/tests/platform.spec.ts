@@ -279,4 +279,37 @@ test.describe('platform console', () => {
     await page.getByRole('button', { name: 'हिंदी' }).click();
     await expect(page.locator('h1')).toHaveText('उपयोग');
   });
+
+  test('shows system health: the database OK and the queues not configured', async ({
+    page,
+    operator,
+  }) => {
+    await signInToConsole(page, operator);
+    await page.getByRole('link', { name: 'System health' }).click();
+    await expect(page).toHaveURL(/\/platform\/health$/);
+    await expect(page.locator('h1')).toHaveText('System health');
+
+    const database = page.getByTestId('health-database');
+    await expect(database.getByTestId('status')).toHaveText('OK');
+    await expect(database.getByTestId('health-migration')).toContainText(/\d{14}_\w+/);
+    await expect(page.getByTestId('health-api').getByTestId('status')).toHaveText('OK');
+    // The e2e API runs with REDIS_URL empty (playwright.config.ts).
+    const queues = page.getByTestId('health-queues');
+    await expect(queues.getByTestId('status')).toHaveText('Not configured');
+    await expect(queues).toContainText('This API server has no REDIS_URL');
+    await expect(page.getByTestId('health-queue-counts')).toHaveCount(0);
+
+    // Refresh checks again (each check is audited; the page never polls on its own).
+    const again = page.waitForResponse(
+      (r) => r.url().endsWith('/v1/platform/health') && r.request().method() === 'GET',
+    );
+    await page.getByRole('button', { name: 'Refresh' }).click();
+    expect((await again).status()).toBe(200);
+    await expect(page.getByTestId('checked-at')).toContainText('Last checked');
+    await expect(page.locator('meta[name=robots]')).toHaveAttribute('content', 'noindex, nofollow');
+
+    await page.getByRole('button', { name: 'हिंदी' }).click();
+    await expect(page.locator('h1')).toHaveText('सिस्टम की स्थिति');
+    await expect(database.getByTestId('status')).toHaveText('ठीक');
+  });
 });

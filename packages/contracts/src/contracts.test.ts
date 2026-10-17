@@ -6,6 +6,9 @@ import {
   HealthResponse,
   LoginResponse,
   NewPassword,
+  PlatformHealth,
+  QUEUES,
+  QUEUE_NAMES,
   buildOpenApiDocument,
   checkUpload,
   page,
@@ -101,6 +104,7 @@ describe('buildOpenApiDocument', () => {
     );
     expect(platformOps.sort()).toEqual([
       'GET /platform/doctors',
+      'GET /platform/health',
       'GET /platform/me',
       'GET /platform/organisations',
       'GET /platform/usage',
@@ -154,5 +158,52 @@ describe('checkUpload', () => {
     expect(checkUpload(settings, { mediaType: 'application/pdf', sizeBytes: 2 * mb + 1 })).toBe(
       'too_large',
     );
+  });
+});
+
+describe('job queues', () => {
+  it('names each queue once, in a fixed order', () => {
+    expect(QUEUE_NAMES).toEqual(Object.values(QUEUES));
+    expect(new Set(QUEUE_NAMES).size).toBe(QUEUE_NAMES.length);
+  });
+});
+
+describe('PlatformHealth', () => {
+  const health = {
+    checkedAt: '2026-10-17T06:30:00.000Z',
+    api: { version: '1.2.3', uptimeSeconds: 42 },
+    database: { status: 'ok', latencyMs: 3, latestMigration: '20261017120000_platform_health' },
+    queues: {
+      status: 'ok',
+      items: [{ name: 'messaging', waiting: 1, active: 0, delayed: 2, failed: 3 }],
+    },
+  };
+
+  it('keeps status and counts only, dropping anything else a queue might carry', () => {
+    const parsed = PlatformHealth.parse({
+      ...health,
+      queues: {
+        status: 'ok',
+        items: [{ ...health.queues.items[0], jobs: [{ data: { patientId: 'x' } }] }],
+      },
+    });
+    expect(parsed.queues.items[0]).toEqual(health.queues.items[0]);
+  });
+
+  it('refuses unknown queues and statuses', () => {
+    expect(
+      PlatformHealth.safeParse({
+        ...health,
+        queues: { status: 'ok', items: [{ ...health.queues.items[0], name: 'other' }] },
+      }).success,
+    ).toBe(false);
+    expect(
+      PlatformHealth.safeParse({ ...health, database: { ...health.database, status: 'slow' } })
+        .success,
+    ).toBe(false);
+    expect(
+      PlatformHealth.safeParse({ ...health, queues: { status: 'not_configured', items: [] } })
+        .success,
+    ).toBe(true);
   });
 });

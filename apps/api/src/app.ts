@@ -122,7 +122,9 @@ export function buildApp({
       services,
       signInRateLimit,
       allowlist: platformAllowlist,
+      version: config.APP_VERSION,
     });
+    app.addHook('onClose', async () => services.queues.close());
     app.addHook('onClose', async () => services.db.$disconnect());
   }
 
