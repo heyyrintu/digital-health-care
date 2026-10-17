@@ -1,5 +1,5 @@
+import type { QueueName } from '@dhc/contracts';
 import type { Job } from 'bullmq';
-import type { QueueName } from './queues';
 
 export type Processor = (job: Job) => Promise<unknown>;
 

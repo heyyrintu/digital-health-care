@@ -1,8 +1,10 @@
 import { z } from 'zod';
 import { OrganisationSlug } from './auth';
+import { QUEUE_NAMES } from './job-queues';
 
 /**
- * Platform console (PRD §3.2, §9.3): organisations, doctor verification and usage only.
+ * Platform console (PRD §3.2, §9.3): organisations, doctor verification, usage and system
+ * health only.
  * Separate sign-in and token audience from the clinic app; nothing here carries patient
  * or clinical data (threat model T17, ADR 0016).
  */
@@ -210,3 +212,61 @@ export const PlatformUsageReport = z.object({
   data: z.array(PlatformUsageRow),
 });
 export type PlatformUsageReport = z.infer<typeof PlatformUsageReport>;
+
+// ---- System health ------------------------------------------------------------------
+
+/**
+ * One background queue's job counts. Counts only: no job IDs, names or payloads, which
+ * may reference an organisation or a patient.
+ */
+export const PlatformQueueCounts = z.object({
+  name: z.enum(QUEUE_NAMES),
+  /** Waiting to start, prioritised ones included. */
+  waiting: Count,
+  active: Count,
+  /** Scheduled for later, retries waiting out their backoff included. */
+  delayed: Count,
+  /** Failed for good after every retry; kept until someone looks into them. */
+  failed: Count,
+});
+export type PlatformQueueCounts = z.infer<typeof PlatformQueueCounts>;
+
+/** The platform's own state (PRD §9.3 "system health"): status and counts, no organisation or patient data. */
+export const PlatformHealth = z.object({
+  checkedAt: z.iso.datetime(),
+  api: z.object({
+    version: z.string(),
+    /** Seconds since this API server started (one server behind the load balancer). */
+    uptimeSeconds: Count,
+  }),
+  database: z.object({
+    /**
+     * `down`: the database failed, or did not answer a trivial query within 2 seconds,
+     * after the request's sign-in check had passed. A database that is fully down fails
+     * that check first, so the request gets an error (5xx) rather than this report.
+     */
+    status: z.enum(['ok', 'down']),
+    /** Round trip of that query in milliseconds; null when down. */
+    latencyMs: Count.nullable(),
+    /** The last migration applied, e.g. `20261017120000_platform_health`; null when down. */
+    latestMigration: z.string().nullable(),
+  }),
+  queues: z
+    .object({
+      /**
+       * `not_configured`: this API server has no `REDIS_URL`. `down`: Redis failed, refused
+       * the connection or did not answer within 1.5 seconds.
+       */
+      status: z.enum(['ok', 'down', 'not_configured']),
+      /** Every queue, in `QUEUE_NAMES` order, when `ok`; empty otherwise. */
+      items: z.array(PlatformQueueCounts),
+    })
+    .refine(
+      ({ status, items }) =>
+        status === 'ok'
+          ? items.length === QUEUE_NAMES.length && items.every((q, i) => q.name === QUEUE_NAMES[i])
+          : items.length === 0,
+      { message: 'Every queue in QUEUE_NAMES order when ok; none otherwise.', path: ['items'] },
+    ),
+});
+export type PlatformHealth = z.infer<typeof PlatformHealth>;

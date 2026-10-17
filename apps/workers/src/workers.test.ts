@@ -1,8 +1,8 @@
+import { QUEUES } from '@dhc/contracts';
 import type { Job } from 'bullmq';
 import { describe, expect, it } from 'vitest';
 import { loadConfig } from './config';
 import { processors } from './processors';
-import { QUEUES } from './queues';
 
 describe('queues', () => {
   it('has unique queue names', () => {

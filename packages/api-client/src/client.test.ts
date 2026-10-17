@@ -243,4 +243,27 @@ describe('platform console calls', () => {
     expect(url).toBe('https://api.test/v1/platform/usage?from=2026-10-01&to=2026-10-07');
     expect((init.headers as Record<string, string>).authorization).toBe('Bearer platform-token');
   });
+
+  it('asks for system health', async () => {
+    const fetch = vi.fn(async () =>
+      json(200, {
+        checkedAt: '2026-10-17T06:30:00.000Z',
+        api: { version: '1.2.3', uptimeSeconds: 42 },
+        database: { status: 'ok', latencyMs: 3, latestMigration: '20261017120000_platform_health' },
+        queues: { status: 'not_configured', items: [] },
+      }),
+    );
+    const client = createApiClient({
+      baseUrl: 'https://api.test/v1',
+      getAccessToken: () => 'platform-token',
+      fetch,
+    });
+    await expect(client.platform.health()).resolves.toMatchObject({
+      queues: { status: 'not_configured' },
+    });
+    const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('https://api.test/v1/platform/health');
+    expect(init.method).toBe('GET');
+    expect((init.headers as Record<string, string>).authorization).toBe('Bearer platform-token');
+  });
 });

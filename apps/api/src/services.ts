@@ -5,6 +5,11 @@ import { PlatformTokenService, TokenService } from './auth/tokens';
 import type { Config } from './config';
 import { LiveEvents } from './live';
 import { LocalFileStore, type FileStore } from './files';
+import {
+  RedisQueueProbe,
+  queuesNotConfigured,
+  type QueueProbe,
+} from './modules/platform/queue-health';
 import { TestKeySigner, type PrescriptionSigner } from './signing/signer';
 
 /** Delivers patient sign-in codes. The SMS/WhatsApp provider plugs in here (decision O5). */
@@ -33,6 +38,8 @@ export interface Services {
   files: FileStore;
   /** Queue changes from the database, for the live queue and waiting-room streams. */
   live: LiveEvents;
+  /** Background queues' job counts for the platform console's system health. */
+  queues: QueueProbe;
   now(): Date;
 }
 
@@ -43,6 +50,7 @@ export function createServices(
     now?: () => Date;
     signer?: PrescriptionSigner | null;
     files?: FileStore;
+    queues?: QueueProbe;
   } = {},
 ): Services {
   const { DATABASE_URL, JWT_SECRET, FIELD_ENCRYPTION_KEY } = config;
@@ -84,6 +92,9 @@ export function createServices(
           : null,
     files: overrides.files ?? new LocalFileStore(config.FILE_STORE_DIR ?? '.data/files'),
     live: new LiveEvents(DATABASE_URL),
+    queues:
+      overrides.queues ??
+      (config.REDIS_URL ? new RedisQueueProbe(config.REDIS_URL) : queuesNotConfigured),
     now: overrides.now ?? (() => new Date()),
   };
 }

@@ -1,7 +1,7 @@
+import type { QueueName } from '@dhc/contracts';
 import { Worker } from 'bullmq';
 import { createRedis, loadConfig } from './config';
 import { processors } from './processors';
-import type { QueueName } from './queues';
 
 const config = loadConfig();
 const connection = createRedis(config.REDIS_URL);

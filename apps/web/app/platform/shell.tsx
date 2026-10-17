@@ -2,7 +2,7 @@
 
 import type { PlatformOperator } from '@dhc/contracts';
 import { Badge, StaffShell, type NavItem } from '@dhc/ui-web';
-import { BadgeCheck, BarChart3, Building2 } from 'lucide-react';
+import { Activity, BadgeCheck, BarChart3, Building2 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, type ReactNode } from 'react';
@@ -38,6 +38,7 @@ export function PlatformShell({
     { href: '/platform', label: t('platform.nav.organisations'), icon: Building2, exact: true },
     { href: '/platform/doctors', label: t('platform.nav.verification'), icon: BadgeCheck },
     { href: '/platform/usage', label: t('platform.nav.usage'), icon: BarChart3 },
+    { href: '/platform/health', label: t('platform.nav.health'), icon: Activity },
   ];
 
   return (
