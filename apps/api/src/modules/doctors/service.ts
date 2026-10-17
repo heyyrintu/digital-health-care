@@ -98,8 +98,14 @@ export class DoctorProfileService {
         specialty: body.specialty || null,
         rxPrefix: body.rxPrefix,
         paperSize: body.paperSize,
+        // Back in the platform team's queue, as of now.
         ...(reverify
-          ? { verification: 'pending' as const, verifiedAt: null, verifiedBy: null }
+          ? {
+              verification: 'pending' as const,
+              verifiedAt: null,
+              verifiedBy: null,
+              submittedAt: this.s.now(),
+            }
           : {}),
       };
       let row: ProfileRow;
@@ -107,7 +113,12 @@ export class DoctorProfileService {
         row = existing
           ? await tx.doctorProfile.update({ where: { id: existing.id }, data })
           : await tx.doctorProfile.create({
-              data: { ...data, organisationId: actor.organisationId, userId: actor.userId },
+              data: {
+                ...data,
+                organisationId: actor.organisationId,
+                userId: actor.userId,
+                submittedAt: this.s.now(),
+              },
             });
       } catch (error) {
         if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {

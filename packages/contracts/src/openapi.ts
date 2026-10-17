@@ -170,6 +170,20 @@ import {
 import { CreateTagBody, Tag, TagList, UpdateTagBody } from './tags';
 import { PushDevice, PushDeviceList, RegisterPushDeviceBody } from './devices';
 import {
+  CreatePlatformOrganisationBody,
+  CreatedPlatformOrganisation,
+  PlatformDoctorList,
+  PlatformDoctorQuery,
+  PlatformLoginBody,
+  PlatformLoginResponse,
+  PlatformMeResponse,
+  PlatformOrganisationList,
+  PlatformUsageQuery,
+  PlatformUsageReport,
+  VerifiedPlatformDoctor,
+  VerifyPlatformDoctorBody,
+} from './platform';
+import {
   SyncMedicinesQuery,
   SyncMedicinesResponse,
   SyncTodayQuery,
@@ -183,6 +197,8 @@ interface Operation {
   summary: string;
   /** Endpoints without auth are listed explicitly; everything else needs a bearer token. */
   public?: boolean;
+  /** Platform console: a platform operator's token (its own audience), never a clinic one. */
+  platform?: boolean;
   body?: z.ZodType;
   query?: z.ZodObject;
   pathParams?: string[];
@@ -1256,6 +1272,95 @@ const operations: Operation[] = [
     query: SyncTodayQuery,
     response: SyncTodayResponse,
   },
+  {
+    method: 'post',
+    path: '/platform/auth/login',
+    operationId: 'platformLogin',
+    summary: 'Platform operator password step (allowed networks only)',
+    public: true,
+    body: PlatformLoginBody,
+    response: PlatformLoginResponse,
+  },
+  {
+    method: 'post',
+    path: '/platform/auth/mfa/verify',
+    operationId: 'platformVerifyMfa',
+    summary: 'Platform operator authenticator-code step',
+    public: true,
+    body: MfaVerifyBody,
+    response: TokenResponse,
+  },
+  {
+    method: 'post',
+    path: '/platform/auth/refresh',
+    operationId: 'platformRefreshTokens',
+    summary: 'Rotate a platform refresh token',
+    public: true,
+    body: RefreshBody,
+    response: TokenResponse,
+  },
+  {
+    method: 'post',
+    path: '/platform/auth/logout',
+    operationId: 'platformLogout',
+    summary: 'End this platform session',
+    platform: true,
+    status: 204,
+  },
+  {
+    method: 'get',
+    path: '/platform/me',
+    operationId: 'getPlatformMe',
+    summary: 'Signed-in platform operator',
+    platform: true,
+    response: PlatformMeResponse,
+  },
+  {
+    method: 'get',
+    path: '/platform/organisations',
+    operationId: 'listPlatformOrganisations',
+    summary: 'Organisations with clinic and staff counts (no patient or clinical data)',
+    platform: true,
+    response: PlatformOrganisationList,
+  },
+  {
+    method: 'post',
+    path: '/platform/organisations',
+    operationId: 'createPlatformOrganisation',
+    summary: 'Onboard an organisation: first clinic and the first clinic admin’s invite link',
+    platform: true,
+    body: CreatePlatformOrganisationBody,
+    response: CreatedPlatformOrganisation,
+    status: 201,
+  },
+  {
+    method: 'get',
+    path: '/platform/doctors',
+    operationId: 'listPlatformDoctors',
+    summary: 'Doctor verification queue across organisations',
+    platform: true,
+    query: PlatformDoctorQuery,
+    response: PlatformDoctorList,
+  },
+  {
+    method: 'post',
+    path: '/platform/doctors/{profileId}/verify',
+    operationId: 'verifyPlatformDoctor',
+    summary: 'Mark a doctor’s registration verified so they can sign',
+    platform: true,
+    pathParams: ['profileId'],
+    body: VerifyPlatformDoctorBody,
+    response: VerifiedPlatformDoctor,
+  },
+  {
+    method: 'get',
+    path: '/platform/usage',
+    operationId: 'getPlatformUsage',
+    summary: 'Usage per organisation over IST days: counts and payment totals only',
+    platform: true,
+    query: PlatformUsageQuery,
+    response: PlatformUsageReport,
+  },
 ];
 
 const errorResponse = {
@@ -1280,7 +1385,7 @@ export function buildOpenApiDocument(options: { version: string; serverUrl?: str
     paths[op.path]![op.method] = {
       operationId: op.operationId,
       summary: op.summary,
-      ...(op.public ? { security: [] } : {}),
+      ...(op.public ? { security: [] } : op.platform ? { security: [{ platformAuth: [] }] } : {}),
       ...(parameters.length ? { parameters } : {}),
       ...(op.body
         ? {
@@ -1322,7 +1427,11 @@ export function buildOpenApiDocument(options: { version: string; serverUrl?: str
     paths,
     components: {
       schemas: { ErrorResponse: toSchema(ErrorResponse) },
-      securitySchemes: { bearerAuth: { type: 'http', scheme: 'bearer' } },
+      securitySchemes: {
+        bearerAuth: { type: 'http', scheme: 'bearer' },
+        // Platform console tokens: a separate audience and key; clinic tokens are refused.
+        platformAuth: { type: 'http', scheme: 'bearer' },
+      },
     },
     security: [{ bearerAuth: [] }],
   };

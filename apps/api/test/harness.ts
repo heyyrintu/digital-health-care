@@ -7,6 +7,7 @@ import { buildApp } from '../src/app';
 import { hashPassword } from '../src/auth/password';
 import { generateTotpSecret, totpAt } from '../src/auth/totp';
 import { LocalFileStore } from '../src/files';
+import { IpAllowlist } from '../src/plugins/ip-allowlist';
 import { createServices, type Services } from '../src/services';
 import { TestKeySigner } from '../src/signing/signer';
 
@@ -23,7 +24,7 @@ export class Clock {
   }
 }
 
-export function createHarness() {
+export function createHarness(options: { platformAllowlist?: IpAllowlist } = {}) {
   const url = process.env.TEST_DATABASE_URL!;
   const clock = new Clock();
   const sentCodes: { phone: string; code: string }[] = [];
@@ -49,6 +50,7 @@ export function createHarness() {
     },
     services,
     signInRateLimit: 1000,
+    platformAllowlist: options.platformAllowlist ?? IpAllowlist.any(),
   });
   /** Owner connection for arranging data and inspecting results (bypasses RLS). */
   const owner = createDb(url);
@@ -59,7 +61,7 @@ export type Harness = ReturnType<typeof createHarness>;
 
 export async function resetDatabase(owner: Db) {
   await owner.$executeRawUnsafe(
-    'TRUNCATE audit_logs, patient_merge_requests, medicine_requests, payments, bill_items, bills, price_list_items, receipt_settings, prescription_verifications, doctor_profiles, safety_alerts, prescription_templates, prescription_items, prescriptions, medicine_ingredients, medicines, drug_condition_rules, drug_cross_sensitivities, drug_interactions, drug_database, drug_molecules, consultations, vitals, allergies, medical_conditions, current_medications, display_screens, appointment_status_history, appointments, availability_exceptions, availability_versions, booking_rules, consultation_types, clinics, staff_invites, sessions, otp_challenges, memberships, patient_tags, tags, uhid_settings, patients, users, organisations CASCADE',
+    'TRUNCATE platform_sessions, platform_operators, audit_logs, patient_merge_requests, medicine_requests, payments, bill_items, bills, price_list_items, receipt_settings, prescription_verifications, doctor_profiles, safety_alerts, prescription_templates, prescription_items, prescriptions, medicine_ingredients, medicines, drug_condition_rules, drug_cross_sensitivities, drug_interactions, drug_database, drug_molecules, consultations, vitals, allergies, medical_conditions, current_medications, display_screens, appointment_status_history, appointments, availability_exceptions, availability_versions, booking_rules, consultation_types, clinics, staff_invites, sessions, otp_challenges, memberships, patient_tags, tags, uhid_settings, patients, users, organisations CASCADE',
   );
 }
 
@@ -158,4 +160,45 @@ export async function patientLogin(h: Harness, organisation: string, phone: stri
   });
   if (verified.statusCode !== 200) throw new Error(`OTP verify failed: ${verified.body}`);
   return verified.json() as TokenResponse;
+}
+
+export interface OperatorFixture {
+  operatorId: string;
+  email: string;
+  totpSecret: string;
+}
+
+/** A platform operator, as the support command creates one. */
+export async function addOperator(
+  h: Harness,
+  email = 'ops@platform.test',
+): Promise<OperatorFixture> {
+  const totpSecret = generateTotpSecret();
+  const operator = await h.owner.platformOperator.create({
+    data: {
+      email,
+      displayName: 'Synthetic Operator',
+      passwordHash: await hashPassword(STAFF_PASSWORD),
+      mfaSecret: h.services.cipher.encrypt(totpSecret),
+    },
+  });
+  return { operatorId: operator.id, email, totpSecret };
+}
+
+/** Full platform console sign-in: password step, then a fresh TOTP code. */
+export async function platformLogin(h: Harness, op: OperatorFixture): Promise<TokenResponse> {
+  const login = await h.app.inject({
+    method: 'POST',
+    url: '/v1/platform/auth/login',
+    payload: { email: op.email, password: STAFF_PASSWORD },
+  });
+  if (login.statusCode !== 200) throw new Error(`platform login failed: ${login.body}`);
+  h.clock.advance(30);
+  const verify = await h.app.inject({
+    method: 'POST',
+    url: '/v1/platform/auth/mfa/verify',
+    payload: { mfaToken: login.json().mfaToken, code: totpAt(op.totpSecret, h.clock.ms / 1000) },
+  });
+  if (verify.statusCode !== 200) throw new Error(`platform mfa failed: ${verify.body}`);
+  return verify.json();
 }

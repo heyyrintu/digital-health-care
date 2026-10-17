@@ -12,8 +12,18 @@ import {
   PortalPatientList,
   type AcceptConsentsBody,
   type CreatePortalPatientBody,
+  CreatedPlatformOrganisation,
   ErrorResponse,
   HealthResponse,
+  PlatformDoctorList,
+  PlatformLoginResponse,
+  PlatformMeResponse,
+  PlatformOrganisationList,
+  PlatformUsageReport,
+  VerifiedPlatformDoctor,
+  type CreatePlatformOrganisationBody,
+  type PlatformLoginBody,
+  type PlatformUsageQuery,
   InviteDetails,
   LoginResponse,
   MeResponse,
@@ -275,6 +285,40 @@ export function createApiClient(options: ApiClientOptions) {
 
     /** Ends the session of the current access token. */
     logout: () => request('POST', '/auth/logout', { schema: NoContent }),
+
+    // Platform console (platform operators only; its own tokens, which clinic endpoints refuse).
+    platform: {
+      /** Password first; the authenticator code follows with `verifyMfa`. */
+      login: (body: PlatformLoginBody) =>
+        request('POST', '/platform/auth/login', { schema: PlatformLoginResponse, body }),
+      verifyMfa: (mfaToken: string, code: string) =>
+        request('POST', '/platform/auth/mfa/verify', {
+          schema: TokenResponse,
+          body: { mfaToken, code },
+        }),
+      /** Single use: keep the new refresh token from the response. */
+      refresh: (refreshToken: string) =>
+        request('POST', '/platform/auth/refresh', {
+          schema: TokenResponse,
+          body: { refreshToken },
+        }),
+      logout: () => request('POST', '/platform/auth/logout', { schema: NoContent }),
+      me: () => request('GET', '/platform/me', { schema: PlatformMeResponse }),
+      organisations: () =>
+        request('GET', '/platform/organisations', { schema: PlatformOrganisationList }),
+      /** Onboarding: the response carries the first admin's invite link, shown once. */
+      createOrganisation: (body: CreatePlatformOrganisationBody) =>
+        request('POST', '/platform/organisations', { schema: CreatedPlatformOrganisation, body }),
+      doctors: (status: 'pending' | 'verified' = 'pending') =>
+        request('GET', '/platform/doctors', { schema: PlatformDoctorList, query: { status } }),
+      verifyDoctor: (profileId: string, ticket: string) =>
+        request('POST', `/platform/doctors/${encodeURIComponent(profileId)}/verify`, {
+          schema: VerifiedPlatformDoctor,
+          body: { ticket },
+        }),
+      usage: (query: PlatformUsageQuery = {}) =>
+        request('GET', '/platform/usage', { schema: PlatformUsageReport, query: { ...query } }),
+    },
   };
 }
 

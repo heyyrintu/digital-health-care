@@ -17,11 +17,13 @@ import { prescribingRoutes } from './modules/prescribing/routes';
 import { billingRoutes } from './modules/billing/routes';
 import { queueRoutes } from './modules/queue/routes';
 import { reportRoutes } from './modules/reports/routes';
+import { platformRoutes } from './modules/platform/routes';
 import { portalRoutes } from './modules/portal/routes';
 import { settingsRoutes } from './modules/settings/routes';
 import { schedulingRoutes } from './modules/scheduling/routes';
 import { staffRoutes } from './modules/staff/routes';
 import { syncRoutes } from './modules/sync/routes';
+import { IpAllowlist } from './plugins/ip-allowlist';
 import { systemRoutes } from './routes/system';
 import type { Services } from './services';
 
@@ -29,12 +31,18 @@ export interface BuildAppOptions {
   config: Pick<Config, 'LOG_LEVEL' | 'APP_VERSION'>;
   /** Without services only the system routes are mounted (health, OpenAPI). */
   services?: Services;
-  /** Behind a load balancer, trust X-Forwarded-For for client IPs and rate limits. */
-  trustProxy?: boolean;
+  /**
+   * Behind a load balancer, how many proxy hops of X-Forwarded-For to trust for client IPs
+   * (rate limits, the platform allowlist). Never `true`: that would trust entries the
+   * client wrote itself.
+   */
+  trustProxy?: false | number;
   /** Sign-in requests per IP per minute (default 10). */
   signInRateLimit?: number;
   /** Browser origins allowed to call the API (web app). None means no CORS headers. */
   corsOrigins?: string[];
+  /** Networks that may reach `/v1/platform/*` (from PLATFORM_ALLOWED_CIDRS); default none. */
+  platformAllowlist?: IpAllowlist;
 }
 
 export function buildApp({
@@ -43,6 +51,7 @@ export function buildApp({
   trustProxy = false,
   signInRateLimit = 10,
   corsOrigins = [],
+  platformAllowlist = IpAllowlist.none(),
 }: BuildAppOptions) {
   const logger: FastifyServerOptions['logger'] = {
     level: config.LOG_LEVEL,
@@ -60,7 +69,9 @@ export function buildApp({
 
   const app = Fastify({
     logger,
-    trustProxy,
+    // Trust the first `trustProxy` hops from the socket (proxy-addr's own rule for a hop
+    // count, which Fastify's types do not accept as a number).
+    trustProxy: trustProxy === false ? false : (_address: string, hop: number) => hop < trustProxy,
     // Request IDs are always ours; a client-supplied ID is never trusted.
     requestIdHeader: false,
     genReqId: () => `req_${randomUUID()}`,
@@ -102,6 +113,12 @@ export function buildApp({
     app.register(portalRoutes, { prefix: '/v1', services });
     app.register(deviceRoutes, { prefix: '/v1', services });
     app.register(syncRoutes, { prefix: '/v1', services });
+    app.register(platformRoutes, {
+      prefix: '/v1/platform',
+      services,
+      signInRateLimit,
+      allowlist: platformAllowlist,
+    });
     app.addHook('onClose', async () => services.db.$disconnect());
   }
 

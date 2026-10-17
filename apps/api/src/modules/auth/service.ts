@@ -16,13 +16,13 @@ const OTP_TTL_MS = 5 * 60_000;
 const OTP_MAX_ATTEMPTS = 5;
 const OTP_MAX_PER_WINDOW = 3;
 const OTP_WINDOW_MS = 10 * 60_000;
-const MAX_FAILED_LOGINS = 5;
-const LOCKOUT_MS = 15 * 60_000;
+export const MAX_FAILED_LOGINS = 5;
+export const LOCKOUT_MS = 15 * 60_000;
 const PATIENT_SESSION_MS = 30 * 24 * 3600_000;
 export const STAFF_SESSION_MS = 12 * 3600_000;
 export const TOTP_ISSUER = 'DHC Clinic';
 
-const INVALID_LOGIN = () => new AppError(401, 'UNAUTHENTICATED', 'Invalid sign-in details.');
+export const INVALID_LOGIN = () => new AppError(401, 'UNAUTHENTICATED', 'Invalid sign-in details.');
 export const INVALID_CODE = () =>
   new AppError(401, 'UNAUTHENTICATED', 'The code is invalid or has expired.');
 export const LOCKED = () =>

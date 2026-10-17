@@ -1,11 +1,12 @@
 import { defineConfig } from 'tsup';
 
 export default defineConfig({
-  // The support commands ship with the server so operators can run it in production.
+  // The support commands ship with the server so operators can run them in production.
   entry: {
     server: 'src/server.ts',
     'support-reset-authenticator': 'src/scripts/support-reset-authenticator.ts',
     'support-verify-doctor': 'src/scripts/support-verify-doctor.ts',
+    'support-platform-operator': 'src/scripts/support-platform-operator.ts',
   },
   format: ['esm'],
   platform: 'node',

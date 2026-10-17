@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { IpAllowlist, parseCidrs } from './plugins/ip-allowlist';
 
 const Env = z
   .object({
@@ -30,6 +31,21 @@ const Env = z
     FILE_STORE_DIR: z.string().default('.data/files'),
     /** How often (seconds) bookings past their grace period become no-shows; 0 turns it off. */
     NO_SHOW_SWEEP_SECONDS: z.coerce.number().int().min(0).max(3600).default(60),
+    /**
+     * Proxies in front of the API in production (load balancer, CDN) whose X-Forwarded-For
+     * entries are trusted. The client address is the entry this many hops from the right;
+     * anything further left was written by the client and is ignored.
+     */
+    TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(1),
+    /**
+     * Comma-separated networks (CIDR, IPv4 or IPv6, or single addresses) that may reach the
+     * platform console's `/platform/*` endpoints (PRD §3.3). Empty: none in production,
+     * any in development and test.
+     */
+    PLATFORM_ALLOWED_CIDRS: z
+      .string()
+      .default('')
+      .refine((raw) => parseCidrs(raw) !== null, 'Use CIDRs like 203.0.113.0/24, comma-separated'),
   })
   .refine((env) => !(env.NODE_ENV === 'production' && env.OTP_DELIVERY === 'log'), {
     message: 'OTP_DELIVERY=log is not allowed in production',
@@ -50,6 +66,15 @@ export function corsOrigins(config: Pick<Config, 'CORS_ORIGINS' | 'WEB_BASE_URL'
     .map((o) => o.trim())
     .filter(Boolean)
     .map((o) => new URL(o).origin);
+}
+
+/** Who may reach `/platform/*`: the configured networks; with none, nobody in production. */
+export function platformAllowlist(
+  config: Pick<Config, 'NODE_ENV' | 'PLATFORM_ALLOWED_CIDRS'>,
+): IpAllowlist {
+  const cidrs = parseCidrs(config.PLATFORM_ALLOWED_CIDRS) ?? [];
+  if (cidrs.length > 0) return IpAllowlist.of(cidrs);
+  return config.NODE_ENV === 'production' ? IpAllowlist.none() : IpAllowlist.any();
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {

@@ -14,7 +14,8 @@
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "seed": "tsx --env-file-if-exists=../../.env src/scripts/seed.ts",
     "support:reset-authenticator": "tsx --env-file-if-exists=../../.env src/scripts/support-reset-authenticator.ts",
-    "support:verify-doctor": "tsx --env-file-if-exists=../../.env src/scripts/support-verify-doctor.ts"
+    "support:verify-doctor": "tsx --env-file-if-exists=../../.env src/scripts/support-verify-doctor.ts",
+    "support:platform-operator": "tsx --env-file-if-exists=../../.env src/scripts/support-platform-operator.ts"
   },
   "dependencies": {
     "@dhc/contracts": "workspace:*",

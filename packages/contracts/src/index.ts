@@ -13,6 +13,7 @@ export * from './merges';
 export * from './openapi';
 export * from './pagination';
 export * from './patients';
+export * from './platform';
 export * from './prescriptions';
 export * from './queue';
 export * from './scheduling';

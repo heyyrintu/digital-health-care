@@ -1,5 +1,5 @@
 import { buildApp } from './app';
-import { corsOrigins, loadConfig } from './config';
+import { corsOrigins, loadConfig, platformAllowlist } from './config';
 import { scheduleNoShowSweep } from './modules/appointments/no-shows';
 import { createServices } from './services';
 
@@ -8,9 +8,10 @@ const services = createServices(config);
 const app = buildApp({
   config,
   services,
-  trustProxy: config.NODE_ENV === 'production',
+  trustProxy: config.NODE_ENV === 'production' ? config.TRUST_PROXY_HOPS : false,
   corsOrigins: corsOrigins(config),
   signInRateLimit: config.SIGN_IN_RATE_LIMIT,
+  platformAllowlist: platformAllowlist(config),
 });
 
 const stopSweep = scheduleNoShowSweep(services, config.NO_SHOW_SWEEP_SECONDS, app.log);

@@ -17,7 +17,7 @@ import { hashToken } from '../../auth/tokens';
 import { generateTotpSecret, matchTotpStep, otpauthUri } from '../../auth/totp';
 import { AppError } from '../../errors';
 import type { Services } from '../../services';
-import { writeAudit } from '../audit/write';
+import { writeAudit, type AuditSource } from '../audit/write';
 import {
   AuthService,
   INVALID_CODE,
@@ -90,64 +90,20 @@ export class InviteService {
 
     // Identity lives in platform-level tables (sign-in role); the invite and membership
     // live in the organisation (tenant role).
-    const user = await withAuth(this.s.db, async (tx) => {
-      const existing =
-        'email' in identity
-          ? await tx.user.findUnique({ where: { email: identity.email } })
-          : await tx.user.findUnique({ where: { phone: identity.phone } });
-      if (existing) return existing;
-      return tx.user.create({ data: { ...identity, displayName: body.displayName ?? null } });
-    });
-    if (user.status !== 'active') {
-      throw new AppError(409, 'CONFLICT', 'This person’s account is disabled.');
-    }
-
-    const token = randomBytes(32).toString('base64url');
-    const invite = await withTenant(this.s.db, actor.organisationId, async (tx) => {
-      const key = { organisationId: actor.organisationId, userId: user.id, role: body.role };
-      const membership = await tx.membership.findUnique({
-        where: { organisationId_userId_role: key },
-      });
-      if (membership?.status === 'active') {
-        throw new AppError(409, 'CONFLICT', 'This person already has that role.', {
-          identifier: 'exists',
-        });
-      }
-      if (membership) {
-        await tx.membership.update({ where: { id: membership.id }, data: { status: 'invited' } });
-      } else {
-        await tx.membership.create({ data: { ...key, status: 'invited' } });
-      }
-      // A new invite replaces any earlier open one for the same person and role.
-      await tx.staffInvite.updateMany({
-        where: { ...key, acceptedAt: null, revokedAt: null },
-        data: { revokedAt: now },
-      });
-      const created = await tx.staffInvite.create({
-        data: {
-          ...key,
-          tokenHash: hashToken(token),
-          createdByUserId: actor.userId,
-          expiresAt: new Date(now.getTime() + INVITE_TTL_MS),
-          createdAt: now,
-        },
-      });
-      await writeAudit(tx, request, {
-        action: 'staff.invite.created',
+    const user = await withAuth(this.s.db, (tx) =>
+      findOrCreateInvitee(tx, identity, body.displayName),
+    );
+    const { invite, inviteUrl } = await withTenant(this.s.db, actor.organisationId, (tx) =>
+      issueJoinInvite(tx, request, this.s, {
         organisationId: actor.organisationId,
+        user,
+        role: body.role,
+        now,
+        createdByUserId: actor.userId,
         actorUserId: actor.userId,
-        entityType: 'staff_invite',
-        entityId: created.id,
-        metadata: { role: body.role, invitedUserId: user.id },
-      });
-      return created;
-    });
-
-    return {
-      ...toStaffInvite(invite, user, now),
-      // The token rides in the URL fragment, which browsers never send to servers or logs.
-      inviteUrl: `${this.s.webBaseUrl}/invite#${token}`,
-    };
+      }),
+    );
+    return { ...toStaffInvite(invite, user, now), inviteUrl };
   }
 
   async list(actor: Actor): Promise<StaffInvite[]> {
@@ -388,6 +344,92 @@ export class InviteService {
     if (organisation?.status !== 'active' || user?.status !== 'active') return null;
     return { invite, organisation, user };
   }
+}
+
+/**
+ * The person an invite is for, found by email or mobile or given a new account with no
+ * password yet. Runs as the sign-in role. A disabled account cannot be invited.
+ */
+export async function findOrCreateInvitee(
+  tx: Tx,
+  identity: { email: string } | { phone: string },
+  displayName: string | undefined,
+) {
+  const existing =
+    'email' in identity
+      ? await tx.user.findUnique({ where: { email: identity.email } })
+      : await tx.user.findUnique({ where: { phone: identity.phone } });
+  const user =
+    existing ?? (await tx.user.create({ data: { ...identity, displayName: displayName ?? null } }));
+  if (user.status !== 'active') {
+    throw new AppError(409, 'CONFLICT', 'This person’s account is disabled.');
+  }
+  return user;
+}
+
+export interface JoinInviteParams {
+  organisationId: string;
+  user: { id: string };
+  role: StaffRole;
+  now: Date;
+  /** The clinic admin issuing it; for a platform-issued invite, the invitee (as for support resets). */
+  createdByUserId: string;
+  /** Null when the platform team issued it; `metadata` then names the operator. */
+  actorUserId: string | null;
+  metadata?: Record<string, string>;
+}
+
+/**
+ * Inside the organisation (tenant role): marks the membership invited and issues a new
+ * single-use join link, replacing any open one for the same person and role. Shared by
+ * clinic admins' invites and platform onboarding. The URL is returned once.
+ */
+export async function issueJoinInvite(
+  tx: Tx,
+  request: AuditSource,
+  s: Pick<Services, 'webBaseUrl'>,
+  params: JoinInviteParams,
+) {
+  const { organisationId, user, role, now } = params;
+  const token = randomBytes(32).toString('base64url');
+  const key = { organisationId, userId: user.id, role };
+  const membership = await tx.membership.findUnique({
+    where: { organisationId_userId_role: key },
+  });
+  if (membership?.status === 'active') {
+    throw new AppError(409, 'CONFLICT', 'This person already has that role.', {
+      identifier: 'exists',
+    });
+  }
+  if (membership) {
+    await tx.membership.update({ where: { id: membership.id }, data: { status: 'invited' } });
+  } else {
+    await tx.membership.create({ data: { ...key, status: 'invited' } });
+  }
+  // A new invite replaces any earlier open one for the same person and role.
+  await tx.staffInvite.updateMany({
+    where: { ...key, acceptedAt: null, revokedAt: null },
+    data: { revokedAt: now },
+  });
+  const invite = await tx.staffInvite.create({
+    data: {
+      ...key,
+      tokenHash: hashToken(token),
+      createdByUserId: params.createdByUserId,
+      expiresAt: new Date(now.getTime() + INVITE_TTL_MS),
+      createdAt: now,
+    },
+  });
+  await writeAudit(tx, request, {
+    action: 'staff.invite.created',
+    organisationId,
+    actorUserId: params.actorUserId,
+    entityType: 'staff_invite',
+    entityId: invite.id,
+    metadata: { role, invitedUserId: user.id, ...params.metadata },
+  });
+  // The token rides in the URL fragment, which browsers never send to servers or logs.
+  return { invite, inviteUrl: `${s.webBaseUrl}/invite#${token}` };
 }
 
 export function toStaffInvite(
