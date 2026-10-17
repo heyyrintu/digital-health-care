@@ -4,6 +4,18 @@
 
 Platform operators are not clinic users: they have their own accounts, sign in only to the platform console, and have no access to patient or clinical data (ADR 0016). There is no screen or API for creating them; it is done with the support command below.
 
+## The console
+On the web app, from the office network or VPN only:
+
+| Path | What it is for |
+|---|---|
+| `/platform/login` | Sign in: work email and password, then the code from the authenticator app. A clinic sign-in does not open the console, and a console sign-in does not open the clinic dashboard. |
+| `/platform` | **Organisations**: each one's status, clinics, staff (active and invited, by role) and doctors pending or verified. **Onboard organisation** creates an organisation, its first clinic and an invite for its first clinic admin; the invite link is shown once, on that page only. Copy it and give it to the admin directly (not by ticket or group chat); once you leave or reload the page it cannot be shown again, and a lost link means the clinic admin asks for a new invite. |
+| `/platform/doctors` | **Doctor verification**: the queue, pending and verified, oldest first ([doctor verification runbook](doctor-verification.md)). |
+| `/platform/usage` | **Usage** per organisation over a range of days. Messages and scribe minutes show "—" until those features exist. |
+
+Your name and email are shown at the top of every page; **Sign out** ends the session at once. The console also signs you out after 15 minutes without activity, and a session lasts 8 hours at most.
+
 ## Add an operator
 1. **Ticket and approval.** Open a ticket naming the person and why they need access. The tech lead (or delegate, not the person) approves on the ticket. Production database access for the command follows the break-glass rule in the [access control policy](../security/access-control.md).
 2. **Network.** Check the person will work from a network in `PLATFORM_ALLOWED_CIDRS` (office or VPN). Changing that list is a deploy-time setting change, with its own ticket.
@@ -20,7 +32,7 @@ Platform operators are not clinic users: they have their own accounts, sign in o
    The new operator types their password (at least 12 characters; not shown, asked twice). The command then asks you to **pause the session recording**: the QR code holds the authenticator secret and must not be in the recording. Press Enter once it is paused; the operator scans the QR code with their authenticator app and types the first code. The screen is cleared, and you resume the recording when the command says so. Nothing is saved until that code matches, and that code cannot then be used to sign in.
 
    The typed key (the same secret as text) is printed only with `--show-key`, for an app that cannot scan; keep the recording paused while it is on screen. Locally, `pnpm --filter @dhc/api support:platform-operator --email …` runs the same command from source.
-4. **Close out.** Record the run ID on the ticket. The new operator signs in to the console to check it works.
+4. **Close out.** Record the run ID on the ticket. The new operator signs in to the console at `/platform/login` (work email, password, then the authenticator code) to check it works.
 
 Never put a password, the authenticator key or a code in the ticket, chat or email.
 
@@ -77,7 +89,8 @@ Every operator's sign-ins, failures, lockouts and logouts, and every list, onboa
 ## If something goes wrong
 - **"An operator with that email already exists."** If they were disabled and are coming back, use `--enable` (and `--reset-authenticator` if their phone changed).
 - **"No matching code: nothing was saved."** Check the phone's clock is set automatically, then run the command again.
-- **Locked out (429 at sign-in).** It lifts after 15 minutes, or at once with `--reset-authenticator`. Repeated lockouts may be someone guessing: check the audit log for `platform.auth.login.failed` from unfamiliar addresses and treat it as an [incident](incident-response.md).
+- **"The platform console is not available from this network."** (403) Connect to the office network or VPN. If you are on it, check `PLATFORM_ALLOWED_CIDRS` and how the web server's forwarded address reaches the API (API guide §3s, *Web console*).
+- **Locked out (429 at sign-in, "Too many attempts").** It lifts after 15 minutes, or at once with `--reset-authenticator`. Repeated lockouts may be someone guessing: check the audit log for `platform.auth.login.failed` from unfamiliar addresses and treat it as an [incident](incident-response.md).
 
 ## Access review
 Quarterly, the tech lead lists the active operators (with the audit log's `platform.auth.login.succeeded` for each) against the platform team, disables anyone who no longer needs access, and records the review on a ticket ([access control policy](../security/access-control.md)).

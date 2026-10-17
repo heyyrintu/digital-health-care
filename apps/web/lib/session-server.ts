@@ -6,10 +6,32 @@ import { NextResponse, type NextRequest } from 'next/server';
  * httpOnly, SameSite=Strict cookie scoped to /api/session, so page scripts can never read
  * it. The page keeps the short-lived access token in memory and calls the API directly.
  */
-export const SESSION_COOKIE = 'dhc_session';
-const COOKIE_PATH = '/api/session';
-/** Matches the API's staff session lifetime; the API stays the authority on expiry. */
-const COOKIE_MAX_AGE_SECONDS = 12 * 3600;
+export interface SessionCookie {
+  name: string;
+  /** The only path the browser sends the cookie to: that session's own routes. */
+  path: string;
+  maxAgeSeconds: number;
+}
+
+/** Staff dashboard. Matches the API's staff session lifetime; the API stays the authority on expiry. */
+export const STAFF_COOKIE: SessionCookie = {
+  name: 'dhc_session',
+  path: '/api/session',
+  maxAgeSeconds: 12 * 3600,
+};
+
+/**
+ * Platform console (ADR 0016): its own cookie on its own routes, so a clinic session is
+ * never sent to the console's routes and a console session never reaches the clinic's.
+ * Matches the API's 8-hour platform session.
+ */
+export const PLATFORM_COOKIE: SessionCookie = {
+  name: 'dhc_platform_session',
+  path: '/api/platform-session',
+  maxAgeSeconds: 8 * 3600,
+};
+
+export const SESSION_COOKIE = STAFF_COOKIE.name;
 
 interface TokenPair {
   accessToken: string;
@@ -103,27 +125,34 @@ function isTokenPair(body: unknown): body is TokenPair {
  * Turns an API token pair into a browser session: the refresh token goes into the cookie,
  * and only the access token (and its lifetime) is returned to the page.
  */
-export function sessionResponse(request: NextRequest, result: { status: number; body: unknown }) {
+export function sessionResponse(
+  request: NextRequest,
+  result: { status: number; body: unknown },
+  cookie: SessionCookie = STAFF_COOKIE,
+) {
   if (result.status !== 200 || !isTokenPair(result.body)) return passThrough(result);
   const response = NextResponse.json(
     { accessToken: result.body.accessToken, expiresIn: result.body.expiresIn },
     { status: 200, headers: { 'cache-control': 'no-store' } },
   );
-  response.cookies.set(SESSION_COOKIE, result.body.refreshToken, {
+  response.cookies.set(cookie.name, result.body.refreshToken, {
     httpOnly: true,
     sameSite: 'strict',
     secure: request.nextUrl.protocol === 'https:' || process.env.NODE_ENV === 'production',
-    path: COOKIE_PATH,
-    maxAge: COOKIE_MAX_AGE_SECONDS,
+    path: cookie.path,
+    maxAge: cookie.maxAgeSeconds,
   });
   return response;
 }
 
-export function clearSession<T extends NextResponse>(response: T): T {
-  response.cookies.set(SESSION_COOKIE, '', {
+export function clearSession<T extends NextResponse>(
+  response: T,
+  cookie: SessionCookie = STAFF_COOKIE,
+): T {
+  response.cookies.set(cookie.name, '', {
     httpOnly: true,
     sameSite: 'strict',
-    path: COOKIE_PATH,
+    path: cookie.path,
     maxAge: 0,
   });
   return response;

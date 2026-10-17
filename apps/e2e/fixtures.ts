@@ -1,6 +1,10 @@
 import { createDb, type Db } from '@dhc/db';
 import { expect, test as base, type Page } from '@playwright/test';
+import { execFile } from 'node:child_process';
 import { createHash, createHmac, randomBytes } from 'node:crypto';
+import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
+import { E2E_FIELD_ENCRYPTION_KEY } from './env';
 
 const WEB_URL = 'http://localhost:3300';
 
@@ -65,9 +69,11 @@ async function createClinic(db: Db): Promise<Clinic> {
   };
 }
 
+const BASE32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+
 /** RFC 6238 code for a base32 secret, `offset` steps from now. */
 export function totp(secret: string, offset = 0): string {
-  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  const alphabet = BASE32;
   let bits = 0;
   let value = 0;
   const bytes: number[] = [];
@@ -103,10 +109,75 @@ export async function setUpFromInvite(page: Page, link: string, password: string
   return secret;
 }
 
+/** A synthetic platform operator's password (named so it reads as test data). */
+export const OPERATOR_PASSWORD = 'operator synthetic passphrase';
+
+export interface Operator {
+  email: string;
+  name: string;
+  /** Base32 authenticator key, new for each operator: codes then never collide across tests. */
+  totpKey: string;
+}
+
+function base32(bytes: Buffer): string {
+  let bits = 0;
+  let value = 0;
+  let out = '';
+  for (const byte of bytes) {
+    value = (value << 8) | byte;
+    bits += 8;
+    while (bits >= 5) {
+      out += BASE32[(value >>> (bits - 5)) & 31];
+      bits -= 5;
+    }
+  }
+  return bits > 0 ? out + BASE32[(value << (5 - bits)) & 31] : out;
+}
+
+/**
+ * A platform operator for one test, created with the API's own `createPlatformOperator`
+ * (as the support command does; there is no HTTP route) through `apps/api/test/seed-platform-operator.ts`.
+ */
+async function createOperator(): Promise<Operator> {
+  const operator = {
+    email: `ops-${randomBytes(4).toString('hex')}@platform.test`,
+    name: 'Synthetic Operator',
+    totpKey: base32(randomBytes(20)),
+  };
+  await promisify(execFile)('pnpm', ['exec', 'tsx', 'test/seed-platform-operator.ts'], {
+    cwd: fileURLToPath(new URL('../api', import.meta.url)),
+    env: {
+      ...process.env,
+      NODE_ENV: 'test',
+      DATABASE_URL: process.env.E2E_DATABASE_URL,
+      FIELD_ENCRYPTION_KEY: E2E_FIELD_ENCRYPTION_KEY,
+      E2E_OPERATOR_EMAIL: operator.email,
+      E2E_OPERATOR_NAME: operator.name,
+      E2E_OPERATOR_PASSWORD: OPERATOR_PASSWORD,
+      E2E_OPERATOR_TOTP_KEY: operator.totpKey,
+    },
+  });
+  return operator;
+}
+
+/** Signs in to the platform console with password and authenticator. Ends on Organisations. */
+export async function signInToConsole(page: Page, operator: Operator, offset = 0) {
+  await page.goto('/platform/login');
+  await page.getByLabel('Work email').fill(operator.email);
+  await page.getByLabel('Password').fill(OPERATOR_PASSWORD);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await page
+    .getByLabel('Enter the code from your authenticator app')
+    .fill(totp(operator.totpKey, offset));
+  await page.getByRole('button', { name: 'Verify' }).click();
+  await expect(page).toHaveURL(/\/platform$/);
+  await expect(page.getByTestId('signed-in-as')).toContainText(operator.email);
+}
+
 /** The page's own alert (Next.js also renders a hidden route-announcer alert). */
 export const pageAlert = (page: Page) => page.locator('main [role=alert]');
 
-export const test = base.extend<{ clinic: Clinic }, { db: Db }>({
+export const test = base.extend<{ clinic: Clinic; operator: Operator }, { db: Db }>({
   db: [
     // eslint-disable-next-line no-empty-pattern
     async ({}, use) => {
@@ -118,6 +189,10 @@ export const test = base.extend<{ clinic: Clinic }, { db: Db }>({
   ],
   clinic: async ({ db }, use) => {
     await use(await createClinic(db));
+  },
+  // eslint-disable-next-line no-empty-pattern
+  operator: async ({}, use) => {
+    await use(await createOperator());
   },
 });
 

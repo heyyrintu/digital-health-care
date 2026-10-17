@@ -22,6 +22,7 @@ The web app's route handlers under `/api/session/*` (login, mfa, invite, refresh
 - An XSS bug can use the current access token for at most 15 minutes while the page is open, but cannot read the refresh token.
 - Logout and idle sign-out end the session at the API, not just in the browser.
 - Completing a staff invite signs the person straight in.
+- The platform console (ADR 0016) uses the same pattern with a cookie of its own, `dhc_platform_session` on `Path=/api/platform-session` for 8 hours, behind its own `/api/platform-session/*` routes, so a staff session and a console session never stand in for each other.
 - The API sees the web server as the client for these five routes. Before production, forward the client address through a trusted proxy hop so audit IPs and sign-in rate limits stay per person.
 
 ## Review trigger

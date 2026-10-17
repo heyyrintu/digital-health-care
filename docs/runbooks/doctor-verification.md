@@ -16,12 +16,12 @@ Record the doctor, the clinic, and who asked (usually the clinic admin, during o
 If anything does not match, stop and ask the clinic admin. Don't verify.
 
 ## 3. Verify in the platform console
-Sign in to the platform console as yourself (password and authenticator; only from the office network or VPN in `PLATFORM_ALLOWED_CIDRS`). Until the console's web screens arrive (next slice) the same calls are made with the API client (`client.platform`):
+Sign in to the platform console as yourself at `/platform/login` (password and authenticator; only from the office network or VPN in `PLATFORM_ALLOWED_CIDRS`), then open **Doctor verification** (`/platform/doctors`):
 
-1. Open the verification queue: `GET /v1/platform/doctors?status=pending`. It lists active doctors across organisations, oldest first, with their organisation, name, masked email or mobile, registration number, council and qualifications. Find the doctor from the ticket and check these are what you checked in step 2.
-2. Verify: `POST /v1/platform/doctors/{profileId}/verify` with the ticket and the details you checked, exactly as the queue showed them: `{"ticket": "SUP-1234", "expected": {"registrationNumber": "…", "council": "…", "qualifications": "…", "submittedAt": "…"}}`. (The web screens will send these for you.)
+1. The **Pending** tab lists active doctors across organisations, oldest first, with their organisation, name, masked email or mobile, registration number, council, qualifications and when they submitted them. Find the doctor from the ticket and check these are what you checked in step 2.
+2. Choose **Verify**, type the ticket ID, tick the box confirming you checked the registration, and choose **Verify doctor**. The console sends the details exactly as it showed them (`POST /v1/platform/doctors/{profileId}/verify` with `{"ticket": "SUP-1234", "expected": {"registrationNumber": "…", "council": "…", "qualifications": "…", "submittedAt": "…"}}`; the API client's `client.platform.verifyDoctor` does the same).
 
-The answer shows the doctor as `verified`, with `verifiedBy` set to your email and the ticket. `alreadyVerified: true` means someone verified it before you; nothing changed. The queue shows 200 profiles at a time; when `hasMore` is true, `?cursor=<nextCursor>` shows the next page. Doctors who have only set a signing PIN are not in the queue until they fill in the prescription pad.
+The console then says the doctor is verified, and the **Verified** tab shows them with your email and the ticket (`verifiedBy`). "Already verified" (`alreadyVerified: true`) means someone verified it before you; nothing changed. The queue shows 200 profiles at a time; **Load more** shows the next page (`?cursor=<nextCursor>`). Doctors who have only set a signing PIN are not in the queue until they fill in the prescription pad.
 
 ## 3b. Fallback: run the command
 From a production API task (the command ships in the API build) with `DATABASE_URL` set as for the API, in a recorded session:
@@ -42,16 +42,16 @@ The dry run prints the doctor (masked), the registration number, council and qua
 What it does (console and command alike): marks the profile verified with the time and `operator (ticket)`, and writes `support.doctor.verified` into the clinic's audit log with the ticket, operator and registration number (from the console, also your operator ID). The doctor's next signing attempt works; nothing needs restarting.
 
 ## 4. Close out
-Record on the ticket the request ID the console returned (`x-request-id`) or the command's run ID, and tell the clinic admin.
+Record on the ticket the time you verified (the console's **Verified** tab shows it with your email and the ticket, and the clinic's audit log has `support.doctor.verified` with the ticket) or the command's run ID, and tell the clinic admin.
 
 ## Afterwards
 - If the doctor changes their registration number or council, the profile goes back to *pending*, joins the end of the queue, and needs this runbook again. Qualifications, specialty, prefix and paper size can change without it.
 - To withdraw verification (for example a suspended registration), there is no command yet: raise an incident and, with break-glass access ([access control](../security/access-control.md)), set the profile back to pending; record it on the ticket.
 
 ## If something goes wrong
-- **Console: 409 `profile: verified`.** Another operator verified the doctor at the same moment; nothing more to do.
-- **Console: 409 `profile: changed`.** The doctor changed their registration number, council or qualifications after you loaded the queue, so what you checked is not what is on the profile. Nothing was verified. Reload the queue and go back to step 2 with the new details. The command refuses the same way if the profile changes between its dry run and the real run.
+- **Console: "Another operator verified this doctor just now"** (409 `profile: verified`). Nothing more to do.
+- **Console: "The doctor changed their registration after this list was loaded"** (409 `profile: changed`). The doctor changed their registration number, council or qualifications after you loaded the queue, so what you checked is not what is on the profile. Nothing was verified. Choose **Reload queue** and go back to step 2 with the new details. The command refuses the same way if the profile changes between its dry run and the real run.
 - **Console: 404 "No active doctor’s profile with that ID."** The doctor was removed from the clinic since the queue was loaded; reload the queue and ask the clinic admin.
-- **Console: 403 "The platform console is not available from here."** You are outside the allowed networks; connect to the VPN, or use the command (3b).
+- **Console: "The platform console is not available from this network."** (403) You are outside the allowed networks; connect to the VPN, or use the command (3b).
 - **"No active doctor with that email or mobile at that clinic."** Check the spelling and the clinic ID; the person must be an active doctor there.
 - **"The doctor has not filled in their registration number…"** Ask the doctor to complete the prescription pad first.
