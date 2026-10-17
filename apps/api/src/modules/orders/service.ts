@@ -205,9 +205,9 @@ export class OrdersService {
   }
 
   /**
-   * Stores a result against an ordered test and moves it to `result_uploaded` (again, if a
-   * doctor had reviewed an earlier one). Staff: front desk or a doctor with the chart; the
-   * portal passes `allowPatient`.
+   * Stores a result against an ordered test and moves it to `result_uploaded`. A reviewed
+   * test takes no more results. Staff: front desk or a doctor with the chart; the portal
+   * passes `allowPatient`.
    */
   async upload(
     request: FastifyRequest,
