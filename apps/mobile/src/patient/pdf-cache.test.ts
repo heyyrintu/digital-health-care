@@ -103,6 +103,26 @@ describe('PdfCache', () => {
     expect(types).toEqual(['application/pdf', 'image/jpeg']);
   });
 
+  it('on Android deletes the last copy when the next open fails or cannot share', async () => {
+    const f = fakeDeps({ keepAfterShare: true });
+    const cache = new PdfCache(f.deps);
+    const first = cache.open('test-result-1.pdf', bytes, 'A');
+    await f.closeSheet();
+    await first;
+    expect([...f.files.keys()]).toEqual(['test-result-1.pdf']);
+
+    const failed = cache.open('test-result-2.pdf', () => Promise.reject(new Error('offline')), 'B');
+    await expect(failed).rejects.toThrow('offline');
+    expect(f.files.size).toBe(0);
+
+    const again = cache.open('test-result-1.pdf', bytes, 'A');
+    await f.closeSheet();
+    await again;
+    f.deps.canShare = async () => false;
+    expect(await cache.open('test-result-2.pdf', bytes, 'B')).toBe('cannot-share');
+    expect(f.files.size).toBe(0);
+  });
+
   it('reports a phone that cannot share without downloading', async () => {
     let downloads = 0;
     const f = fakeDeps({ canShare: async () => false });

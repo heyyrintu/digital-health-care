@@ -1135,7 +1135,7 @@ export const hi: Record<MessageKey, string> = {
   'patient.tests.resultTitle': '{name}, रिपोर्ट {n}',
   'patient.tests.cannotOpen': 'इस फ़ोन पर ऐप से फ़ाइल नहीं भेजी जा सकती।',
   'patient.tests.pickFailed': 'फ़ाइल पढ़ी नहीं जा सकी। फ़ाइल फिर से चुनें।',
-  'patient.tests.file.type': 'PDF या फ़ोटो (JPEG, PNG या HEIC) चुनें।',
+  'patient.tests.file.type': 'PDF या फ़ोटो (JPEG, PNG, HEIC या HEIF) चुनें।',
   'patient.tests.file.tooLarge': 'फ़ाइल {mb} MB से बड़ी है। छोटी फ़ाइल चुनें।',
   'patient.tests.file.clinicTooLarge':
     'फ़ाइल आपके क्लिनिक की सीमा से बड़ी है। छोटी फ़ाइल या छोटी फ़ोटो चुनें।',

@@ -19,7 +19,8 @@ export interface PdfCacheDeps {
   share(uri: string, title: string, mediaType: string): Promise<void>;
   /**
    * Android resolves the share as soon as the chooser hands the file to an app, which may read
-   * it later, so the copy is kept until the next open or sign-out instead of deleted at once.
+   * it later, so the copy is kept until the next open starts or sign-out instead of deleted at
+   * once.
    */
   keepAfterShare: boolean;
 }
@@ -30,7 +31,8 @@ export type OpenResult = 'shared' | 'busy' | 'cannot-share' | 'signed-out';
  * Files the patient views or shares: signed prescription PDFs, and test results (a PDF or a
  * photo), each kind in its own cache folder. A patient's phone may be lost or shared (threat
  * model T24), so at most one copy per folder exists: it lives only in the app's private
- * cache, is deleted when the sheet closes (iOS) or when the next file is opened (Android),
+ * cache, is deleted when the sheet closes (iOS) or when the next file is opened (Android, as that
+ * open starts, whether or not it succeeds),
  * and signing out empties the folder.
  */
 export class PdfCache {
@@ -50,12 +52,13 @@ export class PdfCache {
     if (this.busy) return 'busy';
     this.busy = true;
     try {
+      // The copy Android kept from the last open goes first, so a download or share that
+      // fails now cannot leave it behind; at most the newest copy is ever on disk.
+      this.deps.clearAll();
       if (!(await this.deps.canShare())) return 'cannot-share';
       const started = this.generation;
       const bytes = await download();
       if (started !== this.generation) return 'signed-out';
-      // Only the newest copy is ever on disk: the one Android kept from the last open goes now.
-      this.deps.clearAll();
       const file = this.deps.write(name, bytes);
       let shared = false;
       try {

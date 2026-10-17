@@ -53,22 +53,23 @@ export function appendPage(rows: PortalTestOrder[], page: PortalTestOrder[]): Po
 
 /**
  * The order as the server has it now, after a refusal left the row out of date: the pages
- * are fetched again, newest first, until it turns up. Null when it is gone.
+ * are fetched again, newest first, until it turns up. `gone` when the last page passed
+ * without it; `unknown` when `maxPages` ran out first, which says nothing about the order.
  */
 export async function findOrder(
   fetchPage: (cursor?: string) => Promise<{ data: PortalTestOrder[]; nextCursor: string | null }>,
   id: string,
   maxPages = 20,
-): Promise<PortalTestOrder | null> {
+): Promise<PortalTestOrder | 'gone' | 'unknown'> {
   let cursor: string | undefined;
   for (let pages = 0; pages < maxPages; pages++) {
     const page = await fetchPage(cursor);
     const found = page.data.find((o) => o.id === id);
     if (found) return found;
-    if (!page.nextCursor) return null;
+    if (!page.nextCursor) return 'gone';
     cursor = page.nextCursor;
   }
-  return null;
+  return 'unknown';
 }
 
 const BY_EXTENSION: Record<string, string> = {

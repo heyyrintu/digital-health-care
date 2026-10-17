@@ -1132,7 +1132,7 @@ export const en = {
   'patient.tests.resultTitle': '{name}, result {n}',
   'patient.tests.cannotOpen': 'This phone can’t share files from the app.',
   'patient.tests.pickFailed': 'The file could not be read. Choose it again.',
-  'patient.tests.file.type': 'Choose a PDF or a photo (JPEG, PNG or HEIC).',
+  'patient.tests.file.type': 'Choose a PDF or a photo (JPEG, PNG, HEIC or HEIF).',
   'patient.tests.file.tooLarge': 'The file is larger than {mb} MB. Choose a smaller file.',
   'patient.tests.file.clinicTooLarge':
     'The file is larger than your clinic accepts. Choose a smaller file or a smaller photo.',

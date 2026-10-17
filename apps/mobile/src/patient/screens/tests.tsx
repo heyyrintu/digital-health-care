@@ -119,7 +119,9 @@ export function TestsScreen() {
   async function refresh(orderId: string) {
     try {
       const found = await findOrder((cursor) => api.portalTestOrders(cursor), orderId);
-      if (found) setRow(found);
+      // Only a fresh copy replaces the row. Not found (or not within the pages searched), the
+      // row stays as it is with the refusal's message: never removed or blanked.
+      if (typeof found === 'object') setRow(found);
     } catch {
       // The refusal's message is already showing; the next visit to the screen reloads.
     }

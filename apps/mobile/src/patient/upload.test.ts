@@ -62,9 +62,17 @@ describe('pickAndUpload', () => {
 
   it('deletes the picked copy of a file it refuses, without reading or sending it', async () => {
     const gif = { ...PDF, uri: 'file:///tmp/x-Inbox/a.gif', name: 'a.gif', mimeType: 'image/gif' };
-    const f = fakeUpload({ pick: async () => gif });
+    const reads: string[] = [];
+    const f = fakeUpload({
+      pick: async () => gif,
+      read: async (uri) => {
+        reads.push(uri);
+        throw new Error('A refused file must not be read.');
+      },
+    });
     const outcome = await pickAndUpload(f.deps);
     expect(outcome).toEqual({ kind: 'refused', message: { key: 'patient.tests.file.type' } });
+    expect(reads).toEqual([]);
     expect(f.sent).toHaveLength(0);
     expect(f.removed).toEqual([gif.uri]);
 

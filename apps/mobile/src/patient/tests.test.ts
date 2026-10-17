@@ -99,7 +99,7 @@ describe('rows', () => {
     expect(appendPage(rows, [order('b'), order('c')]).map((o) => o.id)).toEqual(['a', 'b', 'c']);
   });
 
-  it('finds an order again across pages, or reports it gone', async () => {
+  it('finds an order again across pages, or reports it gone or unknown', async () => {
     const pages: Record<string, { data: PortalTestOrder[]; nextCursor: string | null }> = {
       first: { data: [order('a')], nextCursor: 'p2' },
       p2: { data: [order('b', { status: 'reviewed' })], nextCursor: null },
@@ -109,12 +109,14 @@ describe('rows', () => {
       asked.push(cursor);
       return pages[cursor ?? 'first']!;
     };
-    expect((await findOrder(fetchPage, 'b'))?.status).toBe('reviewed');
+    expect(await findOrder(fetchPage, 'b')).toMatchObject({ id: 'b', status: 'reviewed' });
     expect(asked).toEqual([undefined, 'p2']);
-    expect(await findOrder(fetchPage, 'z')).toBeNull();
-    // Never more pages than allowed.
-    const endless = async () => ({ data: [order('a')], nextCursor: 'more' });
-    expect(await findOrder(endless, 'z', 3)).toBeNull();
+    expect(await findOrder(fetchPage, 'z')).toBe('gone');
+    // Never more pages than allowed, and running out says nothing about the order.
+    let fetched = 0;
+    const endless = async () => (fetched++, { data: [order('a')], nextCursor: 'more' });
+    expect(await findOrder(endless, 'z', 3)).toBe('unknown');
+    expect(fetched).toBe(3);
   });
 });
 
