@@ -1,6 +1,7 @@
 import { defineConfig, devices } from '@playwright/test';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { E2E_FIELD_ENCRYPTION_KEY } from './env';
 
 /**
  * Browser tests against the *built* API and web app (run `pnpm build` first), on their
@@ -43,7 +44,7 @@ export default defineConfig({
         LOG_LEVEL: 'warn',
         // Synthetic secrets for this throwaway environment only.
         JWT_SECRET: 'e2e-only-jwt-secret-0123456789abcdef',
-        FIELD_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'),
+        FIELD_ENCRYPTION_KEY: E2E_FIELD_ENCRYPTION_KEY,
         WEB_BASE_URL: WEB_URL,
         OTP_DELIVERY: 'disabled',
         // Prescriptions are signed with the test key and stored in a throwaway folder.
@@ -53,6 +54,8 @@ export default defineConfig({
         NO_SHOW_SWEEP_SECONDS: '0',
         // All browser traffic comes from one address here.
         SIGN_IN_RATE_LIMIT: '100000',
+        // The platform console answers the test runner's address (local and CI only; production refuses `*`).
+        PLATFORM_ALLOWED_CIDRS: '*',
       },
     },
     {
