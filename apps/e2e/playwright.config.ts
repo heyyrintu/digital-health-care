@@ -16,6 +16,7 @@ if (!databaseUrl) throw new Error('E2E_DATABASE_URL is required for browser test
 export default defineConfig({
   testDir: './tests',
   globalSetup: './global-setup.ts',
+  globalTeardown: './global-teardown.ts',
   // Every test makes its own clinic, so tests can run side by side.
   fullyParallel: true,
   workers: process.env.CI ? 2 : undefined,

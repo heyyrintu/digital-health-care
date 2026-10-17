@@ -400,6 +400,7 @@ export function PrescriptionCard({
         void load();
         onSignedChange?.();
       }}
+      onTestsChanged={() => void load()}
       onError={fail}
     />
   );

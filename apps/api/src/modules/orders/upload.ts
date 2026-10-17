@@ -18,16 +18,22 @@ export const UPLOAD_CONTENT_TYPES = Object.values(UPLOAD_MEDIA_TYPES).flat();
 export const UPLOAD_RATE_LIMIT = { max: 60, timeWindow: '1 minute', groupId: 'uploads' };
 
 // `config.rateLimit` gives every route its own in-memory counter (@fastify/rate-limit 11
-// makes a child store per route), so one limiter is made per app and shared by every
-// upload route instead. Keyed by the app's services, which both route plugins receive.
-const limiters = new WeakMap<object, ReturnType<FastifyInstance['rateLimit']>>();
+// makes a child store per route), so one limiter is made per app and limit and shared by
+// every upload route instead. Keyed by the app's services (which both route plugins
+// receive) and then by the limit, so two limits never share a counter.
+const limiters = new WeakMap<object, Map<number, ReturnType<FastifyInstance['rateLimit']>>>();
 
-/** The one upload limiter of this app, for the upload routes' `onRequest`. */
+/** The one upload limiter of this app at this limit, for the upload routes' `onRequest`. */
 export function uploadRateLimit(app: FastifyInstance, shared: object, max = UPLOAD_RATE_LIMIT.max) {
-  let limiter = limiters.get(shared);
+  let byMax = limiters.get(shared);
+  if (!byMax) {
+    byMax = new Map();
+    limiters.set(shared, byMax);
+  }
+  let limiter = byMax.get(max);
   if (!limiter) {
     limiter = app.rateLimit({ ...UPLOAD_RATE_LIMIT, max });
-    limiters.set(shared, limiter);
+    byMax.set(max, limiter);
   }
   return limiter;
 }

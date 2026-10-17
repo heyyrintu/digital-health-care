@@ -23,6 +23,7 @@ export function SignPanel({
   testIds,
   blocked,
   onChanged,
+  onTestsChanged,
   onError,
 }: {
   appointmentId: string;
@@ -37,6 +38,11 @@ export function SignPanel({
   blocked: string | null;
   /** After signing, amending or voiding: reload the card (and the visit record). */
   onChanged(): void;
+  /**
+   * Signing was refused because the visit's tests changed: reload the prescription card
+   * only, so notes still waiting to autosave on the rest of the screen are kept.
+   */
+  onTestsChanged(): void;
   onError(e: unknown): void;
 }) {
   const { api, locale, t } = useSession();
@@ -94,7 +100,7 @@ export function SignPanel({
         // The visit's tests changed elsewhere: reload the card so the doctor sees them.
         if (err.fields.tests === 'review') {
           setProblem(t('sign.testsChanged'));
-          onChanged();
+          onTestsChanged();
         }
       } else {
         onError(err);

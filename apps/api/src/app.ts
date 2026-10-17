@@ -14,6 +14,7 @@ import { deviceRoutes } from './modules/devices/routes';
 import { doctorRoutes } from './modules/doctors/routes';
 import { medicineRoutes } from './modules/medicines/routes';
 import { orderRoutes } from './modules/orders/routes';
+import { UPLOAD_RATE_LIMIT } from './modules/orders/upload';
 import { prescribingRoutes } from './modules/prescribing/routes';
 import { billingRoutes } from './modules/billing/routes';
 import { queueRoutes } from './modules/queue/routes';
@@ -53,7 +54,7 @@ export function buildApp({
   services,
   trustProxy = false,
   signInRateLimit = 10,
-  uploadRateLimit = 60,
+  uploadRateLimit = UPLOAD_RATE_LIMIT.max,
   corsOrigins = [],
   platformAllowlist = IpAllowlist.none(),
 }: BuildAppOptions) {

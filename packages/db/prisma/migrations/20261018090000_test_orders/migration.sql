@@ -140,6 +140,9 @@ ALTER TABLE test_orders ADD CONSTRAINT test_orders_status_check
   );
 ALTER TABLE test_results ADD CONSTRAINT test_results_file_check
   CHECK (size_bytes > 0 AND sha256 ~ '^[0-9a-f]{64}$' AND length(file_key) > 0);
+-- The five types any clinic may accept (UPLOAD_MEDIA_TYPES in @dhc/contracts).
+ALTER TABLE test_results ADD CONSTRAINT test_results_media_type_check
+  CHECK (media_type IN ('application/pdf', 'image/jpeg', 'image/png', 'image/heic', 'image/heif'));
 -- Results come from the patient, the front desk or a doctor; clinic admins never upload.
 ALTER TABLE test_results ADD CONSTRAINT test_results_uploader_role_check
   CHECK (uploaded_by_role IN ('patient', 'front_desk', 'doctor'));
@@ -315,6 +318,14 @@ BEGIN
     IF (OLD.status = 'result_uploaded' AND NEW.status = 'ordered')
        OR (OLD.result_uploaded_at IS NOT NULL AND NEW.result_uploaded_at IS NULL) THEN
       RAISE EXCEPTION 'a test status only moves forward' USING ERRCODE = '23514';
+    END IF;
+    -- A review needs a result to review: only from result_uploaded, with a stored result.
+    IF NEW.status = 'reviewed' AND (
+      OLD.status <> 'result_uploaded'
+      OR NOT EXISTS (SELECT 1 FROM public.test_results r WHERE r.test_order_id = OLD.id)
+    ) THEN
+      RAISE EXCEPTION 'a test is reviewed only after a result is uploaded'
+        USING ERRCODE = '23514';
     END IF;
     RETURN NEW;
   END IF;

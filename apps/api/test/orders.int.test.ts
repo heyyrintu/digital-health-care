@@ -620,18 +620,33 @@ describe('signing orders the tests', () => {
         data: { orderedAt: new Date(rx.signedAt!), prescriptionId: rx.id },
       }),
     ).rejects.toThrow(/version being signed/);
-    // A reviewer from another clinic is refused.
-    await expect(
+    // Reviewed straight from ordered, or with no stored result: refused.
+    const reviewAs = (userId: string) =>
       h.owner.testOrder.update({
         where: { id: rx.tests[0]!.id },
         data: {
           status: 'reviewed',
           resultUploadedAt: new Date(),
           reviewedAt: new Date(),
-          reviewedByUserId: clinics.b.doctor.userId,
+          reviewedByUserId: userId,
         },
-      }),
-    ).rejects.toThrow(/reviewer is not a doctor/);
+      });
+    await expect(reviewAs(clinics.a.doctor.userId)).rejects.toThrow(
+      /reviewed only after a result is uploaded/,
+    );
+    await h.owner.testOrder.update({
+      where: { id: rx.tests[0]!.id },
+      data: { status: 'result_uploaded', resultUploadedAt: new Date() },
+    });
+    await expect(reviewAs(clinics.a.doctor.userId)).rejects.toThrow(
+      /reviewed only after a result is uploaded/,
+    );
+    // With a result on file it can be reviewed, but never by another clinic's doctor.
+    expect((await upload(`/test-orders/${rx.tests[0]!.id}/results`, deskA, PDF)).statusCode).toBe(
+      201,
+    );
+    await expect(reviewAs(clinics.b.doctor.userId)).rejects.toThrow(/reviewer is not a doctor/);
+    await reviewAs(clinics.a.doctor.userId);
   });
 
   it('signs a prescription that orders tests only, and still needs one or the other', async () => {
@@ -930,6 +945,24 @@ describe('results and review', () => {
         },
       }),
     ).rejects.toThrow(/uploader_role_check/);
+  });
+
+  it('stores results only of the five upload types, in the database too', async () => {
+    const { mri } = await ordered();
+    await expect(
+      h.owner.testResult.create({
+        data: {
+          organisationId: clinics.a.org.id,
+          testOrderId: mri.id,
+          fileKey: 'x.html',
+          mediaType: 'text/html',
+          sizeBytes: 1,
+          sha256: '0'.repeat(64),
+          uploadedByUserId: clinics.a.doctor.userId,
+          uploadedByRole: 'doctor',
+        },
+      }),
+    ).rejects.toThrow(/test_results_media_type_check/);
   });
 
   it('removes the stored file when the result cannot be recorded', async () => {

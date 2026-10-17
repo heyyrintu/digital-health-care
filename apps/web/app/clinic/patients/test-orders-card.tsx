@@ -67,16 +67,21 @@ export function TestOrdersCard({ patientId, role }: { patientId: string; role: s
     (e: unknown) => {
       if (e instanceof ApiError && e.status === 401) return void signOut('expired');
       const reason = e instanceof ApiError ? e.fields.file : undefined;
+      // Our wording needs the clinic's limits for these two; without the settings yet, the
+      // server's own message (which names them) is shown instead.
+      const needsSettings = reason === 'too_large' || reason === 'type_not_allowed';
       setError(
         e instanceof ApiError
           ? e.code === 'CHART_RESTRICTED'
             ? t('chart.restricted')
             : e.fields.status === 'reviewed'
               ? t('orders.alreadyReviewed')
-              : reason && (FILE_REASONS as readonly string[]).includes(reason)
+              : reason &&
+                  (FILE_REASONS as readonly string[]).includes(reason) &&
+                  !(needsSettings && !settings)
                 ? t(`orders.file.${reason as (typeof FILE_REASONS)[number]}`, {
                     max: MAX_RESULTS_PER_ORDER,
-                    mb: settings?.maxUploadMb ?? '',
+                    mb: settings?.maxUploadMb ?? 0,
                     types: settings?.uploadTypes.map((x) => x.toUpperCase()).join(', ') ?? '',
                   })
                 : e.message
@@ -118,6 +123,29 @@ export function TestOrdersCard({ patientId, role }: { patientId: string; role: s
       setLoadingMore(false);
     }
   }
+
+  /**
+   * After a refusal (409: reviewed meanwhile, full, …) the row on screen is out of date:
+   * fetch the pages already shown again until the order turns up, and put it back, so its
+   * Upload and Mark reviewed buttons match what the server allows now.
+   */
+  async function refresh(id: string) {
+    let cursor: string | undefined;
+    for (let pages = 0; pages < 20; pages++) {
+      const page = await api.patientTestOrders(patientId, cursor).catch(() => null);
+      const found = page?.data.find((o) => o.id === id);
+      if (found) {
+        setOrders((current) => (current ?? []).map((o) => (o.id === id ? found : o)));
+        return;
+      }
+      if (!page?.nextCursor) return;
+      cursor = page.nextCursor;
+    }
+  }
+  const failFor = (id: string, e: unknown) => {
+    fail(e);
+    if (e instanceof ApiError && e.status === 409) void refresh(id);
+  };
 
   /** Puts an order the API returned back in its row, keeping the list's own fields. */
   const replace = (updated: TestOrder, reviewedByName?: string | null) =>
@@ -166,7 +194,7 @@ export function TestOrdersCard({ patientId, role }: { patientId: string; role: s
       replace(await api.uploadTestResult(order.id, file));
       setNotice(t('orders.uploaded'));
     } catch (e) {
-      fail(e);
+      failFor(order.id, e);
     } finally {
       mark(order.id, false);
     }
@@ -179,7 +207,7 @@ export function TestOrdersCard({ patientId, role }: { patientId: string; role: s
     try {
       replace(await api.reviewTestOrder(order.id), me?.user.displayName ?? null);
     } catch (e) {
-      fail(e);
+      failFor(order.id, e);
     } finally {
       mark(order.id, false);
     }
