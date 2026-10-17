@@ -73,7 +73,9 @@ export default function PlatformLoginPage() {
       ? t('session.idleSignedOut')
       : endedReason === 'expired'
         ? t('session.expired')
-        : null;
+        : endedReason === 'network'
+          ? t('platform.error.network')
+          : null;
 
   return (
     <main className="grid min-h-screen place-items-center bg-hero px-4 py-10 font-sans text-foreground">
@@ -97,6 +99,7 @@ export default function PlatformLoginPage() {
         )}
         {error && (
           <p
+            id="login-error"
             role="alert"
             className="mb-4 rounded-xl bg-danger-soft px-4 py-3 text-sm font-medium text-destructive"
           >
@@ -112,6 +115,8 @@ export default function PlatformLoginPage() {
               </label>
               <Input
                 id="email"
+                aria-invalid={error ? true : undefined}
+                aria-describedby={error ? 'login-error' : undefined}
                 name="email"
                 type="email"
                 required
@@ -126,6 +131,8 @@ export default function PlatformLoginPage() {
               </label>
               <Input
                 id="password"
+                aria-invalid={error ? true : undefined}
+                aria-describedby={error ? 'login-error' : undefined}
                 name="password"
                 type="password"
                 required
@@ -150,6 +157,8 @@ export default function PlatformLoginPage() {
               </label>
               <Input
                 id="code"
+                aria-invalid={error ? true : undefined}
+                aria-describedby={error ? 'login-error' : undefined}
                 name="code"
                 inputMode="numeric"
                 pattern="[0-9]*"

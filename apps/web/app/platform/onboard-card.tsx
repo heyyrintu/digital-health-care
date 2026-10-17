@@ -28,13 +28,19 @@ interface Handover {
  * admin's invite. The invite link is shown once, here, and never stored: not in the page
  * address, browser storage or anywhere the operator could reopen it.
  */
-export function OnboardCard({ onCreated }: { onCreated: () => Promise<void> }) {
+export function OnboardCard({
+  onCreated,
+}: {
+  /** Reloads the organisation list; throws on failure. */
+  onCreated: () => Promise<void>;
+}) {
   const { api, signOut, t } = usePlatformSession();
   const slugInput = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [slugError, setSlugError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [handover, setHandover] = useState<Handover | null>(null);
+  const [listError, setListError] = useState(false);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -65,16 +71,9 @@ export function OnboardCard({ onCreated }: { onCreated: () => Promise<void> }) {
     };
 
     setBusy(true);
+    let created: CreatedPlatformOrganisation;
     try {
-      const created: CreatedPlatformOrganisation = await api.platform.createOrganisation(body);
-      setHandover({
-        organisation: created.organisation.name,
-        admin: body.admin.displayName ?? created.invite.identifier,
-        inviteUrl: created.invite.inviteUrl,
-        expiresAt: created.invite.expiresAt,
-      });
-      form.reset();
-      await onCreated();
+      created = await api.platform.createOrganisation(body);
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) return void signOut('expired');
       if (slugTaken(e)) {
@@ -84,9 +83,22 @@ export function OnboardCard({ onCreated }: { onCreated: () => Promise<void> }) {
       }
       const key = platformErrorKey(e, 'page');
       setError(key ? t(key) : (e as Error).message);
+      return;
     } finally {
       setBusy(false);
     }
+
+    setHandover({
+      organisation: created.organisation.name,
+      admin: body.admin.displayName ?? created.invite.identifier,
+      inviteUrl: created.invite.inviteUrl,
+      expiresAt: created.invite.expiresAt,
+    });
+    setListError(false);
+    form.reset();
+    // The link is on screen now: nothing here may sign the operator out or replace it,
+    // so a failed list reload (even a 401) is only a notice next to it.
+    await onCreated().catch(() => setListError(true));
   }
 
   return (
@@ -97,6 +109,11 @@ export function OnboardCard({ onCreated }: { onCreated: () => Promise<void> }) {
       <p className={`mt-1 ${HINT}`}>{t('platform.onboard.hint')}</p>
 
       {handover && <InviteHandover handover={handover} onDone={() => setHandover(null)} />}
+      {handover && listError && (
+        <p className="mt-3 rounded-xl bg-warning-soft px-4 py-3 text-sm text-warning-foreground">
+          {t('platform.onboard.listFailed')}
+        </p>
+      )}
 
       <form
         className="mt-4 grid items-start gap-3 sm:grid-cols-2"
@@ -201,20 +218,28 @@ export function OnboardCard({ onCreated }: { onCreated: () => Promise<void> }) {
 
 /** The invite link, once, with a copy button and the warning that it will not be shown again. */
 function InviteHandover({ handover, onDone }: { handover: Handover; onDone: () => void }) {
-  const { locale, t } = usePlatformSession();
+  const { locale, holdIdleSignOut, t } = usePlatformSession();
   const [copied, setCopied] = useState(false);
   const heading = useRef<HTMLParagraphElement>(null);
   // Move focus to the notice so keyboard and screen-reader users land on it.
   useEffect(() => {
     heading.current?.focus();
   }, []);
+  // The link cannot be shown again: hold off the idle sign-out while it is on screen, and
+  // ask before a reload or closing the tab takes it away.
+  useEffect(() => holdIdleSignOut(), [holdIdleSignOut]);
+  useEffect(() => {
+    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, []);
+  // Only the heading and the warning are live regions: the link itself is never read out.
   return (
     <div
       className="mt-4 space-y-3 rounded-xl bg-info-soft p-4 text-sm"
-      role="status"
       data-testid="onboard-handover"
     >
-      <p ref={heading} tabIndex={-1} className="font-semibold outline-none">
+      <p ref={heading} tabIndex={-1} role="status" className="font-semibold outline-none">
         {t('platform.onboard.done', { name: handover.organisation, admin: handover.admin })}
       </p>
       <p
@@ -223,7 +248,7 @@ function InviteHandover({ handover, onDone }: { handover: Handover; onDone: () =
       >
         {handover.inviteUrl}
       </p>
-      <p className="rounded-lg bg-warning-soft px-3 py-2 text-warning-foreground">
+      <p role="status" className="rounded-lg bg-warning-soft px-3 py-2 text-warning-foreground">
         {t('platform.onboard.once', { date: formatIstDateTime(handover.expiresAt, locale) })}
       </p>
       <div className="flex flex-wrap gap-2">

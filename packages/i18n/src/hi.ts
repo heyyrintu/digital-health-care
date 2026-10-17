@@ -1098,6 +1098,7 @@ export const hi: Record<MessageKey, string> = {
     'यह कोड सही नहीं है या इसकी समय-सीमा खत्म हो गई है। अपने ऑथेंटिकेटर ऐप का मौजूदा कोड डालें।',
   'platform.error.mfaExpired': 'साइन इन में बहुत समय लगा। पासवर्ड से फिर से शुरू करें।',
   'platform.error.locked': 'बहुत ज़्यादा प्रयास। साइन इन 15 मिनट के लिए बंद है।',
+  'platform.error.rateLimited': 'बहुत ज़्यादा प्रयास। एक मिनट रुककर फिर से कोशिश करें।',
   'platform.error.network':
     'प्लैटफ़ॉर्म कंसोल इस नेटवर्क से उपलब्ध नहीं है। ऑफ़िस नेटवर्क या VPN से जुड़ें।',
   'platform.nav.organisations': 'संगठन',
@@ -1141,6 +1142,8 @@ export const hi: Record<MessageKey, string> = {
   'platform.onboard.done': '{name} तैयार है। यह आमंत्रण लिंक सीधे {admin} को दें:',
   'platform.onboard.once':
     'यह लिंक केवल एक बार दिखाया जाता है और कहीं सेव नहीं होता। इसे अभी कॉपी करें: यह दोबारा नहीं दिखेगा। इसकी समय-सीमा {date} को खत्म होगी।',
+  'platform.onboard.listFailed':
+    'संगठन बन गया, लेकिन सूची ताज़ा नहीं हो सकी। पहले लिंक कॉपी करें, फिर पेज दोबारा लोड करें।',
   'platform.onboard.dismiss': 'मैंने लिंक कॉपी कर लिया है',
   'platform.doctors.title': 'डॉक्टर सत्यापन',
   'platform.doctors.sub':

@@ -25,6 +25,13 @@ export const PLATFORM_SESSION_MS = 8 * 3600_000;
 
 const SIGN_IN_AGAIN = () => new AppError(401, 'UNAUTHENTICATED', 'Please sign in again.');
 
+/**
+ * The code step's MFA token ran out. The web console tells this 401 apart from a wrong
+ * code by its wording ("Start again"); `messages.test.ts` pins it.
+ */
+export const MFA_EXPIRED = () =>
+  new AppError(401, 'UNAUTHENTICATED', 'Your sign-in has expired. Start again.');
+
 declare module 'fastify' {
   interface FastifyRequest {
     platformAuth: PlatformAccessClaims | null;
@@ -129,7 +136,7 @@ export class PlatformAuthService {
   async verifyMfa(request: FastifyRequest, mfaToken: string, code: string): Promise<TokenResponse> {
     const claims = await this.s.platformTokens.verifyMfaToken(mfaToken);
     if (!claims) {
-      throw new AppError(401, 'UNAUTHENTICATED', 'Your sign-in has expired. Start again.');
+      throw MFA_EXPIRED();
     }
     const now = this.s.now();
 

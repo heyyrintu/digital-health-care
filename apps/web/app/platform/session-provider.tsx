@@ -1,6 +1,6 @@
 'use client';
 
-import { ApiError, createApiClient, type ApiClient } from '@dhc/api-client';
+import { createApiClient, type ApiClient } from '@dhc/api-client';
 import type { PlatformOperator } from '@dhc/contracts';
 import { t as translate, type Locale, type MessageKey } from '@dhc/i18n';
 import { Button, UiLocaleProvider } from '@dhc/ui-web';
@@ -14,6 +14,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
+import { retryableRefresh, sessionEndReason } from '../../lib/platform';
 import {
   IDLE_TIMEOUT_MS,
   postPlatformSession,
@@ -22,7 +23,7 @@ import {
 } from '../../lib/session-client';
 
 type Status = 'loading' | 'signedOut' | 'signedIn';
-export type SignOutReason = 'user' | 'idle' | 'expired';
+export type SignOutReason = 'user' | 'idle' | 'expired' | 'network';
 
 interface PlatformSessionContext {
   status: Status;
@@ -37,11 +38,22 @@ interface PlatformSessionContext {
   /** Called with the tokens returned by the console's sign-in route. */
   startSession(tokens: SessionTokens): Promise<void>;
   signOut(reason?: SignOutReason): Promise<void>;
+  /**
+   * Holds off the idle sign-out (for at most IDLE_HOLD_MS) while something that cannot be
+   * shown again is on screen, such as a new organisation's invite link. Returns the release.
+   */
+  holdIdleSignOut(): () => void;
 }
 
 const Context = createContext<PlatformSessionContext | null>(null);
 
 const ACTIVITY_EVENTS = ['pointerdown', 'keydown', 'wheel', 'touchstart'] as const;
+
+/** Longest the idle sign-out waits for a hold: an unattended screen still signs out. */
+export const IDLE_HOLD_MS = 60 * 60_000;
+/** A scheduled refresh that fails other than with 401 is tried this many more times. */
+const REFRESH_RETRIES = 2;
+const REFRESH_RETRY_MS = 5_000;
 
 /**
  * Platform console session (ADR 0016), separate from the clinic's: its refresh token is in
@@ -59,6 +71,8 @@ export function PlatformSessionProvider({
   const accessToken = useRef<string | null>(null);
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const idleTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  /** While a hold is on: when it lapses (ms since epoch); 0 for none. */
+  const idleHeldUntil = useRef(0);
   const [status, setStatus] = useState<Status>('loading');
   const [operator, setOperator] = useState<PlatformOperator | null>(null);
   const [endedReason, setEndedReason] = useState<SignOutReason | null>(null);
@@ -86,14 +100,25 @@ export function PlatformSessionProvider({
   const scheduleRefresh = useCallback(
     (expiresIn: number) => {
       clearTimeout(refreshTimer.current);
-      refreshTimer.current = setTimeout(() => {
+      const attempt = (retriesLeft: number) =>
         postPlatformSession<SessionTokens>('refresh')
           .then((tokens) => {
             accessToken.current = tokens.accessToken;
             scheduleRefresh(tokens.expiresIn);
           })
-          .catch(() => clear('expired'));
-      }, refreshDelayMs(expiresIn));
+          .catch((e: unknown) => {
+            // A blip (network, 5xx) gets another go before the session ends.
+            if (retriesLeft > 0 && retryableRefresh(e)) {
+              const delay = REFRESH_RETRY_MS * (REFRESH_RETRIES - retriesLeft + 1);
+              refreshTimer.current = setTimeout(() => void attempt(retriesLeft - 1), delay);
+            } else {
+              clear(sessionEndReason(e) ?? 'expired');
+            }
+          });
+      refreshTimer.current = setTimeout(
+        () => void attempt(REFRESH_RETRIES),
+        refreshDelayMs(expiresIn),
+      );
     },
     [clear],
   );
@@ -106,8 +131,8 @@ export function PlatformSessionProvider({
         setOperator((await api.platform.me()).operator);
         setEndedReason(null);
         setStatus('signedIn');
-      } catch {
-        clear('expired');
+      } catch (e) {
+        clear(sessionEndReason(e) ?? 'expired');
       }
     },
     [api, clear, scheduleRefresh],
@@ -126,7 +151,8 @@ export function PlatformSessionProvider({
   useEffect(() => {
     postPlatformSession<SessionTokens>('refresh')
       .then(startSession)
-      .catch((e: unknown) => clear(e instanceof ApiError && e.status === 401 ? null : 'expired'));
+      // No session (401) is not an ending worth a notice; outside the allowed networks is.
+      .catch((e: unknown) => clear(sessionEndReason(e)));
     return () => {
       clearTimeout(refreshTimer.current);
       clearTimeout(idleTimer.current);
@@ -138,7 +164,10 @@ export function PlatformSessionProvider({
     if (status !== 'signedIn') return;
     const reset = () => {
       clearTimeout(idleTimer.current);
-      idleTimer.current = setTimeout(() => void signOut('idle'), IDLE_TIMEOUT_MS);
+      idleTimer.current = setTimeout(() => {
+        if (Date.now() < idleHeldUntil.current) reset();
+        else void signOut('idle');
+      }, IDLE_TIMEOUT_MS);
     };
     reset();
     for (const event of ACTIVITY_EVENTS) window.addEventListener(event, reset, { passive: true });
@@ -147,6 +176,13 @@ export function PlatformSessionProvider({
       for (const event of ACTIVITY_EVENTS) window.removeEventListener(event, reset);
     };
   }, [status, signOut]);
+
+  const holdIdleSignOut = useCallback(() => {
+    idleHeldUntil.current = Date.now() + IDLE_HOLD_MS;
+    return () => {
+      idleHeldUntil.current = 0;
+    };
+  }, []);
 
   const value = useMemo<PlatformSessionContext>(
     () => ({
@@ -159,8 +195,9 @@ export function PlatformSessionProvider({
       t: (key, params) => translate(locale, key, params),
       startSession,
       signOut,
+      holdIdleSignOut,
     }),
-    [status, operator, endedReason, api, locale, startSession, signOut],
+    [status, operator, endedReason, api, locale, startSession, signOut, holdIdleSignOut],
   );
 
   return (

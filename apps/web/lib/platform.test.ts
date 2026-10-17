@@ -6,7 +6,11 @@ import {
   countOrDash,
   defaultUsageRange,
   isTicket,
+  lockedOut,
+  mfaExpired,
   platformErrorKey,
+  retryableRefresh,
+  sessionEndReason,
   slugTaken,
   usageRangeProblem,
   verifiable,
@@ -34,11 +38,41 @@ const doctor = (id: string, over: Partial<PlatformDoctor> = {}): PlatformDoctor 
   ...over,
 });
 
+// The API's own wording, pinned on the API side by `modules/platform/messages.test.ts`.
+const LOCKED_MESSAGE = 'Too many attempts. Try again in 15 minutes.';
+const MFA_EXPIRED_MESSAGE = 'Your sign-in has expired. Start again.';
+
+describe('API wording the console depends on', () => {
+  it('recognises the lockout and the expired code step, and nothing else', () => {
+    expect(lockedOut(apiError(429, LOCKED_MESSAGE))).toBe(true);
+    expect(lockedOut(apiError(429, 'Request failed.'))).toBe(false);
+    expect(mfaExpired(apiError(401, MFA_EXPIRED_MESSAGE))).toBe(true);
+    expect(mfaExpired(apiError(401, 'The code is invalid or has expired.'))).toBe(false);
+  });
+});
+
+describe('session endings', () => {
+  it('reads a 403 as the network, a 401 as no session, anything else as expired', () => {
+    expect(sessionEndReason(apiError(403))).toBe('network');
+    expect(sessionEndReason(apiError(401))).toBeNull();
+    expect(sessionEndReason(new TypeError('fetch failed'))).toBe('expired');
+  });
+
+  it('retries a failed refresh unless the session was refused', () => {
+    expect(retryableRefresh(new TypeError('fetch failed'))).toBe(true);
+    expect(retryableRefresh(apiError(502))).toBe(true);
+    expect(retryableRefresh(apiError(401))).toBe(false);
+  });
+});
+
 describe('platformErrorKey', () => {
-  it('names the network refusal and the lockout, at every step', () => {
+  it('names the network refusal, the lockout and the rate limit, at every step', () => {
     for (const step of ['password', 'code', 'page'] as const) {
       expect(platformErrorKey(apiError(403), step)).toBe('platform.error.network');
-      expect(platformErrorKey(apiError(429), step)).toBe('platform.error.locked');
+      expect(platformErrorKey(apiError(429, LOCKED_MESSAGE), step)).toBe('platform.error.locked');
+      expect(platformErrorKey(apiError(429, 'Request failed.'), step)).toBe(
+        'platform.error.rateLimited',
+      );
     }
   });
 
@@ -103,6 +137,16 @@ describe('verifyBody', () => {
 });
 
 describe('appendPage', () => {
+  it('replaces a row already shown with the newer copy', () => {
+    const shown = [doctor('a'), doctor('b')];
+    const merged = appendPage(shown, [doctor('b', { registrationNumber: 'TEST-2' }), doctor('c')]);
+    expect(merged.map((d) => [d.profileId, d.registrationNumber])).toEqual([
+      ['a', 'TEST-12345'],
+      ['b', 'TEST-2'],
+      ['c', 'TEST-12345'],
+    ]);
+  });
+
   it('keeps the oldest-first order and drops rows already shown', () => {
     const shown = [doctor('a'), doctor('b')];
     expect(appendPage(shown, [doctor('b'), doctor('c')]).map((d) => d.profileId)).toEqual([

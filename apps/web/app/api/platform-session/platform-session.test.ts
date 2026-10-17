@@ -16,9 +16,16 @@ const tokens = {
 
 function req(
   path: string,
-  init: { body?: unknown; origin?: string | null; cookie?: string; auth?: string } = {},
+  init: {
+    body?: unknown;
+    origin?: string | null;
+    cookie?: string;
+    auth?: string;
+    forwardedFor?: string;
+  } = {},
 ) {
   const headers = new Headers({ 'content-type': 'application/json' });
+  if (init.forwardedFor) headers.set('x-forwarded-for', init.forwardedFor);
   if (init.origin !== null) headers.set('origin', init.origin ?? SITE);
   if (init.cookie) headers.set('cookie', init.cookie);
   if (init.auth) headers.set('authorization', init.auth);
@@ -52,7 +59,10 @@ const sentTo = (fetch: ReturnType<typeof vi.fn>, i = 0) => {
   };
 };
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
+});
 
 describe('platform console session', () => {
   it('signs in at the platform endpoints, not the clinic ones', async () => {
@@ -143,6 +153,24 @@ describe('platform console session', () => {
     expect(sentTo(fetch, 1).headers.authorization).toBe('Bearer platform-access-1');
     expect(res.status).toBe(204);
     expect(res.headers.get('set-cookie')).toMatch(/dhc_platform_session=;.*Max-Age=0/i);
+  });
+
+  it('sends no client address by default, even one the browser wrote', async () => {
+    const fetch = mockApi({ status: 200, body: { status: 'mfa_required', mfaToken: 'm' } });
+    await login(req('/api/platform-session/login', { body: {}, forwardedFor: '10.0.0.5' }));
+    expect(sentTo(fetch).headers['x-forwarded-for']).toBeUndefined();
+  });
+
+  it('with FORWARD_CLIENT_IP, sends only the load balancer’s entry', async () => {
+    vi.stubEnv('FORWARD_CLIENT_IP', 'true');
+    const fetch = mockApi({ status: 200, body: { status: 'mfa_required', mfaToken: 'm' } });
+    await login(
+      req('/api/platform-session/login', {
+        body: {},
+        forwardedFor: '10.0.0.5, 203.0.113.7',
+      }),
+    );
+    expect(sentTo(fetch).headers['x-forwarded-for']).toBe('203.0.113.7');
   });
 
   it.each([

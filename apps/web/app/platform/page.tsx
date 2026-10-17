@@ -23,16 +23,21 @@ function OrganisationsScreen() {
   const [organisations, setOrganisations] = useState<PlatformOrganisation[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  /** Reloads the list; failures are the caller's to show. */
+  const refresh = useCallback(async () => {
+    setOrganisations((await api.platform.organisations()).data);
+  }, [api]);
+
   const load = useCallback(async () => {
     setError(null);
     try {
-      setOrganisations((await api.platform.organisations()).data);
+      await refresh();
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) return void signOut('expired');
       const key = platformErrorKey(e, 'page');
       setError(key ? t(key) : (e as Error).message);
     }
-  }, [api, signOut, t]);
+  }, [refresh, signOut, t]);
 
   useEffect(() => {
     void load();
@@ -45,7 +50,7 @@ function OrganisationsScreen() {
     <section className="space-y-5">
       <PageHeader title={t('platform.orgs.title')} sub={t('platform.orgs.sub')} />
       <ErrorNotice message={error} />
-      <OnboardCard onCreated={load} />
+      <OnboardCard onCreated={refresh} />
 
       <Surface className="min-w-0 p-4 sm:p-6">
         {!organisations ? (

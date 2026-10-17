@@ -19,7 +19,8 @@ const fail = (message: string): never => {
 };
 
 if (process.env.NODE_ENV !== 'test') fail('seed-platform-operator runs only with NODE_ENV=test.');
-const env = (name: string) => process.env[name] ?? fail(`${name} is required.`);
+// An empty value counts as missing, so a blank variable never becomes an empty password or key.
+const env = (name: string) => process.env[name]?.trim() || fail(`${name} is required.`);
 
 const db = createDb(env('DATABASE_URL'));
 try {

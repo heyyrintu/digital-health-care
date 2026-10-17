@@ -1095,6 +1095,7 @@ export const en = {
     'That code is not right or has expired. Enter the current code from your authenticator app.',
   'platform.error.mfaExpired': 'Sign-in took too long. Start again with your password.',
   'platform.error.locked': 'Too many attempts. Sign-in is locked for 15 minutes.',
+  'platform.error.rateLimited': 'Too many attempts. Wait a minute and try again.',
   'platform.error.network':
     'The platform console is not available from this network. Connect to the office network or VPN.',
   'platform.nav.organisations': 'Organisations',
@@ -1138,6 +1139,8 @@ export const en = {
   'platform.onboard.done': '{name} is set up. Give this invite link to {admin} directly:',
   'platform.onboard.once':
     'This link is shown only once and is not saved anywhere. Copy it now: it cannot be shown again. It expires {date}.',
+  'platform.onboard.listFailed':
+    'The organisation was created, but the list could not be refreshed. Copy the link first, then reload the page.',
   'platform.onboard.dismiss': 'I have copied the link',
   'platform.doctors.title': 'Doctor verification',
   'platform.doctors.sub':

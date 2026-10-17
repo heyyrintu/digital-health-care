@@ -18,13 +18,15 @@ export type PlatformStep = 'password' | 'code' | 'page';
 
 /**
  * A localised message for a console refusal, or null to show the API's own message.
- * The 403 is the network allowlist (it answers sign-in too), 429 the 15-minute lockout.
+ * The 403 is the network allowlist (it answers sign-in too); a 429 is the operator's
+ * 15-minute lockout or the per-address rate limit.
  */
 export function platformErrorKey(e: unknown, step: PlatformStep): MessageKey | null {
   if (e instanceof TypeError) return 'error.network';
   if (!(e instanceof ApiError)) return 'error.generic';
   if (e.status === 403) return 'platform.error.network';
-  if (e.status === 429) return 'platform.error.locked';
+  if (e.status === 429)
+    return lockedOut(e) ? 'platform.error.locked' : 'platform.error.rateLimited';
   if (e.status === 401) {
     if (step === 'password') return 'platform.error.invalidLogin';
     if (step === 'code')
@@ -35,9 +37,30 @@ export function platformErrorKey(e: unknown, step: PlatformStep): MessageKey | n
   return null;
 }
 
-/** The password step's MFA token ran out: the operator starts again from the password. */
+/*
+ * The API gives these two refusals the same status and code as others, so they are told
+ * apart by its English wording. `apps/api/src/modules/platform/messages.test.ts` pins that
+ * wording (and `platform.test.ts` here pins these patterns to it): rewording it in the API
+ * breaks a test, not the sign-in screen.
+ */
+
+/** The code step's MFA token ran out (401): the operator starts again from the password. */
 export const mfaExpired = (e: unknown) =>
   e instanceof ApiError && e.status === 401 && /start again/i.test(e.message);
+
+/** The operator's 15-minute lockout (429), not the per-address rate limit (also 429). */
+export const lockedOut = (e: unknown) =>
+  e instanceof ApiError && e.status === 429 && /15 minutes/i.test(e.message);
+
+/** Why a console session could not be restored or kept: for the sign-in page's notice. */
+export function sessionEndReason(e: unknown): 'network' | 'expired' | null {
+  if (e instanceof ApiError && e.status === 401) return null;
+  if (e instanceof ApiError && e.status === 403) return 'network';
+  return 'expired';
+}
+
+/** Whether a failed refresh is worth trying again: anything but a refused session (401). */
+export const retryableRefresh = (e: unknown) => !(e instanceof ApiError && e.status === 401);
 
 /** 409 on verifying: `changed` (reload and check again) or `verified` (someone else did). */
 export function verifyConflict(e: unknown): 'changed' | 'verified' | null {
@@ -71,10 +94,15 @@ export function verifyBody(
 /** Whether the row has everything the operator must check before verifying. */
 export const verifiable = (doctor: PlatformDoctor) => verifyBody(doctor, '') !== null;
 
-/** Adds the next page to the rows already shown, keeping the order and dropping repeats. */
+/**
+ * Adds the next page to the rows already shown, keeping the order. A row already shown is
+ * replaced by the page's newer copy rather than repeated.
+ */
 export function appendPage(shown: PlatformDoctor[], page: PlatformDoctor[]): PlatformDoctor[] {
+  const newer = new Map(page.map((d) => [d.profileId, d]));
+  const kept = shown.map((d) => newer.get(d.profileId) ?? d);
   const seen = new Set(shown.map((d) => d.profileId));
-  return [...shown, ...page.filter((d) => !seen.has(d.profileId))];
+  return [...kept, ...page.filter((d) => !seen.has(d.profileId))];
 }
 
 /** The usage report's default range, as the API's: the 30 IST days ending today. */

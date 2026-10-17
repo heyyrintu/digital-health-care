@@ -68,6 +68,23 @@ export function errorResponse(status: number, code: string, message: string) {
 
 export const forbiddenOrigin = () => errorResponse(403, 'FORBIDDEN', 'Request not allowed.');
 
+/**
+ * The browser's address to pass on to the API, or null to pass none. Only with
+ * `FORWARD_CLIENT_IP=true`, and then only the rightmost `X-Forwarded-For` entry: the one
+ * the load balancer in front of the web servers wrote. Entries to its left are whatever
+ * the client sent (Next fills the header in only when it is missing), so they are never
+ * passed on. Turn it on only once the web servers accept traffic from the load balancer
+ * alone, and their subnets are in the API's `TRUSTED_PROXY_CIDRS` (API guide §3s).
+ */
+export function forwardedClientIp(
+  header: string | null,
+  enabled = process.env.FORWARD_CLIENT_IP === 'true',
+): string | null {
+  if (!enabled || !header) return null;
+  const last = header.split(',').at(-1)?.trim();
+  return last ? last : null;
+}
+
 /** Calls the API on the person's behalf, passing on their address and browser for audit and rate limits. */
 export async function callApi(
   request: NextRequest,
@@ -79,8 +96,8 @@ export async function callApi(
   if (options.accessToken) headers.authorization = `Bearer ${options.accessToken}`;
   const userAgent = request.headers.get('user-agent');
   if (userAgent) headers['user-agent'] = userAgent;
-  const forwardedFor = request.headers.get('x-forwarded-for');
-  if (forwardedFor) headers['x-forwarded-for'] = forwardedFor;
+  const clientIp = forwardedClientIp(request.headers.get('x-forwarded-for'));
+  if (clientIp) headers['x-forwarded-for'] = clientIp;
 
   try {
     const response = await fetch(`${apiBaseUrl()}${path}`, {

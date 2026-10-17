@@ -23,7 +23,7 @@ The web app's route handlers under `/api/session/*` (login, mfa, invite, refresh
 - Logout and idle sign-out end the session at the API, not just in the browser.
 - Completing a staff invite signs the person straight in.
 - The platform console (ADR 0016) uses the same pattern with a cookie of its own, `dhc_platform_session` on `Path=/api/platform-session` for 8 hours, behind its own `/api/platform-session/*` routes, so a staff session and a console session never stand in for each other.
-- The API sees the web server as the client for these five routes. Before production, forward the client address through a trusted proxy hop so audit IPs and sign-in rate limits stay per person.
+- The API sees the web server as the client for the session routes (`/api/session/{login,mfa,invite,refresh,logout}` and the platform console's `/api/platform-session/{login,mfa,refresh,logout}`). With `FORWARD_CLIENT_IP=true` the web server passes on the rightmost `X-Forwarded-For` entry (the load balancer's, never one the client wrote), which the API believes only from a peer in `TRUSTED_PROXY_CIDRS`. Before production, make the web servers accept traffic only from the load balancer, then add their subnets to `TRUSTED_PROXY_CIDRS` and turn on `FORWARD_CLIENT_IP`, so audit IPs, sign-in rate limits and the console's network allowlist stay per person. Until then (the default) no client address is passed on.
 
 ## Review trigger
 A second web origin, server-rendered clinical pages, or moving the API behind the same origin as the web app.
