@@ -17,7 +17,7 @@ Patient identities and contact details; clinical records (notes, diagnoses, pres
 ## Threats and controls
 | # | Threat | STRIDE | Control |
 |---|---|---|---|
-| T1 | Staff account takeover (phished password) | S | Password + TOTP; device registration; biometric unlock; device revocation; anomaly alerts |
+| T1 | Staff account takeover (phished password) | S | Password + TOTP; 5 wrong passwords or codes lock the account for 15 minutes, and only a correct authenticator code resets the count, so a known password does not buy unlimited code guesses across sign-ins; a code is accepted once even under concurrent requests, and never once the account was disabled, locked or had its authenticator reset after the code was checked (`auth.mfa.failed` with `code_reused` or `changed_meanwhile`); device registration; biometric unlock; device revocation; anomaly alerts |
 | T2 | Patient OTP abuse / SIM swap | S | OTP rate limits, short expiry, attempt lockout; sensitive actions need re-verification |
 | T3 | Cross-tenant data access via ID guessing | I, E | Row-level security + API checks; 404 for foreign IDs; CI isolation suite |
 | T4 | Public file URL leakage | I | Private buckets; signed URLs with short expiry; no PHI in file names |

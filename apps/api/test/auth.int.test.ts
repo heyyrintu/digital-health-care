@@ -42,6 +42,8 @@ afterAll(async () => {
 const post = (url: string, payload: unknown, headers?: Record<string, string>) =>
   h.app.inject({ method: 'POST', url: `/v1${url}`, payload: payload as object, headers });
 
+const WRONG_CODE = '000000';
+
 describe('patient sign-in with a mobile code', () => {
   const requestCode = async (phone = '98765 43210') => {
     const res = await post('/auth/otp/request', { organisation: 'clinic-a', phone });
@@ -205,6 +207,99 @@ describe('staff sign-in with password and authenticator', () => {
     expect((await attempt(STAFF_PASSWORD)).statusCode).toBe(429);
     h.clock.advance(15 * 60 + 1);
     expect((await attempt(STAFF_PASSWORD)).statusCode).toBe(200);
+  });
+
+  describe('at the authenticator step', () => {
+    const passwordStep = () =>
+      post('/auth/login', {
+        organisation: 'clinic-a',
+        identifier: clinics.a.doctor.email,
+        password: STAFF_PASSWORD,
+      });
+    const codeStep = (step: { json: () => { mfaToken: string } }, code: string) =>
+      post('/auth/mfa/verify', { mfaToken: step.json().mfaToken, code });
+    const liveSessions = () =>
+      h.owner.session.count({ where: { userId: clinics.a.doctor.userId, revokedAt: null } });
+
+    it('locks after wrong codes even when each sign-in starts with the right password', async () => {
+      // Someone who knows the password guesses codes across sign-ins: the password step
+      // must not wipe the count.
+      for (let i = 0; i < 5; i++) {
+        const step = await passwordStep();
+        expect(step.statusCode, `attempt ${i + 1}`).toBe(200);
+        expect((await codeStep(step, WRONG_CODE)).statusCode).toBe(401);
+      }
+      expect((await passwordStep()).statusCode).toBe(429);
+      const row = await h.owner.user.findUniqueOrThrow({
+        where: { id: clinics.a.doctor.userId },
+      });
+      expect(row.lockedUntil?.getTime()).toBe(h.clock.ms + 15 * 60_000);
+    });
+
+    it('a right code resets the count', async () => {
+      for (let i = 0; i < 4; i++) {
+        expect((await codeStep(await passwordStep(), WRONG_CODE)).statusCode).toBe(401);
+      }
+      await staffLogin(h, 'clinic-a', clinics.a.doctor);
+      const row = await h.owner.user.findUniqueOrThrow({
+        where: { id: clinics.a.doctor.userId },
+      });
+      expect(row.failedLoginCount).toBe(0);
+    });
+
+    it('accepts one code once, even when two requests race with it', async () => {
+      const [first, second] = await Promise.all([passwordStep(), passwordStep()]);
+      h.clock.advance(30);
+      const code = totpAt(clinics.a.doctor.totpSecret, h.clock.ms / 1000);
+      const results = await Promise.all([codeStep(first!, code), codeStep(second!, code)]);
+      expect(results.map((r) => r.statusCode).sort()).toEqual([200, 401]);
+      expect(await liveSessions()).toBe(1);
+      // The loser is recorded as a reused code, wherever it lost (its read or its write).
+      const failed = await h.owner.auditLog.findMany({ where: { action: 'auth.mfa.failed' } });
+      expect(failed.map((a) => a.metadata)).toEqual([{ reason: 'code_reused' }]);
+    });
+
+    it.each([
+      // As a clinic admin's or support's authenticator reset writes it.
+      [
+        'an authenticator reset',
+        {
+          passwordHash: null,
+          mfaSecret: null,
+          mfaPendingSecret: null,
+          mfaLastUsedStep: null,
+          failedLoginCount: 0,
+          lockedUntil: null,
+        },
+      ],
+      ['a disable', { status: 'disabled' as const }],
+    ])('creates no session when %s commits during the code check', async (_, change) => {
+      const step = await passwordStep();
+      h.clock.advance(30);
+      let release!: () => void;
+      const held = new Promise<void>((resolve) => (release = resolve));
+      let locked!: () => void;
+      const rowLocked = new Promise<void>((resolve) => (locked = resolve));
+      // Hold the user's row, so the code check reads it and then waits at its write.
+      const changing = h.owner.$transaction(
+        async (tx) => {
+          await tx.$queryRaw`SELECT id FROM users WHERE id = ${clinics.a.doctor.userId}::uuid FOR UPDATE`;
+          locked();
+          await held;
+          await tx.user.update({ where: { id: clinics.a.doctor.userId }, data: change });
+        },
+        { timeout: 10_000 },
+      );
+      await rowLocked;
+      const verify = codeStep(step, totpAt(clinics.a.doctor.totpSecret, h.clock.ms / 1000));
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      release();
+      await changing;
+      expect((await verify).statusCode).toBe(401);
+      expect(await liveSessions()).toBe(0);
+      const failed = await h.owner.auditLog.findMany({ where: { action: 'auth.mfa.failed' } });
+      expect(failed.map((a) => a.metadata)).toEqual([{ reason: 'changed_meanwhile' }]);
+    });
   });
 
   it('asks which role to use when a person holds two staff roles', async () => {
