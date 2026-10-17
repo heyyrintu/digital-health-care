@@ -18,6 +18,7 @@ import {
   queuesNoteKey,
   queuesWithFailures,
   retryableRefresh,
+  shareInFlight,
   sessionEndReason,
   slugTaken,
   uptimeMessage,
@@ -216,17 +217,39 @@ describe('system health', () => {
 
   it('lists the queues with failed jobs, in order', () => {
     expect(queuesWithFailures(health({}))).toEqual([]);
-    expect(queuesWithFailures(health({ webhooks: 1, messaging: 4 }))).toEqual([
+    // Report order, not alphabetical: documents sorts first but comes after messaging.
+    expect(queuesWithFailures(health({ documents: 4, messaging: 1 }))).toEqual([
       'messaging',
-      'webhooks',
+      'documents',
     ]);
+  });
+
+  it('shares a call still in flight, so a doubled opening effect sends one request', async () => {
+    let calls = 0;
+    let finish: (value: string) => void = () => {};
+    const once = shareInFlight(() => {
+      calls += 1;
+      return new Promise<string>((resolve) => (finish = resolve));
+    });
+    const first = once();
+    const second = once();
+    expect(second).toBe(first);
+    finish('report');
+    await expect(first).resolves.toBe('report');
+    expect(calls).toBe(1);
+    // Settled: the next page open checks again.
+    void once();
+    expect(calls).toBe(2);
   });
 
   it('words and colours each status', () => {
     expect(healthTone('ok')).toBe('ok');
     expect(healthTone('down')).toBe('danger');
     expect(healthTone('not_configured')).toBe('neutral');
+    expect(messages.en[healthStatusKey('ok')]).toBe('OK');
+    expect(messages.en[healthStatusKey('down')]).toBe('Down');
     expect(messages.en[healthStatusKey('not_configured')]).toBe('Not configured');
+    expect(queuesNoteKey('ok')).toBe('platform.health.queuesOk');
     expect(queuesNoteKey('down')).toBe('platform.health.queuesDown');
     expect(queuesNoteKey('not_configured')).toBe('platform.health.queuesNotConfigured');
   });
@@ -241,7 +264,15 @@ describe('system health', () => {
   });
 
   it('has a label for every queue', () => {
-    for (const name of QUEUE_NAMES) expect(messages.en[queueLabelKey(name)]).toBeTruthy();
+    expect(Object.fromEntries(QUEUE_NAMES.map((n) => [n, messages.en[queueLabelKey(n)]]))).toEqual({
+      system: 'System',
+      messaging: 'Messaging',
+      documents: 'Documents',
+      webhooks: 'Webhooks',
+      abdm: 'ABDM',
+      imports: 'Imports',
+      reconciliation: 'Payment reconciliation',
+    });
   });
 
   it('shows when it was checked in IST, to the second', () => {

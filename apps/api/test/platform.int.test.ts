@@ -1315,6 +1315,35 @@ describe('system health', () => {
     }
   });
 
+  it('fails fast when the audit entry is stuck, and gives every connection back', async () => {
+    const tokens = await platformLogin(h, op);
+    // The owner holds audit_logs locked, so the health check's audit insert waits on it.
+    await h.owner.$transaction(
+      async (tx) => {
+        await tx.$executeRawUnsafe('LOCK TABLE audit_logs IN ACCESS EXCLUSIVE MODE');
+        // More checks than the API's pool has connections (pg's default, 10): any connection
+        // left checked out by an abandoned transaction would make the later ones hang.
+        for (let i = 0; i < 12; i++) {
+          const started = Date.now();
+          const res = await call('GET', '/platform/health', tokens);
+          // The database answered, so a missing audit entry fails the request, as for the
+          // other console reads, but within the transaction's limits.
+          expect(res.statusCode, `check ${i}`).toBe(500);
+          expect(Date.now() - started, `check ${i}`).toBeLessThan(3_500);
+        }
+        const waiting = await tx.$queryRaw<{ n: number }[]>`
+          SELECT count(*)::int AS n FROM pg_stat_activity
+          WHERE datname = current_database() AND pid <> pg_backend_pid()
+            AND (wait_event_type = 'Lock' OR state = 'idle in transaction')`;
+        expect(waiting[0]!.n).toBe(0);
+      },
+      { maxWait: 10_000, timeout: 120_000 },
+    );
+    const after = await call('GET', '/platform/health', tokens);
+    expect(after.statusCode).toBe(200);
+    expect(await h.owner.auditLog.count({ where: { action: 'platform.health.viewed' } })).toBe(1);
+  });
+
   it('reports a database that does not answer as down, without throwing', async () => {
     const failing = {
       $transaction: () => Promise.reject(new Error('connection refused')),
@@ -1511,18 +1540,37 @@ describe('in the database (dhc_platform)', () => {
     ).rejects.toThrow(/permission denied/);
   });
 
-  it('returns only non-clinical columns from every platform function', async () => {
-    // Every platform_* function, found in the catalogue: a new one is checked too.
-    const columns = await h.owner.$queryRaw<{ name: string; column: string }[]>`
-      SELECT p.proname AS name, a.arg AS column
+  it('returns only non-clinical columns, or a plain value, from every platform function', async () => {
+    // Every platform_* function, found in the catalogue: a new one is checked too, whether it
+    // returns a table (its output columns) or a single value (its result type).
+    const functions = await h.owner.$queryRaw<
+      { name: string; result: string; kind: string; columns: string[] }[]
+    >`
+      SELECT p.proname AS name, pg_get_function_result(p.oid) AS result, t.typtype::text AS kind,
+             coalesce(array(
+               SELECT a.arg FROM unnest(p.proargnames, p.proargmodes::text[]) AS a(arg, mode)
+               WHERE a.mode IN ('o', 't')
+             ), '{}') AS columns
       FROM pg_proc p
       JOIN pg_namespace n ON n.oid = p.pronamespace AND n.nspname = 'public'
-      CROSS JOIN LATERAL unnest(p.proargnames, p.proargmodes::text[]) AS a(arg, mode)
-      WHERE p.proname LIKE 'platform\\_%' AND a.mode IN ('o', 't')`;
-    expect(new Set(columns.map((c) => c.name))).toEqual(
-      new Set(['platform_organisation_summaries', 'platform_doctor_profiles', 'platform_usage']),
-    );
-    expect(columns.filter((c) => CLINICAL.test(c.column))).toEqual([]);
+      JOIN pg_type t ON t.oid = p.prorettype
+      WHERE p.proname LIKE 'platform\\_%'
+      ORDER BY p.proname`;
+    const tables = functions.filter((f) => f.columns.length > 0);
+    const scalars = functions.filter((f) => f.columns.length === 0);
+    expect(tables.map((f) => f.name)).toEqual([
+      'platform_doctor_profiles',
+      'platform_organisation_summaries',
+      'platform_usage',
+    ]);
+    expect(tables.flatMap((f) => f.columns).filter((c) => CLINICAL.test(c))).toEqual([]);
+    // Single values are plain base types (no row of a table, no record), named as here.
+    expect(Object.fromEntries(scalars.map((f) => [f.name, `${f.result} (${f.kind})`]))).toEqual({
+      platform_create_organisation: 'uuid (b)',
+      platform_latest_migration: 'text (b)',
+      platform_mask_identifier: 'text (b)',
+      platform_organisation_slug_taken: 'boolean (b)',
+    });
   });
 
   it('masks contact details the same way as the API', async () => {

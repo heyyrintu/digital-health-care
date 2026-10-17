@@ -15,7 +15,10 @@ const Env = z
      * The workers' Redis (BullMQ). The API only reads queue counts from it, for the platform
      * console's system health; unset or empty, the queues show as not configured there.
      */
-    REDIS_URL: z.preprocess((v) => (v === '' ? undefined : v), z.url().optional()),
+    REDIS_URL: z.preprocess(
+      (v) => (v === '' ? undefined : v),
+      z.url({ protocol: /^rediss?$/, error: 'Use a redis:// or rediss:// URL' }).optional(),
+    ),
     JWT_SECRET: z.string().min(32).optional(),
     /** 32 bytes, base64. */
     FIELD_ENCRYPTION_KEY: z.string().optional(),

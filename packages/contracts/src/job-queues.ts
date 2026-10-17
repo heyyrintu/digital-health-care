@@ -16,5 +16,16 @@ export const QUEUES = {
 
 export type QueueName = (typeof QUEUES)[keyof typeof QUEUES];
 
-/** Every queue name, in a fixed order (system health lists them in this order). */
-export const QUEUE_NAMES = Object.values(QUEUES) as [QueueName, ...QueueName[]];
+/**
+ * Every queue name, in a fixed order (system health lists them in this order). A queue added
+ * to `QUEUES` must be added here too; a contract test checks they match.
+ */
+export const QUEUE_NAMES = [
+  QUEUES.system,
+  QUEUES.messaging,
+  QUEUES.documents,
+  QUEUES.webhooks,
+  QUEUES.abdm,
+  QUEUES.imports,
+  QUEUES.reconciliation,
+] as const satisfies readonly QueueName[];

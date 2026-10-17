@@ -80,6 +80,25 @@ interface UsageRow {
 /** How long system health waits for the database before calling it down. */
 const DATABASE_CHECK_TIMEOUT_MS = 2_000;
 
+/**
+ * System health's database limits: a connection within 1 s, the whole transaction within
+ * 2 s (then Prisma rolls it back and returns the connection), each statement within 1 s
+ * (so the rollback is not stuck behind a query that is still running).
+ */
+const HEALTH_TRANSACTION = { maxWait: 1_000, timeout: DATABASE_CHECK_TIMEOUT_MS };
+const HEALTH_STATEMENT_TIMEOUT_MS = 1_000;
+
+/** `withPlatform` within system health's limits. */
+const withHealthLimits = <T>(db: Services['db'], fn: (tx: Tx) => Promise<T>) =>
+  withPlatform(
+    db,
+    async (tx) => {
+      await tx.$executeRawUnsafe(`SET LOCAL statement_timeout = ${HEALTH_STATEMENT_TIMEOUT_MS}`);
+      return fn(tx);
+    },
+    HEALTH_TRANSACTION,
+  );
+
 const PROFILE_NOT_FOUND = () =>
   new AppError(404, 'NOT_FOUND', 'No active doctor’s profile with that ID.');
 
@@ -399,28 +418,34 @@ export class PlatformService {
    * the background queues' counts. Redis that is down or slow is reported as `down`. So is
    * a database that fails or is slow after the sign-in check passed; a database that is
    * fully down already fails that check (`authenticatePlatform` reads the session), and the
-   * request gets the console's usual error instead. Each view is audited like the other
-   * reads. With the database reported down the entry may fail, or outlast its time limit
-   * and commit later: the report is returned anyway (it holds no organisation's data) and
-   * the possible miss is logged.
+   * request gets the console's usual error instead.
+   *
+   * Each view is audited like the other reads, in a transaction with the same short limits
+   * as the check, so a stuck database never holds the request or a pool connection for
+   * long. With the database answering, a failed audit entry fails the request (500), as for
+   * the other console reads, within those limits. With the database reported down, the
+   * report is returned anyway (it holds no organisation's data) and the possible miss is
+   * logged.
    */
   async health(
     request: FastifyRequest,
     claims: PlatformAccessClaims,
     version: string,
   ): Promise<PlatformHealth> {
-    const checkedAt = this.s.now();
     const [database, queues] = await Promise.all([this.databaseHealth(), this.s.queues.check()]);
-    const audit = withPlatform(this.s.db, (tx) =>
-      auditOperator(tx, request, 'platform.health.viewed', claims.operatorId, {
-        database: database.status,
-        queues: queues.status,
-      }),
-    );
-    if (database.status === 'ok') await audit;
+    // When the answer was complete, not when the checks began.
+    const checkedAt = this.s.now();
+    const audit = () =>
+      withHealthLimits(this.s.db, (tx) =>
+        auditOperator(tx, request, 'platform.health.viewed', claims.operatorId, {
+          database: database.status,
+          queues: queues.status,
+        }),
+      );
+    if (database.status === 'ok') await audit();
     else {
       try {
-        await withinTime(audit, DATABASE_CHECK_TIMEOUT_MS);
+        await audit();
       } catch (error) {
         request.log.warn(
           { err: error },
@@ -439,9 +464,10 @@ export class PlatformService {
   /** A trivial query as `dhc_platform`, timed, and the last migration applied. */
   private async databaseHealth(): Promise<PlatformHealth['database']> {
     try {
+      // The transaction's own limits release its connection; the race only makes sure the
+      // page has its answer within DATABASE_CHECK_TIMEOUT_MS whatever happens.
       return await withinTime(
-        withPlatform(this.s.db, async (tx) => {
-          await tx.$executeRawUnsafe(`SET LOCAL statement_timeout = ${DATABASE_CHECK_TIMEOUT_MS}`);
+        withHealthLimits(this.s.db, async (tx) => {
           const started = performance.now();
           await tx.$queryRaw`SELECT 1`;
           const latencyMs = Math.round(performance.now() - started);

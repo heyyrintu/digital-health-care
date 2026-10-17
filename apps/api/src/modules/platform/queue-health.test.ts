@@ -49,7 +49,8 @@ describe('queue health', () => {
     const probe = new RedisQueueProbe(`redis://127.0.0.1:${await silentPort()}`, 200);
     const started = Date.now();
     await expect(probe.check()).resolves.toEqual({ status: 'down', items: [] });
-    expect(Date.now() - started).toBeLessThan(2_000);
+    // Well under the 1.5 s default: the probe keeps to the limit it was given.
+    expect(Date.now() - started).toBeLessThan(1_000);
     await probe.close();
   });
 
@@ -60,6 +61,6 @@ describe('queue health', () => {
     const started = Date.now();
     await probe.close();
     await expect(check).resolves.toEqual({ status: 'down', items: [] });
-    expect(Date.now() - started).toBeLessThan(2_000);
+    expect(Date.now() - started).toBeLessThan(1_000);
   });
 });

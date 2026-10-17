@@ -151,6 +151,23 @@ export function healthErrorKey(e: unknown): MessageKey | null {
   return platformErrorKey(e, 'page');
 }
 
+/**
+ * `fn`, except that a call while an earlier one is still in flight gets that call's promise
+ * instead of starting another (its arguments are then ignored). Once it settles, the next
+ * call starts afresh.
+ */
+export function shareInFlight<A extends unknown[], T>(
+  fn: (...args: A) => Promise<T>,
+): (...args: A) => Promise<T> {
+  let inFlight: Promise<T> | null = null;
+  return (...args) => {
+    inFlight ??= fn(...args).finally(() => {
+      inFlight = null;
+    });
+    return inFlight;
+  };
+}
+
 /** Any status on the system health page: the database's, the queues' or the API's (`ok`). */
 export type HealthStatus = PlatformHealth['queues']['status'];
 

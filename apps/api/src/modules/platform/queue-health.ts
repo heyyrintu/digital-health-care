@@ -73,9 +73,9 @@ export class RedisQueueProbe implements QueueProbe {
     } finally {
       clearTimeout(timer);
       this.running.delete(stop);
-      // The queues share this connection and do not own it: drop it, then the queues.
-      redis.disconnect();
+      // The queues share this connection and do not own it: close them, then drop it.
       await Promise.allSettled(queues.map((queue) => queue.close()));
+      redis.disconnect();
     }
   }
 

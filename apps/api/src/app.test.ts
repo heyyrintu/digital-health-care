@@ -87,6 +87,23 @@ describe('loadConfig', () => {
     expect(() => loadConfig({ API_PORT: 'abc' })).toThrow(/Invalid environment/);
   });
 
+  it('takes only a redis:// or rediss:// REDIS_URL, and treats an empty one as unset', () => {
+    expect(loadConfig({ REDIS_URL: 'redis://localhost:6379/15' }).REDIS_URL).toBe(
+      'redis://localhost:6379/15',
+    );
+    expect(loadConfig({ REDIS_URL: 'rediss://cache.internal:6380' }).REDIS_URL).toBe(
+      'rediss://cache.internal:6380',
+    );
+    expect(loadConfig({ REDIS_URL: '' }).REDIS_URL).toBeUndefined();
+    for (const url of [
+      'http://localhost:6379',
+      'postgresql://localhost:5432/dhc',
+      'localhost:6379',
+    ]) {
+      expect(() => loadConfig({ REDIS_URL: url }), url).toThrow(/REDIS_URL/);
+    }
+  });
+
   it('refuses to log sign-in codes in production', () => {
     expect(() => loadConfig({ NODE_ENV: 'production', OTP_DELIVERY: 'log' })).toThrow(
       /OTP_DELIVERY/,

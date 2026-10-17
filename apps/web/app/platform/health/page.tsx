@@ -15,6 +15,7 @@ import {
   queueLabelKey,
   queuesNoteKey,
   queuesWithFailures,
+  shareInFlight,
   uptimeMessage,
   type HealthStatus,
 } from '../../../lib/platform';
@@ -39,6 +40,14 @@ export default function HealthPage() {
   return <PlatformShell>{() => <HealthScreen />}</PlatformShell>;
 }
 
+/**
+ * The check when the page opens. Each check is audited, and development's StrictMode runs
+ * the opening effect twice: both runs share the one request still in flight.
+ */
+const openingCheck = shareInFlight((api: PlatformApi) => api.platform.health());
+
+type PlatformApi = ReturnType<typeof usePlatformSession>['api'];
+
 function HealthScreen() {
   const { api, locale, signOut, t } = usePlatformSession();
   const [health, setHealth] = useState<PlatformHealth | null>(null);
@@ -49,27 +58,30 @@ function HealthScreen() {
   /** The latest check asked for: answers to earlier ones are dropped. */
   const latest = useRef(0);
 
-  const check = useCallback(async () => {
-    const request = ++latest.current;
-    setChecking(true);
-    setError(null);
-    try {
-      const answer = await api.platform.health();
-      if (request === latest.current) setHealth(answer);
-    } catch (e) {
-      if (request !== latest.current) return;
-      if (e instanceof ApiError && e.status === 401) return void signOut('expired');
-      // An earlier report would now be out of date: show only the error.
-      setHealth(null);
-      const key = healthErrorKey(e);
-      setError(key ? { key } : { text: (e as Error).message });
-    } finally {
-      if (request === latest.current) setChecking(false);
-    }
-  }, [api, signOut]);
+  const check = useCallback(
+    async (opening = false) => {
+      const request = ++latest.current;
+      setChecking(true);
+      setError(null);
+      try {
+        const answer = await (opening ? openingCheck(api) : api.platform.health());
+        if (request === latest.current) setHealth(answer);
+      } catch (e) {
+        if (request !== latest.current) return;
+        if (e instanceof ApiError && e.status === 401) return void signOut('expired');
+        // An earlier report would now be out of date: show only the error.
+        setHealth(null);
+        const key = healthErrorKey(e);
+        setError(key ? { key } : { text: (e as Error).message });
+      } finally {
+        if (request === latest.current) setChecking(false);
+      }
+    },
+    [api, signOut],
+  );
 
   useEffect(() => {
-    void check();
+    void check(true);
   }, [check]);
 
   const count = (n: number | null) => countOrDash(n, locale);

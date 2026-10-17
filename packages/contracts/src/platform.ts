@@ -251,14 +251,22 @@ export const PlatformHealth = z.object({
     /** The last migration applied, e.g. `20261017120000_platform_health`; null when down. */
     latestMigration: z.string().nullable(),
   }),
-  queues: z.object({
-    /**
-     * `not_configured`: this API server has no `REDIS_URL`. `down`: Redis did not answer
-     * within 1.5 seconds.
-     */
-    status: z.enum(['ok', 'down', 'not_configured']),
-    /** Every queue, in a fixed order, when `ok`; empty otherwise. */
-    items: z.array(PlatformQueueCounts),
-  }),
+  queues: z
+    .object({
+      /**
+       * `not_configured`: this API server has no `REDIS_URL`. `down`: Redis failed, refused
+       * the connection or did not answer within 1.5 seconds.
+       */
+      status: z.enum(['ok', 'down', 'not_configured']),
+      /** Every queue, in `QUEUE_NAMES` order, when `ok`; empty otherwise. */
+      items: z.array(PlatformQueueCounts),
+    })
+    .refine(
+      ({ status, items }) =>
+        status === 'ok'
+          ? items.length === QUEUE_NAMES.length && items.every((q, i) => q.name === QUEUE_NAMES[i])
+          : items.length === 0,
+      { message: 'Every queue in QUEUE_NAMES order when ok; none otherwise.', path: ['items'] },
+    ),
 });
 export type PlatformHealth = z.infer<typeof PlatformHealth>;
