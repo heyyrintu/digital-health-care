@@ -12,6 +12,7 @@ export * from './job-queues';
 export * from './medicines';
 export * from './merges';
 export * from './openapi';
+export * from './orders';
 export * from './pagination';
 export * from './patients';
 export * from './platform';

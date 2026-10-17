@@ -7,7 +7,7 @@ import {
   type VoidPrescriptionBody,
 } from '@dhc/contracts';
 import { withAuth, withTenant, type Prisma, type Tx } from '@dhc/db';
-import { ageFrom } from '@dhc/domain';
+import { ageFrom, testOrderLabel } from '@dhc/domain';
 import type { FastifyRequest } from 'fastify';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { hashToken } from '../../auth/tokens';
@@ -18,6 +18,7 @@ import { writeAudit } from '../audit/write';
 import { assertChartAccess } from '../clinical/access';
 import { lockVisit } from '../clinical/service';
 import { DoctorProfileService, findProfile, signingGaps } from '../doctors/service';
+import { assertTestsReviewed, placeDraftOrders, visitOrders } from '../orders/lines';
 import { loadDocument } from './document';
 import { PDF_TEMPLATE_VERSION, renderPrescriptionPdf, stampVoid } from './pdf';
 import { checkAndRecord } from './safety';
@@ -141,8 +142,17 @@ export class SigningService {
 
     return withTenant(this.s.db, actor.organisationId, async (tx) => {
       const { appointment, existing, consultation } = await writableVisit(tx, actor, appointmentId);
-      if (!existing || existing.items.length === 0) {
-        throw new AppError(422, 'BUSINESS_RULE', 'Add at least one medicine before signing.');
+      // A prescription may order tests only (PRD §7.1).
+      const tests = await tx.testOrder.findMany({
+        where: { appointmentId },
+        select: { id: true, orderedAt: true },
+      });
+      if (!existing || (existing.items.length === 0 && tests.length === 0)) {
+        throw new AppError(
+          422,
+          'BUSINESS_RULE',
+          'Add at least one medicine or test before signing.',
+        );
       }
       if (existing.revision !== body.revision) {
         throw new AppError(
@@ -152,6 +162,8 @@ export class SigningService {
           { revision: 'stale' },
         );
       }
+      // The doctor signs only the tests their screen showed them.
+      assertTestsReviewed(tests, body.testIds);
       const profile = await findProfile(tx, actor);
       const gaps = signingGaps(profile, true);
       if (gaps.includes('verification')) {
@@ -253,6 +265,8 @@ export class SigningService {
           data: { status: 'superseded', supersededAt: signedAt },
         });
       }
+      // The draft's tests are ordered by this version and lock with it.
+      const ordered = await placeDraftOrders(tx, appointmentId, existing.id, signedAt);
       // The visit record locks with the first signature (PRD §6.1).
       if (!consultation) {
         await tx.consultation.create({
@@ -279,12 +293,14 @@ export class SigningService {
         signatureMethod: signer.method,
         templateVersion: PDF_TEMPLATE_VERSION,
         drugDatabaseVersion: summary.drugDatabaseVersion,
+        testsOrdered: ordered,
         ...(previous ? { supersedes: previous.id } : {}),
       });
       return prescriptionOut(
         (await currentPrescription(tx, appointmentId))!,
         summary,
         this.s.webBaseUrl,
+        await visitOrders(tx, appointmentId),
       );
     });
   }
@@ -347,7 +363,7 @@ export class SigningService {
         version: row.version,
         amends: latest.id,
       });
-      return prescriptionOut(row, summary, this.s.webBaseUrl);
+      return prescriptionOut(row, summary, this.s.webBaseUrl, await visitOrders(tx, appointmentId));
     });
   }
 
@@ -417,7 +433,7 @@ export class SigningService {
         persist: false,
         now: voidedAt,
       });
-      return prescriptionOut(row, summary, this.s.webBaseUrl);
+      return prescriptionOut(row, summary, this.s.webBaseUrl, await visitOrders(tx, appointmentId));
     });
   }
 
@@ -494,10 +510,19 @@ export class SigningService {
           organisationId_userId: { organisationId: row.organisationId, userId: row.doctorUserId },
         },
       });
-      return { row, latest, profile };
+      // What this version printed: tests ordered by it or by an earlier version of the visit.
+      const tests = await tx.testOrder.findMany({
+        where: {
+          appointmentId: row.appointmentId,
+          prescription: { version: { lte: row.version } },
+        },
+        orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+        select: { name: true, region: true, side: true, views: true },
+      });
+      return { row, latest, profile, tests };
     });
     if (!found) throw BAD_CODE();
-    const { row, latest, profile } = found;
+    const { row, latest, profile, tests } = found;
     const patient = row.appointment.patient;
     const names = await staffNames(this.s.db, [row.doctorUserId]);
     const initials = patient.name
@@ -530,6 +555,7 @@ export class SigningService {
         gender: patient.gender,
       },
       medicines: row.items.map((i) => ({ name: i.name, generic: i.composition })),
+      tests: tests.map((o) => ({ label: testOrderLabel(o, row.language) })),
     };
   }
 

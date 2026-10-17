@@ -65,7 +65,20 @@ import {
   PortalPrescriptionList,
   PortalSlotsQuery,
 } from './portal';
-import { OrganisationSettings, UpdateOrganisationSettingsBody } from './settings';
+import {
+  AwaitingReviewList,
+  PatientTestOrderList,
+  PortalTestOrderList,
+  TestCatalogueList,
+  TestCatalogueQuery,
+  TestOrder,
+  TestOrderListQuery,
+} from './orders';
+import {
+  OrganisationSettings,
+  UPLOAD_MEDIA_TYPES,
+  UpdateOrganisationSettingsBody,
+} from './settings';
 import {
   LastPrescription,
   LastPrescriptionQuery,
@@ -208,6 +221,10 @@ interface Operation {
   status?: 200 | 201 | 204;
   /** The response is a PDF file instead of JSON. */
   pdf?: boolean;
+  /** The request body is a file (an uploaded result) instead of JSON. */
+  upload?: boolean;
+  /** The response is an uploaded file (PDF or image) instead of JSON. */
+  file?: boolean;
   /** For a 201 that a retry answers with 200 and the same body: what that 200 means. */
   replay?: string;
 }
@@ -515,6 +532,32 @@ const operations: Operation[] = [
     summary: 'The PDF of one of the family’s prescriptions (the VOID copy once voided; patient)',
     pathParams: ['id'],
     pdf: true,
+  },
+  {
+    method: 'get',
+    path: '/portal/test-orders',
+    operationId: 'listPortalTestOrders',
+    summary: 'The family’s ordered tests and their results (patient)',
+    query: TestOrderListQuery,
+    response: PortalTestOrderList,
+  },
+  {
+    method: 'post',
+    path: '/portal/test-orders/{id}/results',
+    operationId: 'uploadPortalTestResult',
+    summary: 'Upload a result for one of the family’s ordered tests; the body is the file',
+    pathParams: ['id'],
+    upload: true,
+    response: TestOrder,
+    status: 201,
+  },
+  {
+    method: 'get',
+    path: '/portal/test-results/{id}/file',
+    operationId: 'getPortalTestResultFile',
+    summary: 'A result’s file for one of the family’s tests (patient)',
+    pathParams: ['id'],
+    file: true,
   },
   {
     method: 'get',
@@ -867,6 +910,56 @@ const operations: Operation[] = [
     summary: 'A signed version’s PDF (the copy marked VOID once voided); doctor or front desk',
     pathParams: ['id'],
     pdf: true,
+  },
+  {
+    method: 'get',
+    path: '/test-catalogue',
+    operationId: 'listTestCatalogue',
+    summary: 'The clinic’s test catalogue: blood tests, X-ray with views, MRI and CT (doctor)',
+    query: TestCatalogueQuery,
+    response: TestCatalogueList,
+  },
+  {
+    method: 'get',
+    path: '/patients/{id}/test-orders',
+    operationId: 'listPatientTestOrders',
+    summary: 'A patient’s ordered tests and results (doctor; front desk without notes)',
+    pathParams: ['id'],
+    query: TestOrderListQuery,
+    response: PatientTestOrderList,
+  },
+  {
+    method: 'get',
+    path: '/test-orders/awaiting-review',
+    operationId: 'listTestResultsAwaitingReview',
+    summary: 'The signed-in doctor’s results waiting for review',
+    response: AwaitingReviewList,
+  },
+  {
+    method: 'post',
+    path: '/test-orders/{id}/results',
+    operationId: 'uploadTestResult',
+    summary: 'Upload a result for an ordered test; the body is the file (doctor, front desk)',
+    pathParams: ['id'],
+    upload: true,
+    response: TestOrder,
+    status: 201,
+  },
+  {
+    method: 'post',
+    path: '/test-orders/{id}/review',
+    operationId: 'reviewTestOrder',
+    summary: 'Mark an uploaded result reviewed (doctor)',
+    pathParams: ['id'],
+    response: TestOrder,
+  },
+  {
+    method: 'get',
+    path: '/test-results/{id}/file',
+    operationId: 'getTestResultFile',
+    summary: 'An uploaded result’s file (doctor)',
+    pathParams: ['id'],
+    file: true,
   },
   {
     method: 'post',
@@ -1377,6 +1470,13 @@ const errorResponse = {
   content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } },
 };
 
+/** Uploaded results: the file itself as the body, in any type a clinic may accept. */
+const binary = Object.fromEntries(
+  Object.values(UPLOAD_MEDIA_TYPES)
+    .flat()
+    .map((type) => [type, { schema: { type: 'string', format: 'binary' } }]),
+);
+
 export function buildOpenApiDocument(options: { version: string; serverUrl?: string }) {
   const paths: Record<string, Record<string, unknown>> = {};
   for (const op of operations) {
@@ -1404,18 +1504,21 @@ export function buildOpenApiDocument(options: { version: string; serverUrl?: str
             },
           }
         : {}),
+      ...(op.upload ? { requestBody: { required: true, content: binary } } : {}),
       responses: {
         [String(status)]: op.pdf
           ? {
               description: 'PDF',
               content: { 'application/pdf': { schema: { type: 'string', format: 'binary' } } },
             }
-          : status === 204 || !op.response
-            ? { description: 'No content' }
-            : {
-                description: status === 201 ? 'Created' : 'OK',
-                content: { 'application/json': { schema: toSchema(op.response) } },
-              },
+          : op.file
+            ? { description: 'The file, as uploaded', content: binary }
+            : status === 204 || !op.response
+              ? { description: 'No content' }
+              : {
+                  description: status === 201 ? 'Created' : 'OK',
+                  content: { 'application/json': { schema: toSchema(op.response) } },
+                },
         ...(op.replay && op.response
           ? {
               '200': {

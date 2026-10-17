@@ -322,7 +322,7 @@ describe('signing', () => {
     const digest = createHash('sha256').update(pdf.rawPayload).digest();
     expect(digest.toString('hex')).toBe(row.pdfSha256);
     expect((h.services.signer as TestKeySigner).verify(digest, row.signature!)).toBe(true);
-    expect(row).toMatchObject({ templateVersion: 'rx-1', paperSize: 'a5' });
+    expect(row).toMatchObject({ templateVersion: 'rx-2', paperSize: 'a5' });
 
     // The visit record and the prescription are locked.
     const consultation = await h.owner.consultation.findUniqueOrThrow({

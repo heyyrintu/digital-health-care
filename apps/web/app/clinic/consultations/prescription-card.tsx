@@ -13,6 +13,7 @@ import {
   type Medicine,
   type PrescriptionItem,
   type TemplateItem,
+  type TestOrder,
 } from '@dhc/contracts';
 import { defaultDose } from '@dhc/domain';
 import { Button, Input, Label, NativeSelect, cn } from '@dhc/ui-web';
@@ -22,6 +23,7 @@ import { useSession } from '../session-provider';
 import { remarksOf, RxLine } from './rx-line';
 import { LineAlerts, SafetyBanner, type SafetyAct } from './safety-alerts';
 import { SignPanel } from './sign-panel';
+import { lineOf, TestsSection } from './tests-section';
 
 const AUTOSAVE_MS = 1200;
 /** The most lines a prescription can hold (the API limit). */
@@ -70,7 +72,8 @@ const withNewIds = (items: TemplateItem[]): PrescriptionItem[] =>
 /**
  * The prescription builder on the consultation screen (PRD §6.4). Lines autosave like
  * the notes, and the server runs the safety engine (PRD §6.5) on every save; its alerts
- * show on each line. Signing, amendments and voiding are in the sign panel (PRD §6.6).
+ * show on each line. The visit's tests (PRD §7.1) are saved with the lines. Signing,
+ * amendments and voiding are in the sign panel (PRD §6.6).
  */
 export function PrescriptionCard({
   appointmentId,
@@ -85,6 +88,7 @@ export function PrescriptionCard({
   const { api, signOut, t } = useSession();
   const [view, setView] = useState<PrescriptionView | null>(null);
   const [items, setItems] = useState<PrescriptionItem[]>([]);
+  const [tests, setTests] = useState<TestOrder[]>([]);
   const [language, setLanguage] = useState<Language>('en');
   const [state, setState] = useState<SaveState>('idle');
   const [error, setError] = useState<string | null>(null);
@@ -95,7 +99,7 @@ export function PrescriptionCard({
   const [templateId, setTemplateId] = useState('');
   const [safety, setSafety] = useState<SafetySummary | null>(null);
 
-  const latest = useRef({ items, language });
+  const latest = useRef({ items, language, tests });
   const revision = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const inFlight = useRef(false);
@@ -122,9 +126,11 @@ export function PrescriptionCard({
       setView(v);
       const next = v.prescription?.items ?? [];
       const lang = v.prescription?.language ?? v.defaultLanguage;
+      const nextTests = v.prescription?.tests ?? [];
       setItems(next);
       setLanguage(lang);
-      latest.current = { items: next, language: lang };
+      setTests(nextTests);
+      latest.current = { items: next, language: lang, tests: nextTests };
       revision.current = v.prescription?.revision ?? 0;
       setSafety(v.prescription?.safety ?? null);
       setState(v.prescription ? 'saved' : 'idle');
@@ -167,12 +173,17 @@ export function PrescriptionCard({
     }
     inFlight.current = true;
     setState('saving');
-    const { items: lines, language: lang } = latest.current;
+    const { items: lines, language: lang, tests: orders } = latest.current;
     const editsAtStart = edits.current;
     try {
       const saved = await api.request('PUT', `/appointments/${appointmentId}/prescription`, {
         schema: Prescription,
-        body: { language: lang, items: lines, revision: revision.current },
+        body: {
+          language: lang,
+          items: lines,
+          tests: orders.map(lineOf),
+          revision: revision.current,
+        },
       });
       revision.current = saved.revision;
       setSafety(saved.safety);
@@ -197,10 +208,15 @@ export function PrescriptionCard({
     }
   }, [api, appointmentId, fail]);
 
-  const edit = (next: PrescriptionItem[], lang = latest.current.language) => {
+  const edit = (
+    next: PrescriptionItem[],
+    lang = latest.current.language,
+    nextTests = latest.current.tests,
+  ) => {
     setItems(next);
     setLanguage(lang);
-    latest.current = { items: next, language: lang };
+    setTests(nextTests);
+    latest.current = { items: next, language: lang, tests: nextTests };
     edits.current += 1;
     setState('dirty');
     clearTimeout(timer.current);
@@ -367,7 +383,7 @@ export function PrescriptionCard({
   const draft = (view.prescription?.status ?? 'draft') === 'draft';
   const blocked = checking
     ? t('sign.blocked.saving')
-    : items.length === 0
+    : items.length === 0 && tests.length === 0
       ? t('sign.blocked.empty')
       : safety && (safety.openBlocks > 0 || safety.openWarnings > 0)
         ? t('sign.blocked.safety')
@@ -378,11 +394,13 @@ export function PrescriptionCard({
       view={view}
       prescription={view.prescription}
       revision={revision.current}
+      testIds={tests.map((x) => x.id)}
       blocked={blocked}
       onChanged={() => {
         void load();
         onSignedChange?.();
       }}
+      onTestsChanged={() => void load()}
       onError={fail}
     />
   );
@@ -585,6 +603,13 @@ export function PrescriptionCard({
             </ul>
           )}
         </div>
+
+        <TestsSection
+          tests={tests}
+          language={language}
+          editable={editable}
+          onChange={(next) => edit(latest.current.items, latest.current.language, next)}
+        />
       </fieldset>
 
       {draft && signPanel}

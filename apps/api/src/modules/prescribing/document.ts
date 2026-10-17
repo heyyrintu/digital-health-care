@@ -1,7 +1,8 @@
 import { ConsultationNotes } from '@dhc/contracts';
 import type { Tx } from '@dhc/db';
-import { ageFrom, bmiOf } from '@dhc/domain';
+import { ageFrom, bmiOf, testOrderLabel } from '@dhc/domain';
 import type { FieldCipher } from '../../auth/field-cipher';
+import { visitOrders } from '../orders/lines';
 import type { RxDocument } from './pdf';
 import { fromDbDate, type PrescriptionRow } from './shared';
 
@@ -10,7 +11,8 @@ const num = (d: { toString(): string } | null) => (d === null ? null : Number(d.
 /**
  * Reads what the PDF prints for a version (PRD §6.6) inside the caller's tenant
  * transaction: the visit, patient, clinic, vitals, the doctor's notes (decrypted; never
- * the private notes) and the active allergies on the chart.
+ * the private notes), the active allergies on the chart and the visit's tests (PRD §7.1:
+ * those earlier versions ordered and the draft's).
  */
 export async function loadDocument(
   tx: Tx,
@@ -46,6 +48,7 @@ export async function loadDocument(
     orderBy: { createdAt: 'asc' },
     select: { substance: true },
   });
+  const orders = await visitOrders(tx, row.appointmentId);
   const notes = visit.consultation
     ? ConsultationNotes.parse(JSON.parse(cipher.decrypt(visit.consultation.notesCipher)))
     : ConsultationNotes.parse({});
@@ -108,6 +111,7 @@ export async function loadDocument(
       instructions: i.instructions,
       remarks: i.remarks,
     })),
+    tests: orders.map((o) => ({ label: testOrderLabel(o, row.language), notes: o.notes })),
     testsAdvised: notes.testsAdvised,
     advice: notes.advice,
     followUpDate: visit.consultation?.followUpDate
