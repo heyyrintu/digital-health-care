@@ -1,8 +1,9 @@
+import { SignJWT } from 'jose';
 import { describe, expect, it } from 'vitest';
 import { FieldCipher } from './field-cipher';
 import { hashPassword, verifyPassword } from './password';
 import { normaliseIndianMobile } from './phone';
-import { TokenService, hashToken, newRefreshToken } from './tokens';
+import { PlatformTokenService, TokenService, hashToken, newRefreshToken } from './tokens';
 import { base32Decode, base32Encode, otpauthUri, totpAt, verifyTotp } from './totp';
 
 describe('password hashing', () => {
@@ -98,6 +99,51 @@ describe('TokenService', () => {
     expect(t).toHaveLength(43);
     expect(hashToken(t)).toBe(hashToken(t));
     expect(hashToken(t)).not.toBe(t);
+  });
+});
+
+describe('PlatformTokenService', () => {
+  const secret = 'x'.repeat(32);
+  const platform = new PlatformTokenService(secret);
+  const clinic = new TokenService(secret);
+
+  it('round-trips operator claims', async () => {
+    const claims = { operatorId: 'op1', sessionId: 's1' };
+    expect(await platform.verifyAccessToken(await platform.createAccessToken(claims))).toEqual(
+      claims,
+    );
+    const mfa = await platform.createMfaToken('op1');
+    expect(await platform.verifyMfaToken(mfa)).toEqual({ operatorId: 'op1' });
+    expect(await platform.verifyAccessToken(mfa)).toBeNull();
+  });
+
+  it('signs with a key derived from the secret, never the raw secret', async () => {
+    // Right issuer, audience and claims, but signed with the JWT secret itself.
+    const forged = await new SignJWT({ sid: 's1' })
+      .setProtectedHeader({ alg: 'HS256' })
+      .setSubject('op1')
+      .setIssuer('dhc-api')
+      .setAudience('dhc-platform')
+      .setIssuedAt()
+      .setExpirationTime('15m')
+      .sign(new TextEncoder().encode(secret));
+    expect(await platform.verifyAccessToken(forged)).toBeNull();
+  });
+
+  it('never accepts a clinic token, and a clinic never accepts a platform token', async () => {
+    const clinicToken = await clinic.createAccessToken({
+      userId: 'u1',
+      organisationId: 'o1',
+      role: 'clinic_admin',
+      sessionId: 's1',
+    });
+    expect(await platform.verifyAccessToken(clinicToken)).toBeNull();
+    expect(await platform.verifyMfaToken(await clinic.createMfaToken('u1', 'o1', 'doctor'))).toBe(
+      null,
+    );
+    const platformToken = await platform.createAccessToken({ operatorId: 'op1', sessionId: 's1' });
+    expect(await clinic.verifyAccessToken(platformToken)).toBeNull();
+    expect(await clinic.verifyMfaToken(await platform.createMfaToken('op1'))).toBeNull();
   });
 });
 

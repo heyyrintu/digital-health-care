@@ -173,3 +173,74 @@ describe('staff invite calls', () => {
     expect(JSON.parse(init.body as string)).toEqual({ challengeId, code: '123456' });
   });
 });
+
+describe('platform console calls', () => {
+  const expected = {
+    registrationNumber: 'TEST-12345',
+    council: 'Test Medical Council',
+    qualifications: 'MBBS',
+    submittedAt: '2026-10-06T04:30:00.000Z',
+  };
+
+  it('posts the verification ticket for a profile and parses the result', async () => {
+    const fetch = vi.fn(async () =>
+      json(200, {
+        profileId: '6a0c8a8e-4b1a-4c6f-9d43-2f1f5f6c7a10',
+        organisation: {
+          id: '0b5b4a36-3c7e-4bb8-9a8e-1e8a7f0e2c11',
+          slug: 'clinic-a',
+          name: 'Clinic A',
+        },
+        displayName: 'Dr Synthetic',
+        identifier: 'do****@clinic-a.test',
+        registrationNumber: 'TEST-12345',
+        council: 'Test Medical Council',
+        qualifications: 'MBBS',
+        specialty: null,
+        verification: 'verified',
+        submittedAt: '2026-10-06T04:30:00.000Z',
+        verifiedAt: '2026-10-06T05:00:00.000Z',
+        verifiedBy: 'ops@platform.test (SUP-1)',
+        alreadyVerified: false,
+      }),
+    );
+    const client = createApiClient({
+      baseUrl: 'https://api.test/v1',
+      getAccessToken: () => 'platform-token',
+      fetch,
+    });
+    await expect(
+      client.platform.verifyDoctor('6a0c8a8e-4b1a-4c6f-9d43-2f1f5f6c7a10', {
+        ticket: 'SUP-1',
+        expected,
+      }),
+    ).resolves.toMatchObject({ verification: 'verified' });
+    const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe(
+      'https://api.test/v1/platform/doctors/6a0c8a8e-4b1a-4c6f-9d43-2f1f5f6c7a10/verify',
+    );
+    expect((init.headers as Record<string, string>).authorization).toBe('Bearer platform-token');
+    expect(JSON.parse(init.body as string)).toEqual({ ticket: 'SUP-1', expected });
+  });
+
+  it('asks for the next page of the verification queue with the cursor', async () => {
+    const fetch = vi.fn(async () => json(200, { data: [], hasMore: false, nextCursor: null }));
+    const client = createApiClient({ baseUrl: 'https://api.test/v1', fetch });
+    await client.platform.doctors('pending', 'abc');
+    const [url] = fetch.mock.calls[0] as unknown as [string];
+    expect(url).toBe('https://api.test/v1/platform/doctors?status=pending&cursor=abc');
+  });
+
+  it('asks for usage over a range', async () => {
+    const fetch = vi.fn(async () => json(200, { from: '2026-10-01', to: '2026-10-07', data: [] }));
+    const client = createApiClient({
+      baseUrl: 'https://api.test/v1',
+      getAccessToken: () => 'platform-token',
+      fetch,
+    });
+    await client.platform.usage({ from: '2026-10-01', to: '2026-10-07' });
+    const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('https://api.test/v1/platform/usage?from=2026-10-01&to=2026-10-07');
+    expect((init.headers as Record<string, string>).authorization).toBe('Bearer platform-token');
+  });
+});

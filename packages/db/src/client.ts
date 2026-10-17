@@ -50,3 +50,39 @@ export async function withAuth<T>(db: Db, fn: (tx: Tx) => Promise<T>): Promise<T
     return fn(tx);
   });
 }
+
+/**
+ * Runs `fn` as the `dhc_platform` role (platform console, ADR 0016): platform operators,
+ * their sessions and platform-level audit inserts. It has no grant on any tenant table;
+ * what it may know about organisations comes only from the `platform_*` functions, which
+ * return names, counts and doctors' registration details, never patient or clinical rows.
+ */
+export async function withPlatform<T>(db: Db, fn: (tx: Tx) => Promise<T>): Promise<T> {
+  return db.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe('SET LOCAL ROLE dhc_platform');
+    return fn(tx);
+  });
+}
+
+/**
+ * Onboarding (PRD §9.1 steps 1–2) in one transaction: creates the organisation as
+ * `dhc_platform` (through `platform_create_organisation`), then runs `fn` as `dhc_app`
+ * inside the new organisation, exactly as `withTenant` would. Returns null, changing
+ * nothing, when the slug is taken.
+ */
+export async function withNewOrganisation<T>(
+  db: Db,
+  organisation: { slug: string; name: string; now: Date },
+  fn: (tx: Tx, organisationId: string) => Promise<T>,
+): Promise<T | null> {
+  return db.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe('SET LOCAL ROLE dhc_platform');
+    const [row] = await tx.$queryRaw<{ id: string | null }[]>`
+      SELECT platform_create_organisation(${organisation.slug}, ${organisation.name},
+                                          ${organisation.now}) AS id`;
+    if (!row?.id) return null;
+    await tx.$executeRawUnsafe('SET LOCAL ROLE dhc_app');
+    await tx.$executeRaw`SELECT set_config('app.organisation_id', ${row.id}, true)`;
+    return fn(tx, row.id);
+  });
+}

@@ -1118,6 +1118,10 @@ model DoctorProfile {
   verifiedAt         DateTime?          @map("verified_at") @db.Timestamptz(3)
   /// The platform operator who checked the registration, and the support ticket.
   verifiedBy         String?            @map("verified_by")
+  /// When the profile last went to the platform team for verification: when registration
+  /// details were first saved, and again whenever the registration number or council
+  /// changes. Null until then (a PIN can be set first).
+  submittedAt        DateTime?          @map("submitted_at") @db.Timestamptz(3)
   /// scrypt hash of the PIN that approves each signature on the web.
   signingPinHash     String?            @map("signing_pin_hash")
   pinFailedCount     Int                @default(0) @map("pin_failed_count")
@@ -1368,4 +1372,50 @@ model IdempotencyKey {
   @@id([organisationId, userId, key])
   @@index([createdAt])
   @@map("idempotency_keys")
+}
+
+/// Platform staff (PRD §3.2: organisations, doctor verification, usage and system health
+/// only). Not a clinic user: no memberships, no clinical access. Created and disabled only
+/// by the support command (docs/runbooks/platform-operators.md), never over HTTP. Reachable
+/// only as the dhc_platform role (ADR 0016).
+model PlatformOperator {
+  id               String     @id @default(uuid()) @db.Uuid
+  email            String     @unique
+  displayName      String     @map("display_name")
+  status           UserStatus @default(active)
+  passwordHash     String     @map("password_hash")
+  /// AES-256-GCM encrypted TOTP secret, confirmed when the operator was created.
+  mfaSecret        String     @map("mfa_secret")
+  /// Last accepted TOTP time step; a code is never accepted twice.
+  mfaLastUsedStep  Int?       @map("mfa_last_used_step")
+  failedLoginCount Int        @default(0) @map("failed_login_count")
+  lockedUntil      DateTime?  @map("locked_until") @db.Timestamptz(3)
+  lastLoginAt      DateTime?  @map("last_login_at") @db.Timestamptz(3)
+  createdAt        DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  sessions PlatformSession[]
+
+  @@map("platform_operators")
+}
+
+/// A platform console sign-in. Like a staff session, but for an operator and never tied
+/// to an organisation. Tokens are stored as SHA-256 hashes only.
+model PlatformSession {
+  id                       String    @id @default(uuid()) @db.Uuid
+  operatorId               String    @map("operator_id") @db.Uuid
+  refreshTokenHash         String    @unique @map("refresh_token_hash")
+  previousRefreshTokenHash String?   @unique @map("previous_refresh_token_hash")
+  userAgent                String?   @map("user_agent")
+  ip                       String?
+  expiresAt                DateTime  @map("expires_at") @db.Timestamptz(3)
+  lastUsedAt               DateTime  @default(now()) @map("last_used_at") @db.Timestamptz(3)
+  revokedAt                DateTime? @map("revoked_at") @db.Timestamptz(3)
+  revokedReason            String?   @map("revoked_reason")
+  createdAt                DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  operator PlatformOperator @relation(fields: [operatorId], references: [id])
+
+  @@index([operatorId])
+  @@map("platform_sessions")
 }

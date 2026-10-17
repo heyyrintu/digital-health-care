@@ -70,7 +70,7 @@ describe('buildOpenApiDocument', () => {
   it('marks only sign-in, health, waiting-room screen and QR check endpoints as public', () => {
     const publicOps = Object.entries(doc.paths).flatMap(([path, ops]) =>
       Object.entries(ops)
-        .filter(([, op]) => Array.isArray((op as { security?: unknown[] }).security))
+        .filter(([, op]) => (op as { security?: unknown[] }).security?.length === 0)
         .map(([method]) => `${method.toUpperCase()} ${path}`),
     );
     expect(publicOps.sort()).toEqual([
@@ -84,7 +84,29 @@ describe('buildOpenApiDocument', () => {
       'POST /auth/otp/verify',
       'POST /auth/refresh',
       'POST /display/board',
+      'POST /platform/auth/login',
+      'POST /platform/auth/mfa/verify',
+      'POST /platform/auth/refresh',
       'POST /verify',
+    ]);
+  });
+
+  it('puts every other platform endpoint behind the platform token, and nothing else', () => {
+    const platformOps = Object.entries(doc.paths).flatMap(([path, ops]) =>
+      Object.entries(ops)
+        .filter(([, op]) =>
+          JSON.stringify((op as { security?: unknown }).security ?? []).includes('platformAuth'),
+        )
+        .map(([method]) => `${method.toUpperCase()} ${path}`),
+    );
+    expect(platformOps.sort()).toEqual([
+      'GET /platform/doctors',
+      'GET /platform/me',
+      'GET /platform/organisations',
+      'GET /platform/usage',
+      'POST /platform/auth/logout',
+      'POST /platform/doctors/{profileId}/verify',
+      'POST /platform/organisations',
     ]);
   });
 

@@ -1,7 +1,7 @@
 import { createDb, type Db } from '@dhc/db';
 import { createHmac, hkdfSync } from 'node:crypto';
 import { FieldCipher } from './auth/field-cipher';
-import { TokenService } from './auth/tokens';
+import { PlatformTokenService, TokenService } from './auth/tokens';
 import type { Config } from './config';
 import { LiveEvents } from './live';
 import { LocalFileStore, type FileStore } from './files';
@@ -15,6 +15,8 @@ export interface OtpSender {
 export interface Services {
   db: Db;
   tokens: TokenService;
+  /** Platform console tokens: their own audience and key (ADR 0016). */
+  platformTokens: PlatformTokenService;
   cipher: FieldCipher;
   otpSender: OtpSender;
   /** HMAC for OTP codes at rest, keyed separately from JWT signing. */
@@ -66,6 +68,7 @@ export function createServices(
   return {
     db: createDb(DATABASE_URL),
     tokens: new TokenService(JWT_SECRET),
+    platformTokens: new PlatformTokenService(JWT_SECRET),
     cipher: new FieldCipher(FIELD_ENCRYPTION_KEY),
     otpSender,
     hashOtp: (challengeId, code) =>
