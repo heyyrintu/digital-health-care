@@ -6,7 +6,8 @@ import { normaliseIndianMobile } from './phone';
 import { PlatformTokenService, TokenService, hashToken, newRefreshToken } from './tokens';
 import { base32Decode, base32Encode, otpauthUri, totpAt, verifyTotp } from './totp';
 
-describe('password hashing', () => {
+// scrypt at production cost takes about a second per hash on a busy CI runner.
+describe('password hashing', { timeout: 20_000 }, () => {
   it('verifies the right password and rejects the wrong one', async () => {
     const hash = await hashPassword('correct horse battery staple');
     expect(hash.startsWith('scrypt$32768$8$3$')).toBe(true);
