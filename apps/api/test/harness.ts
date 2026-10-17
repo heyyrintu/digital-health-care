@@ -26,7 +26,7 @@ export class Clock {
 }
 
 export function createHarness(
-  options: { platformAllowlist?: IpAllowlist; queues?: QueueProbe } = {},
+  options: { platformAllowlist?: IpAllowlist; queues?: QueueProbe; uploadRateLimit?: number } = {},
 ) {
   const url = process.env.TEST_DATABASE_URL!;
   const clock = new Clock();
@@ -54,6 +54,8 @@ export function createHarness(
     },
     services,
     signInRateLimit: 1000,
+    // Suites upload far more than a person would; the limit has its own test.
+    uploadRateLimit: options.uploadRateLimit ?? 1000,
     platformAllowlist: options.platformAllowlist ?? IpAllowlist.any(),
   });
   /** Owner connection for arranging data and inspecting results (bypasses RLS). */
@@ -65,7 +67,7 @@ export type Harness = ReturnType<typeof createHarness>;
 
 export async function resetDatabase(owner: Db) {
   await owner.$executeRawUnsafe(
-    'TRUNCATE platform_sessions, platform_operators, audit_logs, patient_merge_requests, medicine_requests, payments, bill_items, bills, price_list_items, receipt_settings, prescription_verifications, doctor_profiles, safety_alerts, prescription_templates, prescription_items, prescriptions, medicine_ingredients, medicines, drug_condition_rules, drug_cross_sensitivities, drug_interactions, drug_database, drug_molecules, consultations, vitals, allergies, medical_conditions, current_medications, display_screens, appointment_status_history, appointments, availability_exceptions, availability_versions, booking_rules, consultation_types, clinics, staff_invites, sessions, otp_challenges, memberships, patient_tags, tags, uhid_settings, patients, users, organisations CASCADE',
+    'TRUNCATE platform_sessions, platform_operators, audit_logs, test_results, test_orders, test_catalogue_items, patient_merge_requests, medicine_requests, payments, bill_items, bills, price_list_items, receipt_settings, prescription_verifications, doctor_profiles, safety_alerts, prescription_templates, prescription_items, prescriptions, medicine_ingredients, medicines, drug_condition_rules, drug_cross_sensitivities, drug_interactions, drug_database, drug_molecules, consultations, vitals, allergies, medical_conditions, current_medications, display_screens, appointment_status_history, appointments, availability_exceptions, availability_versions, booking_rules, consultation_types, clinics, staff_invites, sessions, otp_challenges, memberships, patient_tags, tags, uhid_settings, patients, users, organisations CASCADE',
   );
 }
 

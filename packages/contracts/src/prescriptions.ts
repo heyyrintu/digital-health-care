@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { MAX_TEST_ORDERS, TestOrder, TestOrderLine } from './orders';
 import { Language } from './patients';
 
 export const MedicineRoute = z.enum([
@@ -166,6 +167,11 @@ export const Prescription = z.object({
   voidReason: z.string().nullable(),
   language: Language,
   items: z.array(PrescriptionItem),
+  /**
+   * The visit's tests (PRD §7.1), printed under "Prescribed tests": lines added on this
+   * draft, and any a signed earlier version already ordered (locked).
+   */
+  tests: z.array(TestOrder),
   /** Increases on every save; send it back so a stale tab cannot overwrite newer lines. */
   revision: z.number().int().positive(),
   updatedAt: z.iso.datetime(),
@@ -210,6 +216,12 @@ export const SignPrescriptionBody = z.object({
   /** The revision on screen, so the doctor signs exactly what they reviewed. */
   revision: z.number().int().positive(),
   pin: Pin,
+  /**
+   * Every draft test shown to the doctor (tests already ordered may be listed too). A draft
+   * test left out, or an ID that is not the visit's, is 409 `tests: review`, so a client
+   * that does not show tests cannot sign them. Omitted: no tests declared.
+   */
+  testIds: z.array(z.uuid()).max(MAX_TEST_ORDERS).optional(),
 });
 export type SignPrescriptionBody = z.infer<typeof SignPrescriptionBody>;
 
@@ -291,12 +303,22 @@ export const PrescriptionCheck = z.object({
     gender: z.enum(['female', 'male', 'other']).nullable(),
   }),
   medicines: z.array(z.object({ name: z.string(), generic: z.string().nullable() })),
+  /**
+   * The tests this version printed (ordered by it or an earlier version of the visit), as
+   * on the paper, in the prescription's language: "MRI knee, right". No notes or results.
+   */
+  tests: z.array(z.object({ label: z.string() })),
 });
 export type PrescriptionCheck = z.infer<typeof PrescriptionCheck>;
 
 export const SavePrescriptionBody = z.object({
   language: Language,
   items: z.array(PrescriptionItem).max(30),
+  /**
+   * The visit's tests, the whole list (it replaces the draft's). Tests a signed version
+   * already ordered must stay, unchanged. Leave out to keep the tests as they are.
+   */
+  tests: z.array(TestOrderLine).max(MAX_TEST_ORDERS).optional(),
   /** The revision this edit started from; 0 for the first save. */
   revision: z.number().int().min(0),
 });

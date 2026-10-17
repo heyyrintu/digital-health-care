@@ -41,6 +41,36 @@ describe('createApiClient', () => {
     expect((init.headers as Record<string, string>)['idempotency-key']).toBe('key-1');
   });
 
+  it('uploads a result as the raw file, typed by the file', async () => {
+    const order = {
+      id: '00000000-0000-4000-8000-000000000001',
+      catalogueItemId: null,
+      kind: 'mri',
+      name: 'MRI',
+      region: 'Knee',
+      side: 'right',
+      views: [],
+      notes: null,
+      status: 'result_uploaded',
+      orderedAt: '2026-10-06T10:00:00.000Z',
+      resultUploadedAt: '2026-10-07T10:00:00.000Z',
+      reviewedAt: null,
+      results: [],
+    };
+    const fetch = vi.fn(async () => json(201, order));
+    const client = createApiClient({ baseUrl: 'https://api.test/v1', fetch });
+    const file = new Blob(['%PDF-1.7'], { type: 'application/pdf' });
+
+    await expect(client.uploadTestResult(order.id, file)).resolves.toMatchObject({
+      status: 'result_uploaded',
+    });
+    const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe(`https://api.test/v1/test-orders/${order.id}/results`);
+    expect(init.method).toBe('POST');
+    expect(init.body).toBe(file);
+    expect((init.headers as Record<string, string>)['content-type']).toBe('application/pdf');
+  });
+
   it('turns the standard error shape into an ApiError', async () => {
     const fetch = vi.fn(async () =>
       json(409, {

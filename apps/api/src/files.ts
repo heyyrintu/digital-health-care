@@ -10,6 +10,11 @@ export interface FileStore {
   /** Stores new content under `key`. A key is written once and never overwritten. */
   put(key: string, data: Buffer): Promise<void>;
   get(key: string): Promise<Buffer>;
+  /**
+   * Removes a file whose record never committed (a rolled-back upload). Missing keys are
+   * fine. Never used on a committed record's file.
+   */
+  delete(key: string): Promise<void>;
 }
 
 const KEY = /^[a-z0-9][a-z0-9_-]*(\/[a-z0-9][a-z0-9_.-]*)*$/;
@@ -46,5 +51,11 @@ export class LocalFileStore implements FileStore {
 
   async get(key: string): Promise<Buffer> {
     return readFile(this.path(key));
+  }
+
+  async delete(key: string): Promise<void> {
+    await unlink(this.path(key)).catch((error: NodeJS.ErrnoException) => {
+      if (error.code !== 'ENOENT') throw error;
+    });
   }
 }

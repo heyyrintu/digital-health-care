@@ -98,6 +98,9 @@ importers:
       '@dhc/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@dhc/pdf-text':
+        specifier: workspace:*
+        version: link:../../packages/pdf-text
       '@types/node':
         specifier: ^22.20.5
         version: 22.20.5
@@ -125,6 +128,9 @@ importers:
       '@dhc/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@dhc/pdf-text':
+        specifier: workspace:*
+        version: link:../../packages/pdf-text
       '@playwright/test':
         specifier: 1.56.1
         version: 1.56.1
@@ -399,6 +405,15 @@ importers:
       '@dhc/config':
         specifier: workspace:*
         version: link:../config
+
+  packages/pdf-text:
+    devDependencies:
+      '@dhc/config':
+        specifier: workspace:*
+        version: link:../config
+      '@types/node':
+        specifier: ^22.20.5
+        version: 22.20.5
 
   packages/safety:
     dependencies:

@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { AppError } from '../../errors';
 import { writeAudit } from '../audit/write';
 import { lockVisit, NOTE_STATUSES } from '../clinical/service';
+import { orderOut, type OrderRow } from '../orders/lines';
 
 export interface Actor {
   userId: string;
@@ -51,10 +52,12 @@ export function currentPrescription(
 
 export const verificationUrl = (webBaseUrl: string, code: string) => `${webBaseUrl}/verify/${code}`;
 
+/** The prescription with its safety check and the visit's tests (`visitOrders`). */
 export function prescriptionOut(
   row: PrescriptionRow,
   safety: SafetySummary,
   webBaseUrl: string,
+  tests: OrderRow[],
 ): Prescription {
   return {
     id: row.id,
@@ -72,6 +75,7 @@ export function prescriptionOut(
     voidReason: row.voidReason,
     language: row.language,
     items: row.items.map(itemOut),
+    tests: tests.map((t) => orderOut(t)),
     revision: row.revision,
     updatedAt: row.updatedAt.toISOString(),
     safety,

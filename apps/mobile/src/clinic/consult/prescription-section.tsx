@@ -31,6 +31,7 @@ import {
   lineFromMedicine,
   previewRemarks,
   signBlocker,
+  testRows,
   toSaveBody,
   type DraftLine,
 } from './rx-draft';
@@ -160,9 +161,12 @@ export function PrescriptionSection({
   }
 
   const safety = saved?.safety ?? null;
+  // The visit's tests are written on the web; here they are shown, and signed with the rest.
+  const tests = testRows(saved?.tests ?? [], language);
   const blocker = signBlocker({
     dirty,
     lines: lines.length,
+    tests: tests.length,
     openBlocks: safety?.openBlocks ?? 0,
     openWarnings: safety?.openWarnings ?? 0,
     missing: rx.signingMissing,
@@ -206,6 +210,21 @@ export function PrescriptionSection({
           onRemove={() => change(lines.filter((_, j) => j !== i))}
         />
       ))}
+      {tests.length > 0 && (
+        <View style={{ gap: theme.spacing[1] }} testID="rx-tests">
+          <Text variant="label">{t('orders.title')}</Text>
+          {tests.map((row, i) => (
+            <View key={row.id}>
+              <Text>
+                {`${i + 1}. ${row.label}`}
+                {row.ordered ? ` · ${t('orders.locked')}` : ''}
+              </Text>
+              {row.notes && <Text variant="muted">{row.notes}</Text>}
+            </View>
+          ))}
+          {editable && <Text variant="muted">{t('mobile.clinic.testsOnWeb')}</Text>}
+        </View>
+      )}
       {editable && lines.length < 30 && (
         <MedicineSearch disabled={!canType} onPick={(line) => change([...lines, line])} />
       )}
@@ -267,6 +286,7 @@ export function PrescriptionSection({
         <SignPanel
           appointmentId={appointmentId}
           revision={saved.revision}
+          testIds={tests.map((row) => row.id)}
           blocker={blocker}
           missing={rx.signingMissing}
           onStage={setSigning}
@@ -574,6 +594,7 @@ function AlertRow({
 function SignPanel({
   appointmentId,
   revision,
+  testIds,
   blocker,
   missing,
   onStage,
@@ -581,6 +602,8 @@ function SignPanel({
 }: {
   appointmentId: string;
   revision: number;
+  /** The tests shown above: the server signs only tests the doctor was shown. */
+  testIds: string[];
   blocker: ReturnType<typeof signBlocker>;
   missing: PrescriptionView['signingMissing'];
   onStage: (signing: boolean) => void;
@@ -618,7 +641,7 @@ function SignPanel({
     try {
       const signed = await api.request('POST', `/appointments/${appointmentId}/prescription/sign`, {
         schema: Prescription,
-        body: { revision, pin },
+        body: { revision, pin, testIds },
       });
       setStage('idle');
       setPin('');

@@ -28,7 +28,7 @@ Patient identities and contact details; clinical records (notes, diagnoses, pres
 | T9 | AI vendor retains or trains on data | I | DPAs with no-training clauses; approved regions; audio auto-deletion; minimum data sent |
 | T10 | Prompt injection via uploaded documents into Ask AI | T, I | Ask AI read-only; answers cite sources; no tool access to write; output never auto-applied |
 | T11 | Messages leak diagnosis on lock screens | I | Templates exclude diagnoses and medicine names; links require authentication |
-| T12 | Malicious file upload | T | Type and size checks; malware scan before visibility |
+| T12 | Malicious file upload | T | Type and size checks against the clinic's settings (`checkUpload`) and the file's first bytes, which must match the declared type (PDF, JPEG, PNG, HEIC); authentication and the role check before the body is read, then a 25 MB ceiling; one stricter per-address rate limit shared by every upload route, counted before authentication; a file whose record fails to commit is removed; a body that is not a file is 415; at most 10 results per test; files stored by a key with no patient data, written once, checked against their SHA-256 on every read; served with their stored type, `nosniff`, a sandboxing CSP and `no-store`, never to the front desk. Built for test results (API guide §3t). Still to come with the files module: malware scan before visibility |
 | T13 | Lost or stolen clinic device | I | Idle lock, biometric unlock, remote revoke, encrypted local cache with limited scope |
 | T14 | Insider misuse (staff browsing records) | I, R | Role-based access, chart model, audit of record views, periodic access review |
 | T15 | API abuse / denial of service | D | WAF, rate limits, autoscaling, queue back-pressure |
@@ -43,5 +43,6 @@ Patient identities and contact details; clinical records (notes, diagnoses, pres
 | T20 | Invite link intercepted | S | Link alone is not enough for an existing account (password + current authenticator); for a new account the admin sees acceptance in the invite list and audit log and can revoke; short expiry |
 
 ## Open items
+- [ ] Malware scanning of uploaded files (test results today) before they become visible (T12).
 - [ ] Pen-test scope agreed (web, both apps, API, tenant isolation, payment and webhook flows).
 - [ ] Vendor security reviews for DSC, AI and WhatsApp providers.

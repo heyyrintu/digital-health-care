@@ -1,3 +1,4 @@
+import { pdfText } from '@dhc/pdf-text';
 import { describe, expect, it } from 'vitest';
 import {
   formatDate,
@@ -46,6 +47,7 @@ const doc = (over: Partial<RxDocument> = {}): RxDocument => ({
       remarks: 'Take 1 tablet twice a day for 5 days.',
     },
   ],
+  tests: [],
   testsAdvised: '',
   advice: '',
   followUpDate: null,
@@ -111,6 +113,53 @@ describe('renderPrescriptionPdf', { timeout: 30_000 }, () => {
     const item = doc().items[0]!;
     const pdf = await renderPrescriptionPdf(doc({ items: Array.from({ length: 30 }, () => item) }));
     expect(pages(pdf)).toBeGreaterThan(1);
+  });
+
+  it('prints ordered tests under "Prescribed tests", with their notes, before the free text', async () => {
+    const text = pdfText(
+      await renderPrescriptionPdf(
+        doc({
+          tests: [
+            { label: 'MRI knee, right', notes: 'Rule out ACL tear' },
+            { label: 'X-ray knee, both sides (AP, Lateral)', notes: null },
+          ],
+          testsAdvised: 'Repeat CBC in 2 weeks',
+        }),
+      ),
+    );
+    expect(text).toContain(
+      'Prescribed tests 1. MRI knee, right Rule out ACL tear 2. X-ray knee, both sides (AP, Lateral) Repeat CBC in 2 weeks',
+    );
+    // Medicines still print first, and no tests means no heading.
+    expect(text.indexOf('Rx Medicines')).toBeLessThan(text.indexOf('Prescribed tests'));
+    expect(pdfText(await renderPrescriptionPdf(doc()))).not.toContain('Prescribed tests');
+    // A tests-only prescription has no medicines heading.
+    const testsOnly = pdfText(
+      await renderPrescriptionPdf(doc({ items: [], tests: [{ label: 'CBC', notes: null }] })),
+    );
+    expect(testsOnly).not.toContain('Medicines');
+    expect(testsOnly).toContain('Prescribed tests 1. CBC');
+  });
+
+  // Hindi text is shaped (glyphs reordered and joined), so its text cannot be read back
+  // from the PDF reliably; the Hindi rendering is checked by its bytes and page count only.
+  it('renders ordered tests in Hindi and with only tests (bytes and pages, not text)', async () => {
+    const tests = [
+      { label: 'MRI knee, right', notes: 'Rule out ACL tear' },
+      { label: 'X-ray knee, both sides (AP, Lateral)', notes: null },
+    ];
+    const plain = await renderPrescriptionPdf(doc());
+    const ordered = await renderPrescriptionPdf(doc({ tests }));
+    const hindi = await renderPrescriptionPdf(
+      doc({ language: 'hi', tests: [{ label: 'MRI knee, दायाँ', notes: null }] }),
+    );
+    const testsOnly = await renderPrescriptionPdf(doc({ items: [], tests }));
+    for (const pdf of [ordered, hindi, testsOnly]) {
+      expect(pdf.subarray(0, 5).toString()).toBe('%PDF-');
+      expect(pages(pdf)).toBe(1);
+    }
+    expect(ordered.equals(plain)).toBe(false);
+    expect(ordered.equals(await renderPrescriptionPdf(doc({ tests })))).toBe(true);
   });
 
   it('renders an unsigned preview without a QR', async () => {
