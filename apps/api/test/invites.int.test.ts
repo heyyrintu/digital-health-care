@@ -176,6 +176,59 @@ describe('clinic admin', () => {
     ).toBe(1);
   });
 
+  it('does not reopen a membership whose earlier invite was accepted during a re-invite', async () => {
+    const first = await invite(adminA);
+    const user = await h.owner.user.findUniqueOrThrow({
+      where: { email: 'new.doctor@clinic-a.test' },
+    });
+    const key = { organisationId: clinics.a.org.id, userId: user.id, role: 'doctor' as const };
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    let locked!: () => void;
+    const rowLocked = new Promise<void>((resolve) => (locked = resolve));
+    // The earlier invite's completion holds the membership row...
+    const completion = h.owner.$transaction(
+      async (tx) => {
+        await tx.$queryRaw`SELECT id FROM memberships
+          WHERE organisation_id = ${key.organisationId}::uuid AND user_id = ${key.userId}::uuid
+            AND role = 'doctor' FOR UPDATE`;
+        locked();
+        await held;
+        await tx.membership.updateMany({ where: key, data: { status: 'active' } });
+        await tx.staffInvite.updateMany({
+          where: { id: first.created.id },
+          data: { acceptedAt: h.clock.now() },
+        });
+      },
+      { timeout: 10_000 },
+    );
+    await rowLocked;
+    // ...while a re-invite reads it as invited and waits at its update.
+    const reinvite = withTenant(h.services.db, clinics.a.org.id, (tx) =>
+      issueJoinInvite(tx, { id: 'req_test', ip: '127.0.0.1', headers: {} }, h.services, {
+        ...key,
+        user,
+        now: h.clock.now(),
+        createdByUserId: clinics.a.admin.userId,
+        actorUserId: clinics.a.admin.userId,
+      }),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    release();
+    await completion;
+    await expect(reinvite).rejects.toMatchObject({
+      statusCode: 409,
+      fields: { identifier: 'exists' },
+    });
+    const membership = await h.owner.membership.findFirstOrThrow({ where: key });
+    expect(membership.status).toBe('active');
+    expect(
+      await h.owner.staffInvite.count({
+        where: { userId: user.id, acceptedAt: null, revokedAt: null },
+      }),
+    ).toBe(0);
+  });
+
   it('cannot see or revoke another organisation’s invites', async () => {
     const adminB = await staffLogin(h, 'clinic-b', clinics.b.admin);
     const { created } = await invite(adminA);

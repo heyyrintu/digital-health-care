@@ -17,18 +17,21 @@ ALTER TABLE "doctor_profiles" ADD COLUMN "submitted_at" TIMESTAMPTZ(3);
 -- true) if any, else the first save (when the details were first filled in), else
 -- created_at. A changed registration on a still-pending profile left no mark before this
 -- migration, so for those the first save is the best estimate.
-UPDATE doctor_profiles dp
-SET submitted_at = coalesce(
-  (SELECT max(al.at) FROM audit_logs al
-    WHERE al.action = 'doctor.profile_saved' AND al.entity_type = 'doctor_profile'
-      AND al.entity_id = dp.id::text AND al.organisation_id = dp.organisation_id
-      AND al.metadata ->> 'reverify' = 'true'),
-  (SELECT min(al.at) FROM audit_logs al
-    WHERE al.action = 'doctor.profile_saved' AND al.entity_type = 'doctor_profile'
-      AND al.entity_id = dp.id::text AND al.organisation_id = dp.organisation_id),
-  dp.created_at
+-- One pass over audit_logs, grouped by profile, rather than a lookup per profile.
+WITH saves AS (
+  SELECT organisation_id, entity_id,
+         max(at) FILTER (WHERE metadata ->> 'reverify' = 'true') AS last_reverify,
+         min(at) AS first_save
+  FROM audit_logs
+  WHERE action = 'doctor.profile_saved' AND entity_type = 'doctor_profile'
+  GROUP BY organisation_id, entity_id
 )
-WHERE dp.registration_number IS NOT NULL;
+UPDATE doctor_profiles dp
+SET submitted_at = coalesce(saves.last_reverify, saves.first_save, dp.created_at)
+FROM doctor_profiles target
+LEFT JOIN saves ON saves.entity_id = target.id::text
+               AND saves.organisation_id = target.organisation_id
+WHERE dp.id = target.id AND dp.registration_number IS NOT NULL;
 
 -- CreateTable
 CREATE TABLE "platform_operators" (
