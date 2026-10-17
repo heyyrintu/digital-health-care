@@ -4,6 +4,7 @@ import {
   type CreatePlatformOrganisationBody,
   type CreatedPlatformOrganisation,
   type PlatformDoctor,
+  type PlatformHealth,
   type PlatformMeResponse,
   type PlatformOrganisation,
   type PlatformUsageQuery,
@@ -75,6 +76,28 @@ interface UsageRow {
   payments: number;
   payments_paise: bigint | number;
 }
+
+/** How long system health waits for the database before calling it down. */
+const DATABASE_CHECK_TIMEOUT_MS = 2_000;
+
+/**
+ * System health's database limits: a connection within 1 s, the whole transaction within
+ * 2 s (then Prisma rolls it back and returns the connection), each statement within 1 s
+ * (so the rollback is not stuck behind a query that is still running).
+ */
+const HEALTH_TRANSACTION = { maxWait: 1_000, timeout: DATABASE_CHECK_TIMEOUT_MS };
+const HEALTH_STATEMENT_TIMEOUT_MS = 1_000;
+
+/** `withPlatform` within system health's limits. */
+const withHealthLimits = <T>(db: Services['db'], fn: (tx: Tx) => Promise<T>) =>
+  withPlatform(
+    db,
+    async (tx) => {
+      await tx.$executeRawUnsafe(`SET LOCAL statement_timeout = ${HEALTH_STATEMENT_TIMEOUT_MS}`);
+      return fn(tx);
+    },
+    HEALTH_TRANSACTION,
+  );
 
 const PROFILE_NOT_FOUND = () =>
   new AppError(404, 'NOT_FOUND', 'No active doctor’s profile with that ID.');
@@ -390,6 +413,75 @@ export class PlatformService {
     };
   }
 
+  /**
+   * System health (PRD §9.3): this API server, the database as `dhc_platform` sees it, and
+   * the background queues' counts. Redis that is down or slow is reported as `down`. So is
+   * a database that fails or is slow after the sign-in check passed; a database that is
+   * fully down already fails that check (`authenticatePlatform` reads the session), and the
+   * request gets the console's usual error instead.
+   *
+   * Each view is audited like the other reads, in a transaction with the same short limits
+   * as the check, so a stuck database never holds the request or a pool connection for
+   * long. With the database answering, a failed audit entry fails the request (500), as for
+   * the other console reads, within those limits. With the database reported down, the
+   * report is returned anyway (it holds no organisation's data) and the possible miss is
+   * logged.
+   */
+  async health(
+    request: FastifyRequest,
+    claims: PlatformAccessClaims,
+    version: string,
+  ): Promise<PlatformHealth> {
+    const [database, queues] = await Promise.all([this.databaseHealth(), this.s.queues.check()]);
+    // When the answer was complete, not when the checks began.
+    const checkedAt = this.s.now();
+    const audit = () =>
+      withHealthLimits(this.s.db, (tx) =>
+        auditOperator(tx, request, 'platform.health.viewed', claims.operatorId, {
+          database: database.status,
+          queues: queues.status,
+        }),
+      );
+    if (database.status === 'ok') await audit();
+    else {
+      try {
+        await audit();
+      } catch (error) {
+        request.log.warn(
+          { err: error },
+          'System health viewed with the database down: the view may not have been audited',
+        );
+      }
+    }
+    return {
+      checkedAt: checkedAt.toISOString(),
+      api: { version, uptimeSeconds: Math.floor(process.uptime()) },
+      database,
+      queues,
+    };
+  }
+
+  /** A trivial query as `dhc_platform`, timed, and the last migration applied. */
+  private async databaseHealth(): Promise<PlatformHealth['database']> {
+    try {
+      // The transaction's own limits release its connection; the race only makes sure the
+      // page has its answer within DATABASE_CHECK_TIMEOUT_MS whatever happens.
+      return await withinTime(
+        withHealthLimits(this.s.db, async (tx) => {
+          const started = performance.now();
+          await tx.$queryRaw`SELECT 1`;
+          const latencyMs = Math.round(performance.now() - started);
+          const [row] = await tx.$queryRaw<{ name: string | null }[]>`
+            SELECT platform_latest_migration() AS name`;
+          return { status: 'ok' as const, latencyMs, latestMigration: row?.name ?? null };
+        }),
+        DATABASE_CHECK_TIMEOUT_MS,
+      );
+    } catch {
+      return { status: 'down', latencyMs: null, latestMigration: null };
+    }
+  }
+
   private async doctorRows(
     tx: Tx,
     by: { status: 'pending' | 'verified'; after: QueueCursor | null } | { profileId: string },
@@ -413,6 +505,21 @@ export class PlatformService {
     );
     if (!operator) throw new AppError(401, 'UNAUTHENTICATED', 'Please sign in again.');
     return operator;
+  }
+}
+
+/** `promise`, or a rejection once `ms` have passed without an answer. */
+async function withinTime<T>(promise: Promise<T>, ms: number): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  const late = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`No answer within ${ms} ms`)), ms);
+  });
+  // A late answer, or a late failure, is dropped: the caller has moved on.
+  promise.catch(() => {});
+  try {
+    return await Promise.race([promise, late]);
+  } finally {
+    clearTimeout(timer);
   }
 }
 

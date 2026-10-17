@@ -1,17 +1,27 @@
 import { ApiError } from '@dhc/api-client';
-import type { PlatformDoctor } from '@dhc/contracts';
+import { QUEUE_NAMES, type PlatformDoctor, type PlatformHealth } from '@dhc/contracts';
+import { messages } from '@dhc/i18n';
 import { describe, expect, it } from 'vitest';
 import {
   appendPage,
   countOrDash,
   defaultUsageRange,
+  formatCheckedAt,
+  healthErrorKey,
+  healthStatusKey,
+  healthTone,
   isTicket,
   lockedOut,
   mfaExpired,
   platformErrorKey,
+  queueLabelKey,
+  queuesNoteKey,
+  queuesWithFailures,
   retryableRefresh,
+  shareInFlight,
   sessionEndReason,
   slugTaken,
+  uptimeMessage,
   usageRangeProblem,
   verifiable,
   verifyBody,
@@ -185,5 +195,115 @@ describe('usage range', () => {
     expect(countOrDash(null, 'en')).toBe('—');
     expect(countOrDash(1234, 'en')).toBe('1,234');
     expect(countOrDash(0, 'hi')).toBe('0');
+  });
+});
+
+describe('system health', () => {
+  const health = (failed: Record<string, number>): PlatformHealth => ({
+    checkedAt: '2026-10-17T06:30:00.000Z',
+    api: { version: '1.2.3', uptimeSeconds: 10 },
+    database: { status: 'ok', latencyMs: 2, latestMigration: '20261017120000_platform_health' },
+    queues: {
+      status: 'ok',
+      items: QUEUE_NAMES.map((name) => ({
+        name,
+        waiting: 0,
+        active: 0,
+        delayed: 0,
+        failed: failed[name] ?? 0,
+      })),
+    },
+  });
+
+  it('lists the queues with failed jobs, in order', () => {
+    expect(queuesWithFailures(health({}))).toEqual([]);
+    // Report order, not alphabetical: documents sorts first but comes after messaging.
+    expect(queuesWithFailures(health({ documents: 4, messaging: 1 }))).toEqual([
+      'messaging',
+      'documents',
+    ]);
+  });
+
+  it('shares a call still in flight, so a doubled opening effect sends one request', async () => {
+    let calls = 0;
+    let finish: (value: string) => void = () => {};
+    const once = shareInFlight((_session: object) => {
+      calls += 1;
+      return new Promise<string>((resolve) => (finish = resolve));
+    });
+    const session = {};
+    const first = once(session);
+    const second = once(session);
+    expect(second).toBe(first);
+    finish('report');
+    await expect(first).resolves.toBe('report');
+    expect(calls).toBe(1);
+    // Settled: the next page open checks again.
+    void once(session);
+    expect(calls).toBe(2);
+  });
+
+  it('never shares a request with another session', () => {
+    let calls = 0;
+    const once = shareInFlight((_session: object) => {
+      calls += 1;
+      return new Promise<string>(() => {});
+    });
+    const first = once({});
+    const second = once({});
+    expect(second).not.toBe(first);
+    expect(calls).toBe(2);
+  });
+
+  it('words and colours each status', () => {
+    expect(healthTone('ok')).toBe('ok');
+    expect(healthTone('down')).toBe('danger');
+    expect(healthTone('not_configured')).toBe('neutral');
+    expect(messages.en[healthStatusKey('ok')]).toBe('OK');
+    expect(messages.en[healthStatusKey('down')]).toBe('Down');
+    expect(messages.en[healthStatusKey('not_configured')]).toBe('Not configured');
+    expect(queuesNoteKey('ok')).toBe('platform.health.queuesOk');
+    expect(queuesNoteKey('down')).toBe('platform.health.queuesDown');
+    expect(queuesNoteKey('not_configured')).toBe('platform.health.queuesNotConfigured');
+  });
+
+  it('says the API or database is not answering when the check fails with a 5xx', () => {
+    for (const status of [500, 502, 503, 504]) {
+      expect(healthErrorKey(apiError(status)), String(status)).toBe('platform.health.unavailable');
+    }
+    expect(healthErrorKey(new TypeError('fetch failed'))).toBe('error.network');
+    expect(healthErrorKey(apiError(403))).toBe('platform.error.network');
+    expect(healthErrorKey(apiError(401))).toBe('session.expired');
+  });
+
+  it('has a label for every queue', () => {
+    expect(Object.fromEntries(QUEUE_NAMES.map((n) => [n, messages.en[queueLabelKey(n)]]))).toEqual({
+      system: 'System',
+      messaging: 'Messaging',
+      documents: 'Documents',
+      webhooks: 'Webhooks',
+      abdm: 'ABDM',
+      imports: 'Imports',
+      reconciliation: 'Payment reconciliation',
+    });
+  });
+
+  it('shows when it was checked in IST, to the second', () => {
+    expect(formatCheckedAt('2026-10-17T06:30:05.000Z', 'en')).toMatch(/17 Oct.*12:00:05\s?pm/i);
+  });
+
+  it('shows uptime in the two largest units', () => {
+    expect(uptimeMessage(59)).toEqual({
+      key: 'platform.health.uptimeMinutes',
+      params: { minutes: 0 },
+    });
+    expect(uptimeMessage(3 * 3600 + 5 * 60 + 9)).toEqual({
+      key: 'platform.health.uptimeHours',
+      params: { hours: 3, minutes: 5 },
+    });
+    expect(uptimeMessage(2 * 86_400 + 7 * 3600 + 59 * 60)).toEqual({
+      key: 'platform.health.uptimeDays',
+      params: { days: 2, hours: 7 },
+    });
   });
 });

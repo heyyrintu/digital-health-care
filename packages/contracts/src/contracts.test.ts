@@ -6,6 +6,9 @@ import {
   HealthResponse,
   LoginResponse,
   NewPassword,
+  PlatformHealth,
+  QUEUES,
+  QUEUE_NAMES,
   buildOpenApiDocument,
   checkUpload,
   page,
@@ -101,6 +104,7 @@ describe('buildOpenApiDocument', () => {
     );
     expect(platformOps.sort()).toEqual([
       'GET /platform/doctors',
+      'GET /platform/health',
       'GET /platform/me',
       'GET /platform/organisations',
       'GET /platform/usage',
@@ -154,5 +158,72 @@ describe('checkUpload', () => {
     expect(checkUpload(settings, { mediaType: 'application/pdf', sizeBytes: 2 * mb + 1 })).toBe(
       'too_large',
     );
+  });
+});
+
+describe('job queues', () => {
+  it('names the queues in this order', () => {
+    expect(QUEUE_NAMES).toEqual([
+      'system',
+      'messaging',
+      'documents',
+      'webhooks',
+      'abdm',
+      'imports',
+      'reconciliation',
+    ]);
+    expect(Object.values(QUEUES)).toEqual(QUEUE_NAMES);
+  });
+});
+
+describe('PlatformHealth', () => {
+  const counts = (name: string, failed = 0) => ({
+    name,
+    waiting: 1,
+    active: 0,
+    delayed: 2,
+    failed,
+  });
+  const items = QUEUE_NAMES.map((name) => counts(name, name === 'messaging' ? 3 : 0));
+  const health = {
+    checkedAt: '2026-10-17T06:30:00.000Z',
+    api: { version: '1.2.3', uptimeSeconds: 42 },
+    database: { status: 'ok', latencyMs: 3, latestMigration: '20261017120000_platform_health' },
+    queues: { status: 'ok', items },
+  };
+  const withQueues = (queues: { status: string; items: unknown[] }) =>
+    PlatformHealth.safeParse({ ...health, queues }).success;
+
+  it('keeps status and counts only, dropping anything else a queue might carry', () => {
+    const parsed = PlatformHealth.parse({
+      ...health,
+      queues: {
+        status: 'ok',
+        items: items.map((q) => ({ ...q, jobs: [{ data: { patientId: 'x' } }] })),
+      },
+    });
+    expect(parsed.queues.items).toEqual(items);
+  });
+
+  it('takes every queue in order when ok, and none otherwise', () => {
+    expect(withQueues({ status: 'ok', items })).toBe(true);
+    expect(withQueues({ status: 'ok', items: [] })).toBe(false);
+    expect(withQueues({ status: 'ok', items: items.slice(1) })).toBe(false);
+    expect(withQueues({ status: 'ok', items: [...items].reverse() })).toBe(false);
+    expect(withQueues({ status: 'ok', items: [...items, items[0]] })).toBe(false);
+    expect(withQueues({ status: 'down', items: [] })).toBe(true);
+    expect(withQueues({ status: 'not_configured', items: [] })).toBe(true);
+    expect(withQueues({ status: 'down', items })).toBe(false);
+  });
+
+  it('refuses unknown queues and statuses', () => {
+    expect(
+      withQueues({ status: 'ok', items: items.map((q, i) => (i ? q : { ...q, name: 'other' })) }),
+    ).toBe(false);
+    expect(
+      PlatformHealth.safeParse({ ...health, database: { ...health.database, status: 'slow' } })
+        .success,
+    ).toBe(false);
+    expect(withQueues({ status: 'slow', items: [] })).toBe(false);
   });
 });

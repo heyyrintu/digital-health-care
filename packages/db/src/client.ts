@@ -57,11 +57,21 @@ export async function withAuth<T>(db: Db, fn: (tx: Tx) => Promise<T>): Promise<T
  * what it may know about organisations comes only from the `platform_*` functions, which
  * return names, counts and doctors' registration details, never patient or clinical rows.
  */
-export async function withPlatform<T>(db: Db, fn: (tx: Tx) => Promise<T>): Promise<T> {
-  return db.$transaction(async (tx) => {
+export async function withPlatform<T>(
+  db: Db,
+  fn: (tx: Tx) => Promise<T>,
+  /**
+   * Prisma's interactive transaction limits, for callers that must give up quickly (system
+   * health): `maxWait` for a connection, `timeout` for the whole transaction, after which it
+   * is rolled back and its connection returned to the pool. Omitted, Prisma's defaults.
+   */
+  options?: { maxWait: number; timeout: number },
+): Promise<T> {
+  const run = async (tx: Tx) => {
     await tx.$executeRawUnsafe('SET LOCAL ROLE dhc_platform');
     return fn(tx);
-  });
+  };
+  return options ? db.$transaction(run, options) : db.$transaction(run);
 }
 
 /**

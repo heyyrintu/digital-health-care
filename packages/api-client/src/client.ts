@@ -16,6 +16,7 @@ import {
   ErrorResponse,
   HealthResponse,
   PlatformDoctorList,
+  PlatformHealth,
   PlatformLoginResponse,
   PlatformMeResponse,
   PlatformOrganisationList,
@@ -324,6 +325,8 @@ export function createApiClient(options: ApiClientOptions) {
         }),
       usage: (query: PlatformUsageQuery = {}) =>
         request('GET', '/platform/usage', { schema: PlatformUsageReport, query: { ...query } }),
+      /** API, database and background queues: status and counts only. */
+      health: () => request('GET', '/platform/health', { schema: PlatformHealth }),
     },
   };
 }

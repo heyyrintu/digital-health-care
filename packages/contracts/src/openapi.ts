@@ -174,6 +174,7 @@ import {
   CreatedPlatformOrganisation,
   PlatformDoctorList,
   PlatformDoctorQuery,
+  PlatformHealth,
   PlatformLoginBody,
   PlatformLoginResponse,
   PlatformMeResponse,
@@ -1360,6 +1361,14 @@ const operations: Operation[] = [
     platform: true,
     query: PlatformUsageQuery,
     response: PlatformUsageReport,
+  },
+  {
+    method: 'get',
+    path: '/platform/health',
+    operationId: 'getPlatformHealth',
+    summary: 'System health: API, database and background queues; status and counts only',
+    platform: true,
+    response: PlatformHealth,
   },
 ];
 
