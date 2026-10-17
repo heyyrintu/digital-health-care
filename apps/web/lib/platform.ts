@@ -52,15 +52,29 @@ export const mfaExpired = (e: unknown) =>
 export const lockedOut = (e: unknown) =>
   e instanceof ApiError && e.status === 429 && /15 minutes/i.test(e.message);
 
-/** Why a console session could not be restored or kept: for the sign-in page's notice. */
-export function sessionEndReason(e: unknown): 'network' | 'expired' | null {
-  if (e instanceof ApiError && e.status === 401) return null;
-  if (e instanceof ApiError && e.status === 403) return 'network';
+/**
+ * Why a console session could not be restored or kept, for the sign-in page's notice:
+ * `network` is the allowlist (403), `offline` a server that could not be reached (as
+ * `platformErrorKey` words it), null no session to restore (401).
+ */
+export function sessionEndReason(e: unknown): 'network' | 'offline' | 'expired' | null {
+  if (e instanceof TypeError || unreachable(e)) return 'offline';
+  if (!(e instanceof ApiError)) return 'expired';
+  if (e.status === 401) return null;
+  if (e.status === 403) return 'network';
   return 'expired';
 }
 
-/** Whether a failed refresh is worth trying again: anything but a refused session (401). */
-export const retryableRefresh = (e: unknown) => !(e instanceof ApiError && e.status === 401);
+/** The web server could not connect to the API at all (session routes' 503). */
+const unreachable = (e: unknown) =>
+  e instanceof ApiError && e.status === 503 && e.fields.api === 'unreachable';
+
+/**
+ * Whether a failed refresh may be tried again: only when the API is known never to have
+ * seen it. Any other failure may have rotated the refresh token already, and sending the
+ * old one again would count as reuse and end the session.
+ */
+export const retryableRefresh = unreachable;
 
 /** 409 on verifying: `changed` (reload and check again) or `verified` (someone else did). */
 export function verifyConflict(e: unknown): 'changed' | 'verified' | null {

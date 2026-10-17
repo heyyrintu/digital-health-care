@@ -1,28 +1,19 @@
-import { NextResponse, type NextRequest } from 'next/server';
+import type { NextRequest } from 'next/server';
 import {
-  SESSION_COOKIE,
-  callApi,
-  clearSession,
+  STAFF_COOKIE,
+  endSession,
   forbiddenOrigin,
   isSameOrigin,
 } from '../../../../lib/session-server';
 
-/** Ends the session at the API and clears the cookie, even if the API call fails. */
+/**
+ * Ends the session at the API and clears its cookie, even if the API call fails. An
+ * expired access token from the page is replaced from the cookie first (`endSession`).
+ */
 export async function POST(request: NextRequest) {
   if (!isSameOrigin(request)) return forbiddenOrigin();
-  const header = request.headers.get('authorization');
-  let accessToken = header?.startsWith('Bearer ') ? header.slice(7) : undefined;
-
-  const refreshToken = request.cookies.get(SESSION_COOKIE)?.value;
-  if (!accessToken && refreshToken) {
-    // The page lost its access token (e.g. reload): get one so the session can be ended.
-    const refreshed = await callApi(request, '/auth/refresh', { body: { refreshToken } });
-    const body = refreshed.body as { accessToken?: string } | undefined;
-    if (refreshed.status === 200) accessToken = body?.accessToken;
-  }
-  if (accessToken) await callApi(request, '/auth/logout', { accessToken });
-
-  return clearSession(
-    new NextResponse(null, { status: 204, headers: { 'cache-control': 'no-store' } }),
-  );
+  return endSession(request, STAFF_COOKIE, {
+    refresh: '/auth/refresh',
+    logout: '/auth/logout',
+  });
 }

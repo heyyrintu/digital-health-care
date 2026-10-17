@@ -21,6 +21,8 @@ const fail = (message: string): never => {
 if (process.env.NODE_ENV !== 'test') fail('seed-platform-operator runs only with NODE_ENV=test.');
 // An empty value counts as missing, so a blank variable never becomes an empty password or key.
 const env = (name: string) => process.env[name]?.trim() || fail(`${name} is required.`);
+// Passwords are kept as typed (sign-in never trims them): only an empty one is refused.
+const raw = (name: string) => process.env[name] || fail(`${name} is required.`);
 
 const db = createDb(env('DATABASE_URL'));
 try {
@@ -33,7 +35,7 @@ try {
       operator: 'e2e harness',
       email: env('E2E_OPERATOR_EMAIL'),
       displayName: env('E2E_OPERATOR_NAME'),
-      password: env('E2E_OPERATOR_PASSWORD'),
+      password: raw('E2E_OPERATOR_PASSWORD'),
       totpSecret: env('E2E_OPERATOR_TOTP_KEY'),
       // As if enrolled with the previous period's code: the current code signs in.
       confirmedStep: Math.floor(Date.now() / 30_000) - 1,

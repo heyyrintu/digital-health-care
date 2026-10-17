@@ -13,6 +13,7 @@ import {
   TabsList,
   TabsTrigger,
 } from '@dhc/ui-web';
+import type { MessageKey } from '@dhc/i18n';
 import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
 import {
   appendPage,
@@ -26,6 +27,14 @@ import { usePlatformSession } from '../session-provider';
 import { ErrorNotice, PlatformShell } from '../shell';
 
 type Queue = 'pending' | 'verified';
+
+/** A refusal to show: a message key, or the API's own words when there is none. */
+type Problem = { key: MessageKey } | { text: string };
+
+const problemOf = (e: unknown): Problem => {
+  const key = platformErrorKey(e, 'page');
+  return key ? { key } : { text: (e as Error).message };
+};
 
 /** The doctor verification queue across organisations, oldest first (PRD §9.1 step 4). */
 export default function DoctorsPage() {
@@ -57,18 +66,19 @@ function DoctorQueue({ status }: { status: Queue }) {
   const { api, locale, signOut, t } = usePlatformSession();
   const [rows, setRows] = useState<PlatformDoctor[] | null>(null);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
+  // Kept as keys and translated when shown, so switching language changes the text without
+  // reloading the queue (which would close an open verify form and lose the pages loaded).
+  const [error, setError] = useState<Problem | null>(null);
+  const [notice, setNotice] = useState<{ key: MessageKey; name?: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
 
   const fail = useCallback(
     (e: unknown) => {
       if (e instanceof ApiError && e.status === 401) return void signOut('expired');
-      const key = platformErrorKey(e, 'page');
-      setError(key ? t(key) : (e as Error).message);
+      setError(problemOf(e));
     },
-    [signOut, t],
+    [signOut],
   );
 
   const load = useCallback(async () => {
@@ -90,6 +100,7 @@ function DoctorQueue({ status }: { status: Queue }) {
   async function loadMore() {
     if (!nextCursor) return;
     setBusy(true);
+    setError(null);
     try {
       const page = await api.platform.doctors(status, nextCursor);
       setRows((shown) => appendPage(shown ?? [], page.data));
@@ -109,10 +120,13 @@ function DoctorQueue({ status }: { status: Queue }) {
     setOpen(null);
     setNotice(
       'verifiedMeanwhile' in result
-        ? t('platform.doctors.verifiedMeanwhile')
-        : result.alreadyVerified
-          ? t('platform.doctors.alreadyVerified', { name: nameOf(doctor) })
-          : t('platform.doctors.verified', { name: nameOf(doctor) }),
+        ? { key: 'platform.doctors.verifiedMeanwhile' }
+        : {
+            key: result.alreadyVerified
+              ? 'platform.doctors.alreadyVerified'
+              : 'platform.doctors.verified',
+            name: nameOf(doctor),
+          },
     );
   }
 
@@ -120,17 +134,21 @@ function DoctorQueue({ status }: { status: Queue }) {
     <Surface className="mt-4 min-w-0 space-y-4 p-4 sm:p-6">
       {notice && (
         <p role="status" className="rounded-xl bg-success-soft px-4 py-3 text-sm">
-          {notice}
+          {t(notice.key, notice.name === undefined ? {} : { name: notice.name })}
         </p>
       )}
-      <ErrorNotice message={error} />
+      <ErrorNotice message={error && ('key' in error ? t(error.key) : error.text)} />
       {!rows ? (
-        !error && (
+        error ? (
+          <Button type="button" variant="outline" onClick={() => void load()}>
+            {t('common.retry')}
+          </Button>
+        ) : (
           <p aria-live="polite" className="text-sm text-muted-foreground">
             {t('common.loading')}
           </p>
         )
-      ) : rows.length === 0 ? (
+      ) : rows.length === 0 && !nextCursor ? (
         <p className="text-sm text-muted-foreground">
           {status === 'pending'
             ? t('platform.doctors.emptyPending')

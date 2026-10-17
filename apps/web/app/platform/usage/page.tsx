@@ -4,7 +4,7 @@ import { ApiError } from '@dhc/api-client';
 import type { PlatformUsageReport } from '@dhc/contracts';
 import { formatInr } from '@dhc/domain';
 import { Button, Input, PageHeader, Surface } from '@dhc/ui-web';
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import {
   countOrDash,
   defaultUsageRange,
@@ -30,13 +30,19 @@ function UsageScreen() {
   const [error, setError] = useState<string | null>(null);
   const [rangeError, setRangeError] = useState<string | null>(null);
 
+  /** The latest range asked for: answers to earlier ones are dropped. */
+  const latest = useRef(0);
+
   const load = useCallback(
     async (from: string, to: string) => {
+      const request = ++latest.current;
       setError(null);
       setReport(null);
       try {
-        setReport(await api.platform.usage({ from, to }));
+        const answer = await api.platform.usage({ from, to });
+        if (request === latest.current) setReport(answer);
       } catch (e) {
+        if (request !== latest.current) return;
         if (e instanceof ApiError && e.status === 401) return void signOut('expired');
         const key = platformErrorKey(e, 'page');
         setError(key ? t(key) : (e as Error).message);

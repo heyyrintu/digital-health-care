@@ -10,23 +10,16 @@ import { formatIstDateTime } from '@dhc/domain';
 import { Button, Input } from '@dhc/ui-web';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { platformErrorKey, slugTaken } from '../../lib/platform';
-import { usePlatformSession } from './session-provider';
+import { usePlatformSession, type Handover } from './session-provider';
 
 const LABEL = 'block text-sm font-medium';
 const HINT = 'text-xs text-muted-foreground';
 
-/** What the operator hands to the new admin: kept in this component's memory only. */
-interface Handover {
-  organisation: string;
-  admin: string;
-  inviteUrl: string;
-  expiresAt: string;
-}
-
 /**
  * Onboarding steps 1–2 (PRD §9.1): the organisation, its first clinic and the first clinic
  * admin's invite. The invite link is shown once, here, and never stored: not in the page
- * address, browser storage or anywhere the operator could reopen it.
+ * address, browser storage or anywhere the operator could reopen it. It is held by the
+ * session provider, so it survives moving between console pages until dismissed.
  */
 export function OnboardCard({
   onCreated,
@@ -34,16 +27,17 @@ export function OnboardCard({
   /** Reloads the organisation list; throws on failure. */
   onCreated: () => Promise<void>;
 }) {
-  const { api, signOut, t } = usePlatformSession();
+  const { api, signOut, handover, showHandover, dismissHandover, t } = usePlatformSession();
   const slugInput = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [slugError, setSlugError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [handover, setHandover] = useState<Handover | null>(null);
   const [listError, setListError] = useState(false);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    // One link at a time: a second onboarding must not replace one not yet handed over.
+    if (handover) return;
     const form = event.currentTarget;
     const data = new FormData(form);
     const field = (name: string) => String(data.get(name) ?? '').trim();
@@ -88,7 +82,7 @@ export function OnboardCard({
       setBusy(false);
     }
 
-    setHandover({
+    showHandover({
       organisation: created.organisation.name,
       admin: body.admin.displayName ?? created.invite.identifier,
       inviteUrl: created.invite.inviteUrl,
@@ -108,7 +102,9 @@ export function OnboardCard({
       </h2>
       <p className={`mt-1 ${HINT}`}>{t('platform.onboard.hint')}</p>
 
-      {handover && <InviteHandover handover={handover} onDone={() => setHandover(null)} />}
+      {handover && (
+        <InviteHandover key={handover.inviteUrl} handover={handover} onDone={dismissHandover} />
+      )}
       {handover && listError && (
         <p className="mt-3 rounded-xl bg-warning-soft px-4 py-3 text-sm text-warning-foreground">
           {t('platform.onboard.listFailed')}
@@ -208,9 +204,19 @@ export function OnboardCard({
             {error}
           </p>
         )}
-        <Button type="submit" disabled={busy} className="sm:col-span-2 sm:justify-self-start">
+        <Button
+          type="submit"
+          disabled={busy || handover !== null}
+          aria-describedby={handover ? 'onboard-wait' : undefined}
+          className="sm:col-span-2 sm:justify-self-start"
+        >
           {t('platform.onboard.submit')}
         </Button>
+        {handover && (
+          <p id="onboard-wait" className={`${HINT} sm:col-span-2`}>
+            {t('platform.onboard.handOverFirst')}
+          </p>
+        )}
       </form>
     </section>
   );
@@ -218,20 +224,12 @@ export function OnboardCard({
 
 /** The invite link, once, with a copy button and the warning that it will not be shown again. */
 function InviteHandover({ handover, onDone }: { handover: Handover; onDone: () => void }) {
-  const { locale, holdIdleSignOut, t } = usePlatformSession();
+  const { locale, t } = usePlatformSession();
   const [copied, setCopied] = useState(false);
   const heading = useRef<HTMLParagraphElement>(null);
   // Move focus to the notice so keyboard and screen-reader users land on it.
   useEffect(() => {
     heading.current?.focus();
-  }, []);
-  // The link cannot be shown again: hold off the idle sign-out while it is on screen, and
-  // ask before a reload or closing the tab takes it away.
-  useEffect(() => holdIdleSignOut(), [holdIdleSignOut]);
-  useEffect(() => {
-    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
-    window.addEventListener('beforeunload', warn);
-    return () => window.removeEventListener('beforeunload', warn);
   }, []);
   // Only the heading and the warning are live regions: the link itself is never read out.
   return (

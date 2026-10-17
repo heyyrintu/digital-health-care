@@ -26,6 +26,7 @@ function OrganisationsScreen() {
   /** Reloads the list; failures are the caller's to show. */
   const refresh = useCallback(async () => {
     setOrganisations((await api.platform.organisations()).data);
+    setError(null);
   }, [api]);
 
   const load = useCallback(async () => {

@@ -109,18 +109,41 @@ export async function callApi(
     const body: unknown =
       response.status === 204 ? undefined : await response.json().catch(() => undefined);
     return { status: response.status, body };
-  } catch {
+  } catch (error) {
+    // Only a failure to connect proves the API never saw the request, so that a retry
+    // cannot replay a refresh token it already rotated: 503 with `fields.api: unreachable`.
+    // Anything else (a reset mid-request, a timeout) is a 502 the page must not retry.
+    const unreachable = connectFailed(error);
     return {
-      status: 502,
+      status: unreachable ? 503 : 502,
       body: {
         error: {
           code: 'INTERNAL',
           message: 'Could not reach the server. Try again.',
           requestId: 'web',
+          ...(unreachable ? { fields: { api: UNREACHABLE } } : {}),
         },
       },
     };
   }
+}
+
+/** `fields.api` on a 503 from the session routes: the API was never reached. */
+export const UNREACHABLE = 'unreachable';
+
+/** Node's fetch (undici) error codes for a connection that was never made. */
+const CONNECT_ERRORS = new Set([
+  'ECONNREFUSED',
+  'ENOTFOUND',
+  'EAI_AGAIN',
+  'EHOSTUNREACH',
+  'ENETUNREACH',
+  'UND_ERR_CONNECT_TIMEOUT',
+]);
+
+export function connectFailed(error: unknown): boolean {
+  const cause = (error as { cause?: { code?: unknown } } | undefined)?.cause;
+  return typeof cause?.code === 'string' && CONNECT_ERRORS.has(cause.code);
 }
 
 export function passThrough({ status, body }: { status: number; body: unknown }) {
@@ -177,4 +200,36 @@ export function clearSession<T extends NextResponse>(
 
 export async function readJson(request: NextRequest): Promise<unknown> {
   return request.json().catch(() => undefined);
+}
+
+/**
+ * Ends a session at the API and clears its cookie, even if the API call fails. Uses the
+ * page's access token when it still works; when there is none, or the API refuses it
+ * (expired), gets a fresh one from the cookie first, so the session cannot outlive the
+ * cookie being cleared.
+ */
+export async function endSession(
+  request: NextRequest,
+  cookie: SessionCookie,
+  paths: { refresh: string; logout: string },
+) {
+  const header = request.headers.get('authorization');
+  const bearer = header?.startsWith('Bearer ') ? header.slice(7) : undefined;
+  const refreshToken = request.cookies.get(cookie.name)?.value;
+
+  const loggedOut = bearer
+    ? (await callApi(request, paths.logout, { accessToken: bearer })).status
+    : 401;
+  if (loggedOut === 401 && refreshToken) {
+    const refreshed = await callApi(request, paths.refresh, { body: { refreshToken } });
+    const accessToken = (refreshed.body as { accessToken?: string } | undefined)?.accessToken;
+    if (refreshed.status === 200 && accessToken) {
+      await callApi(request, paths.logout, { accessToken });
+    }
+  }
+
+  return clearSession(
+    new NextResponse(null, { status: 204, headers: { 'cache-control': 'no-store' } }),
+    cookie,
+  );
 }

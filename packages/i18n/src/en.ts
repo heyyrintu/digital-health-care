@@ -1141,6 +1141,8 @@ export const en = {
     'This link is shown only once and is not saved anywhere. Copy it now: it cannot be shown again. It expires {date}.',
   'platform.onboard.listFailed':
     'The organisation was created, but the list could not be refreshed. Copy the link first, then reload the page.',
+  'platform.onboard.handOverFirst':
+    'Hand over the invite link above and dismiss it before onboarding another organisation.',
   'platform.onboard.dismiss': 'I have copied the link',
   'platform.doctors.title': 'Doctor verification',
   'platform.doctors.sub':

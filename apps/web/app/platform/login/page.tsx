@@ -1,5 +1,6 @@
 'use client';
 
+import { ApiError } from '@dhc/api-client';
 import type { PlatformLoginResponse } from '@dhc/contracts';
 import { Button, Input } from '@dhc/ui-web';
 import { ShieldCheck } from 'lucide-react';
@@ -20,11 +21,20 @@ export default function PlatformLoginPage() {
   const router = useRouter();
   const [step, setStep] = useState<Step>({ kind: 'password' });
   const [error, setError] = useState<string | null>(null);
+  /** Whether the error is about what was typed (marks the fields invalid), not the network. */
+  const [invalid, setInvalid] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Kept when the code step sends the operator back to the password.
+  const [email, setEmail] = useState('');
 
   useEffect(() => {
     if (status === 'signedIn') router.replace('/platform');
   }, [status, router]);
+
+  function fail(e: unknown, at: PlatformStep) {
+    setInvalid(e instanceof ApiError && (e.status === 401 || e.status === 400));
+    setError(messageFor(e, at));
+  }
 
   function messageFor(e: unknown, at: PlatformStep): string {
     const key = platformErrorKey(e, at);
@@ -37,14 +47,15 @@ export default function PlatformLoginPage() {
     const form = new FormData(event.currentTarget);
     setBusy(true);
     setError(null);
+    setInvalid(false);
     try {
       const result = await postPlatformSession<PlatformLoginResponse>('login', {
-        email: String(form.get('email') ?? '').trim(),
+        email: email.trim(),
         password: String(form.get('password') ?? ''),
       });
       setStep({ kind: 'code', mfaToken: result.mfaToken });
     } catch (e) {
-      setError(messageFor(e, 'password'));
+      fail(e, 'password');
     } finally {
       setBusy(false);
     }
@@ -53,16 +64,20 @@ export default function PlatformLoginPage() {
   async function submitCode(event: FormEvent<HTMLFormElement>, mfaToken: string) {
     event.preventDefault();
     const code = String(new FormData(event.currentTarget).get('code') ?? '').replace(/\s/g, '');
-    if (!isSixDigitCode(code)) return setError(t('invite.codeInvalid'));
+    if (!isSixDigitCode(code)) {
+      setInvalid(true);
+      return setError(t('invite.codeInvalid'));
+    }
     setBusy(true);
     setError(null);
+    setInvalid(false);
     try {
       await startSession(await postPlatformSession<SessionTokens>('mfa', { mfaToken, code }));
       router.replace('/platform');
     } catch (e) {
       // An expired code step means starting again from the password.
       if (mfaExpired(e)) setStep({ kind: 'password' });
-      setError(messageFor(e, 'code'));
+      fail(e, 'code');
     } finally {
       setBusy(false);
     }
@@ -75,7 +90,9 @@ export default function PlatformLoginPage() {
         ? t('session.expired')
         : endedReason === 'network'
           ? t('platform.error.network')
-          : null;
+          : endedReason === 'offline'
+            ? t('error.network')
+            : null;
 
   return (
     <main className="grid min-h-screen place-items-center bg-hero px-4 py-10 font-sans text-foreground">
@@ -108,17 +125,19 @@ export default function PlatformLoginPage() {
         )}
 
         {step.kind === 'password' && (
-          <form className="space-y-4" onSubmit={(e) => void submitPassword(e)} noValidate>
+          <form className="space-y-4" onSubmit={(e) => void submitPassword(e)}>
             <div className="space-y-1.5">
               <label htmlFor="email" className={LABEL}>
                 {t('platform.login.email')}
               </label>
               <Input
                 id="email"
-                aria-invalid={error ? true : undefined}
+                aria-invalid={invalid ? true : undefined}
                 aria-describedby={error ? 'login-error' : undefined}
                 name="email"
                 type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 required
                 autoComplete="username"
                 autoCapitalize="none"
@@ -131,7 +150,7 @@ export default function PlatformLoginPage() {
               </label>
               <Input
                 id="password"
-                aria-invalid={error ? true : undefined}
+                aria-invalid={invalid ? true : undefined}
                 aria-describedby={error ? 'login-error' : undefined}
                 name="password"
                 type="password"
@@ -157,7 +176,7 @@ export default function PlatformLoginPage() {
               </label>
               <Input
                 id="code"
-                aria-invalid={error ? true : undefined}
+                aria-invalid={invalid ? true : undefined}
                 aria-describedby={error ? 'login-error' : undefined}
                 name="code"
                 inputMode="numeric"
@@ -176,8 +195,10 @@ export default function PlatformLoginPage() {
               type="button"
               variant="link"
               className="w-full"
+              disabled={busy}
               onClick={() => {
                 setError(null);
+                setInvalid(false);
                 setStep({ kind: 'password' });
               }}
             >

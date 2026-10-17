@@ -52,15 +52,22 @@ describe('API wording the console depends on', () => {
 });
 
 describe('session endings', () => {
-  it('reads a 403 as the network, a 401 as no session, anything else as expired', () => {
+  const unreachable = new ApiError(503, 'INTERNAL', 'x', 'web', { api: 'unreachable' });
+
+  it('reads a 403 as the network, a 401 as no session, a dropped connection as offline', () => {
     expect(sessionEndReason(apiError(403))).toBe('network');
     expect(sessionEndReason(apiError(401))).toBeNull();
-    expect(sessionEndReason(new TypeError('fetch failed'))).toBe('expired');
+    expect(sessionEndReason(new TypeError('fetch failed'))).toBe('offline');
+    expect(sessionEndReason(unreachable)).toBe('offline');
+    expect(sessionEndReason(apiError(502))).toBe('expired');
   });
 
-  it('retries a failed refresh unless the session was refused', () => {
-    expect(retryableRefresh(new TypeError('fetch failed'))).toBe(true);
-    expect(retryableRefresh(apiError(502))).toBe(true);
+  it('retries a refresh only when the API never saw it', () => {
+    expect(retryableRefresh(unreachable)).toBe(true);
+    // Sent, or perhaps sent: a retry could replay a rotated token.
+    expect(retryableRefresh(new TypeError('fetch failed'))).toBe(false);
+    expect(retryableRefresh(apiError(502))).toBe(false);
+    expect(retryableRefresh(new ApiError(503, 'INTERNAL', 'x', 'r'))).toBe(false);
     expect(retryableRefresh(apiError(401))).toBe(false);
   });
 });

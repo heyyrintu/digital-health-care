@@ -1144,6 +1144,8 @@ export const hi: Record<MessageKey, string> = {
     'यह लिंक केवल एक बार दिखाया जाता है और कहीं सेव नहीं होता। इसे अभी कॉपी करें: यह दोबारा नहीं दिखेगा। इसकी समय-सीमा {date} को खत्म होगी।',
   'platform.onboard.listFailed':
     'संगठन बन गया, लेकिन सूची ताज़ा नहीं हो सकी। पहले लिंक कॉपी करें, फिर पेज दोबारा लोड करें।',
+  'platform.onboard.handOverFirst':
+    'दूसरा संगठन जोड़ने से पहले ऊपर का आमंत्रण लिंक सौंपें और उसे बंद करें।',
   'platform.onboard.dismiss': 'मैंने लिंक कॉपी कर लिया है',
   'platform.doctors.title': 'डॉक्टर सत्यापन',
   'platform.doctors.sub':

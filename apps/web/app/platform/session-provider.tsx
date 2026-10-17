@@ -23,7 +23,7 @@ import {
 } from '../../lib/session-client';
 
 type Status = 'loading' | 'signedOut' | 'signedIn';
-export type SignOutReason = 'user' | 'idle' | 'expired' | 'network';
+export type SignOutReason = 'user' | 'idle' | 'expired' | 'network' | 'offline';
 
 interface PlatformSessionContext {
   status: Status;
@@ -39,10 +39,22 @@ interface PlatformSessionContext {
   startSession(tokens: SessionTokens): Promise<void>;
   signOut(reason?: SignOutReason): Promise<void>;
   /**
-   * Holds off the idle sign-out (for at most IDLE_HOLD_MS) while something that cannot be
-   * shown again is on screen, such as a new organisation's invite link. Returns the release.
+   * A new organisation's first-admin invite link, shown once (onboarding). Kept here, in
+   * memory only, so moving between console pages does not lose it; signing out drops it.
+   * While it is set the idle sign-out waits (at most IDLE_HOLD_MS) and the browser asks
+   * before a reload or closing the tab.
    */
-  holdIdleSignOut(): () => void;
+  handover: Handover | null;
+  showHandover(handover: Handover): void;
+  dismissHandover(): void;
+}
+
+/** What the operator hands to a new organisation's first clinic admin. */
+export interface Handover {
+  organisation: string;
+  admin: string;
+  inviteUrl: string;
+  expiresAt: string;
 }
 
 const Context = createContext<PlatformSessionContext | null>(null);
@@ -51,9 +63,23 @@ const ACTIVITY_EVENTS = ['pointerdown', 'keydown', 'wheel', 'touchstart'] as con
 
 /** Longest the idle sign-out waits for a hold: an unattended screen still signs out. */
 export const IDLE_HOLD_MS = 60 * 60_000;
-/** A scheduled refresh that fails other than with 401 is tried this many more times. */
+/** A scheduled refresh the API never received (it was unreachable) is tried this many more times. */
 const REFRESH_RETRIES = 2;
 const REFRESH_RETRY_MS = 5_000;
+
+/**
+ * The restore-on-load refresh, shared by every mount until it settles. React's StrictMode
+ * runs the mount effect twice in development; two refreshes with one refresh token would
+ * count as reuse and end the session, so the replayed effect reuses this one.
+ */
+let restoring: Promise<SessionTokens> | null = null;
+
+function restoreOnce(): Promise<SessionTokens> {
+  restoring ??= postPlatformSession<SessionTokens>('refresh').finally(() => {
+    restoring = null;
+  });
+  return restoring;
+}
 
 /**
  * Platform console session (ADR 0016), separate from the clinic's: its refresh token is in
@@ -73,10 +99,16 @@ export function PlatformSessionProvider({
   const idleTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   /** While a hold is on: when it lapses (ms since epoch); 0 for none. */
   const idleHeldUntil = useRef(0);
+  /**
+   * Bumped whenever the session ends: a refresh or sign-in still in flight from an earlier
+   * session checks it and does not bring back a token or timer after sign-out.
+   */
+  const generation = useRef(0);
   const [status, setStatus] = useState<Status>('loading');
   const [operator, setOperator] = useState<PlatformOperator | null>(null);
   const [endedReason, setEndedReason] = useState<SignOutReason | null>(null);
   const [locale, setLocale] = useState<Locale>('en');
+  const [handover, setHandover] = useState<Handover | null>(null);
 
   // Screen readers and spell-checkers follow the page language.
   useEffect(() => {
@@ -89,9 +121,11 @@ export function PlatformSessionProvider({
   );
 
   const clear = useCallback((reason: SignOutReason | null) => {
+    generation.current += 1;
     clearTimeout(refreshTimer.current);
     clearTimeout(idleTimer.current);
     accessToken.current = null;
+    setHandover(null);
     setOperator(null);
     setEndedReason(reason);
     setStatus('signedOut');
@@ -100,14 +134,17 @@ export function PlatformSessionProvider({
   const scheduleRefresh = useCallback(
     (expiresIn: number) => {
       clearTimeout(refreshTimer.current);
+      const current = generation.current;
       const attempt = (retriesLeft: number) =>
         postPlatformSession<SessionTokens>('refresh')
           .then((tokens) => {
+            if (generation.current !== current) return;
             accessToken.current = tokens.accessToken;
             scheduleRefresh(tokens.expiresIn);
           })
           .catch((e: unknown) => {
-            // A blip (network, 5xx) gets another go before the session ends.
+            if (generation.current !== current) return;
+            // Only a refresh the API never received is safe to send again.
             if (retriesLeft > 0 && retryableRefresh(e)) {
               const delay = REFRESH_RETRY_MS * (REFRESH_RETRIES - retriesLeft + 1);
               refreshTimer.current = setTimeout(() => void attempt(retriesLeft - 1), delay);
@@ -125,14 +162,17 @@ export function PlatformSessionProvider({
 
   const startSession = useCallback(
     async (tokens: SessionTokens) => {
+      const current = generation.current;
       accessToken.current = tokens.accessToken;
       scheduleRefresh(tokens.expiresIn);
       try {
-        setOperator((await api.platform.me()).operator);
+        const { operator: signedIn } = await api.platform.me();
+        if (generation.current !== current) return;
+        setOperator(signedIn);
         setEndedReason(null);
         setStatus('signedIn');
       } catch (e) {
-        clear(sessionEndReason(e) ?? 'expired');
+        if (generation.current === current) clear(sessionEndReason(e) ?? 'expired');
       }
     },
     [api, clear, scheduleRefresh],
@@ -147,13 +187,17 @@ export function PlatformSessionProvider({
     [clear],
   );
 
-  // Restore a console session from its cookie on first load.
+  // Restore a console session from its cookie on first load (once, even under StrictMode).
   useEffect(() => {
-    postPlatformSession<SessionTokens>('refresh')
-      .then(startSession)
+    let mounted = true;
+    restoreOnce()
+      .then((tokens) => (mounted ? startSession(tokens) : undefined))
       // No session (401) is not an ending worth a notice; outside the allowed networks is.
-      .catch((e: unknown) => clear(sessionEndReason(e)));
+      .catch((e: unknown) => {
+        if (mounted) clear(sessionEndReason(e));
+      });
     return () => {
+      mounted = false;
       clearTimeout(refreshTimer.current);
       clearTimeout(idleTimer.current);
     };
@@ -162,12 +206,15 @@ export function PlatformSessionProvider({
   // Idle sign-out while signed in.
   useEffect(() => {
     if (status !== 'signedIn') return;
+    // Fires after the idle period; while a hold is on, again exactly when the hold lapses.
+    const expire = () => {
+      const held = idleHeldUntil.current - Date.now();
+      if (held > 0) idleTimer.current = setTimeout(expire, held);
+      else void signOut('idle');
+    };
     const reset = () => {
       clearTimeout(idleTimer.current);
-      idleTimer.current = setTimeout(() => {
-        if (Date.now() < idleHeldUntil.current) reset();
-        else void signOut('idle');
-      }, IDLE_TIMEOUT_MS);
+      idleTimer.current = setTimeout(expire, IDLE_TIMEOUT_MS);
     };
     reset();
     for (const event of ACTIVITY_EVENTS) window.addEventListener(event, reset, { passive: true });
@@ -177,12 +224,20 @@ export function PlatformSessionProvider({
     };
   }, [status, signOut]);
 
-  const holdIdleSignOut = useCallback(() => {
+  // While an invite link is on hand: hold off the idle sign-out, and ask before a reload or
+  // closing the tab takes it away.
+  useEffect(() => {
+    if (!handover) return;
     idleHeldUntil.current = Date.now() + IDLE_HOLD_MS;
+    const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+    window.addEventListener('beforeunload', warn);
     return () => {
       idleHeldUntil.current = 0;
+      window.removeEventListener('beforeunload', warn);
     };
-  }, []);
+  }, [handover]);
+
+  const dismissHandover = useCallback(() => setHandover(null), []);
 
   const value = useMemo<PlatformSessionContext>(
     () => ({
@@ -195,9 +250,11 @@ export function PlatformSessionProvider({
       t: (key, params) => translate(locale, key, params),
       startSession,
       signOut,
-      holdIdleSignOut,
+      handover,
+      showHandover: setHandover,
+      dismissHandover,
     }),
-    [status, operator, endedReason, api, locale, startSession, signOut, holdIdleSignOut],
+    [status, operator, endedReason, api, locale, startSession, signOut, handover, dismissHandover],
   );
 
   return (

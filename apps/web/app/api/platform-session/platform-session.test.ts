@@ -155,6 +155,56 @@ describe('platform console session', () => {
     expect(res.headers.get('set-cookie')).toMatch(/dhc_platform_session=;.*Max-Age=0/i);
   });
 
+  it('on logout with an expired page token, gets a fresh one from the cookie first', async () => {
+    const fetch = mockApi(
+      { status: 401, body: { error: { code: 'UNAUTHENTICATED', message: 'x', requestId: 'r' } } },
+      { status: 200, body: tokens },
+      { status: 204 },
+    );
+    const res = await logout(
+      req('/api/platform-session/logout', {
+        cookie: 'dhc_platform_session=platform-refresh-1',
+        auth: 'Bearer expired-access',
+      }),
+    );
+    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(sentTo(fetch, 0).headers.authorization).toBe('Bearer expired-access');
+    expect(sentTo(fetch, 1).url).toBe('http://localhost:4000/v1/platform/auth/refresh');
+    expect(sentTo(fetch, 2)).toMatchObject({
+      url: 'http://localhost:4000/v1/platform/auth/logout',
+      headers: { authorization: 'Bearer platform-access-1' },
+    });
+    expect(res.headers.get('set-cookie')).toMatch(/dhc_platform_session=;.*Max-Age=0/i);
+  });
+
+  it('tells an API it never reached (503, retryable) from a failed request (502)', async () => {
+    const refused = Object.assign(new TypeError('fetch failed'), {
+      cause: { code: 'ECONNREFUSED' },
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw refused;
+      }),
+    );
+    const cookie = 'dhc_platform_session=platform-refresh-1';
+    const down = await refresh(req('/api/platform-session/refresh', { cookie }));
+    expect(down.status).toBe(503);
+    expect((await down.json()).error.fields).toEqual({ api: 'unreachable' });
+    // The cookie stays: the session was not refused, the API just could not be reached.
+    expect(down.headers.get('set-cookie')).toBeNull();
+
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw Object.assign(new TypeError('fetch failed'), { cause: { code: 'ECONNRESET' } });
+      }),
+    );
+    const reset = await refresh(req('/api/platform-session/refresh', { cookie }));
+    expect(reset.status).toBe(502);
+    expect((await reset.json()).error.fields).toBeUndefined();
+  });
+
   it('sends no client address by default, even one the browser wrote', async () => {
     const fetch = mockApi({ status: 200, body: { status: 'mfa_required', mfaToken: 'm' } });
     await login(req('/api/platform-session/login', { body: {}, forwardedFor: '10.0.0.5' }));
