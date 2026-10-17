@@ -42,14 +42,15 @@ export default function HealthPage() {
 
 /**
  * The check when the page opens. Each check is audited, and development's StrictMode runs
- * the opening effect twice: both runs share the one request still in flight.
+ * the opening effect twice: both runs share the one request still in flight. Keyed by the
+ * signed-in operator (a new object for every sign-in), so a later session never shares it.
  */
-const openingCheck = shareInFlight((api: PlatformApi) => api.platform.health());
+const openingCheck = shareInFlight((_signedIn: object, api: PlatformApi) => api.platform.health());
 
 type PlatformApi = ReturnType<typeof usePlatformSession>['api'];
 
 function HealthScreen() {
-  const { api, locale, signOut, t } = usePlatformSession();
+  const { api, locale, operator, signOut, t } = usePlatformSession();
   const [health, setHealth] = useState<PlatformHealth | null>(null);
   const [checking, setChecking] = useState(false);
   // Kept as keys and translated when shown, so switching language does not check again.
@@ -64,7 +65,9 @@ function HealthScreen() {
       setChecking(true);
       setError(null);
       try {
-        const answer = await (opening ? openingCheck(api) : api.platform.health());
+        const answer = await (opening && operator
+          ? openingCheck(operator, api)
+          : api.platform.health());
         if (request === latest.current) setHealth(answer);
       } catch (e) {
         if (request !== latest.current) return;
@@ -77,7 +80,7 @@ function HealthScreen() {
         if (request === latest.current) setChecking(false);
       }
     },
-    [api, signOut],
+    [api, operator, signOut],
   );
 
   useEffect(() => {

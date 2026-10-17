@@ -227,18 +227,31 @@ describe('system health', () => {
   it('shares a call still in flight, so a doubled opening effect sends one request', async () => {
     let calls = 0;
     let finish: (value: string) => void = () => {};
-    const once = shareInFlight(() => {
+    const once = shareInFlight((_session: object) => {
       calls += 1;
       return new Promise<string>((resolve) => (finish = resolve));
     });
-    const first = once();
-    const second = once();
+    const session = {};
+    const first = once(session);
+    const second = once(session);
     expect(second).toBe(first);
     finish('report');
     await expect(first).resolves.toBe('report');
     expect(calls).toBe(1);
     // Settled: the next page open checks again.
-    void once();
+    void once(session);
+    expect(calls).toBe(2);
+  });
+
+  it('never shares a request with another session', () => {
+    let calls = 0;
+    const once = shareInFlight((_session: object) => {
+      calls += 1;
+      return new Promise<string>(() => {});
+    });
+    const first = once({});
+    const second = once({});
+    expect(second).not.toBe(first);
     expect(calls).toBe(2);
   });
 

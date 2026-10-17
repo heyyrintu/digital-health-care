@@ -153,18 +153,24 @@ export function healthErrorKey(e: unknown): MessageKey | null {
 
 /**
  * `fn`, except that a call while an earlier one is still in flight gets that call's promise
- * instead of starting another (its arguments are then ignored). Once it settles, the next
- * call starts afresh.
+ * instead of starting another, when it is for the same `key` (the first argument, e.g. the
+ * session's API client: another session never shares a request it did not make). Once it
+ * settles, the next call starts afresh.
  */
-export function shareInFlight<A extends unknown[], T>(
-  fn: (...args: A) => Promise<T>,
-): (...args: A) => Promise<T> {
-  let inFlight: Promise<T> | null = null;
-  return (...args) => {
-    inFlight ??= fn(...args).finally(() => {
-      inFlight = null;
-    });
-    return inFlight;
+export function shareInFlight<K, A extends unknown[], T>(
+  fn: (key: K, ...args: A) => Promise<T>,
+): (key: K, ...args: A) => Promise<T> {
+  let inFlight: { key: K; promise: Promise<T> } | null = null;
+  return (key, ...args) => {
+    if (inFlight?.key === key) return inFlight.promise;
+    const entry = {
+      key,
+      promise: fn(key, ...args).finally(() => {
+        if (inFlight === entry) inFlight = null;
+      }),
+    };
+    inFlight = entry;
+    return entry.promise;
   };
 }
 
