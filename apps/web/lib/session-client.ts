@@ -15,16 +15,32 @@ export const REFRESH_LEAD_MS = 60_000;
  * Calls this site's own session routes (`/api/session/*`), which hold the refresh token
  * in an httpOnly cookie. Non-2xx responses become the same `ApiError` the API client uses.
  */
-export async function postSession<T>(
+export function postSession<T>(
   path: 'login' | 'mfa' | 'invite' | 'refresh' | 'logout',
   body?: unknown,
   accessToken?: string,
 ): Promise<T> {
+  return postTo<T>(`/api/session/${path}`, body, accessToken);
+}
+
+/**
+ * The platform console's session routes (`/api/platform-session/*`): a separate cookie,
+ * so console and clinic sessions never stand in for each other.
+ */
+export function postPlatformSession<T>(
+  path: 'login' | 'mfa' | 'refresh' | 'logout',
+  body?: unknown,
+  accessToken?: string,
+): Promise<T> {
+  return postTo<T>(`/api/platform-session/${path}`, body, accessToken);
+}
+
+async function postTo<T>(url: string, body?: unknown, accessToken?: string): Promise<T> {
   const headers: Record<string, string> = { accept: 'application/json' };
   if (body !== undefined) headers['content-type'] = 'application/json';
   if (accessToken) headers.authorization = `Bearer ${accessToken}`;
 
-  const response = await fetch(`/api/session/${path}`, {
+  const response = await fetch(url, {
     method: 'POST',
     headers,
     body: body === undefined ? undefined : JSON.stringify(body),

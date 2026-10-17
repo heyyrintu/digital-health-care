@@ -4,6 +4,25 @@
 
 Platform operators are not clinic users: they have their own accounts, sign in only to the platform console, and have no access to patient or clinical data (ADR 0016). There is no screen or API for creating them; it is done with the support command below.
 
+## The console
+On the web app, from the office network or VPN only:
+
+| Path | What it is for |
+|---|---|
+| `/platform/login` | Sign in: work email and password, then the code from the authenticator app. A clinic sign-in does not open the console, and a console sign-in does not open the clinic dashboard. |
+| `/platform` | **Organisations**: each one's status, clinics, staff (active and invited, by role) and doctors pending or verified. **Onboard organisation** creates an organisation, its first clinic and an invite for its first clinic admin; the invite link is shown once, on that page only. Copy it and give it to the admin directly (not by ticket or group chat); it stays while you move between console pages, but once you reload, close the tab or sign out it cannot be shown again, and it cannot be issued again either ([Lost first-admin invite](#lost-first-admin-invite)). Until you choose **I have copied the link** the idle sign-out waits (up to an hour), the browser asks before you reload or close the tab, and you cannot onboard another organisation. |
+| `/platform/doctors` | **Doctor verification**: the queue, pending and verified, oldest first ([doctor verification runbook](doctor-verification.md)). |
+| `/platform/usage` | **Usage** per organisation over a range of days. Messages and scribe minutes show "—" until those features exist. |
+
+Your name and email are shown at the top of every page; **Sign out** ends the session at once. The console also signs you out after 15 minutes without activity, and a session lasts 8 hours at most.
+
+## Lost first-admin invite
+The first clinic admin's link works once and expires after 72 hours. **Today there is no supported way to issue a new one**: the console has no re-issue, onboarding again with the same organisation ID is refused (it is taken), the clinic has no admin yet who could invite anyone, and `support-reset-authenticator` works only for staff who are already active. Re-issuing is not built yet (API guide §3s).
+
+So:
+1. **Prevent it.** Copy the link before leaving the page, give it to the admin in person or by phone, and ask them to open it the same day.
+2. **If it is lost or expires:** record it on the onboarding ticket and tell the tech lead. Any repair (a new invite for that admin) is a database change with break-glass access under the [access control policy](../security/access-control.md), raised as an [incident](incident-response.md) and recorded on the ticket; there is no command for it. Do not onboard the organisation again under another ID without the tech lead's agreement: the first one stays, and organisations cannot be suspended yet.
+
 ## Add an operator
 1. **Ticket and approval.** Open a ticket naming the person and why they need access. The tech lead (or delegate, not the person) approves on the ticket. Production database access for the command follows the break-glass rule in the [access control policy](../security/access-control.md).
 2. **Network.** Check the person will work from a network in `PLATFORM_ALLOWED_CIDRS` (office or VPN). Changing that list is a deploy-time setting change, with its own ticket.
@@ -20,7 +39,7 @@ Platform operators are not clinic users: they have their own accounts, sign in o
    The new operator types their password (at least 12 characters; not shown, asked twice). The command then asks you to **pause the session recording**: the QR code holds the authenticator secret and must not be in the recording. Press Enter once it is paused; the operator scans the QR code with their authenticator app and types the first code. The screen is cleared, and you resume the recording when the command says so. Nothing is saved until that code matches, and that code cannot then be used to sign in.
 
    The typed key (the same secret as text) is printed only with `--show-key`, for an app that cannot scan; keep the recording paused while it is on screen. Locally, `pnpm --filter @dhc/api support:platform-operator --email …` runs the same command from source.
-4. **Close out.** Record the run ID on the ticket. The new operator signs in to the console to check it works.
+4. **Close out.** Record the run ID on the ticket. The new operator signs in to the console at `/platform/login` (work email, password, then the authenticator code) to check it works.
 
 Never put a password, the authenticator key or a code in the ticket, chat or email.
 
@@ -77,7 +96,9 @@ Every operator's sign-ins, failures, lockouts and logouts, and every list, onboa
 ## If something goes wrong
 - **"An operator with that email already exists."** If they were disabled and are coming back, use `--enable` (and `--reset-authenticator` if their phone changed).
 - **"No matching code: nothing was saved."** Check the phone's clock is set automatically, then run the command again.
-- **Locked out (429 at sign-in).** It lifts after 15 minutes, or at once with `--reset-authenticator`. Repeated lockouts may be someone guessing: check the audit log for `platform.auth.login.failed` from unfamiliar addresses and treat it as an [incident](incident-response.md).
+- **"The platform console is not available from this network."** (403) Connect to the office network or VPN. If you are on it, check `PLATFORM_ALLOWED_CIDRS` and how the web server's forwarded address reaches the API (API guide §3s, *Web console*; ADR 0015). Never fix it by adding the web servers' addresses to `PLATFORM_ALLOWED_CIDRS`. Before `FORWARD_CLIENT_IP` is turned on: the load balancer in front of the web servers must overwrite `X-Forwarded-For` with, or append to it, the client address it observed, so that address is the rightmost entry; the web servers must accept traffic only from the load balancer; and the API must believe forwarded entries only from the load balancer and the web servers. The API believes them only from a peer in `TRUSTED_PROXY_CIDRS` when that is set, so list both peers there: the load balancer's subnets (the console's own requests come from the browser through it) and the web servers' subnets (the web app's session routes, clinic and console). Each adds exactly one entry, so `TRUST_PROXY_HOPS=1` fits both paths. Without `TRUSTED_PROXY_CIDRS`, set `TRUST_PROXY_HOPS=0` unless the API port can be reached only from the load balancer and the web servers.
+- **"Too many attempts. Sign-in is locked for 15 minutes."** (429) Five wrong passwords or codes locked the account. It lifts after 15 minutes, or at once with `--reset-authenticator`. Repeated lockouts may be someone guessing: check the audit log for `platform.auth.login.failed` from unfamiliar addresses and treat it as an [incident](incident-response.md).
+- **"Too many attempts. Wait a minute and try again."** (429) Too many sign-in requests from your address in a minute (the per-address rate limit), not a lockout: wait a minute. The account is not locked and nothing needs resetting.
 
 ## Access review
 Quarterly, the tech lead lists the active operators (with the audit log's `platform.auth.login.succeeded` for each) against the platform team, disables anyone who no longer needs access, and records the review on a ticket ([access control policy](../security/access-control.md)).

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { postSession, refreshDelayMs, rolesFromField } from './session-client';
+import { postPlatformSession, postSession, refreshDelayMs, rolesFromField } from './session-client';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -51,5 +51,15 @@ describe('postSession', () => {
       status: 400,
       fields: { role: 'doctor,clinic_admin' },
     });
+  });
+});
+
+describe('postPlatformSession', () => {
+  it('calls the console’s own session routes, never the clinic’s', async () => {
+    const fetch = vi.fn(async () => new Response(null, { status: 204 }));
+    vi.stubGlobal('fetch', fetch);
+    await postPlatformSession('refresh');
+    const [url] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('/api/platform-session/refresh');
   });
 });
