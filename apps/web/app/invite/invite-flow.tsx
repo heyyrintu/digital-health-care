@@ -105,6 +105,8 @@ export function InviteFlow({ apiBaseUrl }: { apiBaseUrl: string }) {
         setStep({ kind: 'scan', details, secret, qr });
       } catch (e) {
         if (e instanceof ApiError && e.status === 404) return setStep({ kind: 'invalid' });
+        // Only accept's 409 means the account changed; complete's 409 has its own message.
+        if (e instanceof ApiError && e.status === 409) return setError(t('invite.accountChanged'));
         setError(messageFor(e));
       }
     });

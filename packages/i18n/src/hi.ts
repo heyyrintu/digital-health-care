@@ -38,6 +38,8 @@ export const hi: Record<MessageKey, string> = {
   'invite.passwordConfirm': 'पासवर्ड दोबारा लिखें',
   'invite.passwordExisting': 'आपका मौजूदा पासवर्ड',
   'invite.passwordTooShort': 'कम से कम 12 अक्षर इस्तेमाल करें।',
+  'invite.accountChanged':
+    'सेटअप के दौरान आपका खाता बदल गया। आपको भेजा गया सबसे नया निमंत्रण लिंक खोलें।',
   'invite.passwordMismatch': 'दोनों पासवर्ड मेल नहीं खाते।',
   'invite.scanTitle': 'ऑथेंटिकेटर ऐप जोड़ें',
   'invite.scanHelp':

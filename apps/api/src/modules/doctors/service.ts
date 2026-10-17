@@ -165,16 +165,55 @@ export class DoctorProfileService {
    */
   async checkPin(request: FastifyRequest, actor: Actor, pin: string): Promise<void> {
     const now = this.s.now();
-    const outcome = await withTenant(this.s.db, actor.organisationId, async (tx) => {
+    const found = await withTenant(this.s.db, actor.organisationId, async (tx) => {
       const profile = await findProfile(tx, actor);
       if (!profile?.signingPinHash) return 'unset' as const;
       if (profile.pinLockedUntil && profile.pinLockedUntil > now) return 'locked' as const;
-      if (await verifyPassword(this.s.pepperPin(actor.userId, pin), profile.signingPinHash)) {
+      return { checkedHash: profile.signingPinHash };
+    });
+    // The PIN is checked between transactions: scrypt is slow by design, and on a busy CPU
+    // it can outlast the interactive-transaction timeout (a 500) while holding a pooled
+    // connection.
+    const outcome =
+      typeof found === 'object'
+        ? await this.settlePin(request, actor, pin, found.checkedHash)
+        : found;
+    if (outcome === 'unset') {
+      throw new AppError(422, 'BUSINESS_RULE', 'Set a signing PIN in your profile first.', {
+        pin: 'unset',
+      });
+    }
+    if (outcome === 'locked') {
+      throw new AppError(429, 'RATE_LIMITED', 'Too many wrong PINs. Try again in 15 minutes.', {
+        pin: 'locked',
+      });
+    }
+    if (outcome === 'wrong') {
+      throw new AppError(400, 'VALIDATION_FAILED', 'That PIN is not right.', { pin: 'wrong' });
+    }
+  }
+
+  /** Checks the PIN with no transaction open, then records the result against a re-read profile. */
+  private async settlePin(
+    request: FastifyRequest,
+    actor: Actor,
+    pin: string,
+    checkedHash: string,
+  ): Promise<'unset' | 'locked' | 'ok' | 'wrong'> {
+    const now = this.s.now();
+    const pinOk = await verifyPassword(this.s.pepperPin(actor.userId, pin), checkedHash);
+    return withTenant(this.s.db, actor.organisationId, async (tx) => {
+      // Re-read: the PIN, lock and failure count may have changed during the check.
+      const profile = await findProfile(tx, actor);
+      if (!profile?.signingPinHash) return 'unset' as const;
+      if (profile.pinLockedUntil && profile.pinLockedUntil > now) return 'locked' as const;
+      if (pinOk && profile.signingPinHash === checkedHash) {
         if (profile.pinFailedCount > 0) {
           await tx.doctorProfile.update({ where: { id: profile.id }, data: { pinFailedCount: 0 } });
         }
         return 'ok' as const;
       }
+      // A PIN changed meanwhile counts as a wrong attempt.
       const updated = await tx.doctorProfile.update({
         where: { id: profile.id },
         data: { pinFailedCount: { increment: 1 } },
@@ -193,19 +232,6 @@ export class DoctorProfileService {
       });
       return 'locked' as const;
     });
-    if (outcome === 'unset') {
-      throw new AppError(422, 'BUSINESS_RULE', 'Set a signing PIN in your profile first.', {
-        pin: 'unset',
-      });
-    }
-    if (outcome === 'locked') {
-      throw new AppError(429, 'RATE_LIMITED', 'Too many wrong PINs. Try again in 15 minutes.', {
-        pin: 'locked',
-      });
-    }
-    if (outcome === 'wrong') {
-      throw new AppError(400, 'VALIDATION_FAILED', 'That PIN is not right.', { pin: 'wrong' });
-    }
   }
 
   private out(row: ProfileRow | null): DoctorProfile {
