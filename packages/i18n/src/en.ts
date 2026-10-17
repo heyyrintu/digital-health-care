@@ -1214,9 +1214,9 @@ export const en = {
   'platform.health.latency': 'Answered in {ms} ms',
   'platform.health.migration': 'Latest migration: {name}',
   'platform.health.noMigration': 'No migration recorded',
-  'platform.health.databaseDown': 'The database did not answer within 2 seconds.',
+  'platform.health.databaseDown': 'The database failed, or did not answer within 2 seconds.',
   'platform.health.queuesDown':
-    'Redis did not answer within 1.5 seconds. Jobs cannot be counted and may not be running.',
+    'Redis refused the connection or did not answer within 1.5 seconds. Jobs cannot be counted and may not be running.',
   'platform.health.queuesNotConfigured':
     'This API server has no REDIS_URL, so the queues are not checked.',
   'platform.health.queuesOk': 'Every queue answered.',

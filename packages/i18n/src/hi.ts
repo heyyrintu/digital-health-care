@@ -1217,9 +1217,9 @@ export const hi: Record<MessageKey, string> = {
   'platform.health.latency': '{ms} ms में जवाब',
   'platform.health.migration': 'आख़िरी माइग्रेशन: {name}',
   'platform.health.noMigration': 'कोई माइग्रेशन दर्ज नहीं',
-  'platform.health.databaseDown': 'डेटाबेस ने 2 सेकंड में जवाब नहीं दिया।',
+  'platform.health.databaseDown': 'डेटाबेस में गड़बड़ी हुई, या उसने 2 सेकंड में जवाब नहीं दिया।',
   'platform.health.queuesDown':
-    'Redis ने 1.5 सेकंड में जवाब नहीं दिया। जॉब गिने नहीं जा सकते और शायद चल भी नहीं रहे।',
+    'Redis ने कनेक्शन अस्वीकार किया या 1.5 सेकंड में जवाब नहीं दिया। जॉब गिने नहीं जा सकते और शायद चल भी नहीं रहे।',
   'platform.health.queuesNotConfigured':
     'इस API सर्वर पर REDIS_URL सेट नहीं है, इसलिए कतारें जाँची नहीं जातीं।',
   'platform.health.queuesOk': 'हर कतार ने जवाब दिया।',
