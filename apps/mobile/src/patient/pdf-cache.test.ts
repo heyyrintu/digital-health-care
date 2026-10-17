@@ -94,6 +94,15 @@ describe('PdfCache', () => {
     expect(await cache.open('A-v1.pdf', bytes, 'A')).toBe('shared');
   });
 
+  it('shares a PDF by default and a photo with its own media type', async () => {
+    const types: string[] = [];
+    const f = fakeDeps({ share: async (_uri, _title, type) => void types.push(type) });
+    const cache = new PdfCache(f.deps);
+    await cache.open('A-v1.pdf', bytes, 'A');
+    await cache.open('result-1.jpg', bytes, 'MRI knee, right', 'image/jpeg');
+    expect(types).toEqual(['application/pdf', 'image/jpeg']);
+  });
+
   it('reports a phone that cannot share without downloading', async () => {
     let downloads = 0;
     const f = fakeDeps({ canShare: async () => false });
