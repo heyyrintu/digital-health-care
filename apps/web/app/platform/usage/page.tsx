@@ -3,6 +3,7 @@
 import { ApiError } from '@dhc/api-client';
 import type { PlatformUsageReport } from '@dhc/contracts';
 import { formatInr } from '@dhc/domain';
+import type { MessageKey } from '@dhc/i18n';
 import { Button, Input, PageHeader, Surface } from '@dhc/ui-web';
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react';
 import {
@@ -27,8 +28,9 @@ function UsageScreen() {
   const [range, setRange] = useState(() => defaultUsageRange(new Date()));
   const [draft, setDraft] = useState(range);
   const [report, setReport] = useState<PlatformUsageReport | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [rangeError, setRangeError] = useState<string | null>(null);
+  // Kept as keys and translated when shown, so switching language does not reload the report.
+  const [error, setError] = useState<{ key: MessageKey } | { text: string } | null>(null);
+  const [rangeError, setRangeError] = useState<MessageKey | null>(null);
 
   /** The latest range asked for: answers to earlier ones are dropped. */
   const latest = useRef(0);
@@ -45,10 +47,10 @@ function UsageScreen() {
         if (request !== latest.current) return;
         if (e instanceof ApiError && e.status === 401) return void signOut('expired');
         const key = platformErrorKey(e, 'page');
-        setError(key ? t(key) : (e as Error).message);
+        setError(key ? { key } : { text: (e as Error).message });
       }
     },
-    [api, signOut, t],
+    [api, signOut],
   );
 
   useEffect(() => {
@@ -58,7 +60,7 @@ function UsageScreen() {
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const problem = usageRangeProblem(draft.from, draft.to);
-    setRangeError(problem ? t(problem) : null);
+    setRangeError(problem);
     if (!problem) setRange({ ...draft });
   }
 
@@ -105,12 +107,12 @@ function UsageScreen() {
         </form>
         {rangeError && (
           <div className="mt-3">
-            <ErrorNotice id="usage-range-error" message={rangeError} />
+            <ErrorNotice id="usage-range-error" message={t(rangeError)} />
           </div>
         )}
       </Surface>
 
-      <ErrorNotice message={error} />
+      <ErrorNotice message={error && ('key' in error ? t(error.key) : error.text)} />
 
       <Surface className="min-w-0 p-4 sm:p-6">
         {!report ? (

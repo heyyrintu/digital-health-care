@@ -1145,7 +1145,7 @@ export const hi: Record<MessageKey, string> = {
   'platform.onboard.listFailed':
     'संगठन बन गया, लेकिन सूची ताज़ा नहीं हो सकी। पहले लिंक कॉपी करें, फिर पेज दोबारा लोड करें।',
   'platform.onboard.handOverFirst':
-    'दूसरा संगठन जोड़ने से पहले ऊपर का आमंत्रण लिंक सौंपें और उसे बंद करें।',
+    'दूसरा संगठन जोड़ने से पहले ऊपर का आमंत्रण लिंक सौंपें और इस सूचना को बंद करें।',
   'platform.onboard.dismiss': 'मैंने लिंक कॉपी कर लिया है',
   'platform.doctors.title': 'डॉक्टर सत्यापन',
   'platform.doctors.sub':

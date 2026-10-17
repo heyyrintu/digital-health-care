@@ -27,7 +27,7 @@ export function OnboardCard({
   /** Reloads the organisation list; throws on failure. */
   onCreated: () => Promise<void>;
 }) {
-  const { api, signOut, handover, showHandover, dismissHandover, t } = usePlatformSession();
+  const { api, signOut, handover, reserveHandover, dismissHandover, t } = usePlatformSession();
   const slugInput = useRef<HTMLInputElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [slugError, setSlugError] = useState<string | null>(null);
@@ -65,6 +65,7 @@ export function OnboardCard({
     };
 
     setBusy(true);
+    const showHandover = reserveHandover();
     let created: CreatedPlatformOrganisation;
     try {
       created = await api.platform.createOrganisation(body);

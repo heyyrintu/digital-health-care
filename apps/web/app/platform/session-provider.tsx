@@ -45,7 +45,11 @@ interface PlatformSessionContext {
    * before a reload or closing the tab.
    */
   handover: Handover | null;
-  showHandover(handover: Handover): void;
+  /**
+   * Call before onboarding starts; the returned function shows its link, unless the session
+   * ended meanwhile.
+   */
+  reserveHandover(): (handover: Handover) => void;
   dismissHandover(): void;
 }
 
@@ -238,6 +242,14 @@ export function PlatformSessionProvider({
   }, [handover]);
 
   const dismissHandover = useCallback(() => setHandover(null), []);
+  // Taken before onboarding starts: a link that arrives after the session ended is dropped,
+  // so it cannot come back into a later session.
+  const reserveHandover = useCallback(() => {
+    const current = generation.current;
+    return (shown: Handover) => {
+      if (generation.current === current) setHandover(shown);
+    };
+  }, []);
 
   const value = useMemo<PlatformSessionContext>(
     () => ({
@@ -251,10 +263,21 @@ export function PlatformSessionProvider({
       startSession,
       signOut,
       handover,
-      showHandover: setHandover,
+      reserveHandover,
       dismissHandover,
     }),
-    [status, operator, endedReason, api, locale, startSession, signOut, handover, dismissHandover],
+    [
+      status,
+      operator,
+      endedReason,
+      api,
+      locale,
+      startSession,
+      signOut,
+      handover,
+      reserveHandover,
+      dismissHandover,
+    ],
   );
 
   return (

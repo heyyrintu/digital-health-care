@@ -69,7 +69,7 @@ function DoctorQueue({ status }: { status: Queue }) {
   // Kept as keys and translated when shown, so switching language changes the text without
   // reloading the queue (which would close an open verify form and lose the pages loaded).
   const [error, setError] = useState<Problem | null>(null);
-  const [notice, setNotice] = useState<{ key: MessageKey; name?: string } | null>(null);
+  const [notice, setNotice] = useState<{ key: MessageKey; name?: string | null } | null>(null);
   const [busy, setBusy] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
 
@@ -125,7 +125,7 @@ function DoctorQueue({ status }: { status: Queue }) {
             key: result.alreadyVerified
               ? 'platform.doctors.alreadyVerified'
               : 'platform.doctors.verified',
-            name: nameOf(doctor),
+            name: doctor.displayName,
           },
     );
   }
@@ -134,7 +134,10 @@ function DoctorQueue({ status }: { status: Queue }) {
     <Surface className="mt-4 min-w-0 space-y-4 p-4 sm:p-6">
       {notice && (
         <p role="status" className="rounded-xl bg-success-soft px-4 py-3 text-sm">
-          {t(notice.key, notice.name === undefined ? {} : { name: notice.name })}
+          {t(
+            notice.key,
+            notice.name === undefined ? {} : { name: notice.name ?? t('platform.doctors.unnamed') },
+          )}
         </p>
       )}
       <ErrorNotice message={error && ('key' in error ? t(error.key) : error.text)} />
