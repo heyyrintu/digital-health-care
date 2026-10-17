@@ -11,7 +11,7 @@ import {
   type VerifiedPlatformDoctor,
   type VerifyPlatformDoctorBody,
 } from '@dhc/contracts';
-import { withAuth, withNewOrganisation, withPlatform, type Tx } from '@dhc/db';
+import { withNewOrganisation, withPlatform, type Tx } from '@dhc/db';
 import { addDays, istDateKey } from '@dhc/domain';
 import type { FastifyRequest } from 'fastify';
 import type { PlatformAccessClaims } from '../../auth/tokens';
@@ -19,7 +19,7 @@ import { AppError } from '../../errors';
 import type { Services } from '../../services';
 import { writeAudit, type AuditSource } from '../audit/write';
 import {
-  findOrCreateInvitee,
+  inviteeAccount,
   issueJoinInvite,
   maskIdentifier,
   parseIdentifier,
@@ -184,9 +184,7 @@ export class PlatformService {
         SELECT platform_organisation_slug_taken(${body.slug}) AS taken`,
     );
     if (taken) throw await slugTaken();
-    const user = await withAuth(this.s.db, (tx) =>
-      findOrCreateInvitee(tx, identity, body.admin.displayName),
-    );
+    const user = await inviteeAccount(this.s.db, identity, body.admin.displayName);
 
     const created = await withNewOrganisation(
       this.s.db,
@@ -256,19 +254,26 @@ export class PlatformService {
     request: FastifyRequest,
     claims: PlatformAccessClaims,
     status: 'pending' | 'verified',
-  ): Promise<{ data: PlatformDoctor[]; hasMore: boolean }> {
+    cursor?: string,
+  ): Promise<{ data: PlatformDoctor[]; hasMore: boolean; nextCursor: string | null }> {
+    const after = cursor ? decodeCursor(cursor) : null;
     const rows = await withPlatform(this.s.db, async (tx) => {
       // One more than a page, to tell whether more wait.
-      const rows = await this.doctorRows(tx, { status }, PLATFORM_DOCTOR_PAGE + 1);
+      const rows = await this.doctorRows(tx, { status, after }, PLATFORM_DOCTOR_PAGE + 1);
       await auditOperator(tx, request, 'platform.doctors.listed', claims.operatorId, {
         status,
         count: Math.min(rows.length, PLATFORM_DOCTOR_PAGE),
+        ...(after ? { page: 'next' } : {}),
       });
       return rows;
     });
+    const page = rows.slice(0, PLATFORM_DOCTOR_PAGE);
+    const last = page[page.length - 1];
+    const hasMore = rows.length > PLATFORM_DOCTOR_PAGE;
     return {
-      data: rows.slice(0, PLATFORM_DOCTOR_PAGE).map(toPlatformDoctor),
-      hasMore: rows.length > PLATFORM_DOCTOR_PAGE,
+      data: page.map(toPlatformDoctor),
+      hasMore,
+      nextCursor: hasMore && last ? encodeCursor(last.submitted_at, last.profile_id) : null,
     };
   }
 
@@ -308,6 +313,7 @@ export class PlatformService {
           expected: {
             registrationNumber: body.expected.registrationNumber,
             council: body.expected.council,
+            qualifications: body.expected.qualifications,
             submittedAt: new Date(body.expected.submittedAt),
           },
         },
@@ -386,13 +392,16 @@ export class PlatformService {
 
   private async doctorRows(
     tx: Tx,
-    by: { status: 'pending' | 'verified' } | { profileId: string },
+    by: { status: 'pending' | 'verified'; after: QueueCursor | null } | { profileId: string },
     limit: number,
   ): Promise<DoctorProfileRow[]> {
     const status = 'status' in by ? by.status : null;
     const profileId = 'profileId' in by ? by.profileId : null;
+    const after = 'after' in by ? by.after : null;
     return tx.$queryRaw<DoctorProfileRow[]>`
-      SELECT * FROM platform_doctor_profiles(${status}::text, ${profileId}::uuid, ${limit}::int)`;
+      SELECT * FROM platform_doctor_profiles(${status}::text, ${profileId}::uuid, ${limit}::int,
+                                             ${after?.submittedAt ?? null}::timestamptz,
+                                             ${after?.id ?? null}::uuid)`;
   }
 
   private async operator(claims: PlatformAccessClaims) {
@@ -405,6 +414,28 @@ export class PlatformService {
     if (!operator) throw new AppError(401, 'UNAUTHENTICATED', 'Please sign in again.');
     return operator;
   }
+}
+
+/** Where the next page of the queue starts: after this (submitted at, profile) pair. */
+interface QueueCursor {
+  submittedAt: Date;
+  id: string;
+}
+
+const encodeCursor = (submittedAt: Date, id: string) =>
+  Buffer.from(`${submittedAt.toISOString()}|${id}`).toString('base64url');
+
+function decodeCursor(cursor: string): QueueCursor {
+  const [at = '', id = '', extra] = Buffer.from(cursor, 'base64url').toString('utf8').split('|');
+  const submittedAt = new Date(at);
+  if (
+    extra !== undefined ||
+    Number.isNaN(submittedAt.getTime()) ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+  ) {
+    throw new AppError(400, 'VALIDATION_FAILED', 'Invalid cursor.', { cursor: 'invalid' });
+  }
+  return { submittedAt, id };
 }
 
 function toPlatformDoctor(r: DoctorProfileRow): PlatformDoctor {

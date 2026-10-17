@@ -44,6 +44,8 @@ let op: OperatorFixture;
 const OTHER_PASSWORD = 'another synthetic passphrase';
 const WRONG_PASSWORD = 'not the synthetic passphrase';
 const SHORT_PASSWORD = 'short';
+// Leading and trailing spaces are part of the password: sign-in never trims it.
+const PADDED_PASSWORD = '  padded synthetic passphrase  ';
 const WRONG_CODE = '000000';
 const TOTP_SECRET = 'JBSWY3DPEHPK3PXP';
 
@@ -102,13 +104,19 @@ function expectNoClinicalData(body: string) {
 
 /** What the console sends: the ticket and the details the queue showed. */
 const checked = (
-  profile: { registrationNumber: string | null; council: string | null; submittedAt: string },
+  profile: {
+    registrationNumber: string | null;
+    council: string | null;
+    qualifications: string | null;
+    submittedAt: string;
+  },
   ticket = 'SUP-1',
 ) => ({
   ticket,
   expected: {
     registrationNumber: profile.registrationNumber,
     council: profile.council,
+    qualifications: profile.qualifications,
     submittedAt: profile.submittedAt,
   },
 });
@@ -233,6 +241,75 @@ describe('sign-in', () => {
     );
     expect(results.map((r) => r.statusCode).sort()).toEqual([200, 401]);
     expect(await h.owner.platformSession.count()).toBe(1);
+  });
+
+  it('never leaves a live session for an operator disabled during the code step', async () => {
+    for (let i = 0; i < 3; i++) {
+      await h.owner.platformOperator.update({
+        where: { id: op.operatorId },
+        data: { status: 'active' },
+      });
+      const step = await passwordStep(op.email);
+      h.clock.advance(30);
+      await Promise.all([
+        call('POST', '/platform/auth/mfa/verify', null, {
+          mfaToken: step.json().mfaToken,
+          code: totpAt(op.totpSecret, h.clock.ms / 1000),
+        }),
+        disablePlatformOperator(h.services, source, {
+          email: op.email,
+          ticket: 'SUP-12',
+          operator: 'lead@platform.test',
+        }),
+      ]);
+      expect(
+        await h.owner.platformSession.count({
+          where: { operatorId: op.operatorId, revokedAt: null },
+        }),
+      ).toBe(0);
+    }
+  });
+
+  it('a valid code cannot undo a lock written by a concurrent fifth wrong code', async () => {
+    const [good, bad] = [await passwordStep(op.email), await passwordStep(op.email)];
+    for (let i = 0; i < 4; i++) {
+      expect((await passwordStep(op.email, WRONG_PASSWORD)).statusCode).toBe(401);
+    }
+    h.clock.advance(30);
+    const [valid] = await Promise.all([
+      call('POST', '/platform/auth/mfa/verify', null, {
+        mfaToken: good!.json().mfaToken,
+        code: totpAt(op.totpSecret, h.clock.ms / 1000),
+      }),
+      call('POST', '/platform/auth/mfa/verify', null, {
+        mfaToken: bad!.json().mfaToken,
+        code: WRONG_CODE,
+      }),
+    ]);
+    const row = await h.owner.platformOperator.findUniqueOrThrow({ where: { id: op.operatorId } });
+    if (valid!.statusCode === 200) {
+      // The valid code went first; the wrong one then counted from zero.
+      expect(row).toMatchObject({ failedLoginCount: 1, lockedUntil: null });
+    } else {
+      expect(row.lockedUntil?.getTime()).toBeGreaterThan(h.clock.ms);
+    }
+  });
+
+  it('two refreshes with the same token end the session', async () => {
+    const tokens = await platformLogin(h, op);
+    const results = await Promise.all(
+      [1, 2].map(() =>
+        call('POST', '/platform/auth/refresh', null, { refreshToken: tokens.refreshToken }),
+      ),
+    );
+    expect(results.filter((r) => r.statusCode === 200).length).toBeLessThanOrEqual(1);
+    const session = await h.owner.platformSession.findFirstOrThrow({
+      where: { operatorId: op.operatorId },
+    });
+    expect(session).toMatchObject({ revokedReason: 'refresh_token_reuse' });
+    expect(
+      await h.owner.auditLog.count({ where: { action: 'platform.auth.refresh.reuse_detected' } }),
+    ).toBe(1);
   });
 
   it('counts concurrent wrong passwords atomically', async () => {
@@ -377,6 +454,16 @@ describe('compromised operator password', () => {
         where: { action: 'platform.operator.password_reset', entityId: op.operatorId },
       }),
     ).toBe(1);
+
+    // A padded password is kept exactly as typed.
+    await disablePlatformOperator(h.services, source, trail);
+    await resetPlatformOperatorPassword(h.services, source, {
+      ...trail,
+      password: PADDED_PASSWORD,
+    });
+    await enablePlatformOperator(h.services, source, trail);
+    expect((await passwordStep(op.email, PADDED_PASSWORD.trim())).statusCode).toBe(401);
+    expect((await passwordStep(op.email, PADDED_PASSWORD)).statusCode).toBe(200);
   });
 });
 
@@ -582,6 +669,25 @@ describe('organisations', () => {
     });
     expect(await h.owner.organisation.count()).toBe(3);
     expect(await h.owner.clinic.count({ where: { organisationId: orgId } })).toBe(1);
+  });
+});
+
+describe('onboarding races', () => {
+  it('two onboardings for the same new admin share one account', async () => {
+    const tokens = await platformLogin(h, op);
+    const body = (slug: string) => ({
+      name: `Synthetic ${slug}`,
+      slug,
+      clinic: { name: 'Main' },
+      admin: { identifier: 'pooja.singh@shared-admin.test' },
+    });
+    const results = await Promise.all(
+      ['shared-one', 'shared-two'].map((slug) =>
+        call('POST', '/platform/organisations', tokens, body(slug)),
+      ),
+    );
+    expect(results.map((r) => r.statusCode)).toEqual([201, 201]);
+    expect(await h.owner.user.count({ where: { email: 'pooja.singh@shared-admin.test' } })).toBe(1);
   });
 });
 
@@ -796,6 +902,7 @@ describe('doctor verification', () => {
         expected: {
           registrationNumber: plan.registrationNumber,
           council: plan.council,
+          qualifications: plan.qualifications,
           submittedAt: plan.submittedAt,
         },
       }),
@@ -830,6 +937,79 @@ describe('doctor verification', () => {
     expect(page.data).toHaveLength(200);
     expect(page.hasMore).toBe(true);
     expect(page.data[0]!.registrationNumber).toBe('B-0');
+
+    // The cursor gets past the first page; the last page says so.
+    const next = PlatformDoctorList.parse(
+      (
+        await call(
+          'GET',
+          `/platform/doctors?cursor=${encodeURIComponent(page.nextCursor!)}`,
+          tokens,
+        )
+      ).json(),
+    );
+    expect(next.data.map((d) => d.registrationNumber)).toEqual(['B-200']);
+    expect(next).toMatchObject({ hasMore: false, nextCursor: null });
+    expect(
+      (await call('GET', '/platform/doctors?cursor=bm90LWEtY3Vyc29y', tokens)).statusCode,
+    ).toBe(400);
+  });
+
+  it('leaves out profiles with no registration details yet, such as a PIN set first', async () => {
+    const doctorA = await staffLogin(h, 'clinic-a', clinics.a.doctor);
+    const pin = await call('PUT', '/doctor-profile/signing-pin', doctorA, {
+      password: STAFF_PASSWORD,
+      pin: '482916',
+    });
+    expect(pin.statusCode, pin.body).toBe(204);
+    const row = await h.owner.doctorProfile.findFirstOrThrow({
+      where: { userId: clinics.a.doctor.userId },
+    });
+    expect(row.submittedAt).toBeNull();
+    const tokens = await platformLogin(h, op);
+    expect((await call('GET', '/platform/doctors', tokens)).json().data).toEqual([]);
+
+    h.clock.advance(600);
+    await call('PUT', '/doctor-profile', doctorA, profileBody);
+    const [entry] = (await call('GET', '/platform/doctors', tokens)).json().data;
+    expect(Date.parse(entry.submittedAt)).toBe(h.clock.ms);
+  });
+
+  it('refuses a profile whose qualifications changed after it was shown', async () => {
+    const doctorA = await staffLogin(h, 'clinic-a', clinics.a.doctor);
+    await call('PUT', '/doctor-profile', doctorA, profileBody);
+    const tokens = await platformLogin(h, op);
+    const [shown] = (await call('GET', '/platform/doctors', tokens)).json().data;
+    await call('PUT', '/doctor-profile', doctorA, { ...profileBody, qualifications: 'MBBS' });
+    const res = await call(
+      'POST',
+      `/platform/doctors/${shown.profileId}/verify`,
+      tokens,
+      checked(shown),
+    );
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error.fields).toEqual({ profile: 'changed' });
+  });
+
+  it('verifies once when two operators click at the same moment', async () => {
+    const doctorA = await staffLogin(h, 'clinic-a', clinics.a.doctor);
+    await call('PUT', '/doctor-profile', doctorA, profileBody);
+    const other = await addOperator(h, 'ops2@platform.test');
+    const [first, second] = [await platformLogin(h, op), await platformLogin(h, other)];
+    const [shown] = (await call('GET', '/platform/doctors', first)).json().data;
+    const results = await Promise.all(
+      [first, second].map((tokens) =>
+        call('POST', `/platform/doctors/${shown.profileId}/verify`, tokens, checked(shown)),
+      ),
+    );
+    expect(results.filter((r) => r.statusCode === 200 && !r.json().alreadyVerified)).toHaveLength(
+      1,
+    );
+    for (const r of results.filter((x) => x.statusCode === 409)) {
+      expect(r.json().error.fields).toEqual({ profile: 'verified' });
+      expect(r.json().error.message).toMatch(/verified this doctor/);
+    }
+    expect(await h.owner.auditLog.count({ where: { action: 'support.doctor.verified' } })).toBe(1);
   });
 
   it('puts a profile back in the queue, as of now, when the registration changes', async () => {
@@ -1095,14 +1275,18 @@ describe('in the database (dhc_platform)', () => {
     ).rejects.toThrow(/permission denied/);
   });
 
-  it('returns only the declared, non-clinical columns from each function', async () => {
-    const columns = await h.owner.$queryRaw<{ name: string; args: string[] }[]>`
-      SELECT proname AS name, coalesce(proargnames, '{}') AS args
-      FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace AND n.nspname = 'public'
-      WHERE proname IN ('platform_organisation_summaries', 'platform_doctor_profiles', 'platform_usage')`;
-    for (const { args } of columns) {
-      expect(args.filter((a) => CLINICAL.test(a) && !a.startsWith('p_'))).toEqual([]);
-    }
+  it('returns only non-clinical columns from every platform function', async () => {
+    // Every platform_* function, found in the catalogue: a new one is checked too.
+    const columns = await h.owner.$queryRaw<{ name: string; column: string }[]>`
+      SELECT p.proname AS name, a.arg AS column
+      FROM pg_proc p
+      JOIN pg_namespace n ON n.oid = p.pronamespace AND n.nspname = 'public'
+      CROSS JOIN LATERAL unnest(p.proargnames, p.proargmodes::text[]) AS a(arg, mode)
+      WHERE p.proname LIKE 'platform\\_%' AND a.mode IN ('o', 't')`;
+    expect(new Set(columns.map((c) => c.name))).toEqual(
+      new Set(['platform_organisation_summaries', 'platform_doctor_profiles', 'platform_usage']),
+    );
+    expect(columns.filter((c) => CLINICAL.test(c.column))).toEqual([]);
   });
 
   it('masks contact details the same way as the API', async () => {

@@ -93,13 +93,18 @@ export type CreatedPlatformOrganisation = z.infer<typeof CreatedPlatformOrganisa
 
 export const PlatformDoctorQuery = z.object({
   status: z.enum(['pending', 'verified']).default('pending'),
+  /** `nextCursor` from the previous page. */
+  cursor: z.string().min(1).max(200).optional(),
 });
 export type PlatformDoctorQuery = z.infer<typeof PlatformDoctorQuery>;
 
-/** Most rows the verification queue returns at once; `hasMore` says there are more. */
+/** Most rows the verification queue returns at once; `nextCursor` fetches the rest. */
 export const PLATFORM_DOCTOR_PAGE = 200;
 
-/** An active doctor's registration details, oldest submission first. */
+/**
+ * An active doctor's registration details, oldest submission first. Profiles with no
+ * registration details yet (a PIN set first) are not in the queue.
+ */
 export const PlatformDoctor = z.object({
   profileId: z.uuid(),
   organisation: z.object({ id: z.uuid(), slug: z.string(), name: z.string() }),
@@ -121,8 +126,10 @@ export type PlatformDoctor = z.infer<typeof PlatformDoctor>;
 
 export const PlatformDoctorList = z.object({
   data: z.array(PlatformDoctor),
-  /** More than PLATFORM_DOCTOR_PAGE profiles wait: work the oldest first, then reload. */
+  /** More profiles follow this page. */
   hasMore: z.boolean(),
+  /** Pass as `cursor` for the next page; null on the last one. */
+  nextCursor: z.string().nullable(),
 });
 export type PlatformDoctorList = z.infer<typeof PlatformDoctorList>;
 
@@ -141,6 +148,7 @@ export const VerifyPlatformDoctorBody = z.object({
   expected: z.object({
     registrationNumber: z.string().min(1).max(40),
     council: z.string().min(1).max(120),
+    qualifications: z.string().min(1).max(200),
     submittedAt: z.iso.datetime(),
   }),
 });

@@ -36,7 +36,7 @@ import {
   createPlatformOperator,
   disablePlatformOperator,
   enablePlatformOperator,
-  normaliseOperatorEmail,
+  preflightOperatorCommand,
   resetPlatformOperatorAuthenticator,
   resetPlatformOperatorPassword,
 } from '../modules/platform/operators';
@@ -154,7 +154,12 @@ async function confirm(action: string, word: string) {
 }
 
 try {
-  const email = normaliseOperatorEmail(values.email!);
+  // Everything that can be checked before anyone types a password or scans a code.
+  const { email } = await preflightOperatorCommand({ db }, mode, {
+    ...trail,
+    email: values.email!,
+    displayName: values.name,
+  });
   const done = `audit run ID ${runId} (ticket ${trail.ticket})`;
   if (mode === 'disable') {
     await confirm(`Disable ${email} and end their console sessions?`, 'DISABLE');

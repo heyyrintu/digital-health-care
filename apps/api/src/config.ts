@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { IpAllowlist, parseCidrs } from './plugins/ip-allowlist';
+import { IpAllowlist, hasCatchAll, parseCidrs } from './plugins/ip-allowlist';
 
 const Env = z
   .object({
@@ -59,10 +59,28 @@ const Env = z
         'Use CIDRs like 203.0.113.0/24, comma-separated, or * outside production',
       ),
   })
-  .refine((env) => !(env.NODE_ENV === 'production' && env.PLATFORM_ALLOWED_CIDRS.trim() === '*'), {
-    message: 'PLATFORM_ALLOWED_CIDRS=* is not allowed in production',
-    path: ['PLATFORM_ALLOWED_CIDRS'],
-  })
+  .refine(
+    (env) =>
+      !(
+        env.NODE_ENV === 'production' &&
+        (env.PLATFORM_ALLOWED_CIDRS.trim() === '*' ||
+          hasCatchAll(parseCidrs(env.PLATFORM_ALLOWED_CIDRS) ?? []))
+      ),
+    {
+      message:
+        'PLATFORM_ALLOWED_CIDRS=* and catch-all networks (0.0.0.0/0, ::/0) are not allowed in production',
+      path: ['PLATFORM_ALLOWED_CIDRS'],
+    },
+  )
+  // Trusting every address as a proxy is trusting X-Forwarded-For from anyone.
+  .refine(
+    (env) =>
+      !(env.NODE_ENV === 'production' && hasCatchAll(parseCidrs(env.TRUSTED_PROXY_CIDRS) ?? [])),
+    {
+      message: 'TRUSTED_PROXY_CIDRS must not include a catch-all network in production',
+      path: ['TRUSTED_PROXY_CIDRS'],
+    },
+  )
   .refine((env) => !(env.NODE_ENV === 'production' && env.OTP_DELIVERY === 'log'), {
     message: 'OTP_DELIVERY=log is not allowed in production',
     path: ['OTP_DELIVERY'],

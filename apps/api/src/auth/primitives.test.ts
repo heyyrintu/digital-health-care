@@ -1,3 +1,4 @@
+import { SignJWT } from 'jose';
 import { describe, expect, it } from 'vitest';
 import { FieldCipher } from './field-cipher';
 import { hashPassword, verifyPassword } from './password';
@@ -114,6 +115,19 @@ describe('PlatformTokenService', () => {
     const mfa = await platform.createMfaToken('op1');
     expect(await platform.verifyMfaToken(mfa)).toEqual({ operatorId: 'op1' });
     expect(await platform.verifyAccessToken(mfa)).toBeNull();
+  });
+
+  it('signs with a key derived from the secret, never the raw secret', async () => {
+    // Right issuer, audience and claims, but signed with the JWT secret itself.
+    const forged = await new SignJWT({ sid: 's1' })
+      .setProtectedHeader({ alg: 'HS256' })
+      .setSubject('op1')
+      .setIssuer('dhc-api')
+      .setAudience('dhc-platform')
+      .setIssuedAt()
+      .setExpirationTime('15m')
+      .sign(new TextEncoder().encode(secret));
+    expect(await platform.verifyAccessToken(forged)).toBeNull();
   });
 
   it('never accepts a clinic token, and a clinic never accepts a platform token', async () => {

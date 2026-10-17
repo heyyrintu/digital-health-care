@@ -8,7 +8,7 @@ import {
   type StaffRole,
   type TokenResponse,
 } from '@dhc/contracts';
-import { withAuth, withTenant, type Tx } from '@dhc/db';
+import { Prisma, withAuth, withTenant, type Db, type Tx } from '@dhc/db';
 import type { FastifyRequest } from 'fastify';
 import { randomBytes } from 'node:crypto';
 import { hashPassword, verifyPassword } from '../../auth/password';
@@ -90,9 +90,7 @@ export class InviteService {
 
     // Identity lives in platform-level tables (sign-in role); the invite and membership
     // live in the organisation (tenant role).
-    const user = await withAuth(this.s.db, (tx) =>
-      findOrCreateInvitee(tx, identity, body.displayName),
-    );
+    const user = await inviteeAccount(this.s.db, identity, body.displayName);
     const { invite, inviteUrl } = await withTenant(this.s.db, actor.organisationId, (tx) =>
       issueJoinInvite(tx, request, this.s, {
         organisationId: actor.organisationId,
@@ -365,6 +363,26 @@ export async function findOrCreateInvitee(
     throw new AppError(409, 'CONFLICT', 'This person’s account is disabled.');
   }
   return user;
+}
+
+/**
+ * `findOrCreateInvitee` in its own sign-in transaction. Two invites for a new person at
+ * once can both try to create the account; the loser's insert fails on the unique email
+ * or mobile and aborts its transaction, so it reads the winner's account in a new one.
+ */
+export async function inviteeAccount(
+  db: Db,
+  identity: { email: string } | { phone: string },
+  displayName: string | undefined,
+) {
+  try {
+    return await withAuth(db, (tx) => findOrCreateInvitee(tx, identity, displayName));
+  } catch (error) {
+    if (!(error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002')) {
+      throw error;
+    }
+    return withAuth(db, (tx) => findOrCreateInvitee(tx, identity, displayName));
+  }
 }
 
 export interface JoinInviteParams {

@@ -1118,9 +1118,10 @@ model DoctorProfile {
   verifiedAt         DateTime?          @map("verified_at") @db.Timestamptz(3)
   /// The platform operator who checked the registration, and the support ticket.
   verifiedBy         String?            @map("verified_by")
-  /// When the profile last went to the platform team for verification: when it was first
-  /// saved, and again when a new registration number or council needs checking.
-  submittedAt        DateTime           @default(now()) @map("submitted_at") @db.Timestamptz(3)
+  /// When the profile last went to the platform team for verification: when registration
+  /// details were first saved, and again whenever the registration number or council
+  /// changes. Null until then (a PIN can be set first).
+  submittedAt        DateTime?          @map("submitted_at") @db.Timestamptz(3)
   /// scrypt hash of the PIN that approves each signature on the web.
   signingPinHash     String?            @map("signing_pin_hash")
   pinFailedCount     Int                @default(0) @map("pin_failed_count")

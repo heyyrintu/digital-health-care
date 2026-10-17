@@ -310,8 +310,12 @@ export function createApiClient(options: ApiClientOptions) {
       /** Onboarding: the response carries the first admin's invite link, shown once. */
       createOrganisation: (body: CreatePlatformOrganisationBody) =>
         request('POST', '/platform/organisations', { schema: CreatedPlatformOrganisation, body }),
-      doctors: (status: 'pending' | 'verified' = 'pending') =>
-        request('GET', '/platform/doctors', { schema: PlatformDoctorList, query: { status } }),
+      /** One page of the queue; pass the previous page's `nextCursor` for the next. */
+      doctors: (status: 'pending' | 'verified' = 'pending', cursor?: string) =>
+        request('GET', '/platform/doctors', {
+          schema: PlatformDoctorList,
+          query: { status, cursor },
+        }),
       /** `expected`: the registration details the queue showed and the operator checked. */
       verifyDoctor: (profileId: string, body: VerifyPlatformDoctorBody) =>
         request('POST', `/platform/doctors/${encodeURIComponent(profileId)}/verify`, {

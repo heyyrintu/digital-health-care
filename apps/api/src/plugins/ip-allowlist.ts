@@ -8,7 +8,8 @@ export interface Cidr {
 
 /**
  * Parses `203.0.113.0/24, 2001:db8::/32, 198.51.100.7` into networks; a bare address is a
- * single host. Returns null if any entry is not a valid address or prefix.
+ * single host. Returns null if any entry is not a valid address or prefix, or if the text
+ * holds only separators (`,`), which would otherwise read as an empty list.
  */
 export function parseCidrs(raw: string): Cidr[] | null {
   const out: Cidr[] = [];
@@ -23,7 +24,7 @@ export function parseCidrs(raw: string): Cidr[] | null {
     if (!/^\d{1,3}$/.test(prefixText ?? String(max)) || prefix < 0 || prefix > max) return null;
     out.push({ address, prefix, family });
   }
-  return out;
+  return out.length === 0 && raw.trim() !== '' ? null : out;
 }
 
 /** The networks allowed to reach the platform console (PRD §3.3). */
@@ -58,4 +59,9 @@ export class IpAllowlist {
     if (isIPv6(ip)) return this.list.check(ip, 'ipv6');
     return false;
   }
+}
+
+/** A network that matches every address of its family (`0.0.0.0/0`, `::/0`). */
+export function hasCatchAll(cidrs: Cidr[]): boolean {
+  return cidrs.some((c) => c.prefix === 0);
 }

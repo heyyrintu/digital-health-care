@@ -8,8 +8,10 @@
 -- as dhc_app under that organisation's row-level security, like any clinic request.
 
 -- When a doctor profile went to the platform team for checking (the verification queue).
-ALTER TABLE "doctor_profiles" ADD COLUMN "submitted_at" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP;
-UPDATE doctor_profiles SET submitted_at = created_at;
+-- Set by the API when registration details are saved; null for a profile that only has a
+-- signing PIN so far.
+ALTER TABLE "doctor_profiles" ADD COLUMN "submitted_at" TIMESTAMPTZ(3);
+UPDATE doctor_profiles SET submitted_at = created_at WHERE registration_number IS NOT NULL;
 
 -- CreateTable
 CREATE TABLE "platform_operators" (
@@ -170,8 +172,15 @@ CREATE FUNCTION platform_organisation_summaries()
   $$;
 
 -- Active doctors' registration details for the verification queue: pending or verified,
--- or one profile by ID. Contact details come back masked.
-CREATE FUNCTION platform_doctor_profiles(p_verification text, p_profile_id uuid, p_limit int)
+-- or one profile by ID, oldest submission first, after a (submitted_at, id) cursor.
+-- Profiles without registration details yet are left out. Contact details come back masked.
+CREATE FUNCTION platform_doctor_profiles(
+    p_verification text,
+    p_profile_id uuid,
+    p_limit int,
+    p_after_submitted timestamptz,
+    p_after_id uuid
+  )
   RETURNS TABLE (
     profile_id uuid,
     organisation_id uuid,
@@ -199,15 +208,18 @@ CREATE FUNCTION platform_doctor_profiles(p_verification text, p_profile_id uuid,
     FROM doctor_profiles dp
     JOIN organisations o ON o.id = dp.organisation_id
     JOIN users u ON u.id = dp.user_id
-    WHERE (p_verification IS NULL OR dp.verification::text = p_verification)
+    WHERE dp.registration_number IS NOT NULL
+      AND dp.submitted_at IS NOT NULL
+      AND (p_verification IS NULL OR dp.verification::text = p_verification)
       AND (p_profile_id IS NULL OR dp.id = p_profile_id)
+      AND (p_after_submitted IS NULL OR (dp.submitted_at, dp.id) > (p_after_submitted, p_after_id))
       AND EXISTS (
         SELECT 1 FROM memberships m
         WHERE m.organisation_id = dp.organisation_id AND m.user_id = dp.user_id
           AND m.role = 'doctor' AND m.status = 'active'
       )
     ORDER BY dp.submitted_at, dp.id
-    LIMIT least(greatest(coalesce(p_limit, 200), 1), 500)
+    LIMIT least(greatest(coalesce(p_limit, 200), 1), 501)
   $$;
 
 -- Usage per organisation over IST days p_from to p_to: visits (as the clinic dashboard
@@ -276,14 +288,14 @@ CREATE FUNCTION platform_create_organisation(p_slug text, p_name text, p_now tim
 
 REVOKE ALL ON FUNCTION platform_mask_identifier(text) FROM PUBLIC;
 REVOKE ALL ON FUNCTION platform_organisation_summaries() FROM PUBLIC;
-REVOKE ALL ON FUNCTION platform_doctor_profiles(text, uuid, int) FROM PUBLIC;
+REVOKE ALL ON FUNCTION platform_doctor_profiles(text, uuid, int, timestamptz, uuid) FROM PUBLIC;
 REVOKE ALL ON FUNCTION platform_usage(date, date) FROM PUBLIC;
 REVOKE ALL ON FUNCTION platform_create_organisation(text, text, timestamptz) FROM PUBLIC;
 REVOKE ALL ON FUNCTION platform_organisation_slug_taken(text) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION platform_organisation_slug_taken(text) TO dhc_platform;
 GRANT EXECUTE ON FUNCTION platform_mask_identifier(text) TO dhc_platform;
 GRANT EXECUTE ON FUNCTION platform_organisation_summaries() TO dhc_platform;
-GRANT EXECUTE ON FUNCTION platform_doctor_profiles(text, uuid, int) TO dhc_platform;
+GRANT EXECUTE ON FUNCTION platform_doctor_profiles(text, uuid, int, timestamptz, uuid) TO dhc_platform;
 GRANT EXECUTE ON FUNCTION platform_usage(date, date) TO dhc_platform;
 GRANT EXECUTE ON FUNCTION platform_create_organisation(text, text, timestamptz) TO dhc_platform;
 

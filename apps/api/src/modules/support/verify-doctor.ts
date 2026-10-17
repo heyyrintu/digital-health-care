@@ -8,6 +8,7 @@ import { maskIdentifier, parseIdentifier } from '../invites/service';
 export interface ExpectedRegistration {
   registrationNumber: string;
   council: string;
+  qualifications: string;
   /** When the profile entered the queue; a new registration number or council changes it. */
   submittedAt: Date;
 }
@@ -54,6 +55,12 @@ export interface Verifier {
 
 const invalid = (field: string, message: string) =>
   new AppError(400, 'VALIDATION_FAILED', message, { [field]: 'invalid' });
+
+/** Someone else verified the profile while this request ran. */
+export const ALREADY_VERIFIED = () =>
+  new AppError(409, 'CONFLICT', 'Someone verified this doctor a moment ago: nothing changed.', {
+    profile: 'verified',
+  });
 
 /** The doctor changed their registration after it was shown: it has not been checked. */
 export const PROFILE_CHANGED = () =>
@@ -144,7 +151,12 @@ export async function verifyDoctorProfile(
     const profile = await tx.doctorProfile.findUnique({
       where: { organisationId_userId: target },
     });
-    if (!profile?.registrationNumber || !profile.council || !profile.qualifications) {
+    if (
+      !profile?.registrationNumber ||
+      !profile.council ||
+      !profile.qualifications ||
+      !profile.submittedAt
+    ) {
       throw new AppError(
         422,
         'BUSINESS_RULE',
@@ -155,6 +167,7 @@ export async function verifyDoctorProfile(
       expected &&
       (expected.registrationNumber !== profile.registrationNumber ||
         expected.council !== profile.council ||
+        expected.qualifications !== profile.qualifications ||
         expected.submittedAt.getTime() !== profile.submittedAt.getTime())
     ) {
       throw PROFILE_CHANGED();
@@ -187,11 +200,32 @@ export async function verifyDoctorProfile(
         verification: 'pending',
         registrationNumber: profile.registrationNumber,
         council: profile.council,
+        qualifications: profile.qualifications,
         submittedAt: profile.submittedAt,
       },
       data: { verification: 'verified', verifiedAt, verifiedBy },
     });
-    if (updated.count !== 1) throw PROFILE_CHANGED();
+    if (updated.count !== 1) {
+      // Say which: another verification won, or the doctor changed the details.
+      const latest = await tx.doctorProfile.findUnique({
+        where: { id: profile.id },
+        select: {
+          verification: true,
+          registrationNumber: true,
+          council: true,
+          qualifications: true,
+          submittedAt: true,
+        },
+      });
+      const sameDetails =
+        latest?.registrationNumber === profile.registrationNumber &&
+        latest.council === profile.council &&
+        latest.qualifications === profile.qualifications &&
+        latest.submittedAt?.getTime() === profile.submittedAt.getTime();
+      throw latest?.verification === 'verified' && sameDetails
+        ? ALREADY_VERIFIED()
+        : PROFILE_CHANGED();
+    }
     await writeAudit(tx, source, {
       action: 'support.doctor.verified',
       organisationId: target.organisationId,

@@ -91,6 +91,7 @@ export class DoctorProfileService {
         !!existing &&
         (existing.registrationNumber !== body.registrationNumber ||
           existing.council !== body.council);
+      // Only for the audit entry: a verified registration went back to the queue.
       const reverify = existing?.verification === 'verified' && registrationChanged;
       const data = {
         registrationNumber: body.registrationNumber,
@@ -99,11 +100,15 @@ export class DoctorProfileService {
         specialty: body.specialty || null,
         rxPrefix: body.rxPrefix,
         paperSize: body.paperSize,
-        // Back in the platform team's queue, as of now: a check of the old details (even
-        // one in progress) no longer applies.
-        ...(registrationChanged ? { submittedAt: this.s.now() } : {}),
-        ...(reverify
-          ? { verification: 'pending' as const, verifiedAt: null, verifiedBy: null }
+        // Back in the platform team's queue, as of now, whatever its state: a check of the
+        // old details (finished, or one in progress) no longer applies.
+        ...(registrationChanged
+          ? {
+              submittedAt: this.s.now(),
+              verification: 'pending' as const,
+              verifiedAt: null,
+              verifiedBy: null,
+            }
           : {}),
       };
       let row: ProfileRow;

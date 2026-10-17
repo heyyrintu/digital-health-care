@@ -88,9 +88,9 @@ export const platformRoutes: FastifyPluginAsync<PlatformRoutesOptions> = async (
   });
 
   app.get('/doctors', operator, async (request) => {
-    const { status } = PlatformDoctorQuery.parse(request.query);
+    const { status, cursor } = PlatformDoctorQuery.parse(request.query);
     return PlatformDoctorList.parse(
-      await platform.listDoctors(request, platformAuthOf(request), status),
+      await platform.listDoctors(request, platformAuthOf(request), status, cursor),
     );
   });
 

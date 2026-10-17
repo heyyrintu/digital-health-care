@@ -13,7 +13,7 @@ describe('parseCidrs', () => {
     expect(parseCidrs('')).toEqual([]);
   });
 
-  it.each(['10.0.0.0/33', 'example.test', '10.0.0.0/8/1', '10.0.0.0/x', '::1/129'])(
+  it.each(['10.0.0.0/33', 'example.test', '10.0.0.0/8/1', '10.0.0.0/x', '::1/129', ',', ' , ,'])(
     'rejects %s',
     (raw) => {
       expect(parseCidrs(raw)).toBeNull();
@@ -46,6 +46,20 @@ describe('IpAllowlist', () => {
     expect(local.allows('127.0.0.1')).toBe(true);
     expect(() => loadConfig({ NODE_ENV: 'production', PLATFORM_ALLOWED_CIDRS: '*' })).toThrow(
       /not allowed in production/,
+    );
+  });
+
+  it('refuses catch-all networks in production, and a separator-only list anywhere', () => {
+    for (const cidrs of ['0.0.0.0/0', '10.0.0.0/8, ::/0']) {
+      expect(() => loadConfig({ NODE_ENV: 'production', PLATFORM_ALLOWED_CIDRS: cidrs })).toThrow(
+        /catch-all/,
+      );
+    }
+    expect(() => loadConfig({ NODE_ENV: 'production', TRUSTED_PROXY_CIDRS: '0.0.0.0/0' })).toThrow(
+      /catch-all/,
+    );
+    expect(() => loadConfig({ NODE_ENV: 'development', PLATFORM_ALLOWED_CIDRS: ',' })).toThrow(
+      /PLATFORM_ALLOWED_CIDRS/,
     );
   });
 

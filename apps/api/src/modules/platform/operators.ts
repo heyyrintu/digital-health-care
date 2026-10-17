@@ -9,6 +9,11 @@ import { writeAudit, type AuditSource } from '../audit/write';
 /** Authenticator apps show this as the account's issuer. */
 export const PLATFORM_TOTP_ISSUER = 'DHC Platform';
 
+const DISABLE_FIRST = () =>
+  new AppError(409, 'CONFLICT', 'Disable the operator before replacing their password.', {
+    status: 'active',
+  });
+
 const invalid = (field: string, message: string) =>
   new AppError(400, 'VALIDATION_FAILED', message, { [field]: 'invalid' });
 
@@ -29,6 +34,47 @@ function checkTrail(trail: SupportTrail): SupportTrail {
     throw invalid('operator', 'Give your name or email (3–80 characters).');
   }
   return { ticket, operator };
+}
+
+function checkDisplayName(raw: string): string {
+  const displayName = raw.trim();
+  if (displayName.length < 2 || displayName.length > 120) {
+    throw invalid('displayName', 'Give the operator’s name (2–120 characters).');
+  }
+  return displayName;
+}
+
+export type OperatorCommand =
+  'create' | 'disable' | 'enable' | 'reset-authenticator' | 'reset-password';
+
+/**
+ * Everything the support command can check before it asks anyone to type a password or
+ * scan a QR code: the ticket, operator, email and name, and whether the operator exists
+ * (or, for a password reset, is disabled). The command repeats these checks when it saves.
+ */
+export async function preflightOperatorCommand(
+  s: Pick<Services, 'db'>,
+  command: OperatorCommand,
+  params: SupportTrail & { email: string; displayName?: string },
+): Promise<{ email: string }> {
+  checkTrail(params);
+  const email = normaliseOperatorEmail(params.email);
+  if (command === 'create') checkDisplayName(params.displayName ?? '');
+  const existing = await withPlatform(s.db, (tx) =>
+    tx.platformOperator.findUnique({ where: { email }, select: { status: true } }),
+  );
+  if (command === 'create' && existing) {
+    throw new AppError(409, 'CONFLICT', 'An operator with that email already exists.', {
+      email: 'exists',
+    });
+  }
+  if (command !== 'create' && !existing) {
+    throw new AppError(404, 'NOT_FOUND', 'No operator with that email.');
+  }
+  if (command === 'reset-password' && existing?.status !== 'disabled') {
+    throw DISABLE_FIRST();
+  }
+  return { email };
 }
 
 export function normaliseOperatorEmail(raw: string): string {
@@ -61,10 +107,7 @@ export async function createPlatformOperator(
 ): Promise<{ id: string; email: string }> {
   const trail = checkTrail(params);
   const email = normaliseOperatorEmail(params.email);
-  const displayName = params.displayName.trim();
-  if (displayName.length < 2 || displayName.length > 120) {
-    throw invalid('displayName', 'Give the operator’s name (2–120 characters).');
-  }
+  const displayName = checkDisplayName(params.displayName);
   const password = NewPassword.safeParse(params.password);
   if (!password.success) {
     throw invalid('password', password.error.issues[0]?.message ?? 'Choose a longer password.');
@@ -195,14 +238,14 @@ export async function resetPlatformOperatorPassword(
     const operator = await tx.platformOperator.findUnique({ where: { email } });
     if (!operator) throw new AppError(404, 'NOT_FOUND', 'No operator with that email.');
     if (operator.status !== 'disabled') {
-      throw new AppError(409, 'CONFLICT', 'Disable the operator before replacing their password.', {
-        status: 'active',
-      });
+      throw DISABLE_FIRST();
     }
-    await tx.platformOperator.update({
-      where: { id: operator.id },
+    // Conditional: an --enable racing this one cannot let the old password back in.
+    const written = await tx.platformOperator.updateMany({
+      where: { id: operator.id, status: 'disabled' },
       data: { passwordHash, failedLoginCount: 0, lockedUntil: null },
     });
+    if (written.count !== 1) throw DISABLE_FIRST();
     const revoked = await tx.platformSession.updateMany({
       where: { operatorId: operator.id, revokedAt: null },
       data: { revokedAt: now, revokedReason: 'password_reset' },

@@ -152,18 +152,24 @@ export class PlatformAuthService {
         await auditOperator(tx, request, 'platform.auth.mfa.failed', operator.id);
         return { error: INVALID_CODE() };
       }
-      // Conditional: of two requests racing with the same code, only one moves the step on.
+      // Compare-and-swap on everything checked above, so a concurrent change wins: of two
+      // requests with the same code only one moves the step on; a disable, or a lock written
+      // by a concurrent fifth wrong attempt, is never undone by a valid code.
       const accepted = await tx.platformOperator.updateMany({
         where: {
           id: operator.id,
-          OR: [{ mfaLastUsedStep: null }, { mfaLastUsedStep: { lt: step } }],
+          status: 'active',
+          failedLoginCount: operator.failedLoginCount,
+          AND: [
+            { OR: [{ mfaLastUsedStep: null }, { mfaLastUsedStep: { lt: step } }] },
+            { OR: [{ lockedUntil: null }, { lockedUntil: { lte: now } }] },
+          ],
         },
         data: { mfaLastUsedStep: step, failedLoginCount: 0, lockedUntil: null, lastLoginAt: now },
       });
       if (accepted.count !== 1) {
-        await recordOperatorFailure(tx, operator.id, now);
         await auditOperator(tx, request, 'platform.auth.mfa.failed', operator.id, {
-          reason: 'code_reused',
+          reason: 'changed_meanwhile',
         });
         return { error: INVALID_CODE() };
       }
@@ -248,7 +254,24 @@ export class PlatformAuthService {
           lastUsedAt: now,
         },
       });
-      if (rotated.count !== 1) return null;
+      if (rotated.count !== 1) {
+        // Another refresh with the same token won the swap: the token was used twice, as
+        // when it is copied. End the session, as for any reuse.
+        await tx.platformSession.update({
+          where: { id: session.id },
+          data: { revokedAt: now, revokedReason: 'refresh_token_reuse' },
+        });
+        await auditOperator(
+          tx,
+          request,
+          'platform.auth.refresh.reuse_detected',
+          session.operatorId,
+          {
+            sessionId: session.id,
+          },
+        );
+        return null;
+      }
       return {
         tokenType: 'Bearer' as const,
         accessToken: await this.s.platformTokens.createAccessToken({

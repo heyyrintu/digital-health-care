@@ -178,6 +178,7 @@ describe('platform console calls', () => {
   const expected = {
     registrationNumber: 'TEST-12345',
     council: 'Test Medical Council',
+    qualifications: 'MBBS',
     submittedAt: '2026-10-06T04:30:00.000Z',
   };
 
@@ -218,14 +219,20 @@ describe('platform console calls', () => {
     expect(url).toBe(
       'https://api.test/v1/platform/doctors/6a0c8a8e-4b1a-4c6f-9d43-2f1f5f6c7a10/verify',
     );
+    expect((init.headers as Record<string, string>).authorization).toBe('Bearer platform-token');
     expect(JSON.parse(init.body as string)).toEqual({ ticket: 'SUP-1', expected });
   });
 
   it('asks for usage over a range', async () => {
     const fetch = vi.fn(async () => json(200, { from: '2026-10-01', to: '2026-10-07', data: [] }));
-    const client = createApiClient({ baseUrl: 'https://api.test/v1', fetch });
+    const client = createApiClient({
+      baseUrl: 'https://api.test/v1',
+      getAccessToken: () => 'platform-token',
+      fetch,
+    });
     await client.platform.usage({ from: '2026-10-01', to: '2026-10-07' });
-    const [url] = fetch.mock.calls[0] as unknown as [string];
+    const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe('https://api.test/v1/platform/usage?from=2026-10-01&to=2026-10-07');
+    expect((init.headers as Record<string, string>).authorization).toBe('Bearer platform-token');
   });
 });

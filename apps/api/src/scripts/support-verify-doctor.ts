@@ -82,16 +82,19 @@ try {
       if (answer.trim() !== 'VERIFY') fail('Cancelled: nothing was changed.');
     }
     // Only what was shown above: if the doctor changes it meanwhile, nothing is verified.
-    await supportVerifyDoctor(deps, source, {
+    const result = await supportVerifyDoctor(deps, source, {
       ...params,
       expected: {
         registrationNumber: plan.registrationNumber,
         council: plan.council,
+        qualifications: plan.qualifications,
         submittedAt: plan.submittedAt,
       },
     });
     console.error(
-      `\nVerified; audit run ID ${runId} (ticket ${params.ticket}). They can now sign.`,
+      result.alreadyVerified
+        ? '\nAlready verified (by someone else meanwhile): nothing changed.'
+        : `\nVerified; audit run ID ${runId} (ticket ${params.ticket}). They can now sign.`,
     );
   }
 } catch (error) {
