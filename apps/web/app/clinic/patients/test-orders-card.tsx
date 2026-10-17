@@ -131,15 +131,21 @@ export function TestOrdersCard({ patientId, role }: { patientId: string; role: s
    */
   async function refresh(id: string) {
     let cursor: string | undefined;
-    for (let pages = 0; pages < 20; pages++) {
-      const page = await api.patientTestOrders(patientId, cursor).catch(() => null);
-      const found = page?.data.find((o) => o.id === id);
-      if (found) {
-        setOrders((current) => (current ?? []).map((o) => (o.id === id ? found : o)));
-        return;
+    try {
+      for (let pages = 0; pages < 20; pages++) {
+        const page = await api.patientTestOrders(patientId, cursor);
+        const found = page.data.find((o) => o.id === id);
+        if (found) {
+          setOrders((current) => (current ?? []).map((o) => (o.id === id ? found : o)));
+          return;
+        }
+        if (!page.nextCursor) return;
+        cursor = page.nextCursor;
       }
-      if (!page?.nextCursor) return;
-      cursor = page.nextCursor;
+    } catch (e) {
+      // A failed refresh says so (and a lapsed session signs out) rather than leaving the
+      // row silently stale.
+      fail(e);
     }
   }
   const failFor = (id: string, e: unknown) => {
