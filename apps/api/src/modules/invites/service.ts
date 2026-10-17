@@ -420,9 +420,24 @@ export async function issueJoinInvite(
     });
   }
   if (membership) {
+    // Waits for an overlapping invite's transaction, then replaces its link below.
     await tx.membership.update({ where: { id: membership.id }, data: { status: 'invited' } });
   } else {
-    await tx.membership.create({ data: { ...key, status: 'invited' } });
+    try {
+      await tx.membership.create({ data: { ...key, status: 'invited' } });
+    } catch (error) {
+      // Another invite for the same person and role created the membership at the same
+      // moment. This transaction is aborted, so answer as for an existing invite.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2002') {
+        throw new AppError(
+          409,
+          'CONFLICT',
+          'This person was invited to that role a moment ago. Check the invite list.',
+          { identifier: 'invited' },
+        );
+      }
+      throw error;
+    }
   }
   // A new invite replaces any earlier open one for the same person and role.
   await tx.staffInvite.updateMany({

@@ -241,6 +241,11 @@ describe('sign-in', () => {
     );
     expect(results.map((r) => r.statusCode).sort()).toEqual([200, 401]);
     expect(await h.owner.platformSession.count()).toBe(1);
+    // The loser is recorded as a reused code, wherever it lost (its read or its write).
+    const failed = await h.owner.auditLog.findMany({
+      where: { action: 'platform.auth.mfa.failed' },
+    });
+    expect(failed.map((a) => a.metadata)).toEqual([{ reason: 'code_reused' }]);
   });
 
   it('never leaves a live session for an operator disabled during the code step', async () => {
@@ -268,6 +273,43 @@ describe('sign-in', () => {
         }),
       ).toBe(0);
     }
+  });
+
+  it('a code checked against the old authenticator fails if it is reset meanwhile', async () => {
+    const step = await passwordStep(op.email);
+    h.clock.advance(30);
+    const currentStep = Math.floor(h.clock.ms / 30_000);
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    let locked!: () => void;
+    const rowLocked = new Promise<void>((resolve) => (locked = resolve));
+    // Hold the operator's row, so the code check reads it and then waits at its write.
+    const reset = h.owner.$transaction(
+      async (tx) => {
+        await tx.$queryRaw`SELECT id FROM platform_operators WHERE id = ${op.operatorId}::uuid FOR UPDATE`;
+        locked();
+        await held;
+        // An authenticator reset confirmed a minute earlier commits now.
+        await tx.platformOperator.update({
+          where: { id: op.operatorId },
+          data: {
+            mfaSecret: h.services.cipher.encrypt(TOTP_SECRET),
+            mfaLastUsedStep: currentStep - 2,
+          },
+        });
+      },
+      { timeout: 10_000 },
+    );
+    await rowLocked;
+    const verify = call('POST', '/platform/auth/mfa/verify', null, {
+      mfaToken: step.json().mfaToken,
+      code: totpAt(op.totpSecret, h.clock.ms / 1000),
+    });
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    release();
+    await reset;
+    expect((await verify).statusCode).toBe(401);
+    expect(await h.owner.platformSession.count()).toBe(0);
   });
 
   it('a valid code cannot undo a lock written by a concurrent fifth wrong code', async () => {
@@ -967,12 +1009,20 @@ describe('doctor verification', () => {
     });
     expect(row.submittedAt).toBeNull();
     const tokens = await platformLogin(h, op);
+    // The organisation's pending count is the queue's: both leave the PIN-only profile out.
+    const pendingAtA = async () =>
+      PlatformOrganisationList.parse(
+        (await call('GET', '/platform/organisations', tokens)).json(),
+      ).data.find((o) => o.slug === 'clinic-a')!.doctorVerification.pending;
     expect((await call('GET', '/platform/doctors', tokens)).json().data).toEqual([]);
+    expect(await pendingAtA()).toBe(0);
 
     h.clock.advance(600);
     await call('PUT', '/doctor-profile', doctorA, profileBody);
-    const [entry] = (await call('GET', '/platform/doctors', tokens)).json().data;
-    expect(Date.parse(entry.submittedAt)).toBe(h.clock.ms);
+    const queue = (await call('GET', '/platform/doctors', tokens)).json().data;
+    expect(Date.parse(queue[0].submittedAt)).toBe(h.clock.ms);
+    expect(await pendingAtA()).toBe(queue.length);
+    expect(queue).toHaveLength(1);
   });
 
   it('refuses a profile whose qualifications changed after it was shown', async () => {

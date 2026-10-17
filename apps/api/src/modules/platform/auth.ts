@@ -149,16 +149,21 @@ export class PlatformAuthService {
         (operator.mfaLastUsedStep !== null && step <= operator.mfaLastUsedStep)
       ) {
         await recordOperatorFailure(tx, operator.id, now);
-        await auditOperator(tx, request, 'platform.auth.mfa.failed', operator.id);
+        await auditOperator(tx, request, 'platform.auth.mfa.failed', operator.id, {
+          reason: step === null ? 'wrong_code' : 'code_reused',
+        });
         return { error: INVALID_CODE() };
       }
       // Compare-and-swap on everything checked above, so a concurrent change wins: of two
-      // requests with the same code only one moves the step on; a disable, or a lock written
-      // by a concurrent fifth wrong attempt, is never undone by a valid code.
+      // requests with the same code only one moves the step on; a disable, an authenticator
+      // reset, or a lock written by a concurrent fifth wrong attempt, is never undone by a
+      // code that was valid a moment before.
       const accepted = await tx.platformOperator.updateMany({
         where: {
           id: operator.id,
           status: 'active',
+          // The code was checked against this secret: a reset meanwhile makes it void.
+          mfaSecret: operator.mfaSecret,
           failedLoginCount: operator.failedLoginCount,
           AND: [
             { OR: [{ mfaLastUsedStep: null }, { mfaLastUsedStep: { lt: step } }] },
@@ -168,8 +173,14 @@ export class PlatformAuthService {
         data: { mfaLastUsedStep: step, failedLoginCount: 0, lockedUntil: null, lastLoginAt: now },
       });
       if (accepted.count !== 1) {
+        // Say what won: another request with this code, or another change to the operator.
+        const latest = await tx.platformOperator.findUnique({
+          where: { id: operator.id },
+          select: { mfaLastUsedStep: true },
+        });
+        const reused = latest?.mfaLastUsedStep != null && latest.mfaLastUsedStep >= step;
         await auditOperator(tx, request, 'platform.auth.mfa.failed', operator.id, {
-          reason: 'changed_meanwhile',
+          reason: reused ? 'code_reused' : 'changed_meanwhile',
         });
         return { error: INVALID_CODE() };
       }

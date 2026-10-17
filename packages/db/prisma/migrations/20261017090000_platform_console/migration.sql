@@ -11,7 +11,24 @@
 -- Set by the API when registration details are saved; null for a profile that only has a
 -- signing PIN so far.
 ALTER TABLE "doctor_profiles" ADD COLUMN "submitted_at" TIMESTAMPTZ(3);
-UPDATE doctor_profiles SET submitted_at = created_at WHERE registration_number IS NOT NULL;
+-- Existing profiles with registration details: from the audit log's `doctor.profile_saved`
+-- entries (entity_type doctor_profile, entity_id the profile's ID, written by every save).
+-- The latest save that sent a verified registration back for checking (metadata reverify
+-- true) if any, else the first save (when the details were first filled in), else
+-- created_at. A changed registration on a still-pending profile left no mark before this
+-- migration, so for those the first save is the best estimate.
+UPDATE doctor_profiles dp
+SET submitted_at = coalesce(
+  (SELECT max(al.at) FROM audit_logs al
+    WHERE al.action = 'doctor.profile_saved' AND al.entity_type = 'doctor_profile'
+      AND al.entity_id = dp.id::text AND al.organisation_id = dp.organisation_id
+      AND al.metadata ->> 'reverify' = 'true'),
+  (SELECT min(al.at) FROM audit_logs al
+    WHERE al.action = 'doctor.profile_saved' AND al.entity_type = 'doctor_profile'
+      AND al.entity_id = dp.id::text AND al.organisation_id = dp.organisation_id),
+  dp.created_at
+)
+WHERE dp.registration_number IS NOT NULL;
 
 -- CreateTable
 CREATE TABLE "platform_operators" (
@@ -111,7 +128,7 @@ CREATE FUNCTION platform_mask_identifier(p text) RETURNS text
   $$;
 
 -- Every organisation with its clinics and staff counted by role and status, and its
--- active doctors' verification states.
+-- active doctors' verification states (profiles with registration details, as the queue).
 CREATE FUNCTION platform_organisation_summaries()
   RETURNS TABLE (
     id uuid,
@@ -166,7 +183,9 @@ CREATE FUNCTION platform_organisation_summaries()
       FROM doctor_profiles dp
       JOIN memberships dm ON dm.organisation_id = dp.organisation_id AND dm.user_id = dp.user_id
         AND dm.role = 'doctor' AND dm.status = 'active'
+      -- As the verification queue counts them: profiles with registration details only.
       WHERE dp.organisation_id = o.id
+        AND dp.registration_number IS NOT NULL AND dp.submitted_at IS NOT NULL
     ) d
     ORDER BY o.created_at, o.slug
   $$;

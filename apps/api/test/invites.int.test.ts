@@ -30,6 +30,7 @@ import {
   seedTwoClinics,
   staffLogin,
 } from './harness';
+import { issueJoinInvite } from '../src/modules/invites/service';
 
 const h = createHarness();
 let clinics: Awaited<ReturnType<typeof seedTwoClinics>>;
@@ -131,6 +132,48 @@ describe('clinic admin', () => {
     const first = await invite(adminA);
     await invite(adminA);
     expect((await post('/auth/invites/inspect', { token: first.token })).statusCode).toBe(404);
+  });
+
+  it('answers an invite overlapping another for the same person and role with 409, not 500', async () => {
+    const email = 'overlap.doctor@clinic-a.test';
+    const user = await h.owner.user.create({ data: { email } });
+    const params = {
+      organisationId: clinics.a.org.id,
+      user,
+      role: 'doctor' as const,
+      now: h.clock.now(),
+      createdByUserId: clinics.a.admin.userId,
+      actorUserId: clinics.a.admin.userId,
+    };
+    const source = { id: 'req_test', ip: '127.0.0.1', headers: {} };
+    // The first invite creates the membership and holds its transaction open...
+    let release!: () => void;
+    const held = new Promise<void>((resolve) => (release = resolve));
+    let created!: () => void;
+    const membershipCreated = new Promise<void>((resolve) => (created = resolve));
+    const first = withTenant(h.services.db, clinics.a.org.id, async (tx) => {
+      const result = await issueJoinInvite(tx, source, h.services, params);
+      created();
+      await held;
+      return result;
+    });
+    await membershipCreated;
+    // ...so the second, which found no membership, waits on the unique index, then fails.
+    const second = withTenant(h.services.db, clinics.a.org.id, (tx) =>
+      issueJoinInvite(tx, source, h.services, params),
+    );
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    release();
+    await expect(first).resolves.toMatchObject({ inviteUrl: expect.any(String) });
+    await expect(second).rejects.toMatchObject({
+      statusCode: 409,
+      fields: { identifier: 'invited' },
+    });
+    expect(
+      await h.owner.staffInvite.count({
+        where: { userId: user.id, acceptedAt: null, revokedAt: null },
+      }),
+    ).toBe(1);
   });
 
   it('cannot see or revoke another organisation’s invites', async () => {

@@ -223,6 +223,14 @@ describe('platform console calls', () => {
     expect(JSON.parse(init.body as string)).toEqual({ ticket: 'SUP-1', expected });
   });
 
+  it('asks for the next page of the verification queue with the cursor', async () => {
+    const fetch = vi.fn(async () => json(200, { data: [], hasMore: false, nextCursor: null }));
+    const client = createApiClient({ baseUrl: 'https://api.test/v1', fetch });
+    await client.platform.doctors('pending', 'abc');
+    const [url] = fetch.mock.calls[0] as unknown as [string];
+    expect(url).toBe('https://api.test/v1/platform/doctors?status=pending&cursor=abc');
+  });
+
   it('asks for usage over a range', async () => {
     const fetch = vi.fn(async () => json(200, { from: '2026-10-01', to: '2026-10-07', data: [] }));
     const client = createApiClient({
