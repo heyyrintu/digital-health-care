@@ -420,8 +420,17 @@ export async function issueJoinInvite(
     });
   }
   if (membership) {
-    // Waits for an overlapping invite's transaction, then replaces its link below.
-    await tx.membership.update({ where: { id: membership.id }, data: { status: 'invited' } });
+    // Waits for an overlapping invite's transaction, then replaces its link below. Only a
+    // membership that is still not active: an earlier invite accepted meanwhile is kept.
+    const reopened = await tx.membership.updateMany({
+      where: { id: membership.id, status: { not: 'active' } },
+      data: { status: 'invited' },
+    });
+    if (reopened.count !== 1) {
+      throw new AppError(409, 'CONFLICT', 'This person already has that role.', {
+        identifier: 'exists',
+      });
+    }
   } else {
     try {
       await tx.membership.create({ data: { ...key, status: 'invited' } });
