@@ -74,18 +74,22 @@ export function TestsSection({
   const [query, setQuery] = useState('');
   const [picking, setPicking] = useState<Picking | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [catalogueFailed, setCatalogueFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     if (!editable) return;
     let current = true;
+    setCatalogueFailed(false);
     api
       .request('GET', '/test-catalogue', { schema: TestCatalogueList })
       .then((list) => current && setCatalogue(list.data))
-      .catch(() => current && setCatalogue([]));
+      // Not an empty catalogue: the doctor is told and can try again.
+      .catch(() => current && setCatalogueFailed(true));
     return () => {
       current = false;
     };
-  }, [api, editable]);
+  }, [api, editable, attempt]);
 
   const q = query.trim().toLowerCase();
   const matches = useMemo(
@@ -249,6 +253,23 @@ export function TestsSection({
         />
       )}
 
+      {editable && catalogueFailed && (
+        <p
+          role="alert"
+          className="flex flex-wrap items-center gap-x-2 rounded-xl bg-danger-soft px-4 py-3 text-sm font-medium text-destructive"
+        >
+          {t('orders.catalogueFailed')}
+          <Button
+            type="button"
+            variant="link"
+            className="px-1"
+            onClick={() => setAttempt((n) => n + 1)}
+          >
+            {t('common.retry')}
+          </Button>
+        </p>
+      )}
+
       {editable && (
         <div className="space-y-2">
           <Label htmlFor="tests-search" className={fieldLabel}>
@@ -270,8 +291,8 @@ export function TestsSection({
           {q && (
             <ul
               className="max-h-72 space-y-0.5 overflow-y-auto rounded-xl border border-border bg-card p-1 shadow-soft"
-              role="listbox"
               aria-label={t('orders.search')}
+              data-testid="tests-matches"
             >
               {matches.map((m) => (
                 <li key={m.id}>
@@ -279,8 +300,6 @@ export function TestsSection({
                     type="button"
                     variant="ghost"
                     className={optionLook}
-                    role="option"
-                    aria-selected={false}
                     onClick={() => choose(m)}
                   >
                     <span>
@@ -297,12 +316,7 @@ export function TestsSection({
                 </li>
               ))}
               {catalogue && matches.length === 0 && (
-                <li
-                  role="option"
-                  aria-selected={false}
-                  aria-disabled
-                  className="px-3 py-2.5 text-sm text-muted-foreground"
-                >
+                <li className="px-3 py-2.5 text-sm text-muted-foreground">
                   {t('orders.noMatches')}
                 </li>
               )}
@@ -311,8 +325,6 @@ export function TestsSection({
                   type="button"
                   variant="ghost"
                   className={cn(optionLook, 'text-muted-foreground')}
-                  role="option"
-                  aria-selected={false}
                   onClick={() =>
                     add({
                       catalogueItemId: null,

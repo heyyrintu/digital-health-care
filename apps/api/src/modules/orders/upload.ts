@@ -23,10 +23,10 @@ export const UPLOAD_RATE_LIMIT = { max: 60, timeWindow: '1 minute', groupId: 'up
 const limiters = new WeakMap<object, ReturnType<FastifyInstance['rateLimit']>>();
 
 /** The one upload limiter of this app, for the upload routes' `onRequest`. */
-export function uploadRateLimit(app: FastifyInstance, shared: object) {
+export function uploadRateLimit(app: FastifyInstance, shared: object, max = UPLOAD_RATE_LIMIT.max) {
   let limiter = limiters.get(shared);
   if (!limiter) {
-    limiter = app.rateLimit(UPLOAD_RATE_LIMIT);
+    limiter = app.rateLimit({ ...UPLOAD_RATE_LIMIT, max });
     limiters.set(shared, limiter);
   }
   return limiter;
@@ -83,8 +83,15 @@ export interface UploadedFile {
  */
 export function uploadedFile(request: FastifyRequest): UploadedFile {
   const mediaType = (request.headers['content-type'] ?? '').split(';')[0]!.trim().toLowerCase();
-  const data = Buffer.isBuffer(request.body) ? request.body : Buffer.alloc(0);
-  return { mediaType, data };
+  if (Buffer.isBuffer(request.body)) return { mediaType, data: request.body };
+  // An upload type with no body at all is an empty file; anything else (JSON, text, which
+  // Fastify parsed itself) is not a file this endpoint takes.
+  if (request.body === undefined && UPLOAD_CONTENT_TYPES.includes(mediaType)) {
+    return { mediaType, data: Buffer.alloc(0) };
+  }
+  throw new AppError(415, 'VALIDATION_FAILED', 'Send the file itself, as a PDF or a photo.', {
+    file: 'type_not_allowed',
+  });
 }
 
 /**

@@ -40,6 +40,8 @@ export interface BuildAppOptions {
   trustProxy?: ProxyTrust | false;
   /** Sign-in requests per IP per minute (default 10). */
   signInRateLimit?: number;
+  /** Result uploads per IP per minute, staff and Patient app together (default 60). */
+  uploadRateLimit?: number;
   /** Browser origins allowed to call the API (web app). None means no CORS headers. */
   corsOrigins?: string[];
   /** Networks that may reach `/v1/platform/*` (from PLATFORM_ALLOWED_CIDRS); default none. */
@@ -51,6 +53,7 @@ export function buildApp({
   services,
   trustProxy = false,
   signInRateLimit = 10,
+  uploadRateLimit = 60,
   corsOrigins = [],
   platformAllowlist = IpAllowlist.none(),
 }: BuildAppOptions) {
@@ -111,12 +114,12 @@ export function buildApp({
     app.register(doctorRoutes, { prefix: '/v1', services, signInRateLimit });
     app.register(medicineRoutes, { prefix: '/v1', services });
     app.register(billingRoutes, { prefix: '/v1', services });
-    app.register(orderRoutes, { prefix: '/v1', services });
+    app.register(orderRoutes, { prefix: '/v1', services, uploadRateLimit });
     app.register(staffRoutes, { prefix: '/v1', services });
     app.register(auditRoutes, { prefix: '/v1', services });
     app.register(reportRoutes, { prefix: '/v1', services });
     app.register(settingsRoutes, { prefix: '/v1', services });
-    app.register(portalRoutes, { prefix: '/v1', services });
+    app.register(portalRoutes, { prefix: '/v1', services, uploadRateLimit });
     app.register(deviceRoutes, { prefix: '/v1', services });
     app.register(syncRoutes, { prefix: '/v1', services });
     app.register(platformRoutes, {

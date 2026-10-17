@@ -299,9 +299,11 @@ export function createApiClient(options: ApiClientOptions) {
     testCatalogue: (q?: string) =>
       request('GET', '/test-catalogue', { schema: TestCatalogueList, query: { q } }),
     /** Doctor or front desk: a patient's ordered tests (front desk: without notes). */
-    patientTestOrders: (patientId: string) =>
+    /** One page, newest first; pass the previous page's `nextCursor` for the next. */
+    patientTestOrders: (patientId: string, cursor?: string) =>
       request('GET', `/patients/${encodeURIComponent(patientId)}/test-orders`, {
         schema: PatientTestOrderList,
+        query: { cursor },
       }),
     /** Doctor: their results waiting for review. */
     testResultsAwaitingReview: () =>
@@ -350,7 +352,8 @@ export function createApiClient(options: ApiClientOptions) {
       requestFile('GET', `/portal/prescriptions/${encodeURIComponent(id)}/pdf`),
 
     /** The family's ordered tests, with Upload result. */
-    portalTestOrders: () => request('GET', '/portal/test-orders', { schema: PortalTestOrderList }),
+    portalTestOrders: (cursor?: string) =>
+      request('GET', '/portal/test-orders', { schema: PortalTestOrderList, query: { cursor } }),
     uploadPortalTestResult: (orderId: string, file: Blob) =>
       uploadFile(`/portal/test-orders/${encodeURIComponent(orderId)}/results`, file, {
         schema: TestOrder,

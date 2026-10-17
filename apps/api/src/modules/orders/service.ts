@@ -1,10 +1,13 @@
-import type {
-  AwaitingReviewList,
-  PatientTestOrder,
-  PortalTestOrder,
-  Role,
-  TestCatalogueItem,
-  TestOrder,
+import {
+  MAX_RESULTS_PER_ORDER,
+  type AwaitingReviewList,
+  type PatientTestOrder,
+  type PortalTestOrder,
+  type Role,
+  type TestCatalogueItem,
+  type TestOrder,
+  type TestOrderListQuery,
+  type UploadMediaType,
 } from '@dhc/contracts';
 import { withTenant, type Prisma, type Tx } from '@dhc/db';
 import type { FastifyRequest } from 'fastify';
@@ -37,6 +40,35 @@ const fromDbDate = (date: Date) => date.toISOString().slice(0, 10);
 const sha256 = (data: Buffer) => createHash('sha256').update(data).digest('hex');
 
 const visitSelect = { select: { date: true, doctorUserId: true } } as const;
+
+/** Newest orders first; the ID breaks ties so a cursor always names one place. */
+const listOrder = [{ orderedAt: 'desc' }, { sortOrder: 'asc' }, { id: 'asc' }] as const;
+
+/** The opaque cursor is the last order's ID (Prisma resumes from that row's sort values). */
+export const encodeOrderCursor = (id: string) => Buffer.from(id).toString('base64url');
+function decodeOrderCursor(cursor: string): string {
+  const id = Buffer.from(cursor, 'base64url').toString('utf8');
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)) {
+    throw new AppError(400, 'VALIDATION_FAILED', 'Invalid cursor.', { cursor: 'invalid' });
+  }
+  return id;
+}
+
+/** One page of a listing: `limit` rows after the cursor, and whether more follow. */
+function pageArgs(query: TestOrderListQuery) {
+  return {
+    orderBy: [...listOrder],
+    take: query.limit + 1,
+    ...(query.cursor ? { cursor: { id: decodeOrderCursor(query.cursor) }, skip: 1 } : {}),
+  };
+}
+function pageOf<T extends { id: string }>(rows: T[], limit: number) {
+  const data = rows.slice(0, limit);
+  return {
+    data,
+    nextCursor: rows.length > limit ? encodeOrderCursor(data[data.length - 1]!.id) : null,
+  };
+}
 type ListedRow = Prisma.TestOrderGetPayload<{
   include: typeof orderInclude & { appointment: typeof visitSelect };
 }>;
@@ -68,49 +100,60 @@ export class OrdersService {
     }));
   }
 
-  /** The patient's ordered tests, newest visit first (drafts stay on the consultation). */
+  /**
+   * The patient's ordered tests, newest first, a page at a time (drafts stay on the
+   * consultation).
+   */
   async forPatient(
     request: FastifyRequest,
     actor: Actor,
     patientId: string,
-  ): Promise<PatientTestOrder[]> {
-    const rows = await withTenant(this.s.db, actor.organisationId, async (tx) => {
-      const patient = await tx.patient.findUnique({
-        where: { id: patientId },
-        select: { id: true, mergedIntoId: true },
-      });
-      if (!patient) throw NOT_FOUND();
-      await assertChartAccess(tx, actor, liveId(patient));
-      // A merged duplicate's orders show under the record that was kept.
-      const ids = await historyIds(tx, liveId(patient));
-      const rows: ListedRow[] = await tx.testOrder.findMany({
-        where: { patientId: { in: ids }, orderedAt: { not: null } },
-        include: { ...orderInclude, appointment: visitSelect },
-        orderBy: [{ orderedAt: 'desc' }, { sortOrder: 'asc' }],
-        take: 200,
-      });
-      await writeAudit(tx, request, {
-        action: 'test_orders.viewed',
-        organisationId: actor.organisationId,
-        actorUserId: actor.userId,
-        entityType: 'patient',
-        entityId: patientId,
-        metadata: { count: rows.length },
-      });
-      return rows;
-    });
+    query: TestOrderListQuery,
+  ): Promise<{ data: PatientTestOrder[]; nextCursor: string | null }> {
+    const { data: rows, nextCursor } = await withTenant(
+      this.s.db,
+      actor.organisationId,
+      async (tx) => {
+        const patient = await tx.patient.findUnique({
+          where: { id: patientId },
+          select: { id: true, mergedIntoId: true },
+        });
+        if (!patient) throw NOT_FOUND();
+        await assertChartAccess(tx, actor, liveId(patient));
+        // A merged duplicate's orders show under the record that was kept.
+        const ids = await historyIds(tx, liveId(patient));
+        const found: ListedRow[] = await tx.testOrder.findMany({
+          where: { patientId: { in: ids }, orderedAt: { not: null } },
+          include: { ...orderInclude, appointment: visitSelect },
+          ...pageArgs(query),
+        });
+        const listed = pageOf(found, query.limit);
+        await writeAudit(tx, request, {
+          action: 'test_orders.viewed',
+          organisationId: actor.organisationId,
+          actorUserId: actor.userId,
+          entityType: 'patient',
+          entityId: patientId,
+          metadata: { count: listed.data.length, ...(query.cursor ? { page: 'next' } : {}) },
+        });
+        return listed;
+      },
+    );
     const names = await staffNames(this.s.db, [
       ...rows.map((r) => r.doctorUserId),
       ...rows.flatMap((r) => (r.reviewedByUserId ? [r.reviewedByUserId] : [])),
     ]);
-    return rows.map((r) => ({
-      ...orderOut(r, { notes: actor.role === 'doctor' }),
-      appointmentId: r.appointmentId,
-      visitDate: fromDbDate(r.appointment.date),
-      doctorName: names.get(r.doctorUserId) ?? null,
-      reviewedByName: r.reviewedByUserId ? (names.get(r.reviewedByUserId) ?? null) : null,
-      canReview: actor.role === 'doctor' && r.status === 'result_uploaded',
-    }));
+    return {
+      nextCursor,
+      data: rows.map((r) => ({
+        ...orderOut(r, { notes: actor.role === 'doctor' }),
+        appointmentId: r.appointmentId,
+        visitDate: fromDbDate(r.appointment.date),
+        doctorName: names.get(r.doctorUserId) ?? null,
+        reviewedByName: r.reviewedByUserId ? (names.get(r.reviewedByUserId) ?? null) : null,
+        canReview: actor.role === 'doctor' && r.status === 'result_uploaded',
+      })),
+    };
   }
 
   /**
@@ -210,6 +253,24 @@ export class OrdersService {
           'Results can be added once the prescription ordering this test is signed.',
         );
       }
+      // A review is final (the status only moves forward): a new result needs a new order.
+      if (order.status === 'reviewed') {
+        throw new AppError(
+          409,
+          'CONFLICT',
+          'The doctor has already reviewed this test. Ask the clinic to order it again.',
+          { status: 'reviewed' },
+        );
+      }
+      // Counted under the order's row lock, so two uploads cannot both take the last place.
+      if (order.results.length >= MAX_RESULTS_PER_ORDER) {
+        throw new AppError(
+          409,
+          'CONFLICT',
+          `A test can hold up to ${MAX_RESULTS_PER_ORDER} results. Combine pages into one file.`,
+          { file: 'too_many' },
+        );
+      }
       const { extension } = acceptUpload(await readSettings(tx, actor.organisationId), file);
       const digest = sha256(file.data);
       // No patient data in the key (threat model T4): clinic, order and a random suffix.
@@ -222,7 +283,7 @@ export class OrdersService {
           organisationId: actor.organisationId,
           testOrderId: order.id,
           fileKey: key,
-          mediaType: file.mediaType,
+          mediaType: file.mediaType as UploadMediaType,
           sizeBytes: file.data.length,
           sha256: digest,
           uploadedByUserId: actor.userId,
@@ -232,12 +293,7 @@ export class OrdersService {
       });
       await tx.testOrder.update({
         where: { id: order.id },
-        data: {
-          status: 'result_uploaded',
-          resultUploadedAt: now,
-          reviewedAt: null,
-          reviewedByUserId: null,
-        },
+        data: { status: 'result_uploaded', resultUploadedAt: now },
       });
       await this.audit(tx, request, actor, 'test_order.result_uploaded', order.id, {
         resultId: result.id,
@@ -245,7 +301,6 @@ export class OrdersService {
         sizeBytes: file.data.length,
         sha256: digest,
         by: actor.role,
-        ...(order.status === 'reviewed' ? { reopened: true } : {}),
       });
       return orderOut(await this.reload(tx, order.id), { notes: actor.role !== 'front_desk' });
     });
@@ -309,29 +364,38 @@ export class OrdersService {
     });
   }
 
-  /** The family's ordered tests for the Patient app, newest first; audited per view. */
+  /** The family's ordered tests for the Patient app, newest first, a page at a time. */
   async forAccount(
     request: FastifyRequest,
     actor: Actor,
     patients: { id: string; name: string; mergedInto: { id: string; name: string } | null }[],
-  ): Promise<PortalTestOrder[]> {
-    const rows = await withTenant(this.s.db, actor.organisationId, async (tx) => {
-      const rows = await tx.testOrder.findMany({
-        where: { patientId: { in: patients.map((p) => p.id) }, orderedAt: { not: null } },
-        include: { ...orderInclude, appointment: visitSelect },
-        orderBy: [{ orderedAt: 'desc' }, { sortOrder: 'asc' }],
-        take: 200,
-      });
-      await writeAudit(tx, request, {
-        action: 'test_orders.viewed',
-        organisationId: actor.organisationId,
-        actorUserId: actor.userId,
-        entityType: 'account',
-        entityId: actor.userId,
-        metadata: { count: rows.length, source: 'patient_app' },
-      });
-      return rows;
-    });
+    query: TestOrderListQuery,
+  ): Promise<{ data: PortalTestOrder[]; nextCursor: string | null }> {
+    const { data: rows, nextCursor } = await withTenant(
+      this.s.db,
+      actor.organisationId,
+      async (tx) => {
+        const found = await tx.testOrder.findMany({
+          where: { patientId: { in: patients.map((p) => p.id) }, orderedAt: { not: null } },
+          include: { ...orderInclude, appointment: visitSelect },
+          ...pageArgs(query),
+        });
+        const listed = pageOf(found, query.limit);
+        await writeAudit(tx, request, {
+          action: 'test_orders.viewed',
+          organisationId: actor.organisationId,
+          actorUserId: actor.userId,
+          entityType: 'account',
+          entityId: actor.userId,
+          metadata: {
+            count: listed.data.length,
+            source: 'patient_app',
+            ...(query.cursor ? { page: 'next' } : {}),
+          },
+        });
+        return listed;
+      },
+    );
     const patientOf = new Map(
       patients.map((p) => [p.id, p.mergedInto ?? { id: p.id, name: p.name }]),
     );
@@ -339,25 +403,28 @@ export class OrdersService {
       this.s.db,
       rows.map((r) => r.doctorUserId),
     );
-    return rows.map((r) => {
-      const out = orderOut(r);
-      return {
-        id: r.id,
-        patient: patientOf.get(r.patientId)!,
-        doctorName: names.get(r.doctorUserId) ?? null,
-        visitDate: fromDbDate(r.appointment.date),
-        kind: r.kind,
-        name: r.name,
-        region: r.region,
-        side: r.side,
-        views: r.views,
-        notes: r.notes,
-        status: r.status,
-        orderedAt: out.orderedAt!,
-        reviewedAt: out.reviewedAt,
-        results: out.results,
-      };
-    });
+    return {
+      nextCursor,
+      data: rows.map((r) => {
+        const out = orderOut(r);
+        return {
+          id: r.id,
+          patient: patientOf.get(r.patientId)!,
+          doctorName: names.get(r.doctorUserId) ?? null,
+          visitDate: fromDbDate(r.appointment.date),
+          kind: r.kind,
+          name: r.name,
+          region: r.region,
+          side: r.side,
+          views: r.views,
+          notes: r.notes,
+          status: r.status,
+          orderedAt: out.orderedAt!,
+          reviewedAt: out.reviewedAt,
+          results: out.results,
+        };
+      }),
+    };
   }
 
   // ---- Helpers ----------------------------------------------------------------------

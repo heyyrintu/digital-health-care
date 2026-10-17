@@ -1417,7 +1417,8 @@ model TestResult {
   sizeBytes        Int      @map("size_bytes")
   sha256           String
   uploadedByUserId String   @map("uploaded_by_user_id") @db.Uuid
-  /// patient (the Patient app or portal), front_desk or doctor.
+  /// patient (the Patient app or portal), front_desk or doctor; a database check refuses
+  /// any other role.
   uploadedByRole   Role     @map("uploaded_by_role")
   uploadedAt       DateTime @default(now()) @map("uploaded_at") @db.Timestamptz(3)
 

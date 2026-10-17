@@ -5,7 +5,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { E2E_FILE_STORE_DIR } from '../env';
 import { expect, setUpFromInvite, test, type Clinic } from '../fixtures';
-import { pdfText } from '../pdf-text';
+import { pdfText } from '@dhc/pdf-text';
 
 const PASSWORD = 'doctor synthetic passphrase';
 const PIN = '482916';
@@ -226,7 +226,10 @@ test.describe('signing', () => {
     const tests = rx.getByTestId('tests-section');
     const search = tests.getByLabel('Add test: search blood tests, X-ray, MRI, CT');
     await search.fill('mri');
-    await tests.getByRole('option', { name: 'MRI', exact: true }).click();
+    await tests
+      .getByTestId('tests-matches')
+      .getByRole('button', { name: 'MRI', exact: true })
+      .click();
     const picker = tests.getByTestId('test-picker');
     await expect(picker.getByRole('button', { name: 'Add test' })).toBeDisabled();
     await picker.getByLabel('Region').selectOption('Knee');
@@ -235,7 +238,10 @@ test.describe('signing', () => {
     await picker.getByRole('button', { name: 'Add test' }).click();
 
     await search.fill('x-ray');
-    await tests.getByRole('option', { name: 'X-ray', exact: true }).click();
+    await tests
+      .getByTestId('tests-matches')
+      .getByRole('button', { name: 'X-ray', exact: true })
+      .click();
     await picker.getByLabel('Region').selectOption('Knee');
     await picker.getByLabel('Side').selectOption('both');
     await picker.getByLabel('AP', { exact: true }).check();

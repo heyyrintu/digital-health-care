@@ -11,6 +11,8 @@ import {
   QUEUE_NAMES,
   SavePrescriptionBody,
   TestOrderLine,
+  UPLOAD_MEDIA_TYPES,
+  UploadMediaType,
   buildOpenApiDocument,
   checkUpload,
   page,
@@ -267,5 +269,13 @@ describe('TestOrderLine', () => {
     const body = { language: 'en', items: [], revision: 0 };
     expect(SavePrescriptionBody.parse(body).tests).toBeUndefined();
     expect(SavePrescriptionBody.parse({ ...body, tests: [line()] }).tests).toHaveLength(1);
+  });
+});
+
+describe('UploadMediaType', () => {
+  it('is exactly the media types of the upload types, so the two cannot drift', () => {
+    expect([...UploadMediaType.options].sort()).toEqual(
+      Object.values(UPLOAD_MEDIA_TYPES).flat().sort(),
+    );
   });
 });

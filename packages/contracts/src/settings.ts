@@ -20,12 +20,22 @@ export type TunableSafetyRule = z.infer<typeof TunableSafetyRule>;
 /** File types a clinic can accept for uploads, with the media types each one covers. */
 export const UploadType = z.enum(['pdf', 'jpeg', 'png', 'heic']);
 export type UploadType = z.infer<typeof UploadType>;
-export const UPLOAD_MEDIA_TYPES: Record<UploadType, readonly string[]> = {
+const MEDIA_TYPES = {
   pdf: ['application/pdf'],
   jpeg: ['image/jpeg'],
   png: ['image/png'],
   heic: ['image/heic', 'image/heif'],
-};
+} as const satisfies Record<UploadType, readonly string[]>;
+export const UPLOAD_MEDIA_TYPES: Record<UploadType, readonly string[]> = MEDIA_TYPES;
+
+/** Every media type any clinic may accept, from the table above (a test keeps them equal). */
+export const UploadMediaType = z.enum([
+  ...MEDIA_TYPES.pdf,
+  ...MEDIA_TYPES.jpeg,
+  ...MEDIA_TYPES.png,
+  ...MEDIA_TYPES.heic,
+]);
+export type UploadMediaType = z.infer<typeof UploadMediaType>;
 
 /** The platform's ceiling; a clinic can set a lower limit, never a higher one. */
 export const MAX_UPLOAD_MB = 25;

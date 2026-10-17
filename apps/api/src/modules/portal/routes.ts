@@ -12,6 +12,7 @@ import {
   PortalPrescriptionList,
   PortalSlotsQuery,
   PortalTestOrderList,
+  TestOrderListQuery,
   SlotsResponse,
   TestOrder,
 } from '@dhc/contracts';
@@ -30,10 +31,11 @@ import { PortalService } from './service';
 const IdParams = z.object({ id: z.uuid() });
 
 /** The Patient app and web portal (PRD §4): patients only, and only their own family. */
-export const portalRoutes: FastifyPluginAsync<{ services: Services }> = async (
-  app,
-  { services },
-) => {
+export const portalRoutes: FastifyPluginAsync<{
+  services: Services;
+  /** Uploads per client address per minute, shared with the staff routes'. */
+  uploadRateLimit: number;
+}> = async (app, { services, uploadRateLimit: uploadMax }) => {
   const portal = new PortalService(services);
   const booking = new PortalBookingService(services);
   const orders = new PortalOrdersService(services);
@@ -102,14 +104,21 @@ export const portalRoutes: FastifyPluginAsync<{ services: Services }> = async (
   });
 
   // Test orders (PRD §4.4, §7.1): what was ordered, and results uploaded against it.
-  app.get('/portal/test-orders', patientOnly, async (request) =>
-    PortalTestOrderList.parse({ data: await orders.list(request, authOf(request)) }),
-  );
+  app.get('/portal/test-orders', patientOnly, async (request) => {
+    const query = TestOrderListQuery.parse(request.query);
+    return PortalTestOrderList.parse(await orders.list(request, authOf(request), query));
+  });
 
   app.post(
     '/portal/test-orders/:id/results',
     // Authenticated before the body is read (see orders/routes.ts).
-    { onRequest: [uploadRateLimit(app, services), authenticate(services), requireRole('patient')] },
+    {
+      onRequest: [
+        uploadRateLimit(app, services, uploadMax),
+        authenticate(services),
+        requireRole('patient'),
+      ],
+    },
     async (request, reply) => {
       const { id } = IdParams.parse(request.params);
       const order = await orders.upload(request, authOf(request), id, uploadedFile(request));

@@ -172,16 +172,18 @@ export function signBlocker(input: {
 
 /**
  * The visit's tests as the Clinic app lists them (read-only; they are written on the web):
- * how each prints, e.g. "MRI knee, right", and whether a signed version already ordered it.
+ * how each prints, e.g. "MRI knee, right", with its note, and whether a signed version already ordered it.
  * Signing sends every ID shown here, so the server knows the doctor saw them.
  */
 export function testRows(
-  tests: Pick<TestOrder, 'id' | 'name' | 'region' | 'side' | 'views' | 'orderedAt'>[],
+  tests: Pick<TestOrder, 'id' | 'name' | 'region' | 'side' | 'views' | 'notes' | 'orderedAt'>[],
   language: Language,
-): { id: string; label: string; ordered: boolean }[] {
+): { id: string; label: string; notes: string | null; ordered: boolean }[] {
   return tests.map((t) => ({
     id: t.id,
     label: testOrderLabel(t, language),
+    // The note prints with the test, so the doctor sees it before signing.
+    notes: t.notes?.trim() || null,
     ordered: t.orderedAt !== null,
   }));
 }

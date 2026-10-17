@@ -304,8 +304,9 @@ function PatientView({ role }: { role: string }) {
         </Surface>
       )}
 
-      {(role === 'doctor' || role === 'front_desk') && (
-        <TestOrdersCard patientId={patient.id} role={role} />
+      {/* A merged duplicate's tests show on the kept record, which the banner links to. */}
+      {(role === 'doctor' || role === 'front_desk') && !merged && (
+        <TestOrdersCard key={patient.id} patientId={patient.id} role={role} />
       )}
 
       <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">

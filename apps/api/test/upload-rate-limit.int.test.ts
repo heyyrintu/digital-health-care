@@ -7,7 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, describe, expect, it } from 'vitest';
 import { createHarness } from './harness';
 
-const h = createHarness();
+const h = createHarness({ uploadRateLimit: 60 });
 
 afterAll(async () => {
   await h.app.close();

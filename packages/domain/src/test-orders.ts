@@ -1,7 +1,7 @@
 /**
  * How an ordered test reads on the prescription and on screen (PRD §7.1): the test, the
  * body region in lower case, the side and the X-ray views, e.g. "MRI knee, right" or
- * "X-ray knee, both (AP, Lateral)". Test and region names stay as the clinic wrote them in
+ * "X-ray knee, both sides (AP, Lateral)". Test and region names stay as the clinic wrote them in
  * both languages, like medicine names; only the side is translated.
  */
 export type TestLabelLanguage = 'en' | 'hi';

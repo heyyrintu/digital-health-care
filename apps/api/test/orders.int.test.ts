@@ -15,6 +15,7 @@ import {
   type TestCatalogueItem,
   type TokenResponse,
   CURRENT_CONSENT_VERSIONS,
+  MAX_RESULTS_PER_ORDER,
 } from '@dhc/contracts';
 import { seedSampleMedicines } from '@dhc/db';
 import { randomUUID } from 'node:crypto';
@@ -730,16 +731,114 @@ describe('results and review', () => {
         .count,
     ).toBe(0);
 
-    // A further result opens the review again.
-    const again = TestOrder.parse(
-      (await upload(`/test-orders/${mri.id}/results`, doctorA, JPEG, 'image/jpeg')).json(),
-    );
-    expect(again).toMatchObject({ status: 'result_uploaded', reviewedAt: null });
-    expect(again.results).toHaveLength(2);
-    expect((await audits('test_order.result_uploaded'))[1]!.metadata).toMatchObject({
-      reopened: true,
-      by: 'doctor',
+    // A review is final: a further result needs a new order.
+    const late = await upload(`/test-orders/${mri.id}/results`, doctorA, JPEG, 'image/jpeg');
+    expect(late.statusCode).toBe(409);
+    expect(late.json().error.fields).toEqual({ status: 'reviewed' });
+    expect(await h.owner.testResult.count({ where: { testOrderId: mri.id } })).toBe(1);
+  });
+
+  it('moves the status only forward, and never touches a review, in the database too', async () => {
+    const { mri, xray } = await ordered();
+    await upload(`/test-orders/${mri.id}/results`, deskA, PDF);
+    const refused = (id: string, data: Record<string, unknown>) =>
+      expect(h.owner.testOrder.update({ where: { id }, data })).rejects.toThrow(
+        /only moves forward|reviewed test cannot change/,
+      );
+    // result_uploaded → ordered, or the upload time cleared: refused.
+    await refused(mri.id, { status: 'ordered', resultUploadedAt: null });
+    await refused(mri.id, { resultUploadedAt: null });
+    // result_uploaded → result_uploaded (another upload) is fine.
+    await h.owner.testOrder.update({
+      where: { id: mri.id },
+      data: { resultUploadedAt: new Date() },
     });
+    expect((await call('POST', `/test-orders/${mri.id}/review`, doctorA)).statusCode).toBe(200);
+    // Once reviewed nothing moves: not back, not a new upload time, not the reviewer.
+    await refused(mri.id, {
+      status: 'result_uploaded',
+      reviewedAt: null,
+      reviewedByUserId: null,
+    });
+    await refused(mri.id, { resultUploadedAt: new Date() });
+    await refused(mri.id, { reviewedAt: new Date() });
+    // An untouched update is no change.
+    await h.owner.testOrder.update({ where: { id: mri.id }, data: { updatedAt: new Date() } });
+    expect((await h.owner.testOrder.findUniqueOrThrow({ where: { id: xray.id } })).status).toBe(
+      'ordered',
+    );
+  });
+
+  it('holds at most 10 results per test, counted under the order’s lock', async () => {
+    const { mri } = await ordered();
+    for (let i = 0; i < MAX_RESULTS_PER_ORDER; i++) {
+      expect((await upload(`/test-orders/${mri.id}/results`, deskA, PDF)).statusCode).toBe(201);
+    }
+    const full = await upload(`/test-orders/${mri.id}/results`, deskA, PDF);
+    expect(full.statusCode).toBe(409);
+    expect(full.json().error.fields).toEqual({ file: 'too_many' });
+    expect(await h.owner.testResult.count({ where: { testOrderId: mri.id } })).toBe(
+      MAX_RESULTS_PER_ORDER,
+    );
+  });
+
+  it('pages a patient’s tests newest first with a cursor', async () => {
+    const first = await ordered();
+    const second = await visit();
+    const secondDraft = await saved(second, [
+      cbc(),
+      cbc({ catalogueItemId: item('ESR').id, name: 'ESR' }),
+    ]);
+    h.clock.advance(60);
+    const later = await sign(second, secondDraft.revision);
+    const page1 = await call(
+      'GET',
+      `/patients/${clinics.a.patients[0]!.id}/test-orders?limit=3`,
+      deskA,
+    );
+    expect(page1.statusCode, page1.body).toBe(200);
+    const one = PatientTestOrderList.parse(page1.json());
+    expect(one.data.map((o) => o.id)).toEqual([...later.tests.map((t) => t.id), first.mri.id]);
+    expect(one.nextCursor).not.toBeNull();
+    const two = PatientTestOrderList.parse(
+      (
+        await call(
+          'GET',
+          `/patients/${clinics.a.patients[0]!.id}/test-orders?limit=3&cursor=${one.nextCursor}`,
+          deskA,
+        )
+      ).json(),
+    );
+    expect(two).toEqual({
+      data: [expect.objectContaining({ id: first.xray.id })],
+      nextCursor: null,
+    });
+    const bad = await call(
+      'GET',
+      `/patients/${clinics.a.patients[0]!.id}/test-orders?cursor=nope`,
+      deskA,
+    );
+    expect(bad.statusCode).toBe(400);
+    expect(bad.json().error.fields).toEqual({ cursor: 'invalid' });
+    const viewed = await audits('test_orders.viewed');
+    expect(viewed.map((a) => a.metadata)).toEqual([{ count: 3 }, { count: 1, page: 'next' }]);
+  });
+
+  it('refuses a body that is not a file with 415', async () => {
+    const { mri } = await ordered();
+    for (const [type, payload] of [
+      ['application/json', JSON.stringify({ file: 'x' })],
+      ['text/plain', 'not a file'],
+    ] as const) {
+      const res = await h.app.inject({
+        method: 'POST',
+        url: `/v1/test-orders/${mri.id}/results`,
+        headers: { ...bearer(deskA), 'content-type': type },
+        payload,
+      });
+      expect(res.statusCode, type).toBe(415);
+      expect(res.json().error.fields).toEqual({ file: 'type_not_allowed' });
+    }
   });
 
   it('follows the clinic’s upload limits and checks the file is what it says', async () => {
@@ -813,6 +912,24 @@ describe('results and review', () => {
       get.mockRestore();
     }
     expect(await audits('test_result.viewed')).toEqual([]);
+  });
+
+  it('accepts results only from patients, front desk and doctors, in the database too', async () => {
+    const { mri } = await ordered();
+    await expect(
+      h.owner.testResult.create({
+        data: {
+          organisationId: clinics.a.org.id,
+          testOrderId: mri.id,
+          fileKey: 'x.pdf',
+          mediaType: 'application/pdf',
+          sizeBytes: 1,
+          sha256: '0'.repeat(64),
+          uploadedByUserId: clinics.a.admin.userId,
+          uploadedByRole: 'clinic_admin',
+        },
+      }),
+    ).rejects.toThrow(/uploader_role_check/);
   });
 
   it('removes the stored file when the result cannot be recorded', async () => {
@@ -1027,16 +1144,13 @@ describe('merged records', () => {
   it('shows a duplicate’s orders under the record that was kept, for staff and the patient', async () => {
     const [kept, duplicate] = clinics.a.patients;
     await h.owner.patient.update({ where: { id: kept!.id }, data: { phone: '+919000000001' } });
-    const { mri } = await ordered(duplicate!.id);
+    const { mri, xray } = await ordered(duplicate!.id);
     // As an approved merge leaves it: the duplicate points at the kept record.
     await h.owner.patient.update({
       where: { id: duplicate!.id },
       data: { mergedIntoId: kept!.id, mergedAt: new Date() },
     });
-    expect((await patientOrders(doctorA, kept!.id)).map((o) => o.id)).toEqual([
-      mri.id,
-      expect.any(String),
-    ]);
+    expect((await patientOrders(doctorA, kept!.id)).map((o) => o.id)).toEqual([mri.id, xray.id]);
     expect((await patientOrders(deskA, duplicate!.id)).map((o) => o.id)).toContain(mri.id);
 
     const tokens = await patientLogin(h, 'clinic-a', '9000000001');

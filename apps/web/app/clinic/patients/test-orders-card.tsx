@@ -3,9 +3,11 @@
 import { ApiError } from '@dhc/api-client';
 import {
   checkUpload,
+  MAX_RESULTS_PER_ORDER,
   OrganisationSettings,
   UPLOAD_MEDIA_TYPES,
   type PatientTestOrder,
+  type TestOrder,
   type TestOrderStatus,
 } from '@dhc/contracts';
 import { formatIstDateTime, testOrderLabel } from '@dhc/domain';
@@ -20,7 +22,21 @@ const STATUS_LOOK: Record<TestOrderStatus, string> = {
   reviewed: 'bg-success-soft text-success',
 };
 
-const ACCEPT = Object.values(UPLOAD_MEDIA_TYPES).flat().join(',');
+/** The file picker's types: the clinic's, once its settings load; every type until then. */
+const acceptOf = (settings: OrganisationSettings | null) =>
+  (settings
+    ? settings.uploadTypes.flatMap((x) => UPLOAD_MEDIA_TYPES[x])
+    : Object.values(UPLOAD_MEDIA_TYPES).flat()
+  ).join(',');
+
+/** The server's reasons for refusing a file, in the screen's language. */
+const FILE_REASONS = [
+  'type_not_allowed',
+  'too_large',
+  'type_mismatch',
+  'empty',
+  'too_many',
+] as const;
 
 /**
  * A patient's ordered tests on the profile (PRD §7.1): status, the results uploaded so far,
@@ -29,34 +45,96 @@ const ACCEPT = Object.values(UPLOAD_MEDIA_TYPES).flat().join(',');
  */
 export function TestOrdersCard({ patientId, role }: { patientId: string; role: string }) {
   const { api, locale, signOut, t } = useSession();
+  const { me } = useSession();
   const [orders, setOrders] = useState<PatientTestOrder[] | null>(null);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [settings, setSettings] = useState<OrganisationSettings | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [busy, setBusy] = useState<string | null>(null);
+  // Per order, so working on one row never freezes or unfreezes another.
+  const [busy, setBusy] = useState<ReadonlySet<string>>(new Set());
   const doctor = role === 'doctor';
+  const mark = (id: string, on: boolean) =>
+    setBusy((current) => {
+      const next = new Set(current);
+      if (on) next.add(id);
+      else next.delete(id);
+      return next;
+    });
 
   const fail = useCallback(
     (e: unknown) => {
       if (e instanceof ApiError && e.status === 401) return void signOut('expired');
+      const reason = e instanceof ApiError ? e.fields.file : undefined;
       setError(
         e instanceof ApiError
           ? e.code === 'CHART_RESTRICTED'
             ? t('chart.restricted')
-            : e.message
+            : e.fields.status === 'reviewed'
+              ? t('orders.alreadyReviewed')
+              : reason && (FILE_REASONS as readonly string[]).includes(reason)
+                ? t(`orders.file.${reason as (typeof FILE_REASONS)[number]}`, {
+                    max: MAX_RESULTS_PER_ORDER,
+                    mb: settings?.maxUploadMb ?? '',
+                    types: settings?.uploadTypes.map((x) => x.toUpperCase()).join(', ') ?? '',
+                  })
+                : e.message
           : t('error.network'),
       );
     },
-    [signOut, t],
+    [signOut, t, settings],
   );
+
+  // Kept in a ref: `fail` changes when the settings arrive, which must not reload the list.
+  const failRef = useRef(fail);
+  useEffect(() => {
+    failRef.current = fail;
+  }, [fail]);
 
   const load = useCallback(async () => {
     try {
-      setOrders((await api.patientTestOrders(patientId)).data);
+      const first = await api.patientTestOrders(patientId);
+      setOrders(first.data);
+      setNextCursor(first.nextCursor);
+    } catch (e) {
+      failRef.current(e);
+    }
+  }, [api, patientId]);
+
+  async function more() {
+    if (!nextCursor) return;
+    setLoadingMore(true);
+    try {
+      const page = await api.patientTestOrders(patientId, nextCursor);
+      setOrders((current) => [
+        ...(current ?? []),
+        ...page.data.filter((o) => !current?.some((c) => c.id === o.id)),
+      ]);
+      setNextCursor(page.nextCursor);
     } catch (e) {
       fail(e);
+    } finally {
+      setLoadingMore(false);
     }
-  }, [api, patientId, fail]);
+  }
+
+  /** Puts an order the API returned back in its row, keeping the list's own fields. */
+  const replace = (updated: TestOrder, reviewedByName?: string | null) =>
+    setOrders((current) =>
+      (current ?? []).map((o) =>
+        o.id === updated.id
+          ? {
+              ...o,
+              ...updated,
+              // The upload answer leaves the doctor's notes out for the front desk.
+              notes: doctor ? updated.notes : o.notes,
+              reviewedByName: reviewedByName === undefined ? o.reviewedByName : reviewedByName,
+              canReview: doctor && updated.status === 'result_uploaded',
+            }
+          : o,
+      ),
+    );
 
   useEffect(() => {
     void load();
@@ -83,29 +161,27 @@ export function TestOrdersCard({ patientId, role }: { patientId: string; role: s
     if (check === 'too_large') {
       return setError(t('orders.file.too_large', { mb: settings!.maxUploadMb }));
     }
-    setBusy(order.id);
+    mark(order.id, true);
     try {
-      await api.uploadTestResult(order.id, file);
+      replace(await api.uploadTestResult(order.id, file));
       setNotice(t('orders.uploaded'));
-      await load();
     } catch (e) {
       fail(e);
     } finally {
-      setBusy(null);
+      mark(order.id, false);
     }
   }
 
   async function review(order: PatientTestOrder) {
     setError(null);
     setNotice(null);
-    setBusy(order.id);
+    mark(order.id, true);
     try {
-      await api.reviewTestOrder(order.id);
-      await load();
+      replace(await api.reviewTestOrder(order.id), me?.user.displayName ?? null);
     } catch (e) {
       fail(e);
     } finally {
-      setBusy(null);
+      mark(order.id, false);
     }
   }
 
@@ -160,7 +236,8 @@ export function TestOrdersCard({ patientId, role }: { patientId: string; role: s
                 key={o.id}
                 order={o}
                 doctor={doctor}
-                busy={busy === o.id}
+                busy={busy.has(o.id)}
+                accept={acceptOf(settings)}
                 locale={locale}
                 onUpload={(file) => void upload(o, file)}
                 onReview={() => void review(o)}
@@ -168,6 +245,17 @@ export function TestOrdersCard({ patientId, role }: { patientId: string; role: s
               />
             ))}
           </ul>
+        )}
+        {nextCursor && (
+          <Button
+            type="button"
+            variant="outline"
+            className="mt-3"
+            disabled={loadingMore}
+            onClick={() => void more()}
+          >
+            {loadingMore ? t('common.loading') : t('orders.more')}
+          </Button>
         )}
       </section>
     </Surface>
@@ -178,6 +266,7 @@ function OrderRow({
   order: o,
   doctor,
   busy,
+  accept,
   locale,
   onUpload,
   onReview,
@@ -186,6 +275,8 @@ function OrderRow({
   order: PatientTestOrder;
   doctor: boolean;
   busy: boolean;
+  /** The file types the clinic accepts, for the picker. */
+  accept: string;
   locale: 'en' | 'hi';
   onUpload(file: File): void;
   onReview(): void;
@@ -258,29 +349,34 @@ function OrderRow({
         </ul>
       )}
       <div className="flex flex-wrap gap-2">
-        <input
-          ref={input}
-          type="file"
-          accept={ACCEPT}
-          className="sr-only"
-          aria-label={t('orders.uploadFor', { name: label })}
-          tabIndex={-1}
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            e.target.value = '';
-            if (file) onUpload(file);
-          }}
-        />
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          disabled={busy}
-          onClick={() => input.current?.click()}
-        >
-          <Upload aria-hidden />
-          {busy ? t('orders.uploading') : t('orders.upload')}
-        </Button>
+        {/* A review is final; a new result needs a new order. */}
+        {o.status !== 'reviewed' && o.results.length < MAX_RESULTS_PER_ORDER && (
+          <>
+            <input
+              ref={input}
+              type="file"
+              accept={accept}
+              className="sr-only"
+              aria-label={t('orders.uploadFor', { name: label })}
+              tabIndex={-1}
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = '';
+                if (file) onUpload(file);
+              }}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={busy}
+              onClick={() => input.current?.click()}
+            >
+              <Upload aria-hidden />
+              {busy ? t('orders.uploading') : t('orders.upload')}
+            </Button>
+          </>
+        )}
         {doctor && o.canReview && (
           <Button type="button" size="sm" disabled={busy} onClick={onReview}>
             <CheckCircle2 aria-hidden />

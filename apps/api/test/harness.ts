@@ -26,7 +26,7 @@ export class Clock {
 }
 
 export function createHarness(
-  options: { platformAllowlist?: IpAllowlist; queues?: QueueProbe } = {},
+  options: { platformAllowlist?: IpAllowlist; queues?: QueueProbe; uploadRateLimit?: number } = {},
 ) {
   const url = process.env.TEST_DATABASE_URL!;
   const clock = new Clock();
@@ -54,6 +54,8 @@ export function createHarness(
     },
     services,
     signInRateLimit: 1000,
+    // Suites upload far more than a person would; the limit has its own test.
+    uploadRateLimit: options.uploadRateLimit ?? 1000,
     platformAllowlist: options.platformAllowlist ?? IpAllowlist.any(),
   });
   /** Owner connection for arranging data and inspecting results (bypasses RLS). */

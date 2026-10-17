@@ -143,6 +143,7 @@ describe('testRows', () => {
         region: 'Knee',
         side: 'right' as const,
         views: [],
+        notes: 'Rule out ACL tear',
         orderedAt: '2026-10-06T10:00:00.000Z',
       },
       {
@@ -151,12 +152,18 @@ describe('testRows', () => {
         region: 'Knee',
         side: 'both' as const,
         views: ['AP', 'Lateral'],
+        notes: '  ',
         orderedAt: null,
       },
     ];
     expect(testRows(tests, 'en')).toEqual([
-      { id: tests[0]!.id, label: 'MRI knee, right', ordered: true },
-      { id: tests[1]!.id, label: 'X-ray knee, both sides (AP, Lateral)', ordered: false },
+      { id: tests[0]!.id, label: 'MRI knee, right', notes: 'Rule out ACL tear', ordered: true },
+      {
+        id: tests[1]!.id,
+        label: 'X-ray knee, both sides (AP, Lateral)',
+        notes: null,
+        ordered: false,
+      },
     ]);
     expect(testRows(tests, 'hi')[0]!.label).toBe('MRI knee, दायाँ');
   });

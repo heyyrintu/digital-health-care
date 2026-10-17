@@ -140,6 +140,9 @@ ALTER TABLE test_orders ADD CONSTRAINT test_orders_status_check
   );
 ALTER TABLE test_results ADD CONSTRAINT test_results_file_check
   CHECK (size_bytes > 0 AND sha256 ~ '^[0-9a-f]{64}$' AND length(file_key) > 0);
+-- Results come from the patient, the front desk or a doctor; clinic admins never upload.
+ALTER TABLE test_results ADD CONSTRAINT test_results_uploader_role_check
+  CHECK (uploaded_by_role IN ('patient', 'front_desk', 'doctor'));
 
 -- Row-level security (ADR 0014). Results are append-only for the app.
 ALTER TABLE test_catalogue_items ENABLE ROW LEVEL SECURITY;
@@ -267,7 +270,8 @@ CREATE TRIGGER appointments_keep_test_orders
 -- Locked once ordered (PRD §7.1, like the lines of a signed prescription) ---------------
 -- A test starts as a draft line and is ordered only by the version being signed: the
 -- visit's newest version, signed, at the same instant. An ordered test is never deleted,
--- and only its status and the times and reviewer that go with it change. A draft line
+-- and only its status and the times and reviewer that go with it change: forwards only
+-- (ordered → result_uploaded → reviewed), and not at all once reviewed. A draft line
 -- changes freely (the API allows it only while the visit's prescription is a draft).
 CREATE FUNCTION test_orders_locked() RETURNS trigger LANGUAGE plpgsql
   SET search_path = pg_catalog, public, pg_temp AS $$
@@ -300,6 +304,18 @@ BEGIN
     RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
   END IF;
   IF TG_OP = 'UPDATE' AND (to_jsonb(NEW) - changeable) = (to_jsonb(OLD) - changeable) THEN
+    -- The status only moves forward: ordered → result_uploaded (again for each further
+    -- result) → reviewed. A review is final: once reviewed nothing changes but updated_at.
+    IF OLD.status = 'reviewed' THEN
+      IF (to_jsonb(NEW) - 'updated_at') = (to_jsonb(OLD) - 'updated_at') THEN
+        RETURN NEW;
+      END IF;
+      RAISE EXCEPTION 'a reviewed test cannot change' USING ERRCODE = '23514';
+    END IF;
+    IF (OLD.status = 'result_uploaded' AND NEW.status = 'ordered')
+       OR (OLD.result_uploaded_at IS NOT NULL AND NEW.result_uploaded_at IS NULL) THEN
+      RAISE EXCEPTION 'a test status only moves forward' USING ERRCODE = '23514';
+    END IF;
     RETURN NEW;
   END IF;
   RAISE EXCEPTION 'an ordered test cannot change' USING ERRCODE = '23514';

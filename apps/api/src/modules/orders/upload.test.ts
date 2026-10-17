@@ -36,6 +36,7 @@ describe('acceptUpload', () => {
   it('accepts a file of an allowed type within the limit, with its extension', () => {
     expect(accept('application/pdf', PDF)).toEqual({ type: 'pdf', extension: 'pdf' });
     expect(accept('image/heif', HEIC)).toEqual({ type: 'heic', extension: 'heic' });
+    expect(accept('image/jpeg', JPEG)).toEqual({ type: 'jpeg', extension: 'jpg' });
   });
 
   it('follows the clinic’s types and size, and refuses a file that is not what it says', () => {

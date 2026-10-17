@@ -91,6 +91,11 @@ export function SignPanel({
       if (err instanceof ApiError && err.status !== 401) {
         setProblem(err.message);
         if (err.fields.pin) setPin('');
+        // The visit's tests changed elsewhere: reload the card so the doctor sees them.
+        if (err.fields.tests === 'review') {
+          setProblem(t('sign.testsChanged'));
+          onChanged();
+        }
       } else {
         onError(err);
       }

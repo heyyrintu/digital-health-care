@@ -1,4 +1,4 @@
-import type { Role, TestOrder, TestOrderLine } from '@dhc/contracts';
+import { UploadMediaType, type Role, type TestOrder, type TestOrderLine } from '@dhc/contracts';
 import { Prisma, type Tx } from '@dhc/db';
 import type { FastifyRequest } from 'fastify';
 import { AppError } from '../../errors';
@@ -38,7 +38,7 @@ export function orderOut(row: OrderRow, options: { notes: boolean } = { notes: t
     reviewedAt: row.reviewedAt?.toISOString() ?? null,
     results: row.results.map((r) => ({
       id: r.id,
-      mediaType: r.mediaType,
+      mediaType: UploadMediaType.parse(r.mediaType),
       sizeBytes: r.sizeBytes,
       uploadedAt: r.uploadedAt.toISOString(),
       uploadedBy: r.uploadedByRole === 'patient' ? 'patient' : 'clinic',

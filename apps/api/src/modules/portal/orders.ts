@@ -1,4 +1,4 @@
-import type { PortalTestOrder, TestOrder } from '@dhc/contracts';
+import type { PortalTestOrder, TestOrder, TestOrderListQuery } from '@dhc/contracts';
 import { withTenant } from '@dhc/db';
 import type { FastifyRequest } from 'fastify';
 import type { Services } from '../../services';
@@ -26,7 +26,11 @@ export class PortalOrdersService {
     this.portal = new PortalService(s);
   }
 
-  async list(request: FastifyRequest, actor: Actor): Promise<PortalTestOrder[]> {
+  async list(
+    request: FastifyRequest,
+    actor: Actor,
+    query: TestOrderListQuery,
+  ): Promise<{ data: PortalTestOrder[]; nextCursor: string | null }> {
     const phone = await accountPhone(this.s, actor.userId);
     const patients = await withTenant(this.s.db, actor.organisationId, async (tx) => {
       await this.portal.requireConsents(tx, actor);
@@ -35,7 +39,7 @@ export class PortalOrdersService {
         select: { id: true, name: true, mergedInto: { select: { id: true, name: true } } },
       });
     });
-    return this.orders.forAccount(request, { ...actor, role: 'patient' }, patients);
+    return this.orders.forAccount(request, { ...actor, role: 'patient' }, patients, query);
   }
 
   async upload(

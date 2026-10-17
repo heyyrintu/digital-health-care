@@ -4,6 +4,7 @@ import {
   TestCatalogueList,
   TestCatalogueQuery,
   TestOrder,
+  TestOrderListQuery,
 } from '@dhc/contracts';
 import type { FastifyPluginAsync, FastifyReply } from 'fastify';
 import { z } from 'zod';
@@ -31,10 +32,11 @@ export const sendResultFile = (
     .send(result.file);
 
 /** Test orders after signing (PRD §7.1): catalogue, lists, results and review. */
-export const orderRoutes: FastifyPluginAsync<{ services: Services }> = async (
-  app,
-  { services },
-) => {
+export const orderRoutes: FastifyPluginAsync<{
+  services: Services;
+  /** Uploads per client address per minute, shared with the Patient app's. */
+  uploadRateLimit: number;
+}> = async (app, { services, uploadRateLimit: uploadMax }) => {
   registerUploadParser(app);
   const orders = new OrdersService(services);
   const doctor = { preHandler: [authenticate(services), requireRole('doctor')] };
@@ -44,7 +46,7 @@ export const orderRoutes: FastifyPluginAsync<{ services: Services }> = async (
   // wrong-role request is refused without buffering up to 25 MB.
   const deskUpload = {
     onRequest: [
-      uploadRateLimit(app, services),
+      uploadRateLimit(app, services, uploadMax),
       authenticate(services),
       requireRole('doctor', 'front_desk'),
     ],
@@ -57,9 +59,8 @@ export const orderRoutes: FastifyPluginAsync<{ services: Services }> = async (
 
   app.get('/patients/:id/test-orders', desk, async (request) => {
     const { id } = IdParams.parse(request.params);
-    return PatientTestOrderList.parse({
-      data: await orders.forPatient(request, authOf(request), id),
-    });
+    const query = TestOrderListQuery.parse(request.query);
+    return PatientTestOrderList.parse(await orders.forPatient(request, authOf(request), id, query));
   });
 
   app.get('/test-orders/awaiting-review', doctor, async (request) =>

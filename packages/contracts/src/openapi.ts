@@ -72,6 +72,7 @@ import {
   TestCatalogueList,
   TestCatalogueQuery,
   TestOrder,
+  TestOrderListQuery,
 } from './orders';
 import {
   OrganisationSettings,
@@ -537,6 +538,7 @@ const operations: Operation[] = [
     path: '/portal/test-orders',
     operationId: 'listPortalTestOrders',
     summary: 'The family’s ordered tests and their results (patient)',
+    query: TestOrderListQuery,
     response: PortalTestOrderList,
   },
   {
@@ -923,6 +925,7 @@ const operations: Operation[] = [
     operationId: 'listPatientTestOrders',
     summary: 'A patient’s ordered tests and results (doctor; front desk without notes)',
     pathParams: ['id'],
+    query: TestOrderListQuery,
     response: PatientTestOrderList,
   },
   {

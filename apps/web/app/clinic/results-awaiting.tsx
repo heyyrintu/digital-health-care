@@ -20,6 +20,7 @@ export function ResultsAwaiting() {
 
   useEffect(() => {
     let current = true;
+    setError(null);
     api
       .testResultsAwaitingReview()
       .then((l) => current && setList(l))
@@ -56,6 +57,11 @@ export function ResultsAwaiting() {
       {error && (
         <p role="alert" className="rounded-xl bg-danger-soft px-4 py-3 text-sm text-destructive">
           {error}
+        </p>
+      )}
+      {!list && !error && (
+        <p aria-live="polite" className="text-sm text-muted-foreground">
+          {t('common.loading')}
         </p>
       )}
       {list?.count === 0 && (

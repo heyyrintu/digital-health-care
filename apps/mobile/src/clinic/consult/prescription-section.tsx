@@ -214,10 +214,13 @@ export function PrescriptionSection({
         <View style={{ gap: theme.spacing[1] }} testID="rx-tests">
           <Text variant="label">{t('orders.title')}</Text>
           {tests.map((row, i) => (
-            <Text key={row.id}>
-              {`${i + 1}. ${row.label}`}
-              {row.ordered ? ` · ${t('orders.locked')}` : ''}
-            </Text>
+            <View key={row.id}>
+              <Text>
+                {`${i + 1}. ${row.label}`}
+                {row.ordered ? ` · ${t('orders.locked')}` : ''}
+              </Text>
+              {row.notes && <Text variant="muted">{row.notes}</Text>}
+            </View>
           ))}
           {editable && <Text variant="muted">{t('mobile.clinic.testsOnWeb')}</Text>}
         </View>

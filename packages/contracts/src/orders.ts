@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { CursorQuery, page } from './pagination';
+import { UploadMediaType } from './settings';
 
 // ---- Test orders (PRD §7.1) -----------------------------------------------------------
 //
@@ -23,6 +25,9 @@ export type TestOrderStatus = z.infer<typeof TestOrderStatus>;
 
 /** The most tests one visit can order (the API limit). */
 export const MAX_TEST_ORDERS = 20;
+
+/** The most results one ordered test can hold; a further upload is 409 `file: too_many`. */
+export const MAX_RESULTS_PER_ORDER = 10;
 
 // ---- Catalogue --------------------------------------------------------------------------
 
@@ -93,8 +98,7 @@ export type TestOrderLine = z.infer<typeof TestOrderLine>;
 /** An uploaded result: what it is and who sent it, never the file itself. */
 export const TestResultSummary = z.object({
   id: z.uuid(),
-  /** `application/pdf`, `image/jpeg`, `image/png`, `image/heic` or `image/heif`. */
-  mediaType: z.string(),
+  mediaType: UploadMediaType,
   sizeBytes: z.number().int().positive(),
   uploadedAt: z.iso.datetime(),
   /** `patient` from the Patient app or portal; otherwise the clinic's staff. */
@@ -133,7 +137,11 @@ export const PatientTestOrder = TestOrder.extend({
 });
 export type PatientTestOrder = z.infer<typeof PatientTestOrder>;
 
-export const PatientTestOrderList = z.object({ data: z.array(PatientTestOrder) });
+/** `?limit=50&cursor=`: newest orders first, a page at a time. */
+export const TestOrderListQuery = CursorQuery;
+export type TestOrderListQuery = z.infer<typeof TestOrderListQuery>;
+
+export const PatientTestOrderList = page(PatientTestOrder);
 export type PatientTestOrderList = z.infer<typeof PatientTestOrderList>;
 
 /** The doctor's results waiting for review (the dashboard's in-app notification). */
@@ -176,5 +184,5 @@ export const PortalTestOrder = z.object({
 });
 export type PortalTestOrder = z.infer<typeof PortalTestOrder>;
 
-export const PortalTestOrderList = z.object({ data: z.array(PortalTestOrder) });
+export const PortalTestOrderList = page(PortalTestOrder);
 export type PortalTestOrderList = z.infer<typeof PortalTestOrderList>;
