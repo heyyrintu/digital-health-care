@@ -16,6 +16,7 @@ import {
   disablePlatformOperator,
   enablePlatformOperator,
   resetPlatformOperatorAuthenticator,
+  resetPlatformOperatorPassword,
 } from '../src/modules/platform/operators';
 import { supportVerifyDoctor } from '../src/modules/support/verify-doctor';
 import { IpAllowlist, parseCidrs } from '../src/plugins/ip-allowlist';
@@ -350,6 +351,32 @@ describe('sign-in', () => {
       'platform.operator.disabled',
       'platform.operator.enabled',
     ]);
+  });
+});
+
+describe('compromised operator password', () => {
+  it('is replaced only while the operator is disabled, then they enable and sign in', async () => {
+    const tokens = await platformLogin(h, op);
+    const trail = { email: op.email, ticket: 'SUP-12', operator: 'lead@platform.test' };
+    await expect(
+      resetPlatformOperatorPassword(h.services, source, { ...trail, password: OTHER_PASSWORD }),
+    ).rejects.toThrow(/Disable the operator/);
+    await disablePlatformOperator(h.services, source, trail);
+    await expect(
+      resetPlatformOperatorPassword(h.services, source, { ...trail, password: SHORT_PASSWORD }),
+    ).rejects.toThrow(/12 characters/);
+    await resetPlatformOperatorPassword(h.services, source, { ...trail, password: OTHER_PASSWORD });
+    // Still disabled, and the old session stays ended.
+    expect((await call('GET', '/platform/me', tokens)).statusCode).toBe(401);
+    expect((await passwordStep(op.email, OTHER_PASSWORD)).statusCode).toBe(401);
+    await enablePlatformOperator(h.services, source, trail);
+    expect((await passwordStep(op.email)).statusCode).toBe(401);
+    expect((await passwordStep(op.email, OTHER_PASSWORD)).statusCode).toBe(200);
+    expect(
+      await h.owner.auditLog.count({
+        where: { action: 'platform.operator.password_reset', entityId: op.operatorId },
+      }),
+    ).toBe(1);
   });
 });
 

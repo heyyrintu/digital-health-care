@@ -5,20 +5,18 @@ import { createServices } from './services';
 
 const config = loadConfig();
 const services = createServices(config);
+const trust = proxyTrust(config);
 const app = buildApp({
   config,
   services,
-  trustProxy: proxyTrust(config),
+  trustProxy: trust,
   corsOrigins: corsOrigins(config),
   signInRateLimit: config.SIGN_IN_RATE_LIMIT,
   platformAllowlist: platformAllowlist(config),
 });
 
-if (
-  config.NODE_ENV === 'production' &&
-  config.TRUST_PROXY_HOPS > 0 &&
-  !config.TRUSTED_PROXY_CIDRS
-) {
+// From the parsed value: a TRUSTED_PROXY_CIDRS of only commas or spaces trusts every peer.
+if (trust && !trust.proxies) {
   app.log.warn(
     'TRUST_PROXY_HOPS is set without TRUSTED_PROXY_CIDRS: safe only if the API port can be reached from the load balancer alone',
   );

@@ -44,7 +44,7 @@ Type `DISABLE` when asked (or pass `--yes` in a recorded non-interactive session
      --email person@platform.example --ticket SUP-1236 --operator your.name@platform.example
    ```
 
-   It replaces the authenticator (the old phone's codes stop working), ends any sessions and clears a lockout. The password stays as it was; if it may be known to someone else, treat it as an [incident](incident-response.md) and remove and re-add the operator instead.
+   It replaces the authenticator (the old phone's codes stop working), ends any sessions and clears a lockout. The password stays as it was; if it may be known to someone else, also follow [Compromised password](#compromised-password) before step 4.
 4. **Enable** them again:
 
    ```sh
@@ -56,8 +56,23 @@ Type `DISABLE` when asked (or pass `--yes` in a recorded non-interactive session
 
 The same `--enable` brings back someone who left and returned, after a new approval on the ticket.
 
+## Compromised password
+If an operator's password may be known to someone else (phished, reused, written down), treat it as an [incident](incident-response.md) and:
+
+1. **At once:** disable the operator (new ticket). The account stays shut until step 4.
+2. **Identity check and approval** on the ticket, as when adding an operator; the operator comes to the terminal.
+3. **New password**, typed by the operator (not echoed):
+
+   ```sh
+   node dist/support-platform-operator.js --reset-password \
+     --email person@platform.example --ticket SUP-1237 --operator your.name@platform.example
+   ```
+
+   It is refused while the operator is active, replaces the password, ends any sessions and clears a lockout. If the phone may also be compromised, run `--reset-authenticator` too.
+4. **Enable** them again with `--enable` (as above) and have them sign in to check.
+
 ## What is recorded
-Every operator's sign-ins, failures, lockouts and logouts, and every list, onboarding (and refused onboarding), verification (and refused verification) and usage view, are in the audit log with no organisation (`platform.*`), naming the operator, so one operator's activity can be reviewed in one place. Onboarding and verification are also in the organisation's own log (`platform.organisation.created`, `support.doctor.verified`). Creating, disabling, enabling and replacing an operator's authenticator write `platform.operator.created`, `platform.operator.disabled`, `platform.operator.enabled` and `platform.operator.authenticator_reset` with the ticket and who ran the command.
+Every operator's sign-ins, failures, lockouts and logouts, and every list, onboarding (and refused onboarding), verification (and refused verification) and usage view, are in the audit log with no organisation (`platform.*`), naming the operator, so one operator's activity can be reviewed in one place. Onboarding and verification are also in the organisation's own log (`platform.organisation.created`, `support.doctor.verified`). Creating, disabling, enabling and replacing an operator's authenticator or password write `platform.operator.created`, `platform.operator.disabled`, `platform.operator.enabled`, `platform.operator.authenticator_reset` and `platform.operator.password_reset` with the ticket and who ran the command.
 
 ## If something goes wrong
 - **"An operator with that email already exists."** If they were disabled and are coming back, use `--enable` (and `--reset-authenticator` if their phone changed).

@@ -17,6 +17,7 @@
  *
  *   node dist/support-platform-operator.js --disable --email … --ticket … --operator …
  *   node dist/support-platform-operator.js --enable --email … --ticket … --operator …
+ *   node dist/support-platform-operator.js --reset-password --email … --ticket … --operator …
  *
  * Disable ends the operator's sessions at once. Both ask you to type the action's name
  * (--yes skips the prompt in a recorded, non-interactive session).
@@ -37,11 +38,13 @@ import {
   enablePlatformOperator,
   normaliseOperatorEmail,
   resetPlatformOperatorAuthenticator,
+  resetPlatformOperatorPassword,
 } from '../modules/platform/operators';
 
 const USAGE =
   'Usage: support-platform-operator --email <email> --name <name> --ticket <id> --operator <you> [--show-key]\n' +
   '       support-platform-operator --reset-authenticator --email <email> --ticket <id> --operator <you> [--show-key]\n' +
+  '       support-platform-operator --reset-password --email <email> --ticket <id> --operator <you>\n' +
   '       support-platform-operator --disable|--enable --email <email> --ticket <id> --operator <you> [--yes]';
 
 const { values } = parseArgs({
@@ -53,6 +56,7 @@ const { values } = parseArgs({
     disable: { type: 'boolean', default: false },
     enable: { type: 'boolean', default: false },
     'reset-authenticator': { type: 'boolean', default: false },
+    'reset-password': { type: 'boolean', default: false },
     'show-key': { type: 'boolean', default: false },
     yes: { type: 'boolean', default: false },
     help: { type: 'boolean', default: false },
@@ -68,8 +72,12 @@ if (values.help) {
   console.error(USAGE);
   process.exit(0);
 }
-const modes = (['disable', 'enable', 'reset-authenticator'] as const).filter((m) => values[m]);
-if (modes.length > 1) fail(`Choose one of --disable, --enable, --reset-authenticator.\n${USAGE}`);
+const modes = (['disable', 'enable', 'reset-authenticator', 'reset-password'] as const).filter(
+  (m) => values[m],
+);
+if (modes.length > 1) {
+  fail(`Choose one of --disable, --enable, --reset-authenticator, --reset-password.\n${USAGE}`);
+}
 const mode = modes[0] ?? 'create';
 const required =
   mode === 'create'
@@ -78,7 +86,7 @@ const required =
 const missing = required.filter((k) => !values[k]);
 if (missing.length > 0) fail(`Missing --${missing.join(', --')}.\n${USAGE}`);
 const url = process.env.DATABASE_URL ?? fail('DATABASE_URL is required.');
-const enrols = mode === 'create' || mode === 'reset-authenticator';
+const enrols = mode === 'create' || mode === 'reset-authenticator' || mode === 'reset-password';
 if (!process.stdin.isTTY && (enrols || !values.yes)) {
   fail(
     enrols
@@ -108,7 +116,8 @@ async function ask(question: string, hidden = false): Promise<string> {
   const answer = await rl.question('');
   muted = false;
   if (hidden) process.stderr.write('\n');
-  return answer.trim();
+  // Passwords are kept as typed: sign-in compares them untrimmed.
+  return hidden ? answer : answer.trim();
 }
 
 /**
@@ -155,6 +164,19 @@ try {
     await confirm(`Let ${email} sign in to the platform console again?`, 'ENABLE');
     const result = await enablePlatformOperator({ db, now }, source, { ...trail, email });
     console.error(result.alreadyActive ? 'Already active: nothing changed.' : `Enabled; ${done}.`);
+  } else if (mode === 'reset-password') {
+    console.error(`New password for ${email} (the operator must be disabled first).`);
+    console.error('The operator types their new password now (at least 12 characters).');
+    const password = await ask('New password: ', true);
+    if ((await ask('Again: ', true)) !== password) {
+      fail('The passwords differ: nothing was saved.');
+    }
+    const result = await resetPlatformOperatorPassword({ db, now }, source, {
+      ...trail,
+      email,
+      password,
+    });
+    console.error(`Password replaced; ${result.sessionsRevoked} session(s) ended; ${done}.`);
   } else {
     const key =
       process.env.FIELD_ENCRYPTION_KEY ??

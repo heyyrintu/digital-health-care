@@ -172,6 +172,51 @@ export async function resetPlatformOperatorAuthenticator(
   });
 }
 
+/**
+ * A new password for a disabled operator whose password may be known to someone else.
+ * Refused while the operator is active, so the account stays shut until the compromised
+ * password is gone; `enablePlatformOperator` lets them in again afterwards.
+ */
+export async function resetPlatformOperatorPassword(
+  s: Pick<Services, 'db' | 'now'>,
+  source: AuditSource,
+  params: SupportTrail & { email: string; password: string },
+): Promise<{ id: string; sessionsRevoked: number }> {
+  const trail = checkTrail(params);
+  const email = normaliseOperatorEmail(params.email);
+  const password = NewPassword.safeParse(params.password);
+  if (!password.success) {
+    throw invalid('password', password.error.issues[0]?.message ?? 'Choose a longer password.');
+  }
+  // scrypt runs before the transaction opens (it is slow by design).
+  const passwordHash = await hashPassword(password.data);
+  const now = s.now();
+  return withPlatform(s.db, async (tx) => {
+    const operator = await tx.platformOperator.findUnique({ where: { email } });
+    if (!operator) throw new AppError(404, 'NOT_FOUND', 'No operator with that email.');
+    if (operator.status !== 'disabled') {
+      throw new AppError(409, 'CONFLICT', 'Disable the operator before replacing their password.', {
+        status: 'active',
+      });
+    }
+    await tx.platformOperator.update({
+      where: { id: operator.id },
+      data: { passwordHash, failedLoginCount: 0, lockedUntil: null },
+    });
+    const revoked = await tx.platformSession.updateMany({
+      where: { operatorId: operator.id, revokedAt: null },
+      data: { revokedAt: now, revokedReason: 'password_reset' },
+    });
+    await writeAudit(tx, source, {
+      action: 'platform.operator.password_reset',
+      entityType: 'platform_operator',
+      entityId: operator.id,
+      metadata: { ...trail, sessionsRevoked: revoked.count },
+    });
+    return { id: operator.id, sessionsRevoked: revoked.count };
+  });
+}
+
 /** Lets a disabled operator sign in again (after a lost phone is replaced, or a return). */
 export async function enablePlatformOperator(
   s: Pick<Services, 'db' | 'now'>,
