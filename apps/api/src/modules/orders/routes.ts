@@ -1,15 +1,22 @@
 import {
+  AdminTestCatalogueItem,
+  AdminTestCatalogueList,
   AwaitingReviewList,
+  CreateTestCatalogueItemBody,
   PatientTestOrderList,
+  ReorderTestCatalogueBody,
   TestCatalogueList,
   TestCatalogueQuery,
   TestOrder,
   TestOrderListQuery,
+  UpdateTestCatalogueItemBody,
 } from '@dhc/contracts';
 import type { FastifyPluginAsync, FastifyReply } from 'fastify';
 import { z } from 'zod';
+import { idempotent } from '../../idempotency';
 import { authOf, authenticate, requireRole } from '../../plugins/authenticate';
 import type { Services } from '../../services';
+import { TestCatalogueService } from './catalogue';
 import { OrdersService } from './service';
 import { registerUploadParser, uploadedFile, uploadRateLimit } from './upload';
 
@@ -31,7 +38,10 @@ export const sendResultFile = (
     .header('Content-Security-Policy', "default-src 'none'; img-src 'self'; sandbox")
     .send(result.file);
 
-/** Test orders after signing (PRD §7.1): catalogue, lists, results and review. */
+/**
+ * Test orders after signing (PRD §7.1): catalogue, lists, results and review; and the
+ * clinic admin's catalogue editing (`/test-catalogue/items`).
+ */
 export const orderRoutes: FastifyPluginAsync<{
   services: Services;
   /** Uploads per client address per minute, shared with the Patient app's. */
@@ -39,6 +49,7 @@ export const orderRoutes: FastifyPluginAsync<{
 }> = async (app, { services, uploadRateLimit: uploadMax }) => {
   registerUploadParser(app);
   const orders = new OrdersService(services);
+  const catalogue = new TestCatalogueService(services);
   const doctor = { preHandler: [authenticate(services), requireRole('doctor')] };
   // The front desk files results that come to the counter (PRD §3.2) but never opens them.
   const desk = { preHandler: [authenticate(services), requireRole('doctor', 'front_desk')] };
@@ -55,6 +66,34 @@ export const orderRoutes: FastifyPluginAsync<{
   app.get('/test-catalogue', doctor, async (request) => {
     const { q } = TestCatalogueQuery.parse(request.query);
     return TestCatalogueList.parse({ data: await orders.catalogue(authOf(request), q) });
+  });
+
+  // The clinic admin keeps the catalogue (PRD §9.2): every test, active or not.
+  const admin = { preHandler: [authenticate(services), requireRole('clinic_admin')] };
+
+  app.get('/test-catalogue/items', admin, async (request) =>
+    AdminTestCatalogueList.parse({ data: await catalogue.list(authOf(request)) }),
+  );
+
+  app.post('/test-catalogue/items', admin, async (request, reply) => {
+    const body = CreateTestCatalogueItemBody.parse(request.body);
+    return idempotent(services, request, reply, async () => {
+      const item = await catalogue.create(request, authOf(request), body);
+      return { status: 201, body: AdminTestCatalogueItem.parse(item) };
+    });
+  });
+
+  app.patch('/test-catalogue/items/:id', admin, async (request) => {
+    const { id } = IdParams.parse(request.params);
+    const body = UpdateTestCatalogueItemBody.parse(request.body);
+    return AdminTestCatalogueItem.parse(await catalogue.update(request, authOf(request), id, body));
+  });
+
+  app.post('/test-catalogue/items/reorder', admin, async (request) => {
+    const body = ReorderTestCatalogueBody.parse(request.body);
+    return AdminTestCatalogueList.parse({
+      data: await catalogue.reorder(request, authOf(request), body),
+    });
   });
 
   app.get('/patients/:id/test-orders', desk, async (request) => {

@@ -140,6 +140,13 @@ export function TestsSection({
         <ol className="m-0 list-none space-y-2 p-0">
           {tests.map((test, i) => {
             const item = catalogue?.find((c) => c.id === test.catalogueItemId);
+            // What the line's catalogue test offers today. A test the clinic has deactivated
+            // is not in the doctor's (active) catalogue: it offers nothing, so the stored
+            // region and views show as no longer listed, for the doctor to keep or clear.
+            const listed =
+              catalogue && test.catalogueItemId
+                ? { regions: item?.regions ?? [], views: item?.views ?? [] }
+                : null;
             const locked = test.orderedAt !== null || !editable;
             const id = (field: string) => `test-${i}-${field}`;
             return (
@@ -178,7 +185,7 @@ export function TestsSection({
                 </div>
                 {!locked && (
                   <div className={grid}>
-                    {item && item.regions.length > 0 && (
+                    {listed && (listed.regions.length > 0 || test.region) && (
                       <div className={cell}>
                         <Label htmlFor={id('region')} className={fieldLabel}>
                           {t('orders.region')}
@@ -186,9 +193,21 @@ export function TestsSection({
                         <NativeSelect
                           id={id('region')}
                           value={test.region ?? ''}
-                          onChange={(e) => set(test.id, { region: e.target.value })}
+                          onChange={(e) => set(test.id, { region: e.target.value || null })}
                         >
-                          {item.regions.map((r) => (
+                          {/* A test that lists no regions now (or is no longer offered) lets
+                              the doctor clear the stored one. */}
+                          {listed.regions.length === 0 && (
+                            <option value="">{t('orders.chooseRegion')}</option>
+                          )}
+                          {/* The clinic may have dropped the stored region since: still shown
+                              as chosen, so the screen matches what is saved. */}
+                          {test.region && !listed.regions.includes(test.region) && (
+                            <option value={test.region}>
+                              {t('orders.noLongerListed', { value: test.region })}
+                            </option>
+                          )}
+                          {listed.regions.map((r) => (
                             <option key={r} value={r}>
                               {r}
                             </option>
@@ -203,10 +222,15 @@ export function TestsSection({
                         onChange={(side) => set(test.id, { side })}
                       />
                     )}
-                    {item && item.views.length > 0 && (
+                    {listed && (listed.views.length > 0 || test.views.length > 0) && (
                       <Views
                         name={id('views')}
-                        options={item.views}
+                        // Views the clinic has dropped since stay, ticked, until unticked.
+                        options={[
+                          ...listed.views,
+                          ...test.views.filter((v) => !listed.views.includes(v)),
+                        ]}
+                        unlisted={test.views.filter((v) => !listed.views.includes(v))}
                         value={test.views}
                         onChange={(views) => set(test.id, { views })}
                       />
@@ -453,11 +477,14 @@ function SideSelect({
 function Views({
   name,
   options,
+  unlisted = [],
   value,
   onChange,
 }: {
   name: string;
   options: string[];
+  /** Stored views no longer in the catalogue's list, labelled as such. */
+  unlisted?: string[];
   value: string[];
   onChange(views: string[]): void;
 }) {
@@ -478,7 +505,7 @@ function Views({
                 onChange(options.filter((o) => (o === v ? e.target.checked : value.includes(o))))
               }
             />
-            {v}
+            {unlisted.includes(v) ? t('orders.noLongerListed', { value: v }) : v}
           </label>
         ))}
       </div>

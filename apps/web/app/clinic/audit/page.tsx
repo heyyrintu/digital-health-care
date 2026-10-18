@@ -24,6 +24,7 @@ const AREAS = [
   { prefix: 'settings.', label: 'audit.area.settings' },
   { prefix: 'patient_merge.', label: 'audit.area.merges' },
   { prefix: 'consent.', label: 'audit.area.consent' },
+  { prefix: 'test_catalogue.', label: 'audit.area.testCatalogue' },
 ] as const;
 
 const TH = 'px-3 py-2 text-left text-xs font-semibold text-muted-foreground';

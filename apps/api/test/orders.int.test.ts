@@ -547,16 +547,23 @@ describe('signing orders the tests', () => {
     );
     const next = await saved(visitId, [...keep, blood], draft.revision);
     expect(next.tests.map((t) => t.id)).toEqual([mri.id, xray.id, blood.id]);
-    // An unchanged draft line too, but a changed one is checked against today's catalogue.
+    // An unchanged draft line too, and one whose notes change (only what changed is checked
+    // against today's catalogue); a new line from the deactivated test is refused.
     await h.owner.testCatalogueItem.updateMany({
       where: { organisationId: clinics.a.org.id, name: 'Complete blood count (CBC)' },
       data: { active: false },
     });
     const again = await saved(visitId, [...keep, blood], next.revision);
     expect(again.tests).toHaveLength(3);
-    const edited = await save(visitId, [...keep, { ...blood, notes: 'Fasting' }], again.revision);
-    expect(edited.statusCode).toBe(400);
-    expect(edited.json().error.fields).toEqual({ tests: 'invalid' });
+    const edited = await saved(visitId, [...keep, { ...blood, notes: 'Fasting' }], again.revision);
+    expect(edited.tests[2]!.notes).toBe('Fasting');
+    const added = await save(
+      visitId,
+      [...keep, { ...blood, notes: 'Fasting' }, cbc()],
+      edited.revision,
+    );
+    expect(added.statusCode).toBe(400);
+    expect(added.json().error.fields).toEqual({ tests: 'invalid' });
   });
 
   it('lets the database order a test only through the version being signed', async () => {

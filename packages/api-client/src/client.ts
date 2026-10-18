@@ -1,5 +1,10 @@
 import {
   AcceptInviteResponse,
+  AdminTestCatalogueItem,
+  AdminTestCatalogueList,
+  type CreateTestCatalogueItemBody,
+  type ReorderTestCatalogueBody,
+  type UpdateTestCatalogueItemBody,
   BookingOptions,
   ConsentStatus,
   AwaitingReviewList,
@@ -298,6 +303,25 @@ export function createApiClient(options: ApiClientOptions) {
     /** Doctor: the clinic's test catalogue, optionally filtered by name. */
     testCatalogue: (q?: string) =>
       request('GET', '/test-catalogue', { schema: TestCatalogueList, query: { q } }),
+    /** Clinic admin: every catalogue test, active or not, in the clinic's order. */
+    testCatalogueItems: () =>
+      request('GET', '/test-catalogue/items', { schema: AdminTestCatalogueList }),
+    /** Clinic admin: add a test. Send the same `idempotencyKey` when retrying one attempt. */
+    createTestCatalogueItem: (body: CreateTestCatalogueItemBody, idempotencyKey?: string) =>
+      request('POST', '/test-catalogue/items', {
+        schema: AdminTestCatalogueItem,
+        body,
+        idempotencyKey,
+      }),
+    /** Clinic admin: rename, change regions or views, or (de)activate; orders keep theirs. */
+    updateTestCatalogueItem: (id: string, body: UpdateTestCatalogueItemBody) =>
+      request('PATCH', `/test-catalogue/items/${encodeURIComponent(id)}`, {
+        schema: AdminTestCatalogueItem,
+        body,
+      }),
+    /** Clinic admin: one kind's tests in a new order (all of them, each once). */
+    reorderTestCatalogue: (body: ReorderTestCatalogueBody) =>
+      request('POST', '/test-catalogue/items/reorder', { schema: AdminTestCatalogueList, body }),
     /** Doctor or front desk: a patient's ordered tests (front desk: without notes). */
     /** One page, newest first; pass the previous page's `nextCursor` for the next. */
     patientTestOrders: (patientId: string, cursor?: string) =>
