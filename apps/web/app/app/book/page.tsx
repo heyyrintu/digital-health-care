@@ -33,6 +33,8 @@ type Load<T> =
 
 function Book({ account }: { account: ReadyAccount }) {
   const { api, t } = usePatientSession();
+  // `?doctor=<public page address>`: from a doctor's public page, that doctor is picked.
+  const doctor = useSearchParams().get('doctor');
   const [options, setOptions] = useState<Load<BookingOptions>>({ status: 'loading' });
 
   const load = useCallback(() => {
@@ -50,7 +52,8 @@ function Book({ account }: { account: ReadyAccount }) {
       {options.status === 'error' && <LoadError error={options.error} retry={load} />}
       {options.status === 'ready' &&
         (canBookOnline(options.data) ? (
-          <BookForm options={options.data} account={account} />
+          // A new `?doctor=` starts a fresh form, so nothing of the last choice is kept.
+          <BookForm key={doctor ?? ''} options={options.data} account={account} doctor={doctor} />
         ) : (
           <Notice tone="info">{t('patient.book.nothing')}</Notice>
         ))}
@@ -58,13 +61,19 @@ function Book({ account }: { account: ReadyAccount }) {
   );
 }
 
-function BookForm({ options, account }: { options: BookingOptions; account: ReadyAccount }) {
+function BookForm({
+  options,
+  account,
+  doctor,
+}: {
+  options: BookingOptions;
+  account: ReadyAccount;
+  doctor: string | null;
+}) {
   const { api, locale, t } = usePatientSession();
-  // `?doctor=<public page address>`: from a doctor's public page, that doctor is picked.
-  const params = useSearchParams();
   const [patientId, setPatientId] = useState(account.selected.id);
   // A link naming a doctor this clinic does not list picks nobody: the patient chooses.
-  const [start] = useState(() => initialDoctor(options, params.get('doctor')));
+  const [start] = useState(() => initialDoctor(options, doctor));
   const [doctorId, setDoctorId] = useState<string | null>(start.doctorId);
   const [clinicId, setClinicId] = useState(options.clinics[0]!.id);
   const [typeId, setTypeId] = useState(options.consultationTypes[0]!.id);
