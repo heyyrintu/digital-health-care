@@ -3,7 +3,15 @@
 import type { PortalAppointmentList } from '@dhc/contracts';
 import { shortDate } from '@dhc/domain';
 import { Button, Surface } from '@dhc/ui-web';
-import { CalendarDays, CalendarPlus, ChevronRight, ShieldCheck, Users } from 'lucide-react';
+import {
+  CalendarDays,
+  CalendarPlus,
+  ChevronRight,
+  FileText,
+  FlaskConical,
+  ShieldCheck,
+  Users,
+} from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { nextAppointmentFor } from '../../lib/patient';
@@ -38,6 +46,8 @@ function Home({ account }: { account: ReadyAccount }) {
 
   const links = [
     { href: '/app/appointments', label: t('patient.nav.appointments'), icon: CalendarDays },
+    { href: '/app/prescriptions', label: t('patient.nav.prescriptions'), icon: FileText },
+    { href: '/app/tests', label: t('patient.nav.tests'), icon: FlaskConical },
     { href: '/app/family', label: t('patient.nav.family'), icon: Users },
     { href: '/app/privacy', label: t('patient.nav.privacy'), icon: ShieldCheck },
   ];

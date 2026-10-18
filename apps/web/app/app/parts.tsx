@@ -2,8 +2,9 @@
 
 import type { PortalPatient } from '@dhc/contracts';
 import { Button, cn } from '@dhc/ui-web';
-import { useEffect, useId, type ReactNode } from 'react';
+import { useEffect, useId, useState, type ReactNode } from 'react';
 import { consentRequired, portalErrorMessage } from '../../lib/patient';
+import { CLICKED_URL_TTL_MS } from '../../lib/patient-files';
 import { usePatientSession } from './session-provider';
 
 /** A page's title and its content, in the portal's narrow, phone-first column. */
@@ -150,5 +151,34 @@ export function PatientPicker({
       value={selectedId}
       onChange={onSelect}
     />
+  );
+}
+
+/**
+ * The browser blocked the file's new tab: a link the person clicks to download it (nothing
+ * is saved unasked). Its object URL is revoked just after the click, when the link goes
+ * away (another action, sign-out) or when its time is up, whichever is first.
+ */
+export function BlockedDownload({ url, name }: { url: string; name: string }) {
+  const { files, t } = usePatientSession();
+  const [gone, setGone] = useState(false);
+  useEffect(() => () => files.release(url), [files, url]);
+  if (gone) return null;
+  return (
+    <p role="status" className="rounded-xl bg-info-soft px-4 py-3 text-sm font-medium">
+      <a
+        href={url}
+        download={name}
+        className="font-semibold text-primary underline underline-offset-2"
+        onClick={() =>
+          files.deps.later(() => {
+            files.release(url);
+            setGone(true);
+          }, CLICKED_URL_TTL_MS)
+        }
+      >
+        {t('portal.files.blocked')}
+      </a>
+    </p>
   );
 }

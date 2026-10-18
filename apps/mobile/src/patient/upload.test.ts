@@ -4,7 +4,6 @@ import { describe, expect, it } from 'vitest';
 import { PdfCache, type PdfCacheDeps } from './pdf-cache';
 import {
   clearOnSignOut,
-  InFlight,
   iosTmpUri,
   isPickerInbox,
   pickAndUpload,
@@ -107,19 +106,6 @@ describe('pickAndUpload', () => {
     expect(await pickAndUpload(g.deps)).toEqual({ kind: 'failed', error: busy });
     expect(g.removed).toEqual([]);
     expect(g.sent).toHaveLength(0);
-  });
-});
-
-describe('InFlight', () => {
-  it('lets one upload per test start until it ends', () => {
-    const inFlight = new InFlight();
-    expect(inFlight.start('a')).toBe(true);
-    // A second tap in the same frame.
-    expect(inFlight.start('a')).toBe(false);
-    // Another test is not held up.
-    expect(inFlight.start('b')).toBe(true);
-    inFlight.end('a');
-    expect(inFlight.start('a')).toBe(true);
   });
 });
 

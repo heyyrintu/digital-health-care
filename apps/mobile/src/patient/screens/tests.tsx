@@ -1,4 +1,19 @@
-import { ApiError } from '@dhc/api-client';
+import {
+  ApiError,
+  appendPage,
+  canUploadResult,
+  fileSize,
+  findOrder,
+  InFlight,
+  isStale,
+  PICK_TYPES,
+  replaceRow,
+  resultFileName,
+  shareTypeOf,
+  uploadErrorMessage,
+  withUploaded,
+  type Message,
+} from '@dhc/api-client';
 import type { PortalTestOrder, TestResultSummary } from '@dhc/contracts';
 import { MAX_RESULTS_PER_ORDER } from '@dhc/contracts';
 import { shortDate, testOrderLabel } from '@dhc/domain';
@@ -13,21 +28,7 @@ import { useLocale } from '../../locale/provider';
 import { istToday } from '../logic';
 import { LoadError, Loading, PatientScreen } from '../parts';
 import { blobBytes, pickedBlob, pickOptions, removePicked, testResultFiles } from '../pdf-native';
-import {
-  appendPage,
-  canUploadResult,
-  fileSize,
-  findOrder,
-  isStale,
-  PICK_TYPES,
-  replaceRow,
-  resultFileName,
-  shareTypeOf,
-  uploadErrorMessage,
-  withUploaded,
-  type Message,
-} from '../tests';
-import { InFlight, pickAndUpload } from '../upload';
+import { pickAndUpload } from '../upload';
 
 type ListState =
   | { status: 'loading' }
@@ -237,7 +238,8 @@ export function TestsScreen() {
                     }}
                   >
                     <Text variant="muted" style={{ flexShrink: 1 }}>
-                      {shareTypeOf(r.mediaType).label} · {fileSize(r.sizeBytes)} ·{' '}
+                      {shareTypeOf(r.mediaType).label ?? t('patient.tests.fileType')} ·{' '}
+                      {fileSize(r.sizeBytes)} ·{' '}
                       {t(
                         r.uploadedBy === 'patient'
                           ? 'patient.tests.byPatient'

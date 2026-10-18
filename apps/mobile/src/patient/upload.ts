@@ -1,5 +1,5 @@
+import { checkPickedFile, fileCheckMessage, type Message } from '@dhc/api-client';
 import type { TestOrder } from '@dhc/contracts';
-import { checkPickedFile, fileCheckMessage, type Message } from './tests';
 
 /** A file the document picker handed back: the app's own copy of it. */
 export interface PickedAsset {
@@ -56,25 +56,6 @@ export async function pickAndUpload(deps: UploadDeps): Promise<UploadOutcome> {
     // React Native keeps a Blob's bytes in its native store until it is closed.
     (file as (Blob & { close?: () => void }) | null)?.close?.();
     deps.removePicked(asset.uri);
-  }
-}
-
-/**
- * The tests with an upload under way. Checked and set synchronously, so two taps in one
- * frame (before React re-renders the busy button) cannot start two pickers or uploads.
- */
-export class InFlight {
-  private readonly ids = new Set<string>();
-
-  /** False when this test already has an upload under way. */
-  start(id: string): boolean {
-    if (this.ids.has(id)) return false;
-    this.ids.add(id);
-    return true;
-  }
-
-  end(id: string): void {
-    this.ids.delete(id);
   }
 }
 

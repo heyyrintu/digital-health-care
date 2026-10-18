@@ -15,6 +15,7 @@ import {
   type ReactNode,
 } from 'react';
 import { sessionEndReason } from '../../lib/patient';
+import { browserFileDeps, OpenFiles } from '../../lib/patient-files';
 import {
   ACTIVITY_KEY,
   ACTIVITY_THROTTLE_MS,
@@ -54,6 +55,8 @@ interface PatientSessionContext {
   api: ApiClient;
   /** Onboarding step, the family and whose records are shown; reset on sign-out. */
   account: PatientAccount;
+  /** The tabs and object URLs of files opened in this session; closed and revoked when it ends. */
+  files: OpenFiles;
   documentUrls: DocumentUrls;
   /** In production without both documents published, consents cannot be accepted. */
   documentsMissing: boolean;
@@ -215,9 +218,13 @@ export function PatientSessionProvider({
     [api],
   );
 
+  const files = useMemo(() => new OpenFiles(browserFileDeps()), []);
+
   const clear = useCallback(
     (reason: SignOutReason | null) => {
       generation.current += 1;
+      // Prescriptions and results opened in this session go with it (threat model T24).
+      files.closeAll();
       clearTimeout(refreshTimer.current);
       clearTimeout(idleTimer.current);
       accessToken.current = null;
@@ -228,7 +235,7 @@ export function PatientSessionProvider({
       setEndedReason(reason);
       setStatus('signedOut');
     },
-    [account],
+    [account, files],
   );
 
   /** Holds a token and schedules its refresh. */
@@ -460,6 +467,7 @@ export function PatientSessionProvider({
       endedReason,
       api,
       account,
+      files,
       documentUrls,
       documentsMissing,
       locale,
@@ -474,6 +482,7 @@ export function PatientSessionProvider({
       endedReason,
       api,
       account,
+      files,
       documentUrls,
       documentsMissing,
       locale,
