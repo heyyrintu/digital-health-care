@@ -5,6 +5,7 @@ import { Badge, StaffShell, type NavItem } from '@dhc/ui-web';
 import {
   CalendarClock,
   FileSignature,
+  FlaskConical,
   IndianRupee,
   ListOrdered,
   ScrollText,
@@ -67,6 +68,11 @@ export function ClinicShell({ children }: { children: (me: MeResponse) => ReactN
             ? [
                 { href: '/clinic/audit', label: t('dashboard.auditLog'), icon: ScrollText },
                 { href: '/clinic/medicines', label: t('dashboard.medicines'), icon: Pill },
+                {
+                  href: '/clinic/test-catalogue',
+                  label: t('dashboard.testCatalogue'),
+                  icon: FlaskConical,
+                },
                 { href: '/clinic/merges', label: t('dashboard.merges'), icon: GitMerge },
               ]
             : []),

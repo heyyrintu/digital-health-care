@@ -66,33 +66,73 @@ const clinical = (l: {
 }) =>
   JSON.stringify([l.catalogueItemId, l.kind, l.name, l.region, l.side, l.views, l.notes || null]);
 
+type StoredLine = {
+  catalogueItemId: string | null;
+  kind: string;
+  name: string;
+  region: string | null;
+  views: string[];
+};
+
 /**
  * Catalogue tests must be active in this clinic's catalogue and match it: the same kind
  * and name, a region from its list (imaging with regions needs one) and views from its list.
+ *
+ * A draft line the visit already holds (`previous`, by line ID) is checked only for what
+ * changed: the clinic may since have renamed the test, dropped a region or view, or
+ * deactivated it, and a doctor changing only the side or notes must still be able to save.
+ * Its stored test, name, region and views stand while unchanged; a new region, or a view
+ * it did not have, must be valid in today's catalogue.
  */
-async function checkCatalogue(tx: Tx, lines: TestOrderLine[]): Promise<void> {
-  const ids = [...new Set(lines.flatMap((l) => (l.catalogueItemId ? [l.catalogueItemId] : [])))];
-  if (ids.length === 0) return;
+async function checkCatalogue(
+  tx: Tx,
+  lines: TestOrderLine[],
+  previous: Map<string, StoredLine>,
+): Promise<void> {
+  type Check = { line: TestOrderLine; region: boolean; views: string[]; whole: boolean };
+  const checks: Check[] = [];
+  for (const line of lines) {
+    if (!line.catalogueItemId) continue;
+    const old = previous.get(line.id);
+    const sameTest =
+      old !== undefined &&
+      old.catalogueItemId === line.catalogueItemId &&
+      old.kind === line.kind &&
+      old.name === line.name;
+    if (!sameTest) {
+      checks.push({ line, region: true, views: line.views, whole: true });
+      continue;
+    }
+    const region = old.region !== line.region;
+    const views = line.views.filter((v) => !old.views.includes(v));
+    if (region || views.length > 0) checks.push({ line, region, views, whole: false });
+  }
+  if (checks.length === 0) return;
+  const ids = [...new Set(checks.map((c) => c.line.catalogueItemId!))];
   const items = new Map(
     (await tx.testCatalogueItem.findMany({ where: { id: { in: ids }, active: true } })).map((i) => [
       i.id,
       i,
     ]),
   );
-  for (const line of lines) {
-    if (!line.catalogueItemId) continue;
-    const item = items.get(line.catalogueItemId);
+  for (const { line, region, views, whole } of checks) {
+    const item = items.get(line.catalogueItemId!);
     if (!item) throw invalid('tests', 'A test is not in the catalogue.');
-    if (item.kind !== line.kind || item.name !== line.name) {
+    if (whole && (item.kind !== line.kind || item.name !== line.name)) {
       throw invalid('tests', 'A test does not match the catalogue.');
     }
-    if (item.regions.length > 0 && (line.region === null || !item.regions.includes(line.region))) {
-      throw invalid('tests', 'Pick a region from the list.');
+    if (region) {
+      if (
+        item.regions.length > 0 &&
+        (line.region === null || !item.regions.includes(line.region))
+      ) {
+        throw invalid('tests', 'Pick a region from the list.');
+      }
+      if (item.regions.length === 0 && line.region !== null) {
+        throw invalid('tests', 'This test has no region.');
+      }
     }
-    if (item.regions.length === 0 && line.region !== null) {
-      throw invalid('tests', 'This test has no region.');
-    }
-    if (line.views.some((v) => !item.views.includes(v))) {
+    if (views.some((v) => !item.views.includes(v))) {
       throw invalid('tests', 'Pick views from the list.');
     }
   }
@@ -116,15 +156,18 @@ export async function saveDraftTests(
 
   const existing = await tx.testOrder.findMany({ where: { appointmentId: visit.id } });
   const byId = new Map(existing.map((o) => [o.id, o]));
-  // Only new and changed lines are checked against today's catalogue: an ordered test is
-  // pinned by `clinical()` below, and an unchanged draft line stays valid even if the
-  // clinic has since deactivated its catalogue entry.
+  // Only new and changed lines are checked against today's catalogue, and a changed draft
+  // line only for what changed: an ordered test is pinned by `clinical()` below, and a
+  // draft line keeps what it stored even if the clinic has since renamed, narrowed or
+  // deactivated its catalogue entry.
+  const drafts = new Map(existing.filter((o) => !o.orderedAt).map((o) => [o.id, o]));
   await checkCatalogue(
     tx,
     lines.filter((l) => {
       const old = byId.get(l.id);
       return !old || (!old.orderedAt && clinical(old) !== clinical(l));
     }),
+    drafts,
   );
   const wanted = new Set(ids);
   const locked = () =>

@@ -178,7 +178,7 @@ export function TestsSection({
                 </div>
                 {!locked && (
                   <div className={grid}>
-                    {item && item.regions.length > 0 && (
+                    {item && (item.regions.length > 0 || test.region) && (
                       <div className={cell}>
                         <Label htmlFor={id('region')} className={fieldLabel}>
                           {t('orders.region')}
@@ -188,6 +188,13 @@ export function TestsSection({
                           value={test.region ?? ''}
                           onChange={(e) => set(test.id, { region: e.target.value })}
                         >
+                          {/* The clinic may have dropped the stored region since: still shown
+                              as chosen, so the screen matches what is saved. */}
+                          {test.region && !item.regions.includes(test.region) && (
+                            <option value={test.region}>
+                              {t('orders.noLongerListed', { value: test.region })}
+                            </option>
+                          )}
                           {item.regions.map((r) => (
                             <option key={r} value={r}>
                               {r}
@@ -203,10 +210,15 @@ export function TestsSection({
                         onChange={(side) => set(test.id, { side })}
                       />
                     )}
-                    {item && item.views.length > 0 && (
+                    {item && (item.views.length > 0 || test.views.length > 0) && (
                       <Views
                         name={id('views')}
-                        options={item.views}
+                        // Views the clinic has dropped since stay, ticked, until unticked.
+                        options={[
+                          ...item.views,
+                          ...test.views.filter((v) => !item.views.includes(v)),
+                        ]}
+                        unlisted={test.views.filter((v) => !item.views.includes(v))}
                         value={test.views}
                         onChange={(views) => set(test.id, { views })}
                       />
@@ -453,11 +465,14 @@ function SideSelect({
 function Views({
   name,
   options,
+  unlisted = [],
   value,
   onChange,
 }: {
   name: string;
   options: string[];
+  /** Stored views no longer in the catalogue's list, labelled as such. */
+  unlisted?: string[];
   value: string[];
   onChange(views: string[]): void;
 }) {
@@ -478,7 +493,7 @@ function Views({
                 onChange(options.filter((o) => (o === v ? e.target.checked : value.includes(o))))
               }
             />
-            {v}
+            {unlisted.includes(v) ? t('orders.noLongerListed', { value: v }) : v}
           </label>
         ))}
       </div>
