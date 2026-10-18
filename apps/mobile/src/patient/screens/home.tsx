@@ -80,6 +80,7 @@ export function PatientHome({ me, account }: { me: MeResponse; account: ReadyAcc
           label={t('patient.nav.prescriptions')}
           onPress={() => go('/prescriptions')}
         />
+        <Button variant="secondary" label={t('patient.nav.tests')} onPress={() => go('/tests')} />
         <Button variant="secondary" label={t('patient.nav.family')} onPress={() => go('/family')} />
         <Button
           variant="secondary"
