@@ -1337,6 +1337,7 @@ export const hi: Record<MessageKey, string> = {
   'catalogue.moveUp': '{name} को ऊपर ले जाएँ',
   'catalogue.moveDown': '{name} को नीचे ले जाएँ',
   'catalogue.regionCount': '{count} हिस्से',
+  'catalogue.regionCountOne': '1 हिस्सा',
   'catalogue.viewList': 'व्यू: {views}',
   'catalogue.empty': 'इस प्रकार का कोई टेस्ट अभी नहीं है।',
   'catalogue.loadFailed': 'टेस्ट सूची लोड नहीं हो सकी।',

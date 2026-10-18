@@ -176,7 +176,15 @@ function CatalogueScreen() {
         sub={t('catalogue.sub')}
         actions={
           editing === null && items ? (
-            <Button type="button" disabled={busy} onClick={() => setEditing('new')}>
+            <Button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                // A fresh key per add form; retries of one submission keep it.
+                setAddKey(crypto.randomUUID());
+                setEditing('new');
+              }}
+            >
               {t('catalogue.add')}
             </Button>
           ) : undefined
@@ -250,7 +258,9 @@ function CatalogueScreen() {
                           {!item.active && <Chip>{t('practice.inactive')}</Chip>}
                           {item.regions.length > 0 && (
                             <Chip>
-                              {t('catalogue.regionCount', { count: item.regions.length })}
+                              {item.regions.length === 1
+                                ? t('catalogue.regionCountOne')
+                                : t('catalogue.regionCount', { count: item.regions.length })}
                             </Chip>
                           )}
                           {item.views.length > 0 && (

@@ -1333,6 +1333,7 @@ export const en = {
   'catalogue.moveUp': 'Move {name} up',
   'catalogue.moveDown': 'Move {name} down',
   'catalogue.regionCount': '{count} regions',
+  'catalogue.regionCountOne': '1 region',
   'catalogue.viewList': 'Views: {views}',
   'catalogue.empty': 'No tests of this type yet.',
   'catalogue.loadFailed': 'The test catalogue could not be loaded.',
