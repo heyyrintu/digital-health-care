@@ -306,14 +306,18 @@ export const register: Register = (on) => {
     const check = await read($, lastCheck);
     const running = await read($, busy);
     const now = currentPhase(list);
-    const mark = { done: '✓', active: '▶', todo: '·' } as const;
+    const mark = { done: '✓', active: '▶', parked: '‖', todo: '·' } as const;
 
     return (
       <Box flexDirection="column">
         <Text bold>Build plan</Text>
         {list.length === 0 && <Text dimColor>No §9.1 progress table found.</Text>}
         {list.map((phase) => (
-          <Text key={phase.id} dimColor={phase.status === 'todo'} bold={phase === now}>
+          <Text
+            key={phase.id}
+            dimColor={phase.status === 'todo' || phase.status === 'parked'}
+            bold={phase === now}
+          >
             {mark[phase.status]} {phase.id} {phase.name}
           </Text>
         ))}

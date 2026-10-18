@@ -1,4 +1,5 @@
 import type { PortalAppointment } from '@dhc/contracts';
+import { shortDate } from '@dhc/domain';
 import { Button, Card, Notice, Text, useTheme } from '@dhc/ui-native';
 import { useState } from 'react';
 import { Alert, View } from 'react-native';
@@ -6,7 +7,6 @@ import { api } from '../../api';
 import { errorMessage } from '../../errors';
 import { useLocale } from '../../locale/provider';
 import { useLoad } from '../../use-load';
-import { shortDate } from '../logic';
 import { LoadError, Loading, PatientScreen } from '../parts';
 
 /** PRD §4.4: the family's upcoming and past appointments; cancel within the clinic's rules. */

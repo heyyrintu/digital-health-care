@@ -1,4 +1,5 @@
 import type { PortalPrescription } from '@dhc/contracts';
+import { shortDate } from '@dhc/domain';
 import type { Locale } from '@dhc/i18n';
 import { Button, Card, Notice, Text, useTheme } from '@dhc/ui-native';
 import { useState } from 'react';
@@ -7,7 +8,7 @@ import { api } from '../../api';
 import { errorMessage } from '../../errors';
 import { useLocale } from '../../locale/provider';
 import { useLoad } from '../../use-load';
-import { istToday, shortDate } from '../logic';
+import { istToday } from '../logic';
 import { LoadError, Loading, PatientScreen } from '../parts';
 import { blobBytes, prescriptionPdfs } from '../pdf-native';
 import { prescriptionPdfName } from '../pdf-name';

@@ -1,11 +1,12 @@
 import type { Gender, PortalPatient } from '@dhc/contracts';
+import { isAdult, isValidDob } from '@dhc/domain';
 import { Button, Choice, Notice, TextField } from '@dhc/ui-native';
 import { useState } from 'react';
 import { api } from '../../api';
 import { errorMessage } from '../../errors';
 import { useLocale } from '../../locale/provider';
 import { ChoiceRow } from '../parts';
-import { isAdult, istToday, isValidDob } from '../logic';
+import { istToday } from '../logic';
 
 const GENDERS: Gender[] = ['female', 'male', 'other'];
 

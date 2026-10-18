@@ -1,3 +1,4 @@
+import { isAdult } from '@dhc/domain';
 import { Card, Notice, Text, useTheme } from '@dhc/ui-native';
 import { useState } from 'react';
 import { View } from 'react-native';
@@ -5,7 +6,7 @@ import { patientAccount } from '../../api';
 import { useLocale } from '../../locale/provider';
 import type { ReadyAccount } from '../gate';
 import { PatientScreen } from '../parts';
-import { isAdult, istToday } from '../logic';
+import { istToday } from '../logic';
 import { PatientForm } from './patient-form';
 
 /** PRD §4.1: everyone on the number, the children they look after, and adding someone. */

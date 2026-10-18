@@ -1343,6 +1343,22 @@ export const en = {
     '{name} deactivated. Doctors no longer see it; tests already ordered are unchanged.',
   'catalogue.activated': '{name} is back on the doctors’ list.',
   'catalogue.stale': 'The catalogue changed on another screen. It has been reloaded.',
+  // Patient portal on the web (/app). Its screens share the Patient app's strings
+  // (`patient.*`, `mobile.patientSignIn.*`); these are the web's own.
+  'portal.title': 'Patient portal',
+  'portal.signedInAs': 'Signed in with {phone}',
+  'portal.nav.home': 'Home',
+  'portal.clinicInvalid': 'Enter the clinic ID from your clinic’s link, for example demo-clinic.',
+  'portal.phoneInvalid': 'Enter a 10-digit Indian mobile number, for example 98765 43210.',
+  'portal.genderRequired': 'Choose one.',
+  'portal.book.policy': 'You can cancel here up to {minutes} minutes before.',
+  'portal.keepSignedIn': 'Keep me signed in on this device',
+  'portal.keepSignedInHint':
+    'For 30 days. Leave it off on a shared computer: you are then signed out when the browser closes or after 15 minutes without use.',
+  'portal.consents.unavailable': 'Not available. Please contact the clinic.',
+  'portal.privacy.withdrawConfirm':
+    'The portal and the app will stop showing health records until you accept again.',
+  'portal.appts.callToCancel': 'Too close to cancel online. Please call the clinic.',
 } as const;
 
 export type MessageKey = keyof typeof en;
