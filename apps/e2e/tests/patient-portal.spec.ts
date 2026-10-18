@@ -453,12 +453,15 @@ test.describe('patient portal', () => {
       await expect(other.getByRole('heading', { name: 'Welcome, Pooja Singh' })).toBeVisible();
       await other.goto('/app/prescriptions');
       const otherCard = other.getByTestId('prescription');
+      const unasked: unknown[] = [];
+      other.on('download', (d) => unasked.push(d));
       await otherCard.getByRole('button', { name: 'Open PDF' }).click();
       const fallback = otherCard.getByRole('link', {
         name: 'Your browser blocked the new tab. Download the file instead.',
       });
       await expect(fallback).toBeVisible();
       await expect(fallback).toHaveAttribute('href', /^blob:/);
+      expect(unasked).toHaveLength(0);
       const saved = other.waitForEvent('download');
       await fallback.click();
       expect((await saved).suggestedFilename()).toBe('PS-00001-v1.pdf');

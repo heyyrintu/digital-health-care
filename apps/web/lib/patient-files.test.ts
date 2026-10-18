@@ -209,6 +209,15 @@ describe('OpenFiles on sign-out', () => {
     expect(b.files.size).toBe(0);
   });
 
+  it('still closes a shown tab at sign-out after its URL expired', async () => {
+    const b = fakeBrowser();
+    await openFile(async () => pdf, PDF, b.files);
+    b.tick(SHOWN_URL_MAX_MS);
+    expect(b.log).toContain('revoke blob:portal/1');
+    b.files.closeAll();
+    expect(b.log.at(-1)).toBe('close');
+  });
+
   it('saves nothing when the session ends during a download', async () => {
     const b = fakeBrowser();
     let arrive: (blob: Blob) => void = () => undefined;

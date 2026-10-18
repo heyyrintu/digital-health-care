@@ -167,7 +167,11 @@ function Tests() {
     }
   }
 
+  // Set synchronously, so a double click opens the result once.
+  const viewing = useRef(false);
   async function view(order: PortalTestOrder, result: TestResultSummary, n: number) {
+    if (viewing.current) return;
+    viewing.current = true;
     setOpening(result.id);
     say(order.id, null);
     try {
@@ -184,6 +188,7 @@ function Tests() {
     } catch (e) {
       say(order.id, { tone: 'error', text: portalErrorMessage(e, t) });
     } finally {
+      viewing.current = false;
       setOpening(null);
     }
   }

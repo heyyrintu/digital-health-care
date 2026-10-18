@@ -75,7 +75,8 @@ export class OpenFiles {
 
   /** Keeps a URL until `ttlMs`, and while `tab` stays open when one is given. */
   track(url: string, ttlMs: number, tab?: FileTab): void {
-    const cancels = [this.deps.later(() => this.release(url, tab), ttlMs)];
+    // Time is up: the URL goes, but a tab still open stays known, so sign-out still closes it.
+    const cancels = [this.deps.later(() => this.release(url), ttlMs)];
     if (tab) {
       this.tabs.add(tab);
       cancels.push(
