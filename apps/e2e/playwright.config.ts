@@ -1,7 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { E2E_FIELD_ENCRYPTION_KEY } from './env';
+import { E2E_FIELD_ENCRYPTION_KEY, E2E_FILE_STORE_DIR } from './env';
 
 /**
  * Browser tests against the *built* API and web app (run `pnpm build` first), on their
@@ -18,6 +16,7 @@ if (!databaseUrl) throw new Error('E2E_DATABASE_URL is required for browser test
 export default defineConfig({
   testDir: './tests',
   globalSetup: './global-setup.ts',
+  globalTeardown: './global-teardown.ts',
   // Every test makes its own clinic, so tests can run side by side.
   fullyParallel: true,
   workers: process.env.CI ? 2 : undefined,
@@ -49,7 +48,7 @@ export default defineConfig({
         OTP_DELIVERY: 'disabled',
         // Prescriptions are signed with the test key and stored in a throwaway folder.
         SIGNER: 'test_key',
-        FILE_STORE_DIR: join(tmpdir(), 'dhc-e2e-files'),
+        FILE_STORE_DIR: E2E_FILE_STORE_DIR,
         // Specs mark no-shows themselves; the automatic sweep would race them.
         NO_SHOW_SWEEP_SECONDS: '0',
         // All browser traffic comes from one address here.

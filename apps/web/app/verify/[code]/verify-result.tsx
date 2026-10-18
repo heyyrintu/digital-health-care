@@ -146,19 +146,34 @@ function Found({
           </div>
         ))}
       </dl>
-      <div className="space-y-1.5 border-t border-border pt-4">
-        <p className="m-0 text-sm text-muted-foreground">{t('verify.medicines')}</p>
-        <ol className="m-0 list-decimal space-y-1 pl-5 text-sm">
-          {check.medicines.map((m, i) => (
-            <li key={i}>
-              <span className="font-medium">{m.name}</span>
-              {m.generic && (
-                <span className="text-muted-foreground"> · {m.generic.toUpperCase()}</span>
-              )}
-            </li>
-          ))}
-        </ol>
-      </div>
+      {/* A prescription may order tests only. */}
+      {check.medicines.length > 0 && (
+        <div className="space-y-1.5 border-t border-border pt-4">
+          <p className="m-0 text-sm text-muted-foreground">{t('verify.medicines')}</p>
+          <ol className="m-0 list-decimal space-y-1 pl-5 text-sm">
+            {check.medicines.map((m, i) => (
+              <li key={i}>
+                <span className="font-medium">{m.name}</span>
+                {m.generic && (
+                  <span className="text-muted-foreground"> · {m.generic.toUpperCase()}</span>
+                )}
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+      {check.tests.length > 0 && (
+        <div className="space-y-1.5 border-t border-border pt-4" data-testid="verify-tests">
+          <p className="m-0 text-sm text-muted-foreground">{t('verify.tests')}</p>
+          <ol className="m-0 list-decimal space-y-1 pl-5 text-sm">
+            {check.tests.map((test, i) => (
+              <li key={i} className="font-medium">
+                {test.label}
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
       <p className="text-xs text-muted-foreground">{t('verify.note')}</p>
     </>
   );

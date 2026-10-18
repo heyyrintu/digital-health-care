@@ -19,10 +19,14 @@ import { AgeGender } from '../../patient-bits';
 import { PatientForm } from '../../patient-form';
 import { TagList, TagPicker } from '../../patient-tags';
 import { MergePanel } from '../merge-panel';
+import { TestOrdersCard } from '../test-orders-card';
 import { useSession } from '../../session-provider';
 import { ClinicShell, canRegister, canTag } from '../../shell';
 
-/** Patient demographics, tags and family. No clinical content: front desk sees all of it. */
+/**
+ * Patient demographics, tags and family, and the ordered tests (doctors and front desk; the
+ * front desk without the doctor's notes or the result files).
+ */
 export default function PatientPage() {
   return <ClinicShell>{(me) => <PatientView role={me.role} />}</ClinicShell>;
 }
@@ -298,6 +302,11 @@ function PatientView({ role }: { role: string }) {
             <MergePanel patient={patient} onRequested={() => setReload((n) => n + 1)} />
           </section>
         </Surface>
+      )}
+
+      {/* A merged duplicate's tests show on the kept record, which the banner links to. */}
+      {(role === 'doctor' || role === 'front_desk') && !merged && (
+        <TestOrdersCard key={patient.id} patientId={patient.id} role={role} />
       )}
 
       <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">

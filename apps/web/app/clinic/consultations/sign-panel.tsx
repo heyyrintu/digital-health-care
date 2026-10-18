@@ -20,8 +20,10 @@ export function SignPanel({
   view,
   prescription,
   revision,
+  testIds,
   blocked,
   onChanged,
+  onTestsChanged,
   onError,
 }: {
   appointmentId: string;
@@ -30,10 +32,17 @@ export function SignPanel({
   prescription: Prescription | null;
   /** The saved revision of the draft on screen. */
   revision: number;
+  /** The tests on screen: signing names them, so only tests the doctor saw are ordered. */
+  testIds: string[];
   /** Why signing must wait (unsaved changes, open alerts, no lines), or null. */
   blocked: string | null;
   /** After signing, amending or voiding: reload the card (and the visit record). */
   onChanged(): void;
+  /**
+   * Signing was refused because the visit's tests changed: reload the prescription card
+   * only, so notes still waiting to autosave on the rest of the screen are kept.
+   */
+  onTestsChanged(): void;
   onError(e: unknown): void;
 }) {
   const { api, locale, t } = useSession();
@@ -77,7 +86,7 @@ export function SignPanel({
       const path = `/appointments/${appointmentId}/prescription/${mode}`;
       const body =
         mode === 'sign'
-          ? { revision, pin }
+          ? { revision, pin, testIds }
           : mode === 'void'
             ? { reason: reason.trim(), pin }
             : { reason: reason.trim() };
@@ -88,6 +97,11 @@ export function SignPanel({
       if (err instanceof ApiError && err.status !== 401) {
         setProblem(err.message);
         if (err.fields.pin) setPin('');
+        // The visit's tests changed elsewhere: reload the card so the doctor sees them.
+        if (err.fields.tests === 'review') {
+          setProblem(t('sign.testsChanged'));
+          onTestsChanged();
+        }
       } else {
         onError(err);
       }

@@ -12,6 +12,7 @@
   "devDependencies": {
     "@dhc/config": "workspace:*",
     "@dhc/db": "workspace:*",
+    "@dhc/pdf-text": "workspace:*",
     "@playwright/test": "1.56.1",
     "@types/node": "^22.20.5"
   }

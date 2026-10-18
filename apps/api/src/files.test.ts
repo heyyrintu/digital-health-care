@@ -17,4 +17,13 @@ describe('LocalFileStore', () => {
       await expect(store.put(key, Buffer.from('x'))).rejects.toThrow('Invalid file key');
     }
   });
+
+  it('deletes a file, and a missing key is no error', async () => {
+    const store = new LocalFileStore(await mkdtemp(join(tmpdir(), 'dhc-files-')));
+    await store.put('org/a/r.pdf', Buffer.from('x'));
+    await store.delete('org/a/r.pdf');
+    await expect(store.get('org/a/r.pdf')).rejects.toThrow();
+    await expect(store.delete('org/a/r.pdf')).resolves.toBeUndefined();
+    await expect(store.delete('../x')).rejects.toThrow('Invalid file key');
+  });
 });
