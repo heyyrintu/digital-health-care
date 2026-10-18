@@ -148,7 +148,7 @@ function nextPrompt(list: readonly PlanPhase[], focus: string): string {
     focus ? `Focus requested by the person: ${focus}` : '',
     '',
     'Steps:',
-    `1. Read ${PLAN_PATH} (§9.1 phase ${now ? now.id : ''} scope and exit criteria, §8 tests, §9.2 definition of done) and docs/release/CHANGELOG.md, then pick the next smallest increment that moves the current phase toward its exit criteria and is not built yet (check the code, not only the docs).`,
+    `1. Read ${PLAN_PATH} (§9.1 phase ${now ? now.id : ''} scope and exit criteria, §8 tests, §9.2 definition of done) and docs/release/CHANGELOG.md, then pick the next smallest increment that moves the current phase toward its exit criteria and is not built yet (check the code, not only the docs). A **Priority** note above the §9.1 progress table orders the work and wins over phase order: follow it first.`,
     '2. Split it into independent slices (e.g. contracts + API module, web screen, mobile screen, docs). Write the plan as a short task list.',
     `3. Spawn one ${PLUGIN}:builder agent per independent slice, in parallel, each with a self-contained brief (files, contracts, acceptance). Do dependent slices in order.`,
     `4. Integrate their results, then call ${TOOL_CHECKS} and fix every failure until it is green.`,
@@ -306,14 +306,18 @@ export const register: Register = (on) => {
     const check = await read($, lastCheck);
     const running = await read($, busy);
     const now = currentPhase(list);
-    const mark = { done: '✓', active: '▶', todo: '·' } as const;
+    const mark = { done: '✓', active: '▶', parked: '‖', todo: '·' } as const;
 
     return (
       <Box flexDirection="column">
         <Text bold>Build plan</Text>
         {list.length === 0 && <Text dimColor>No §9.1 progress table found.</Text>}
         {list.map((phase) => (
-          <Text key={phase.id} dimColor={phase.status === 'todo'} bold={phase === now}>
+          <Text
+            key={phase.id}
+            dimColor={phase.status === 'todo' || phase.status === 'parked'}
+            bold={phase === now}
+          >
             {mark[phase.status]} {phase.id} {phase.name}
           </Text>
         ))}

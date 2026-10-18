@@ -35,6 +35,18 @@ export function postPlatformSession<T>(
   return postTo<T>(`/api/platform-session/${path}`, body, accessToken);
 }
 
+/**
+ * The patient portal's session routes (`/api/patient-session/*`): sign-in by SMS code, and
+ * a cookie of its own, so patient and staff sessions never stand in for each other.
+ */
+export function postPatientSession<T>(
+  path: 'otp/request' | 'otp/verify' | 'refresh' | 'logout',
+  body?: unknown,
+  accessToken?: string,
+): Promise<T> {
+  return postTo<T>(`/api/patient-session/${path}`, body, accessToken);
+}
+
 async function postTo<T>(url: string, body?: unknown, accessToken?: string): Promise<T> {
   const headers: Record<string, string> = { accept: 'application/json' };
   if (body !== undefined) headers['content-type'] = 'application/json';

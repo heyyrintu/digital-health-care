@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CreateTestCatalogueItemBody,
   CursorQuery,
   DEFAULT_PAGE_LIMIT,
   ErrorResponse,
@@ -9,10 +10,13 @@ import {
   PlatformHealth,
   QUEUES,
   QUEUE_NAMES,
+  ReorderTestCatalogueBody,
   SavePrescriptionBody,
   TestOrderLine,
   UPLOAD_MEDIA_TYPES,
+  UpdateTestCatalogueItemBody,
   UploadMediaType,
+  XRAY_VIEWS,
   buildOpenApiDocument,
   checkUpload,
   page,
@@ -269,6 +273,61 @@ describe('TestOrderLine', () => {
     const body = { language: 'en', items: [], revision: 0 };
     expect(SavePrescriptionBody.parse(body).tests).toBeUndefined();
     expect(SavePrescriptionBody.parse({ ...body, tests: [line()] }).tests).toHaveLength(1);
+  });
+});
+
+describe('test catalogue bodies', () => {
+  const fields = (body: unknown) =>
+    CreateTestCatalogueItemBody.safeParse(body).error?.issues.map((i) => i.path.join('.'));
+
+  it('tidies the name and defaults regions and views to none', () => {
+    expect(
+      CreateTestCatalogueItemBody.parse({ kind: 'blood', name: '  Serum   ferritin ' }),
+    ).toEqual({ kind: 'blood', name: 'Serum ferritin', regions: [], views: [] });
+    expect(fields({ kind: 'blood', name: '   ' })).toEqual(['name']);
+    expect(
+      CreateTestCatalogueItemBody.parse({ kind: 'blood', name: '\tSerum\n ferritin\n' }).name,
+    ).toBe('Serum ferritin');
+    expect(
+      CreateTestCatalogueItemBody.parse({ kind: 'ct', name: 'CT', regions: ['\tChest\n'] }).regions,
+    ).toEqual(['Chest']);
+    expect(fields({ kind: 'blood', name: 'x'.repeat(121) })).toEqual(['name']);
+  });
+
+  it('gives regions to imaging only and views to X-rays only, from the allowed views', () => {
+    expect(
+      CreateTestCatalogueItemBody.parse({
+        kind: 'xray',
+        name: 'X-ray (portable)',
+        regions: [' Chest '],
+        views: ['AP', 'PA'],
+      }).regions,
+    ).toEqual(['Chest']);
+    expect(fields({ kind: 'mri', name: 'MRI contrast', regions: ['Brain'] })).toBeUndefined();
+    expect(fields({ kind: 'blood', name: 'CBC', regions: ['Arm'] })).toEqual(['regions']);
+    expect(fields({ kind: 'ct', name: 'CT', regions: ['Brain'], views: ['AP'] })).toEqual([
+      'views',
+    ]);
+    expect(fields({ kind: 'xray', name: 'X-ray', views: ['Frog leg'] })).toEqual(['views.0']);
+    expect(fields({ kind: 'xray', name: 'X-ray', views: ['AP', 'AP'] })).toEqual(['views']);
+    expect(fields({ kind: 'mri', name: 'MRI', regions: ['Knee', 'knee'] })).toEqual(['regions']);
+    expect(fields({ kind: 'mri', name: 'MRI', regions: ['x'.repeat(81)] })).toEqual(['regions.0']);
+    expect(
+      fields({ kind: 'mri', name: 'MRI', regions: Array.from({ length: 41 }, (_, i) => `R${i}`) }),
+    ).toEqual(['regions']);
+    expect(XRAY_VIEWS).toEqual(['AP', 'PA', 'Lateral', 'Oblique', 'Skyline', 'Standing']);
+  });
+
+  it('updates need something to change and never take a kind; a reorder names each test once', () => {
+    expect(UpdateTestCatalogueItemBody.safeParse({}).success).toBe(false);
+    expect(UpdateTestCatalogueItemBody.safeParse({ kind: 'mri', active: false }).success).toBe(
+      false,
+    );
+    expect(UpdateTestCatalogueItemBody.parse({ active: false })).toEqual({ active: false });
+    const id = '0b7a9f43-7d0e-4c58-9a51-2f5a3c0d9e11';
+    expect(ReorderTestCatalogueBody.safeParse({ kind: 'blood', ids: [id, id] }).success).toBe(
+      false,
+    );
   });
 });
 

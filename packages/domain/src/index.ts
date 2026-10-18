@@ -9,3 +9,4 @@ export * from './dosage';
 export * from './billing';
 export * from './appointment-actions';
 export * from './test-orders';
+export * from './patient-portal';

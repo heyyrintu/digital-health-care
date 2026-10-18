@@ -646,6 +646,7 @@ export const en = {
   'orders.side.both': 'Both',
   'orders.side.na': 'Not applicable',
   'orders.views': 'Views',
+  'orders.noLongerListed': '{value} (no longer listed)',
   'orders.notes': 'Notes for the lab (printed)',
   'orders.remove': 'Remove {name}',
   'orders.locked': 'Ordered on the signed prescription',
@@ -1312,6 +1313,52 @@ export const en = {
   'platform.health.queue.abdm': 'ABDM',
   'platform.health.queue.imports': 'Imports',
   'platform.health.queue.reconciliation': 'Payment reconciliation',
+  // Clinic admin: the test catalogue doctors order from (PRD §7.1, §9.2).
+  'dashboard.testCatalogue': 'Test catalogue',
+  'audit.area.testCatalogue': 'Test catalogue',
+  'catalogue.title': 'Test catalogue',
+  'catalogue.sub':
+    'The tests doctors pick from when they order. Tests already ordered keep what was ordered, whatever you change here.',
+  'catalogue.add': 'Add test',
+  'catalogue.addTitle': 'New test',
+  'catalogue.editTitle': 'Edit {name}',
+  'catalogue.name': 'Name',
+  'catalogue.nameHint': 'As doctors see it and the prescription prints it.',
+  'catalogue.kind': 'Type',
+  'catalogue.kindFixed': 'The type cannot change. Add a new test instead.',
+  'catalogue.regions': 'Regions',
+  'catalogue.regionsHint': 'One per line, up to {max}. Doctors pick one when they order.',
+  'catalogue.views': 'Views doctors can pick',
+  'catalogue.edit': 'Edit',
+  'catalogue.moveUp': 'Move {name} up',
+  'catalogue.moveDown': 'Move {name} down',
+  'catalogue.regionCount': '{count} regions',
+  'catalogue.regionCountOne': '1 region',
+  'catalogue.viewList': 'Views: {views}',
+  'catalogue.empty': 'No tests of this type yet.',
+  'catalogue.loadFailed': 'The test catalogue could not be loaded.',
+  'catalogue.added': '{name} added. Doctors can order it now.',
+  'catalogue.saved': '{name} saved.',
+  'catalogue.deactivated':
+    '{name} deactivated. Doctors no longer see it; tests already ordered are unchanged.',
+  'catalogue.activated': '{name} is back on the doctors’ list.',
+  'catalogue.stale': 'The catalogue changed on another screen. It has been reloaded.',
+  // Patient portal on the web (/app). Its screens share the Patient app's strings
+  // (`patient.*`, `mobile.patientSignIn.*`); these are the web's own.
+  'portal.title': 'Patient portal',
+  'portal.signedInAs': 'Signed in with {phone}',
+  'portal.nav.home': 'Home',
+  'portal.clinicInvalid': 'Enter the clinic ID from your clinic’s link, for example demo-clinic.',
+  'portal.phoneInvalid': 'Enter a 10-digit Indian mobile number, for example 98765 43210.',
+  'portal.genderRequired': 'Choose one.',
+  'portal.book.policy': 'You can cancel here up to {minutes} minutes before.',
+  'portal.keepSignedIn': 'Keep me signed in on this device',
+  'portal.keepSignedInHint':
+    'For 30 days. Leave it off on a shared computer: you are then signed out when the browser closes or after 15 minutes without use.',
+  'portal.consents.unavailable': 'Not available. Please contact the clinic.',
+  'portal.privacy.withdrawConfirm':
+    'The portal and the app will stop showing health records until you accept again.',
+  'portal.appts.callToCancel': 'Too close to cancel online. Please call the clinic.',
 } as const;
 
 export type MessageKey = keyof typeof en;

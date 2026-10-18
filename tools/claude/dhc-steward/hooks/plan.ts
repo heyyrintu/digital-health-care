@@ -38,10 +38,11 @@ export function parseProgress(markdown: string): PlanPhase[] {
 export function statusOf(state: string): PlanPhase['status'] {
   if (/^(done|exit criterion met)/i.test(state)) return 'done';
   if (/^not started/i.test(state)) return 'todo';
+  if (/^parked/i.test(state)) return 'parked';
   return 'active';
 }
 
-/** The first phase that is not done: the one /dhc-next builds toward. */
+/** The first phase in progress, else the first not started: the one /dhc-next builds toward. A parked phase waits. */
 export function currentPhase(phases: readonly PlanPhase[]): PlanPhase | undefined {
   return (
     phases.find((phase) => phase.status === 'active') ??

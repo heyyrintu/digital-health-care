@@ -1346,7 +1346,8 @@ model SafetyAlert {
 
 /// A test doctors can order (PRD §7.1), per organisation. Every organisation starts with
 /// a default set (a database trigger seeds it). Imaging lists the body regions and, for
-/// X-rays, the views a doctor picks from; an order snapshots what was picked.
+/// X-rays, the views a doctor picks from; an order snapshots what was picked. Clinic admins
+/// add, edit, reorder and deactivate items (API guide §3t); orders already placed never change.
 model TestCatalogueItem {
   id             String   @id @default(uuid()) @db.Uuid
   organisationId String   @map("organisation_id") @db.Uuid
@@ -1362,7 +1363,11 @@ model TestCatalogueItem {
   organisation Organisation @relation(fields: [organisationId], references: [id])
   orders       TestOrder[]
 
-  @@unique([organisationId, name])
+  // Names are unique per organisation among active items, whatever the case: the partial
+  // index `test_catalogue_items_active_name_key` on (organisation_id, lower(name)) WHERE
+  // active, written in migration 20261018120000_test_catalogue_admin (Prisma cannot express
+  // it). Items are deactivated, never deleted, since orders point at them.
+  @@index([organisationId, sortOrder])
   @@map("test_catalogue_items")
 }
 

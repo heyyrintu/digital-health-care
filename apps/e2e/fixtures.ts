@@ -1,10 +1,10 @@
 import { createDb, type Db } from '@dhc/db';
 import { expect, test as base, type Page } from '@playwright/test';
 import { execFile } from 'node:child_process';
-import { createHash, createHmac, randomBytes } from 'node:crypto';
+import { createHash, createHmac, hkdfSync, randomBytes, randomInt } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import { E2E_FIELD_ENCRYPTION_KEY } from './env';
+import { E2E_FIELD_ENCRYPTION_KEY, E2E_JWT_SECRET } from './env';
 
 const WEB_URL = 'http://localhost:3300';
 
@@ -172,6 +172,47 @@ export async function signInToConsole(page: Page, operator: Operator, offset = 0
   await page.getByRole('button', { name: 'Verify' }).click();
   await expect(page).toHaveURL(/\/platform$/);
   await expect(page.getByTestId('signed-in-as')).toContainText(operator.email);
+}
+
+/** A synthetic Indian mobile number, new for each test (the API limits codes per number). */
+export const syntheticMobile = () => `9${String(randomInt(0, 1_000_000_000)).padStart(9, '0')}`;
+
+/** The API's hash of a sign-in code (`hashOtp` in `apps/api/src/services.ts`), with the e2e secret. */
+function otpCodeHash(challengeId: string, code: string): string {
+  const key = Buffer.from(hkdfSync('sha256', E2E_JWT_SECRET, 'dhc-otp', 'otp-code-hash', 32));
+  return createHmac('sha256', key).update(`${challengeId}:${code}`).digest('base64url');
+}
+
+/**
+ * Signs a patient in on the web portal with their mobile number and an SMS code. No SMS
+ * goes out here, so once the page has asked for a code the test gives that challenge a
+ * code it knows, then types it, ticking "Keep me signed in" when `keep`. Ends wherever the
+ * portal sends the patient next.
+ */
+export async function signInAsPatient(
+  page: Page,
+  db: Db,
+  clinic: Clinic,
+  phone: string,
+  { keep = false }: { keep?: boolean } = {},
+) {
+  await page.goto(`/app/login?clinic=${clinic.slug}`);
+  await expect(page.getByLabel('Clinic ID')).toHaveValue(clinic.slug);
+  await page.getByLabel('Mobile number').fill(phone);
+  await page.getByRole('button', { name: 'Send code' }).click();
+  await expect(page.getByText(`We sent a code to ${phone}.`)).toBeVisible();
+  const challenge = await db.otpChallenge.findFirstOrThrow({
+    where: { phone: `+91${phone}` },
+    orderBy: { createdAt: 'desc' },
+  });
+  const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
+  await db.otpChallenge.update({
+    where: { id: challenge.id },
+    data: { codeHash: otpCodeHash(challenge.id, code) },
+  });
+  await page.getByLabel('6-digit code from the SMS').fill(code);
+  if (keep) await page.getByRole('checkbox', { name: 'Keep me signed in on this device' }).check();
+  await page.getByRole('button', { name: 'Verify' }).click();
 }
 
 /** The page's own alert (Next.js also renders a hidden route-announcer alert). */

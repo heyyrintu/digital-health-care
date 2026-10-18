@@ -66,13 +66,18 @@ import {
   PortalSlotsQuery,
 } from './portal';
 import {
+  AdminTestCatalogueItem,
+  AdminTestCatalogueList,
   AwaitingReviewList,
+  CreateTestCatalogueItemBody,
   PatientTestOrderList,
   PortalTestOrderList,
+  ReorderTestCatalogueBody,
   TestCatalogueList,
   TestCatalogueQuery,
   TestOrder,
   TestOrderListQuery,
+  UpdateTestCatalogueItemBody,
 } from './orders';
 import {
   OrganisationSettings,
@@ -918,6 +923,42 @@ const operations: Operation[] = [
     summary: 'The clinic’s test catalogue: blood tests, X-ray with views, MRI and CT (doctor)',
     query: TestCatalogueQuery,
     response: TestCatalogueList,
+  },
+  {
+    method: 'get',
+    path: '/test-catalogue/items',
+    operationId: 'listTestCatalogueItems',
+    summary: 'Every catalogue test, active and inactive, in the clinic’s order (clinic admin)',
+    response: AdminTestCatalogueList,
+  },
+  {
+    method: 'post',
+    path: '/test-catalogue/items',
+    operationId: 'createTestCatalogueItem',
+    summary:
+      'Add a test; only imaging has regions and only X-rays views; names unique among active tests (clinic admin)',
+    body: CreateTestCatalogueItemBody,
+    response: AdminTestCatalogueItem,
+    status: 201,
+  },
+  {
+    method: 'patch',
+    path: '/test-catalogue/items/{id}',
+    operationId: 'updateTestCatalogueItem',
+    summary:
+      'Rename a test, change its regions or views, or deactivate it; ordered tests keep what they were (clinic admin)',
+    pathParams: ['id'],
+    body: UpdateTestCatalogueItemBody,
+    response: AdminTestCatalogueItem,
+  },
+  {
+    method: 'post',
+    path: '/test-catalogue/items/reorder',
+    operationId: 'reorderTestCatalogue',
+    summary:
+      'Put one kind’s tests in a new order; every test of the kind, each once (clinic admin)',
+    body: ReorderTestCatalogueBody,
+    response: AdminTestCatalogueList,
   },
   {
     method: 'get',

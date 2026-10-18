@@ -1,7 +1,7 @@
 import { ApiError } from '@dhc/api-client';
 import type { PortalTestOrder, TestResultSummary } from '@dhc/contracts';
 import { MAX_RESULTS_PER_ORDER } from '@dhc/contracts';
-import { testOrderLabel } from '@dhc/domain';
+import { shortDate, testOrderLabel } from '@dhc/domain';
 import type { Locale } from '@dhc/i18n';
 import { Button, Card, Notice, Text, useTheme } from '@dhc/ui-native';
 import * as DocumentPicker from 'expo-document-picker';
@@ -10,7 +10,7 @@ import { View } from 'react-native';
 import { api, patientAccount } from '../../api';
 import { errorMessage } from '../../errors';
 import { useLocale } from '../../locale/provider';
-import { istToday, shortDate } from '../logic';
+import { istToday } from '../logic';
 import { LoadError, Loading, PatientScreen } from '../parts';
 import { blobBytes, pickedBlob, pickOptions, removePicked, testResultFiles } from '../pdf-native';
 import {

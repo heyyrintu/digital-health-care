@@ -51,6 +51,116 @@ export const TestCatalogueQuery = z.object({
 });
 export type TestCatalogueQuery = z.infer<typeof TestCatalogueQuery>;
 
+// ---- Catalogue editing (clinic admin) ---------------------------------------------------
+//
+// The clinic admin adds tests, renames them, edits their regions and views, reorders them
+// within their kind and deactivates them. Items are never deleted (orders point at them),
+// and an ordered test keeps its own copy of what was picked, so no edit reaches it.
+
+/** The views an X-ray may offer (the seeded X-ray offers all six). */
+export const XRAY_VIEWS = ['AP', 'PA', 'Lateral', 'Oblique', 'Skyline', 'Standing'] as const;
+export const XrayView = z.enum(XRAY_VIEWS);
+export type XrayView = z.infer<typeof XrayView>;
+
+/** The most regions one catalogue test may list (the seeded X-ray has 20). */
+export const MAX_CATALOGUE_REGIONS = 40;
+/** The most tests, active or not, one clinic's catalogue may hold (the seed adds 26). */
+export const MAX_CATALOGUE_ITEMS = 300;
+
+/**
+ * Trimmed of whitespace of any kind (spaces, tabs, newlines), with inner runs of it made one
+ * space; the database refuses whitespace at either end too.
+ */
+const tidy = (max: number) =>
+  z
+    .string()
+    .trim()
+    .overwrite((s) => s.replace(/\s+/g, ' '))
+    .min(1)
+    .max(max);
+const CatalogueName = tidy(120);
+/** 80 at most: an ordered test copies its region, and orders allow 80. */
+const CatalogueRegion = tidy(80);
+const CatalogueRegions = z
+  .array(CatalogueRegion)
+  .max(MAX_CATALOGUE_REGIONS)
+  .refine((r) => new Set(r.map((x) => x.toLowerCase())).size === r.length, {
+    message: 'Each region once.',
+  });
+const CatalogueViews = z
+  .array(XrayView)
+  .max(XRAY_VIEWS.length)
+  .refine((v) => new Set(v).size === v.length, { message: 'Each view once.' });
+
+/** Only imaging has regions; only X-rays have views. Shared by create and the stored kind. */
+export function catalogueShapeIssues(item: {
+  kind: TestKind;
+  regions?: string[];
+  views?: string[];
+}): { path: 'regions' | 'views'; message: string }[] {
+  const issues: { path: 'regions' | 'views'; message: string }[] = [];
+  if (!IMAGING_KINDS.includes(item.kind) && (item.regions?.length ?? 0) > 0) {
+    issues.push({ path: 'regions', message: 'Only imaging has regions.' });
+  }
+  if (item.kind !== 'xray' && (item.views?.length ?? 0) > 0) {
+    issues.push({ path: 'views', message: 'Only X-rays have views.' });
+  }
+  return issues;
+}
+
+/** A catalogue test as the clinic admin manages it: active or not, in the clinic's order. */
+export const AdminTestCatalogueItem = TestCatalogueItem.extend({
+  active: z.boolean(),
+  sortOrder: z.number().int(),
+});
+export type AdminTestCatalogueItem = z.infer<typeof AdminTestCatalogueItem>;
+
+export const AdminTestCatalogueList = z.object({ data: z.array(AdminTestCatalogueItem) });
+export type AdminTestCatalogueList = z.infer<typeof AdminTestCatalogueList>;
+
+export const CreateTestCatalogueItemBody = z
+  .object({
+    kind: TestKind,
+    name: CatalogueName,
+    regions: CatalogueRegions.default([]),
+    views: CatalogueViews.default([]),
+  })
+  .superRefine((body, ctx) => {
+    for (const issue of catalogueShapeIssues(body)) {
+      ctx.addIssue({ code: 'custom', path: [issue.path], message: issue.message });
+    }
+  });
+export type CreateTestCatalogueItemBody = z.infer<typeof CreateTestCatalogueItemBody>;
+
+/**
+ * Any of: a new name, the whole region or view list, or active. The kind never changes
+ * (add a new test instead); the shape rules apply to the stored kind.
+ */
+export const UpdateTestCatalogueItemBody = z
+  .object({
+    name: CatalogueName.optional(),
+    regions: CatalogueRegions.optional(),
+    views: CatalogueViews.optional(),
+    active: z.boolean().optional(),
+  })
+  .strict()
+  .refine((body) => Object.keys(body).length > 0, { message: 'Nothing to change.' });
+export type UpdateTestCatalogueItemBody = z.infer<typeof UpdateTestCatalogueItemBody>;
+
+/**
+ * The new order of one kind's tests: every one of that kind's tests (active or not), each
+ * once. A list that no longer matches the catalogue is 409 `ids: stale`.
+ */
+export const ReorderTestCatalogueBody = z.object({
+  kind: TestKind,
+  ids: z
+    .array(z.uuid())
+    .min(1)
+    .max(MAX_CATALOGUE_ITEMS)
+    .refine((ids) => new Set(ids).size === ids.length, { message: 'Each test once.' }),
+});
+export type ReorderTestCatalogueBody = z.infer<typeof ReorderTestCatalogueBody>;
+
 // ---- Lines on the prescription draft ----------------------------------------------------
 
 const lineShape = {
