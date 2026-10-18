@@ -19,6 +19,7 @@ import {
   ACTIVITY_KEY,
   ACTIVITY_THROTTLE_MS,
   KEEP_KEY,
+  SIGNED_OUT_KEY,
   REFRESH_LOCK,
   TAB_CHANNEL,
   acceptsSession,
@@ -307,12 +308,19 @@ export function PatientSessionProvider({
   const signOut = useCallback(
     async (reason: SignOutReason = 'user') => {
       const token = accessToken.current?.token;
+      // Until the server confirms, the cookie may still be live: the next load finishes
+      // this sign-out instead of restoring the session.
+      writeStorage(SIGNED_OUT_KEY, '1');
       clear(reason);
       writeStorage(KEEP_KEY, null);
-      writeStorage(ACTIVITY_KEY, null);
       // Every tab of this browser signs out with this one.
       post({ type: 'signedOut' });
-      await postPatientSession('logout', undefined, token).catch(() => undefined);
+      await postPatientSession('logout', undefined, token)
+        .then(() => {
+          writeStorage(SIGNED_OUT_KEY, null);
+          writeStorage(ACTIVITY_KEY, null);
+        })
+        .catch(() => undefined);
     },
     [clear, post],
   );
@@ -323,6 +331,7 @@ export function PatientSessionProvider({
       if (options.keep !== undefined) {
         // A new sign-in: any other tab still showing an earlier session signs out.
         post({ type: 'signedOut' });
+        writeStorage(SIGNED_OUT_KEY, null);
         kept.current = options.keep;
         writeStorage(KEEP_KEY, options.keep ? '1' : null);
       } else {
@@ -387,18 +396,24 @@ export function PatientSessionProvider({
     // A sign-in (or sign-out) meanwhile wins over this restore, whenever it settles.
     const current = generation.current;
     const live = () => mounted && generation.current === current;
+    const signedOut = readStorage(SIGNED_OUT_KEY) === '1';
     const decision = restoreDecision({
       lastActivity: parseActivity(readStorage(ACTIVITY_KEY)),
       kept: readStorage(KEEP_KEY) === '1',
       now: Date.now(),
+      signedOut,
     });
     if (decision === 'end') {
-      clear('idle');
-      // No access token here: the route ends the session with the cookie first. The stale
-      // record goes only afterwards, so a second mount meanwhile ends it too, never restores.
+      clear(signedOut ? 'user' : 'idle');
+      // No access token here: the route ends the session with the cookie first. The records
+      // go only once it has, so a failed call or a second mount meanwhile ends it again,
+      // never restores.
       void postPatientSession('logout')
-        .catch(() => undefined)
-        .finally(() => writeStorage(ACTIVITY_KEY, null));
+        .then(() => {
+          writeStorage(SIGNED_OUT_KEY, null);
+          writeStorage(ACTIVITY_KEY, null);
+        })
+        .catch(() => undefined);
     } else {
       restoreOnce()
         .then((tokens) => (live() ? startSession(tokens) : undefined))

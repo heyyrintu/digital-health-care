@@ -40,6 +40,8 @@ export function refreshRetryDelay(
 /** The localStorage keys the portal keeps: conveniences, never a credential. */
 export const ACTIVITY_KEY = 'dhc.patientActivity';
 export const KEEP_KEY = 'dhc.patientKeep';
+/** Set while a sign-out has not been confirmed by the server: the cookie may still be live. */
+export const SIGNED_OUT_KEY = 'dhc.patientSignedOut';
 
 /** A stored activity time (ms since epoch), or null when there is none or it is not one. */
 export function parseActivity(raw: string | null | undefined): number | null {
@@ -58,13 +60,17 @@ export function restoreDecision({
   lastActivity,
   kept,
   now,
+  signedOut = false,
   idleMs = IDLE_TIMEOUT_MS,
 }: {
   lastActivity: number | null;
   kept: boolean;
   now: number;
+  /** A sign-out the server never confirmed: finish it, never restore. */
+  signedOut?: boolean;
   idleMs?: number;
 }): 'restore' | 'end' {
+  if (signedOut) return 'end';
   if (kept || lastActivity === null) return 'restore';
   return now - lastActivity >= idleMs ? 'end' : 'restore';
 }

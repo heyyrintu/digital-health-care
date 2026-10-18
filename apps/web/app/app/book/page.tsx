@@ -4,7 +4,7 @@ import type { BookingOptions, PortalAppointment, Slot, SlotsResponse } from '@dh
 import { formatInr, istDateKey, shortDate } from '@dhc/domain';
 import { Button, DateStrip, Field, SlotPicker, Surface, Textarea } from '@dhc/ui-web';
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import {
   bookingDates,
   canBookOnline,
@@ -74,22 +74,23 @@ function BookForm({ options, account }: { options: BookingOptions; account: Read
     [patientId, doctorId, clinicId, typeId, slot, reason],
   );
 
-  const loadDay = useCallback(
-    (signal?: { cancelled: boolean }) => {
-      setDay({ status: 'loading' });
-      setSlot(null);
-      api
-        .portalSlots({ doctorId, clinicId, consultationTypeId: typeId, date })
-        .then((data) => !signal?.cancelled && setDay({ status: 'ready', data }))
-        .catch((e: unknown) => !signal?.cancelled && setDay({ status: 'error', error: e }));
-    },
-    [api, doctorId, clinicId, typeId, date],
-  );
+  // Only the latest slots request may show its day: a retry or reload that answers after
+  // the choice changed is dropped.
+  const dayRequest = useRef(0);
+  const loadDay = useCallback(() => {
+    const id = ++dayRequest.current;
+    const latest = () => id === dayRequest.current;
+    setDay({ status: 'loading' });
+    setSlot(null);
+    api
+      .portalSlots({ doctorId, clinicId, consultationTypeId: typeId, date })
+      .then((data) => latest() && setDay({ status: 'ready', data }))
+      .catch((e: unknown) => latest() && setDay({ status: 'error', error: e }));
+  }, [api, doctorId, clinicId, typeId, date]);
   useEffect(() => {
-    const signal = { cancelled: false };
-    loadDay(signal);
+    loadDay();
     return () => {
-      signal.cancelled = true;
+      dayRequest.current++;
     };
   }, [loadDay]);
 

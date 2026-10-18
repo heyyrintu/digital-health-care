@@ -148,7 +148,7 @@ function nextPrompt(list: readonly PlanPhase[], focus: string): string {
     focus ? `Focus requested by the person: ${focus}` : '',
     '',
     'Steps:',
-    `1. Read ${PLAN_PATH} (§9.1 phase ${now ? now.id : ''} scope and exit criteria, §8 tests, §9.2 definition of done) and docs/release/CHANGELOG.md, then pick the next smallest increment that moves the current phase toward its exit criteria and is not built yet (check the code, not only the docs).`,
+    `1. Read ${PLAN_PATH} (§9.1 phase ${now ? now.id : ''} scope and exit criteria, §8 tests, §9.2 definition of done) and docs/release/CHANGELOG.md, then pick the next smallest increment that moves the current phase toward its exit criteria and is not built yet (check the code, not only the docs). A **Priority** note above the §9.1 progress table orders the work and wins over phase order: follow it first.`,
     '2. Split it into independent slices (e.g. contracts + API module, web screen, mobile screen, docs). Write the plan as a short task list.',
     `3. Spawn one ${PLUGIN}:builder agent per independent slice, in parallel, each with a self-contained brief (files, contracts, acceptance). Do dependent slices in order.`,
     `4. Integrate their results, then call ${TOOL_CHECKS} and fix every failure until it is green.`,

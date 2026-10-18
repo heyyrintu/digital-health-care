@@ -57,6 +57,11 @@ describe('patient portal session decisions', () => {
     expect(restoreDecision({ lastActivity: null, kept: false, now })).toBe('restore');
   });
 
+  it('on load, finishes a sign-out the server never confirmed, even on a kept device', () => {
+    expect(restoreDecision({ lastActivity: now, kept: true, now, signedOut: true })).toBe('end');
+    expect(restoreDecision({ lastActivity: null, kept: false, now, signedOut: true })).toBe('end');
+  });
+
   it('counts the idle period from the latest activity in any tab', () => {
     expect(idleDelay({ lastActivity: now - 10 * MIN, kept: false, now })).toBe(5 * MIN);
     expect(idleDelay({ lastActivity: now - 20 * MIN, kept: false, now })).toBe(0);

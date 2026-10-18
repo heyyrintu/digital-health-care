@@ -521,13 +521,13 @@ Before pilot, Dr. Gupta and front-desk staff run a full simulated clinic day on 
 
 ## 9. Delivery plan
 
-Web comes first because it unblocks the clinic's front desk and gives the doctor a full workflow early; mobile starts four weeks later on the same API; integrations run alongside. The pilot uses all three platforms at once.
+Web comes first because it unblocks the clinic's front desk and gives the doctor a full workflow early. Since October 2026 (owner decision, §9.1 Priority) mobile no longer overlaps: the apps resume on the same API once the web app works well, and integrations are built on the web first. The pilot can start on the web alone; the apps join when their store builds are approved.
 
 <img src="media/image2.png" style="width:6in;height:3.05357in" alt="delivery timeline · 7 phases over 32 weeks" />
 
 delivery timeline · 7 phases over 32 weeks
 
-Week 1 starts when the team is hired and the open decisions in §11 are closed. The overlap between phases 1, 2 and 3 is what keeps the plan at about 7 months to pilot; a smaller team removes the overlap and adds 2 to 3 months.
+Week 1 starts when the team is hired and the open decisions in §11 are closed. The timeline above shows the original overlap between phases 1, 2 and 3, which kept the plan at about 7 months to pilot. With mobile parked until the web app works, the store launch (phase 6) moves later by about the length of phase 2; a smaller team adds a further 2 to 3 months.
 
 ### 9.1 Phases and exit criteria
 
