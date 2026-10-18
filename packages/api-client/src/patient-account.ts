@@ -1,11 +1,11 @@
 import type { ConsentStatus, PortalPatient } from '@dhc/contracts';
 
-export interface AccountApi {
+export interface PatientAccountApi {
   consents(): Promise<ConsentStatus>;
   patients(): Promise<PortalPatient[]>;
 }
 
-export type AccountState =
+export type PatientAccountState =
   | { status: 'loading' }
   | { status: 'error'; error: unknown }
   /** Onboarding: the privacy notice, terms or health-data consent still to accept. */
@@ -16,19 +16,20 @@ export type AccountState =
 
 /**
  * The signed-in patient account (PRD §4): which onboarding step is next, the family, and
- * whose record the screens show. Shared by every patient screen, loaded once per sign-in.
+ * whose record the screens show. Shared by every patient screen, on the web portal and in
+ * the Patient app, and loaded once per sign-in.
  */
 export class PatientAccount {
-  private state: AccountState = { status: 'loading' };
+  private state: PatientAccountState = { status: 'loading' };
   private readonly listeners = new Set<() => void>();
   private loading: Promise<void> | null = null;
   private loaded = false;
   /** Bumped by `reset`, so a load started before sign-out cannot fill the store after it. */
   private generation = 0;
 
-  constructor(private readonly api: AccountApi) {}
+  constructor(private readonly api: PatientAccountApi) {}
 
-  getState = (): AccountState => this.state;
+  getState = (): PatientAccountState => this.state;
 
   subscribe = (listener: () => void): (() => void) => {
     this.listeners.add(listener);
@@ -90,7 +91,7 @@ export class PatientAccount {
     }
   }
 
-  private setState(state: AccountState) {
+  private setState(state: PatientAccountState) {
     this.state = state;
     for (const listener of this.listeners) listener();
   }

@@ -1,4 +1,5 @@
 import { ACCOUNT_CONSENT_KINDS } from '@dhc/contracts';
+import { shortDate } from '@dhc/domain';
 import { Button, Card, Notice, Text } from '@dhc/ui-native';
 import { useState } from 'react';
 import { Alert } from 'react-native';
@@ -6,7 +7,7 @@ import { api, patientAccount } from '../../api';
 import { errorMessage } from '../../errors';
 import { useLocale } from '../../locale/provider';
 import { useLoad } from '../../use-load';
-import { istToday, shortDate } from '../logic';
+import { istToday } from '../logic';
 import { LoadError, Loading, PatientScreen } from '../parts';
 
 /** PRD §4.1: what was accepted and when; the health-data consent can be withdrawn. */

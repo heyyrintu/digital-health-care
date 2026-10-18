@@ -1,4 +1,5 @@
 import type { MeResponse, PortalAppointment } from '@dhc/contracts';
+import { shortDate } from '@dhc/domain';
 import { Button, Card, Screen, Text, useTheme } from '@dhc/ui-native';
 import { router, useFocusEffect, type Href } from 'expo-router';
 import { useCallback, useRef, useState } from 'react';
@@ -7,7 +8,6 @@ import { api, patientAccount, session } from '../../api';
 import { useLocale } from '../../locale/provider';
 import { useLoad } from '../../use-load';
 import type { ReadyAccount } from '../gate';
-import { shortDate } from '../logic';
 import { LoadError, Loading, PatientPicker } from '../parts';
 
 /** PRD §4.2: patient switcher, next appointment and quick actions. */

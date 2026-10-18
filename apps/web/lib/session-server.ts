@@ -31,6 +31,27 @@ export const PLATFORM_COOKIE: SessionCookie = {
   maxAgeSeconds: 8 * 3600,
 };
 
+/**
+ * Patient portal (`/app`): its own cookie on its own routes, so a staff session and a
+ * patient session never stand in for each other in the same browser. By default it is a
+ * browser-session cookie (no Max-Age), gone when the browser closes, since patients often
+ * use shared computers. Only when the patient ticks "Keep me signed in on this device" does
+ * it last 30 days, the API's patient session (Build Plan §6.1); `PATIENT_KEEP_COOKIE`
+ * remembers that choice so each refresh keeps it. The API stays the authority on expiry.
+ */
+export const PATIENT_COOKIE: SessionCookie = {
+  name: 'dhc_patient_session',
+  path: '/api/patient-session',
+  maxAgeSeconds: 30 * 24 * 3600,
+};
+
+/** Set beside the patient cookie, with the same lifetime, only when the patient chose to stay signed in. */
+export const PATIENT_KEEP_COOKIE: SessionCookie = {
+  name: 'dhc_patient_keep',
+  path: '/api/patient-session',
+  maxAgeSeconds: 30 * 24 * 3600,
+};
+
 export const SESSION_COOKIE = STAFF_COOKIE.name;
 
 interface TokenPair {
@@ -169,6 +190,7 @@ export function sessionResponse(
   request: NextRequest,
   result: { status: number; body: unknown },
   cookie: SessionCookie = STAFF_COOKIE,
+  { persist = true }: { persist?: boolean } = {},
 ) {
   if (result.status !== 200 || !isTokenPair(result.body)) return passThrough(result);
   const response = NextResponse.json(
@@ -180,10 +202,37 @@ export function sessionResponse(
     sameSite: 'strict',
     secure: request.nextUrl.protocol === 'https:' || process.env.NODE_ENV === 'production',
     path: cookie.path,
-    maxAge: cookie.maxAgeSeconds,
+    // Without Max-Age the browser drops the cookie when it closes.
+    ...(persist ? { maxAge: cookie.maxAgeSeconds } : {}),
   });
   return response;
 }
+
+/**
+ * A patient session response: 30 days and the keep cookie when the patient chose to stay
+ * signed in on this device, otherwise a browser-session cookie and no keep cookie.
+ */
+export function patientSessionResponse(
+  request: NextRequest,
+  result: { status: number; body: unknown },
+  keep: boolean,
+) {
+  const response = sessionResponse(request, result, PATIENT_COOKIE, { persist: keep });
+  if (result.status !== 200 || !isTokenPair(result.body)) return response;
+  if (!keep) return clearSession(response, PATIENT_KEEP_COOKIE);
+  response.cookies.set(PATIENT_KEEP_COOKIE.name, '1', {
+    httpOnly: true,
+    sameSite: 'strict',
+    secure: request.nextUrl.protocol === 'https:' || process.env.NODE_ENV === 'production',
+    path: PATIENT_KEEP_COOKIE.path,
+    maxAge: PATIENT_KEEP_COOKIE.maxAgeSeconds,
+  });
+  return response;
+}
+
+/** Ends the browser's patient session: both of its cookies. */
+export const clearPatientSession = <T extends NextResponse>(response: T): T =>
+  clearSession(clearSession(response, PATIENT_COOKIE), PATIENT_KEEP_COOKIE);
 
 export function clearSession<T extends NextResponse>(
   response: T,

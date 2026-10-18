@@ -28,6 +28,26 @@ describe('plan', () => {
     expect(currentPhase(phases)?.id).toBe('2');
   });
 
+  test('skips a parked phase', async () => {
+    const phases = parseProgress(
+      PLAN.replace(
+        '| 2 Mobile apps | Starting',
+        '| 2 Mobile apps | Parked (web first): starting',
+      ).replace(
+        '| 3 to 6 | Not started.',
+        '| 3 Integrations | In progress: console. |\n| 4 to 6 | Not started.',
+      ),
+    );
+    expect(phases.map((phase) => phase.status)).toEqual([
+      'done',
+      'done',
+      'parked',
+      'active',
+      'todo',
+    ]);
+    expect(currentPhase(phases)?.id).toBe('3');
+  });
+
   test('guards applied migrations', async () => {
     expect(
       isMigrationFile('/repo/packages/db/prisma/migrations/20261006184614_init/migration.sql'),

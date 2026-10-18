@@ -1347,4 +1347,19 @@ export const hi: Record<MessageKey, string> = {
     '{name} निष्क्रिय की गई। डॉक्टर इसे अब नहीं देखते; पहले ऑर्डर हुई जाँचें नहीं बदलीं।',
   'catalogue.activated': '{name} फिर से डॉक्टरों की सूची में है।',
   'catalogue.stale': 'सूची किसी दूसरी स्क्रीन पर बदल गई थी। उसे फिर से लोड किया गया है।',
+  'portal.title': 'मरीज़ पोर्टल',
+  'portal.signedInAs': '{phone} से साइन इन किया',
+  'portal.nav.home': 'होम',
+  'portal.clinicInvalid': 'अपने क्लिनिक के लिंक में दी गई क्लिनिक ID डालें, जैसे demo-clinic।',
+  'portal.phoneInvalid': '10 अंकों का भारतीय मोबाइल नंबर डालें, जैसे 98765 43210।',
+  'portal.genderRequired': 'कोई एक चुनें।',
+  'portal.book.policy': 'आप यहाँ {minutes} मिनट पहले तक रद्द कर सकते हैं।',
+  'portal.keepSignedIn': 'इस डिवाइस पर साइन इन रहने दें',
+  'portal.keepSignedInHint':
+    '30 दिन के लिए। साझा कंप्यूटर पर इसे न चुनें: तब ब्राउज़र बंद करने पर या 15 मिनट तक इस्तेमाल न होने पर आप साइन आउट हो जाएँगे।',
+  'portal.consents.unavailable': 'अभी उपलब्ध नहीं है। कृपया क्लिनिक से संपर्क करें।',
+  'portal.privacy.withdrawConfirm':
+    'जब तक आप फिर से स्वीकार नहीं करते, पोर्टल और ऐप स्वास्थ्य रिकॉर्ड नहीं दिखाएँगे।',
+  'portal.appts.callToCancel':
+    'ऑनलाइन रद्द करने के लिए बहुत देर हो चुकी है। कृपया क्लिनिक को फ़ोन करें।',
 };

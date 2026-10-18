@@ -2,7 +2,7 @@ export type PlanPhase = {
   id: string;
   name: string;
   state: string;
-  status: 'done' | 'active' | 'todo';
+  status: 'done' | 'active' | 'parked' | 'todo';
 };
 
 export type CheckStep = { name: string; exitCode: number; tail: string };

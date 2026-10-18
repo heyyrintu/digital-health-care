@@ -1,6 +1,6 @@
 import type { ConsentStatus, PortalPatient } from '@dhc/contracts';
 import { describe, expect, it, vi } from 'vitest';
-import { PatientAccount } from './account';
+import { PatientAccount } from './patient-account';
 
 const accepted: ConsentStatus = { consents: [], pending: [] };
 const neha: PortalPatient = {

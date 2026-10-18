@@ -1,5 +1,6 @@
 import { ApiError } from '@dhc/api-client';
 import type { BookingOptions, PortalAppointment, Slot } from '@dhc/contracts';
+import { bookingDays, shortDate } from '@dhc/domain';
 import { Button, Card, Choice, Notice, Text, TextField, useTheme } from '@dhc/ui-native';
 import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
@@ -9,7 +10,7 @@ import { errorMessage } from '../../errors';
 import { useLocale } from '../../locale/provider';
 import { useLoad } from '../../use-load';
 import type { ReadyAccount } from '../gate';
-import { bookingDays, dayPart, istToday, rupees, shortDate, type DayPart } from '../logic';
+import { dayPart, istToday, rupees, type DayPart } from '../logic';
 import { ChoiceRow, LoadError, Loading, PatientPicker, PatientScreen } from '../parts';
 
 const PARTS: DayPart[] = ['morning', 'afternoon', 'evening'];

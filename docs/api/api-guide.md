@@ -61,6 +61,7 @@ Rules:
 - Sign-in endpoints are rate-limited per IP (10 per minute by default).
 - **Authenticator reset:** a clinic admin can reset a staff member who lost their authenticator. It clears the person's password and authenticator, ends all their staff sessions, and issues a single-use reset link (same rules as invites); the person sets new ones through `/invite`, and their role is kept. Admins cannot reset themselves, and a person who is staff at another clinic too can only be reset by platform support — otherwise one clinic could take over their access to the other. Support resets have no HTTP endpoint: an operator runs the `support-reset-authenticator` command shipped in the API build ([runbook](../runbooks/support-authenticator-reset.md)), which issues the same kind of reset link for one of the person's clinics, revokes their open links everywhere, and writes `support.authenticator.reset` into every clinic's audit log.
 - **Web dashboard:** the browser never holds the refresh token. The web app's `/api/session/*` routes call these endpoints and keep it in an httpOnly cookie, returning only the access token (ADR 0015).
+- **Web patient portal** (`/app`): the same, through `/api/patient-session/*` with a cookie of its own; those routes call `/auth/otp/request`, `/auth/otp/verify`, `/auth/refresh` and `/auth/logout`, and the portal then calls the `/portal/*` endpoints (§3r) directly with the access token. No endpoint differs for the web.
 
 ## 3a. Patient register
 

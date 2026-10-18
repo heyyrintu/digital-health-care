@@ -1,5 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
-import { E2E_FIELD_ENCRYPTION_KEY, E2E_FILE_STORE_DIR } from './env';
+import { E2E_FIELD_ENCRYPTION_KEY, E2E_FILE_STORE_DIR, E2E_JWT_SECRET } from './env';
 
 /**
  * Browser tests against the *built* API and web app (run `pnpm build` first), on their
@@ -42,10 +42,12 @@ export default defineConfig({
         API_PORT: String(API_PORT),
         LOG_LEVEL: 'warn',
         // Synthetic secrets for this throwaway environment only.
-        JWT_SECRET: 'e2e-only-jwt-secret-0123456789abcdef',
+        JWT_SECRET: E2E_JWT_SECRET,
         FIELD_ENCRYPTION_KEY: E2E_FIELD_ENCRYPTION_KEY,
         WEB_BASE_URL: WEB_URL,
-        OTP_DELIVERY: 'disabled',
+        // Patient sign-in codes go to the API's log, never by SMS; the fixtures set a known
+        // code on the challenge instead of reading it (`signInAsPatient`).
+        OTP_DELIVERY: 'log',
         // Prescriptions are signed with the test key and stored in a throwaway folder.
         SIGNER: 'test_key',
         FILE_STORE_DIR: E2E_FILE_STORE_DIR,
@@ -65,7 +67,13 @@ export default defineConfig({
       url: `${WEB_URL}/clinic/login`,
       reuseExistingServer: false,
       timeout: 60_000,
-      env: { API_BASE_URL: API_URL, NEXT_TELEMETRY_DISABLED: '1' },
+      env: {
+        API_BASE_URL: API_URL,
+        NEXT_TELEMETRY_DISABLED: '1',
+        // `next start` runs in production, where the portal's consents need both documents.
+        PRIVACY_NOTICE_URL: 'https://example.com/privacy',
+        TERMS_URL: 'https://example.com/terms',
+      },
     },
   ],
 });

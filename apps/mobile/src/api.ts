@@ -1,8 +1,7 @@
-import { createApiClient } from '@dhc/api-client';
+import { createApiClient, PatientAccount } from '@dhc/api-client';
 import { API_BASE_URL } from './config';
 import { expiringFetch, SessionManager } from './auth/session';
 import { secureVault } from './auth/vault';
-import { PatientAccount } from './patient/account';
 import { clearPickedFiles, prescriptionPdfs, testResultFiles } from './patient/pdf-native';
 import { clearOnSignOut } from './patient/upload';
 
