@@ -107,6 +107,14 @@ import {
   VoidPrescriptionBody,
 } from './prescriptions';
 import {
+  PUBLIC_SLUG_MAX,
+  PUBLIC_SLUG_MIN,
+  PUBLIC_SLUG_PATTERN,
+  PublicDoctor,
+  PublicDoctorList,
+  SaveDoctorPublicProfileBody,
+} from './public-doctors';
+import {
   AcceptInviteBody,
   AcceptInviteResponse,
   CompleteInviteBody,
@@ -220,7 +228,8 @@ interface Operation {
   platform?: boolean;
   body?: z.ZodType;
   query?: z.ZodObject;
-  pathParams?: string[];
+  /** UUIDs, unless given with their own schema (a public page's slug). */
+  pathParams?: (string | { name: string; schema: Record<string, unknown> })[];
   response?: z.ZodType;
   /** Success status; defaults to 200. 204 has no body. */
   status?: 200 | 201 | 204;
@@ -1035,6 +1044,41 @@ const operations: Operation[] = [
     status: 204,
   },
   {
+    method: 'patch',
+    path: '/doctor-profile/public',
+    operationId: 'saveDoctorPublicProfile',
+    summary: 'Set the public page: address, listed, about and languages (doctor)',
+    body: SaveDoctorPublicProfileBody,
+    response: DoctorProfile,
+  },
+  {
+    method: 'get',
+    path: '/public/doctors',
+    operationId: 'listPublicDoctors',
+    summary: 'Every public doctor page shown (listed and verified): address and last change',
+    public: true,
+    response: PublicDoctorList,
+  },
+  {
+    method: 'get',
+    path: '/public/doctors/{slug}',
+    operationId: 'getPublicDoctor',
+    summary: 'A public doctor page, if listed and verified; 404 otherwise',
+    public: true,
+    pathParams: [
+      {
+        name: 'slug',
+        schema: {
+          type: 'string',
+          minLength: PUBLIC_SLUG_MIN,
+          maxLength: PUBLIC_SLUG_MAX,
+          pattern: PUBLIC_SLUG_PATTERN.source,
+        },
+      },
+    ],
+    response: PublicDoctor,
+  },
+  {
     method: 'get',
     path: '/medicine-master',
     operationId: 'listMedicineMaster',
@@ -1523,11 +1567,11 @@ export function buildOpenApiDocument(options: { version: string; serverUrl?: str
   for (const op of operations) {
     const status = op.status ?? 200;
     const parameters = [
-      ...(op.pathParams ?? []).map((name) => ({
-        name,
+      ...(op.pathParams ?? []).map((param) => ({
+        name: typeof param === 'string' ? param : param.name,
         in: 'path',
         required: true,
-        schema: { type: 'string', format: 'uuid' },
+        schema: typeof param === 'string' ? { type: 'string', format: 'uuid' } : param.schema,
       })),
       ...queryParameters(op.query),
     ];

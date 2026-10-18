@@ -25,7 +25,11 @@ import {
   nextAppointmentFor,
   patientDraftProblems,
   portalErrorMessage,
+  portalNext,
+  initialDoctor,
+  preselectedDoctor,
   sessionEndReason,
+  signedInDestination,
   slotTaken,
   UPLOAD_ACCEPT,
   uploadFailureText,
@@ -194,7 +198,18 @@ describe('appointments', () => {
 
 describe('booking', () => {
   const options: BookingOptions = {
-    doctors: [{ userId: '7a4f0d6c-5b8e-4f1c-9d54-6e7f8091a2b3', displayName: 'Dr. Synthetic' }],
+    doctors: [
+      {
+        userId: '7a4f0d6c-5b8e-4f1c-9d54-6e7f8091a2b3',
+        displayName: 'Dr. Synthetic',
+        publicSlug: 'dr-synthetic',
+      },
+      {
+        userId: '1b2c3d4e-5f60-4718-8a9b-0c1d2e3f4a5b',
+        displayName: 'Dr. Unlisted',
+        publicSlug: null,
+      },
+    ],
     clinics: [{ id: '8b5a1e7d-6c9f-4a2d-8e65-7f8091a2b3c4', name: 'Main clinic', address: null }],
     consultationTypes: [
       {
@@ -209,6 +224,25 @@ describe('booking', () => {
     cancelCutoffMinutes: 120,
     maxActiveBookings: 3,
   };
+
+  it('picks the doctor a public page links to, and nobody for an unknown address', () => {
+    expect(preselectedDoctor(options, 'dr-synthetic')).toBe('7a4f0d6c-5b8e-4f1c-9d54-6e7f8091a2b3');
+    expect(preselectedDoctor(options, 'dr-other')).toBeNull();
+    expect(preselectedDoctor(options, null)).toBeNull();
+    expect(preselectedDoctor(options, '')).toBeNull();
+  });
+
+  it('starts with the linked doctor, nobody for a link that matches no one, else the first', () => {
+    expect(initialDoctor(options, 'dr-synthetic')).toEqual({
+      doctorId: '7a4f0d6c-5b8e-4f1c-9d54-6e7f8091a2b3',
+      unmatched: false,
+    });
+    expect(initialDoctor(options, 'dr-elsewhere')).toEqual({ doctorId: null, unmatched: true });
+    expect(initialDoctor(options, null)).toEqual({
+      doctorId: '7a4f0d6c-5b8e-4f1c-9d54-6e7f8091a2b3',
+      unmatched: false,
+    });
+  });
 
   it('books online only when there is a doctor, a clinic and a consultation', () => {
     expect(canBookOnline(options)).toBe(true);
@@ -294,5 +328,46 @@ describe('test results', () => {
   it('falls back to the usual wording for anything else', () => {
     expect(uploadFailureText(new TypeError('fetch failed'), t)).toBe(t('error.network'));
     expect(uploadFailureText(apiError(404, 'NOT_FOUND'), t)).toBe('API says NOT_FOUND');
+  });
+});
+
+describe('portalNext', () => {
+  it.each([
+    ['/app/book?doctor=dr-synthetic', '/app/book?doctor=dr-synthetic'],
+    ['/app', '/app'],
+    ['/app/appointments', '/app/appointments'],
+  ])('follows %s', (next, expected) => {
+    expect(portalNext(next)).toBe(expected);
+  });
+
+  it.each([
+    null,
+    '',
+    'https://evil.test/app',
+    '//evil.test/app',
+    '/\\evil.test/app',
+    '/clinic',
+    '/apple',
+    '/app/login?next=/app',
+    'app/book',
+    '/app/../clinic',
+  ])('goes home instead of %s', (next) => {
+    expect(portalNext(next)).toBe('/app');
+  });
+});
+
+describe('signedInDestination', () => {
+  it('goes on when the link names this clinic or none', () => {
+    expect(signedInDestination('clinic-a', 'clinic-a', '/app/book?doctor=dr-x')).toEqual({
+      go: '/app/book?doctor=dr-x',
+    });
+    expect(signedInDestination('clinic-a', ' Clinic-A ', null)).toEqual({ go: '/app' });
+    expect(signedInDestination('clinic-a', null, '/app/tests')).toEqual({ go: '/app/tests' });
+  });
+
+  it('stops when the link names another clinic', () => {
+    expect(signedInDestination('clinic-a', 'clinic-b', '/app/book?doctor=dr-x')).toEqual({
+      otherClinic: 'clinic-b',
+    });
   });
 });

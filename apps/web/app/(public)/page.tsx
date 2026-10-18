@@ -12,14 +12,12 @@ export default function HomePage() {
         <h1 className="mt-3 font-display text-3xl font-extrabold sm:text-4xl">
           {t('en', 'booking.book')}
         </h1>
-        <p className="mx-auto mt-3 max-w-md text-muted-foreground">
-          Public website placeholder. Doctor pages, booking and verification arrive in Phase 1.
-        </p>
+        <p className="mx-auto mt-3 max-w-md text-muted-foreground">{t('en', 'home.intro')}</p>
         <nav className="mt-8">
           <ul className="flex flex-col justify-center gap-3 sm:flex-row">
             <li>
               <Link href="/app" className={buttonVariants({ size: 'lg', className: 'w-full' })}>
-                Patient portal
+                {t('en', 'home.portal')}
               </Link>
             </li>
             <li>
@@ -27,7 +25,7 @@ export default function HomePage() {
                 href="/clinic"
                 className={buttonVariants({ variant: 'outline', size: 'lg', className: 'w-full' })}
               >
-                Clinic dashboard
+                {t('en', 'home.clinic')}
               </Link>
             </li>
           </ul>

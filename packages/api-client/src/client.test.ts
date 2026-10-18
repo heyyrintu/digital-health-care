@@ -296,4 +296,46 @@ describe('platform console calls', () => {
     expect(init.method).toBe('GET');
     expect((init.headers as Record<string, string>).authorization).toBe('Bearer platform-token');
   });
+
+  it('reads a public doctor page without a token, dropping fields it does not know', async () => {
+    const page = {
+      slug: 'dr-synthetic',
+      name: 'Dr. Synthetic',
+      qualifications: 'MBBS',
+      specialty: null,
+      registration: { number: 'TEST-1', council: 'Test Council' },
+      about: null,
+      languages: ['English'],
+      organisation: { slug: 'demo-clinic', name: 'Demo Clinic' },
+      clinics: [{ name: 'Main', address: null }],
+      consultationTypes: [
+        { name: 'In person', mode: 'in_person', durationMin: 15, feePaise: 50000 },
+      ],
+      updatedAt: '2026-10-18T10:00:00.000Z',
+      internalId: 'should not survive parsing',
+    };
+    const fetch = vi.fn(async () => json(200, page));
+    const client = createApiClient({ baseUrl: 'https://api.test/v1', fetch });
+    const result = await client.publicDoctor('dr-synthetic');
+    expect(result).not.toHaveProperty('internalId');
+    const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('https://api.test/v1/public/doctors/dr-synthetic');
+    expect((init.headers as Record<string, string>).authorization).toBeUndefined();
+
+    const missing = createApiClient({
+      baseUrl: 'https://api.test/v1',
+      fetch: vi.fn(async () => json(404, { error: { code: 'NOT_FOUND', message: 'Not found.' } })),
+    });
+    await expect(missing.publicDoctor('nobody')).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('saves the public page with PATCH', async () => {
+    const fetch = vi.fn(async () => json(500, { error: { code: 'INTERNAL', message: 'x' } }));
+    const client = createApiClient({ baseUrl: 'https://api.test/v1', fetch });
+    await expect(client.saveDoctorPublicProfile({ listed: true })).rejects.toBeInstanceOf(ApiError);
+    const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('https://api.test/v1/doctor-profile/public');
+    expect(init.method).toBe('PATCH');
+    expect(JSON.parse(init.body as string)).toEqual({ listed: true });
+  });
 });

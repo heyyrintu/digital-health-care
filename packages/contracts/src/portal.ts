@@ -96,7 +96,14 @@ export type CreatePortalPatientBody = z.infer<typeof CreatePortalPatientBody>;
 
 /** What a patient can book: in-person consultations without payment at booking, for now. */
 export const BookingOptions = z.object({
-  doctors: z.array(z.object({ userId: z.uuid(), displayName: z.string().nullable() })),
+  doctors: z.array(
+    z.object({
+      userId: z.uuid(),
+      displayName: z.string().nullable(),
+      /** The doctor's public page address when it is listed: `/app/book?doctor=<slug>` picks them. */
+      publicSlug: z.string().nullable(),
+    }),
+  ),
   clinics: z.array(z.object({ id: z.uuid(), name: z.string(), address: z.string().nullable() })),
   consultationTypes: z.array(
     z.object({

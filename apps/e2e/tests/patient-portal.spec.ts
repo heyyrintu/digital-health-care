@@ -230,9 +230,12 @@ test.describe('patient portal', () => {
     expect(kept!.expires * 1000 - Date.now()).toBeGreaterThan(29 * 24 * 3600_000);
     await page.getByRole('button', { name: 'Sign out' }).click();
     await expect(page).toHaveURL(/\/app\/login$/);
-    expect((await page.context().cookies()).some((c) => c.name.startsWith('dhc_patient'))).toBe(
-      false,
-    );
+    // The sign-out request clears the cookie as it finishes, a moment after the page moves on.
+    await expect
+      .poll(async () =>
+        (await page.context().cookies()).some((c) => c.name.startsWith('dhc_patient')),
+      )
+      .toBe(false);
     await page.goto('/app/family');
     await expect(page).toHaveURL(/\/app\/login$/);
 

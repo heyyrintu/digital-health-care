@@ -6,7 +6,13 @@ import { HeartPulse } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState, type FormEvent } from 'react';
 import { isSixDigitCode } from '../../../lib/invite';
-import { clinicSlug, isClinicSlug, isIndianMobile, portalErrorMessage } from '../../../lib/patient';
+import {
+  clinicSlug,
+  isClinicSlug,
+  isIndianMobile,
+  portalErrorMessage,
+  signedInDestination,
+} from '../../../lib/patient';
 import { postPatientSession, type SessionTokens } from '../../../lib/session-client';
 import { Notice } from '../parts';
 import { PatientLocaleToggle, usePatientSession } from '../session-provider';
@@ -24,7 +30,7 @@ export default function PatientLoginPage() {
 
 /** Patient sign-in (PRD §4.1): clinic and mobile number, then the 6-digit code sent by SMS. */
 function Login() {
-  const { status, endedReason, startSession, t } = usePatientSession();
+  const { status, endedReason, me, signOut, startSession, t } = usePatientSession();
   const router = useRouter();
   const params = useSearchParams();
   const [clinic, setClinic] = useState('');
@@ -48,9 +54,17 @@ function Login() {
     setClinic(params.get('clinic') ?? remembered);
   }, [params]);
 
+  // Signed in (or already), on to the page that sent the patient here: a doctor's public
+  // page sends `next=/app/book?doctor=<slug>`. Only portal pages are followed, and never
+  // into a session at another clinic than the link's.
+  const destination =
+    status === 'signedIn' && me
+      ? signedInDestination(me.organisation.slug, params.get('clinic'), params.get('next'))
+      : null;
+  const goTo = destination && 'go' in destination ? destination.go : null;
   useEffect(() => {
-    if (status === 'signedIn') router.replace('/app');
-  }, [status, router]);
+    if (goTo) router.replace(goTo);
+  }, [goTo, router]);
 
   async function sendCode(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
@@ -146,7 +160,19 @@ function Login() {
           {error && <Notice tone="error">{error}</Notice>}
         </div>
 
-        {challenge === null ? (
+        {destination && 'otherClinic' in destination ? (
+          <div className="space-y-4" data-testid="other-clinic">
+            <Notice tone="info">
+              {t('portal.otherClinic', {
+                current: me!.organisation.name,
+                clinic: destination.otherClinic,
+              })}
+            </Notice>
+            <Button type="button" size="lg" className="w-full" onClick={() => void signOut('user')}>
+              {t('session.signOut')}
+            </Button>
+          </div>
+        ) : challenge === null ? (
           <form className="space-y-4" onSubmit={(e) => void sendCode(e)} noValidate>
             <p className="text-sm text-muted-foreground">{t('mobile.patientSignIn.intro')}</p>
             <Field label={t('login.clinic')} hint={t('login.clinicHint')}>

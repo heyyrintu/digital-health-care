@@ -60,6 +60,65 @@ export const clinicSlug = (value: string) => value.trim().toLowerCase();
 export const isClinicSlug = (value: string) =>
   OrganisationSlug.safeParse(clinicSlug(value)).success;
 
+/**
+ * Where sign-in goes next: the `next` parameter when it is a page of the portal on this
+ * site (a doctor's public page sends `/app/book?doctor=<slug>`), else the portal's home.
+ * Anything else (another site, `//host`, a backslash trick, a non-portal page) is ignored,
+ * so a link cannot use sign-in to send the patient elsewhere.
+ */
+export function portalNext(next: string | null | undefined): string {
+  if (!next || !next.startsWith('/') || next.startsWith('//') || next.includes('\\')) {
+    return '/app';
+  }
+  let url: URL;
+  try {
+    url = new URL(next, 'https://portal.invalid');
+  } catch {
+    return '/app';
+  }
+  if (url.origin !== 'https://portal.invalid') return '/app';
+  if (url.pathname !== '/app' && !url.pathname.startsWith('/app/')) return '/app';
+  if (url.pathname.startsWith('/app/login')) return '/app';
+  return `${url.pathname}${url.search}`;
+}
+
+/**
+ * What sign-in does for a patient who is already signed in: go on to `next`, unless the
+ * link names another clinic (`?clinic=`) than the session's. Then the portal must not
+ * book at the wrong clinic: the page asks the patient to sign out first.
+ */
+export function signedInDestination(
+  sessionClinic: string,
+  linkClinic: string | null | undefined,
+  next: string | null | undefined,
+): { go: string } | { otherClinic: string } {
+  const wanted = linkClinic ? clinicSlug(linkClinic) : '';
+  if (wanted && wanted !== sessionClinic) return { otherClinic: wanted };
+  return { go: portalNext(next) };
+}
+
+/** The doctor a booking link names (`?doctor=<public page address>`), if the clinic has them. */
+export function preselectedDoctor(
+  options: BookingOptions,
+  slug: string | null | undefined,
+): string | null {
+  if (!slug) return null;
+  return options.doctors.find((d) => d.publicSlug === slug)?.userId ?? null;
+}
+
+/**
+ * The doctor the booking form starts with. A link naming a doctor the clinic does not
+ * list (`unmatched`) picks nobody, so the patient chooses; never silently the first one.
+ */
+export function initialDoctor(
+  options: BookingOptions,
+  slug: string | null | undefined,
+): { doctorId: string | null; unmatched: boolean } {
+  if (!slug) return { doctorId: options.doctors[0]!.userId, unmatched: false };
+  const doctorId = preselectedDoctor(options, slug);
+  return { doctorId, unmatched: doctorId === null };
+}
+
 // ---- Consents (PRD §4.1) -----------------------------------------------------------
 
 /** The documents still to accept, in the order the screen lists them. */

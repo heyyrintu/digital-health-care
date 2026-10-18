@@ -71,6 +71,8 @@ export default defineConfig({
         API_BASE_URL: API_URL,
         NEXT_TELEMETRY_DISABLED: '1',
         // `next start` runs in production, where the portal's consents need both documents.
+        // Canonical links and the sitemap on the public pages (required in production).
+        PUBLIC_SITE_URL: WEB_URL,
         PRIVACY_NOTICE_URL: 'https://example.com/privacy',
         TERMS_URL: 'https://example.com/terms',
       },
