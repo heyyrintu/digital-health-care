@@ -21,6 +21,7 @@
     "@dhc/ui-native": "workspace:*",
     "expo": "~57.0.27",
     "expo-constants": "~57.0.21",
+    "expo-document-picker": "~57.0.3",
     "expo-file-system": "~57.0.7",
     "expo-linking": "~57.0.12",
     "expo-local-authentication": "~57.0.3",
