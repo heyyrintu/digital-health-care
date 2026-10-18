@@ -109,6 +109,41 @@ export async function setUpFromInvite(page: Page, link: string, password: string
   return secret;
 }
 
+/**
+ * The doctor's prescription pad and signing PIN in the browser (signed in as the doctor),
+ * then the platform team's verification, written straight to the database here. Ends on
+ * the doctor's profile page.
+ */
+export async function setUpPrescriptionPad(
+  page: Page,
+  db: Db,
+  clinic: Clinic,
+  { prefix, password, pin }: { prefix: string; password: string; pin: string },
+) {
+  await page.goto('/clinic/profile');
+  const pad = page.getByTestId('profile-form');
+  await expect(pad).toContainText('Waiting for verification by the platform team');
+  await pad.getByLabel('Registration number').fill('TEST-12345');
+  await pad.getByLabel('Medical council').fill('Test Medical Council');
+  await pad.getByLabel('Qualifications').fill('MBBS, MS (Ortho)');
+  await pad.getByLabel('Prescription number prefix').fill(prefix);
+  await pad.getByRole('button', { name: 'Save' }).click();
+  await expect(pad.getByRole('status')).toHaveText('Saved.');
+
+  const pinForm = page.getByTestId('pin-form');
+  await pinForm.getByLabel('Account password').fill(password);
+  await pinForm.getByLabel('New PIN').fill(pin);
+  await pinForm.getByLabel('Repeat the PIN').fill(pin);
+  await pinForm.getByRole('button', { name: 'Save PIN' }).click();
+  await expect(pinForm.getByRole('status')).toHaveText('PIN saved.');
+  const org = await db.organisation.findUniqueOrThrow({ where: { slug: clinic.slug } });
+  const doctor = await db.user.findUniqueOrThrow({ where: { email: clinic.email('doctor') } });
+  await db.doctorProfile.update({
+    where: { organisationId_userId: { organisationId: org.id, userId: doctor.id } },
+    data: { verification: 'verified', verifiedAt: new Date(), verifiedBy: 'e2e (SUP-1)' },
+  });
+}
+
 /** A synthetic platform operator's password (named so it reads as test data). */
 export const OPERATOR_PASSWORD = 'operator synthetic passphrase';
 

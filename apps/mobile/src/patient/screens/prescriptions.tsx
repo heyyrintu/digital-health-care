@@ -1,5 +1,5 @@
 import type { PortalPrescription } from '@dhc/contracts';
-import { shortDate } from '@dhc/domain';
+import { prescriptionPdfName, shortDate } from '@dhc/domain';
 import type { Locale } from '@dhc/i18n';
 import { Button, Card, Notice, Text, useTheme } from '@dhc/ui-native';
 import { useState } from 'react';
@@ -11,7 +11,6 @@ import { useLoad } from '../../use-load';
 import { istToday } from '../logic';
 import { LoadError, Loading, PatientScreen } from '../parts';
 import { blobBytes, prescriptionPdfs } from '../pdf-native';
-import { prescriptionPdfName } from '../pdf-name';
 
 /** The IST day a version was signed: an amendment can be signed days after the visit. */
 const signedOn = (at: string, locale: Locale) => shortDate(istToday(new Date(at)), locale);

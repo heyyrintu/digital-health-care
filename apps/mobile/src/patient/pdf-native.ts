@@ -1,9 +1,10 @@
+import { shareTypeOf } from '@dhc/api-client';
 import { Directory, File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { Platform } from 'react-native';
 import { PdfCache } from './pdf-cache';
 import { PDF_FOLDER } from './pdf-name';
-import { RESULT_FOLDER, shareTypeOf } from './tests';
+import { RESULT_FOLDER } from './tests';
 import { iosTmpUri, isPickerInbox } from './upload';
 
 /** A cache on expo-file-system and expo-sharing, in its own folder of the app's private cache. */

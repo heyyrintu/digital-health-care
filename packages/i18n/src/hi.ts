@@ -1133,6 +1133,7 @@ export const hi: Record<MessageKey, string> = {
   'patient.tests.byPatient': 'आपने भेजी, {date}',
   'patient.tests.byClinic': 'क्लिनिक ने जोड़ी, {date}',
   'patient.tests.view': 'रिपोर्ट {n} देखें',
+  'patient.tests.fileType': 'फ़ाइल',
   'patient.tests.resultTitle': '{name}, रिपोर्ट {n}',
   'patient.tests.cannotOpen': 'इस फ़ोन पर ऐप से फ़ाइल नहीं भेजी जा सकती।',
   'patient.tests.pickFailed': 'फ़ाइल पढ़ी नहीं जा सकी। फ़ाइल फिर से चुनें।',
@@ -1362,4 +1363,14 @@ export const hi: Record<MessageKey, string> = {
     'जब तक आप फिर से स्वीकार नहीं करते, पोर्टल और ऐप स्वास्थ्य रिकॉर्ड नहीं दिखाएँगे।',
   'portal.appts.callToCancel':
     'ऑनलाइन रद्द करने के लिए बहुत देर हो चुकी है। कृपया क्लिनिक को फ़ोन करें।',
+  'portal.rx.open': 'PDF खोलें',
+  'portal.rx.download': 'PDF डाउनलोड करें',
+  'portal.tests.limit':
+    'PDF या फ़ोटो (JPEG, PNG, HEIC या HEIF) अपलोड करें, {mb} MB तक। आपका क्लिनिक कम तरह की फ़ाइलें या छोटा साइज़ ले सकता है; ऐसा होने पर आपको बताया जाएगा।',
+  'portal.tests.download': 'रिपोर्ट {n} डाउनलोड करें',
+  'portal.files.saved':
+    'यह फ़ाइल ब्राउज़र में नहीं दिख सकती, इसलिए आपके ब्राउज़र से इसे डाउनलोड करने को कहा गया।',
+  'portal.files.blocked': 'आपके ब्राउज़र ने नया टैब रोक दिया। इसके बजाय फ़ाइल डाउनलोड करें।',
+  'portal.tests.viewFor': '{name} की रिपोर्ट {n} देखें',
+  'portal.tests.downloadFor': '{name} की रिपोर्ट {n} डाउनलोड करें',
 };

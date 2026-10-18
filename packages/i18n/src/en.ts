@@ -1130,6 +1130,7 @@ export const en = {
   'patient.tests.byPatient': 'sent by you, {date}',
   'patient.tests.byClinic': 'added by the clinic, {date}',
   'patient.tests.view': 'View result {n}',
+  'patient.tests.fileType': 'File',
   'patient.tests.resultTitle': '{name}, result {n}',
   'patient.tests.cannotOpen': 'This phone can’t share files from the app.',
   'patient.tests.pickFailed': 'The file could not be read. Choose it again.',
@@ -1359,6 +1360,16 @@ export const en = {
   'portal.privacy.withdrawConfirm':
     'The portal and the app will stop showing health records until you accept again.',
   'portal.appts.callToCancel': 'Too close to cancel online. Please call the clinic.',
+  'portal.rx.open': 'Open PDF',
+  'portal.rx.download': 'Download PDF',
+  'portal.tests.limit':
+    'Upload a PDF or a photo (JPEG, PNG, HEIC or HEIF) of up to {mb} MB. Your clinic may accept fewer types or a smaller size, and you are told if it does.',
+  'portal.tests.download': 'Download result {n}',
+  'portal.files.saved':
+    'This file can’t be shown in the browser, so your browser was asked to download it.',
+  'portal.files.blocked': 'Your browser blocked the new tab. Download the file instead.',
+  'portal.tests.viewFor': 'View result {n} for {name}',
+  'portal.tests.downloadFor': 'Download result {n} for {name}',
 } as const;
 
 export type MessageKey = keyof typeof en;

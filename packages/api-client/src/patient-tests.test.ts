@@ -1,6 +1,6 @@
-import { ApiError } from '@dhc/api-client';
 import type { ErrorCode, PortalTestOrder, TestOrder, TestResultSummary } from '@dhc/contracts';
 import { describe, expect, it } from 'vitest';
+import { ApiError } from './client';
 import {
   appendPage,
   canUploadResult,
@@ -8,6 +8,7 @@ import {
   fileCheckMessage,
   fileSize,
   findOrder,
+  InFlight,
   isStale,
   pickedMediaType,
   replaceRow,
@@ -15,7 +16,7 @@ import {
   shareTypeOf,
   uploadErrorMessage,
   withUploaded,
-} from './tests';
+} from './patient-tests';
 
 // Synthetic personas only (docs/qa/test-plan.md §3): Pooja Singh's account looks after Aarav.
 const POOJA = { id: '00000000-0000-4000-8000-000000000001', name: 'Pooja Singh' };
@@ -203,6 +204,12 @@ describe('upload errors', () => {
 describe('results on screen', () => {
   it('names the type and size', () => {
     expect(shareTypeOf('application/pdf').label).toBe('PDF');
+    // Not listed: the screen translates "File" itself.
+    expect(shareTypeOf('application/zip')).toEqual({
+      label: null,
+      extension: 'bin',
+      uti: 'public.data',
+    });
     expect(shareTypeOf('image/heic')).toEqual({
       label: 'HEIC',
       extension: 'heic',
@@ -218,5 +225,18 @@ describe('results on screen', () => {
     expect(resultFileName(2, 'application/pdf')).toBe('test-result-2.pdf');
     expect(resultFileName(1, 'image/jpeg')).toBe('test-result-1.jpg');
     expect(resultFileName(0, 'image/heif')).toBe('test-result-1.heif');
+  });
+});
+
+describe('InFlight', () => {
+  it('lets one upload per test start until it ends', () => {
+    const inFlight = new InFlight();
+    expect(inFlight.start('a')).toBe(true);
+    // A second tap in the same frame.
+    expect(inFlight.start('a')).toBe(false);
+    // Another test is not held up.
+    expect(inFlight.start('b')).toBe(true);
+    inFlight.end('a');
+    expect(inFlight.start('a')).toBe(true);
   });
 });

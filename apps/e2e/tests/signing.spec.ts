@@ -1,10 +1,9 @@
 import type { Db } from '@dhc/db';
-import type { Page } from '@playwright/test';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { E2E_FILE_STORE_DIR } from '../env';
-import { expect, setUpFromInvite, test, type Clinic } from '../fixtures';
+import { expect, setUpFromInvite, setUpPrescriptionPad, test, type Clinic } from '../fixtures';
 import { pdfText } from '@dhc/pdf-text';
 
 const PASSWORD = 'doctor synthetic passphrase';
@@ -57,38 +56,6 @@ async function setUp(db: Db, clinic: Clinic) {
   return { org, doctor, visit };
 }
 
-/**
- * The prescription pad and a signing PIN in the browser, then the platform team's
- * verification (written straight to the database here).
- */
-async function padAndPin(
-  page: Page,
-  db: Db,
-  { org, doctor }: Awaited<ReturnType<typeof setUp>>,
-  prefix: string,
-) {
-  await page.goto('/clinic/profile');
-  const pad = page.getByTestId('profile-form');
-  await expect(pad).toContainText('Waiting for verification by the platform team');
-  await pad.getByLabel('Registration number').fill('TEST-12345');
-  await pad.getByLabel('Medical council').fill('Test Medical Council');
-  await pad.getByLabel('Qualifications').fill('MBBS, MS (Ortho)');
-  await pad.getByLabel('Prescription number prefix').fill(prefix);
-  await pad.getByRole('button', { name: 'Save' }).click();
-  await expect(pad.getByRole('status')).toHaveText('Saved.');
-
-  const pinForm = page.getByTestId('pin-form');
-  await pinForm.getByLabel('Account password').fill(PASSWORD);
-  await pinForm.getByLabel('New PIN').fill(PIN);
-  await pinForm.getByLabel('Repeat the PIN').fill(PIN);
-  await pinForm.getByRole('button', { name: 'Save PIN' }).click();
-  await expect(pinForm.getByRole('status')).toHaveText('PIN saved.');
-  await db.doctorProfile.update({
-    where: { organisationId_userId: { organisationId: org.id, userId: doctor.id } },
-    data: { verification: 'verified', verifiedAt: new Date(), verifiedBy: 'e2e (SUP-1)' },
-  });
-}
-
 test.describe('signing', () => {
   test('the doctor fills the pad, signs with the PIN, amends, and voids; the QR page follows; the front desk prints', async ({
     page,
@@ -105,7 +72,7 @@ test.describe('signing', () => {
     // The prescription pad, then the platform team's verification. Prefixes are unique
     // within a clinic; each test has its own clinic.
     const prefix = 'SD';
-    await padAndPin(page, db, ready, prefix);
+    await setUpPrescriptionPad(page, db, clinic, { prefix, password: PASSWORD, pin: PIN });
 
     // A line, then sign with the PIN.
     await page.goto(`/clinic/consultations/${visit.id}`);
@@ -218,7 +185,7 @@ test.describe('signing', () => {
     test.setTimeout(120_000);
     await setUpFromInvite(page, clinic.inviteLink('doctor'), PASSWORD);
     const ready = await setUp(db, clinic);
-    await padAndPin(page, db, ready, 'OR');
+    await setUpPrescriptionPad(page, db, clinic, { prefix: 'OR', password: PASSWORD, pin: PIN });
 
     // Tests next to the medicines: the catalogue, then region, side and views for imaging.
     await page.goto(`/clinic/consultations/${ready.visit.id}`);
