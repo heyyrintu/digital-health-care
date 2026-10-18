@@ -4,10 +4,18 @@
  * when it is listed and verified; every other address gets the same 404. The functions run
  * as the owner, so these tests also pin what they may return and who may call them.
  */
-import { DoctorProfile, ErrorResponse, PublicDoctor, PublicDoctorList } from '@dhc/contracts';
+import {
+  DoctorProfile,
+  ErrorResponse,
+  PublicDoctor,
+  PublicDoctorCard,
+  PublicDoctorDirectory,
+  PublicDoctorList,
+} from '@dhc/contracts';
 import { withAuth, withPlatform, withPublic, withTenant, type Tx } from '@dhc/db';
-import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { PUBLIC_DOCTOR_RATE_LIMIT } from '../src/modules/public/routes';
+import { PublicDoctorService } from '../src/modules/public/service';
 import {
   addStaff,
   bearer,
@@ -460,6 +468,280 @@ describe('GET /v1/public/doctors/:slug', () => {
   });
 });
 
+describe('GET /v1/public/doctor-directory', () => {
+  const directory = (remoteAddress = '10.2.0.1') =>
+    h.app.inject({ method: 'GET', url: '/v1/public/doctor-directory', remoteAddress });
+  const slugsOf = async () =>
+    PublicDoctorDirectory.parse((await directory()).json()).data.map((d) => d.slug);
+  /** The sitemap list, which follows the page's own "shown" rule. */
+  const sitemapSlugs = async () =>
+    PublicDoctorList.parse(
+      (
+        await h.app.inject({
+          method: 'GET',
+          url: '/v1/public/doctors',
+          remoteAddress: '10.2.0.2',
+        })
+      ).json(),
+    ).data.map((d) => d.slug);
+
+  beforeEach(async () => {
+    await verifiedPad(clinics.a.org.id, clinics.a.doctor.userId, 'SA');
+    await verifiedPad(clinics.b.org.id, clinics.b.doctor.userId, 'SB');
+  });
+
+  it('lists every doctor shown as a card with only the card fields', async () => {
+    const org = clinics.a.org.id;
+    const doctor = clinics.a.doctor.userId;
+    await schedule(
+      org,
+      doctor,
+      { name: 'Main clinic', address: '1 Test Road, Testpur\nNear the synthetic park' },
+      { name: 'In-person consultation', feePaise: 80000 },
+    );
+    await schedule(
+      org,
+      doctor,
+      { name: 'Branch clinic' },
+      { name: 'Video consultation', feePaise: 50000, mode: 'video' },
+    );
+    // Not counted: an inactive type (cheaper) and an inactive clinic.
+    await schedule(
+      org,
+      doctor,
+      { name: 'Clinic with retired type' },
+      { name: 'Retired type', feePaise: 100, active: false },
+    );
+    await schedule(
+      org,
+      doctor,
+      { name: 'Closed clinic', active: false },
+      { name: 'Closed type', feePaise: 200 },
+    );
+    await h.owner.clinic.updateMany({
+      where: { organisationId: org },
+      data: { phone: '+919999900001' },
+    });
+    // Clinic B's doctor: scheduled, verified and listed, with a clinic phone of its own.
+    await schedule(
+      clinics.b.org.id,
+      clinics.b.doctor.userId,
+      { name: 'Clinic B main', address: '9 Other Street' },
+      { name: 'Clinic B consult', feePaise: 99900 },
+    );
+    await patch(doctorA, {
+      slug: 'dr-synthetic',
+      listed: true,
+      about: 'Synthetic about text, only on the page.',
+      languages: ['English', 'हिन्दी'],
+    });
+    await patch(doctorB, { slug: 'dr-other', listed: true });
+    await h.owner.user.update({
+      where: { id: clinics.b.doctor.userId },
+      data: { displayName: 'Dr Aarav Test' },
+    });
+
+    const res = await directory();
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['cache-control']).toBe('public, max-age=60, s-maxage=300');
+    const body = PublicDoctorDirectory.parse(res.json());
+    // By name, a leading "Dr" ignored: Aarav before Synthetic.
+    expect(body.data).toEqual([
+      {
+        slug: 'dr-other',
+        name: 'Dr Aarav Test',
+        qualifications: 'MBBS, MD',
+        specialty: 'General medicine',
+        organisationName: 'Clinic B',
+        clinics: [{ name: 'Clinic B main', addressLine: '9 Other Street' }],
+        languages: [],
+        feeFromPaise: 99900,
+      },
+      {
+        slug: 'dr-synthetic',
+        name: 'Dr. Synthetic',
+        qualifications: 'MBBS, MD',
+        specialty: 'General medicine',
+        organisationName: 'Synthetic Clinic A',
+        clinics: [
+          { name: 'Branch clinic', addressLine: null },
+          { name: 'Clinic with retired type', addressLine: null },
+          // The first line of the address only.
+          { name: 'Main clinic', addressLine: '1 Test Road, Testpur' },
+        ],
+        languages: ['English', 'हिन्दी'],
+        feeFromPaise: 50000,
+      },
+    ]);
+    for (const card of res.json().data) {
+      expect(Object.keys(card).sort()).toEqual(Object.keys(PublicDoctorCard.shape).sort());
+    }
+    // Nothing private, of either organisation: no IDs, contacts, registration, about text,
+    // PIN or patients.
+    const raw = res.body;
+    for (const secret of [
+      clinics.a.org.id,
+      clinics.b.org.id,
+      clinics.a.doctor.userId,
+      clinics.a.doctor.email,
+      clinics.b.doctor.email,
+      '+9199999',
+      'TEST-SA',
+      'Test Medical Council',
+      'only on the page',
+      'not-a-real-hash',
+      'SUP-1',
+      'clinic-a',
+      'Near the synthetic park',
+      'Closed clinic',
+      ...clinics.a.patients.map((p) => p.name),
+      ...clinics.b.patients.map((p) => p.name),
+    ]) {
+      expect(raw).not.toContain(secret);
+    }
+    expect(raw).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/);
+  });
+
+  it('ignores only a "Dr" title when sorting by name', async () => {
+    // Clinic A's doctor and three more listed, verified doctors there.
+    await patch(doctorA, { slug: 'dr-synthetic', listed: true });
+    const names = ['Dr. Drishti Test', 'Dreamcare Synthetic', 'Dr Aarav Test'];
+    for (const [i, displayName] of names.entries()) {
+      const extra = await addStaff(h, clinics.a.org.id, 'doctor', `extra${i}@clinic-a.test`);
+      await h.owner.user.update({ where: { id: extra.userId }, data: { displayName } });
+      await verifiedPad(clinics.a.org.id, extra.userId, `X${i}`);
+      await h.owner.doctorProfile.updateMany({
+        where: { userId: extra.userId },
+        data: { publicSlug: `dr-extra-${i}`, listed: true },
+      });
+    }
+    const warn = vi.fn();
+    expect(await new PublicDoctorService(h.services).directory({ warn })).toBeTruthy();
+    expect(warn).not.toHaveBeenCalled();
+    const cards = PublicDoctorDirectory.parse((await directory()).json()).data;
+    // aarav, dreamcare, drishti, synthetic: "Dreamcare" keeps its "Dr".
+    expect(cards.map((c) => c.name)).toEqual([
+      'Dr Aarav Test',
+      'Dreamcare Synthetic',
+      'Dr. Drishti Test',
+      'Dr. Synthetic',
+    ]);
+  });
+
+  it('gives the first line of the address, trimmed and cut at a word', async () => {
+    const org = clinics.a.org.id;
+    const doctor = clinics.a.doctor.userId;
+    const long = `${'Synthetic '.repeat(14)}Road`; // 144 characters
+    for (const [name, address] of [
+      ['A windows clinic', ' \t12 Test Lane, Testpur\t \r\nSecond line'],
+      ['B long clinic', `${long}\nSecond line`],
+      ['C blank clinic', ' \t\r\nOnly a second line'],
+      // Cut inside "Synthetitestpurwala": the partial word goes.
+      ['D cut clinic', `${'Synthetic '.repeat(11)}Synthetitestpurwala Road`],
+    ] as const) {
+      await schedule(org, doctor, { name, address }, { name: `${name} type`, feePaise: 10000 });
+    }
+    await patch(doctorA, { slug: 'dr-synthetic', listed: true });
+    const [card] = PublicDoctorDirectory.parse((await directory()).json()).data;
+    const lines = card!.clinics.map((c) => c.addressLine);
+    expect(lines[0]).toBe('12 Test Lane, Testpur');
+    expect(lines[1]).toBe(`${'Synthetic '.repeat(11)}Synthetic…`);
+    expect(lines[1]!.length).toBeLessThanOrEqual(120);
+    expect(lines[2]).toBeNull();
+    expect(lines[3]).toBe(`${'Synthetic '.repeat(10)}Synthetic…`);
+  });
+
+  it('shows a doctor with no schedule without clinics or a fee', async () => {
+    await patch(doctorA, { slug: 'dr-synthetic', listed: true });
+    expect(PublicDoctorDirectory.parse((await directory()).json()).data).toEqual([
+      expect.objectContaining({ slug: 'dr-synthetic', clinics: [], feeFromPaise: null }),
+    ]);
+  });
+
+  it('leaves out unlisted, unverified and inactive doctors, as the pages do', async () => {
+    await patch(doctorA, { slug: 'dr-synthetic', listed: true });
+    await patch(doctorB, { slug: 'dr-unlisted' });
+    // A third doctor, listed but never verified.
+    const pending = await addStaff(h, clinics.b.org.id, 'doctor', 'pending@clinic-b.test');
+    await patch(await staffLogin(h, 'clinic-b', pending), { slug: 'dr-pending', listed: true });
+
+    // The directory goes by name and the sitemap by address, so compare them as sets.
+    const check = async (expected: string[]) => {
+      expect((await slugsOf()).sort()).toEqual(expected);
+      expect(await sitemapSlugs()).toEqual(expected);
+    };
+    await check(['dr-synthetic']);
+
+    // Listed now, but its verification went back to pending.
+    await patch(doctorB, { listed: true });
+    await check(['dr-synthetic', 'dr-unlisted']);
+    await h.owner.doctorProfile.updateMany({
+      where: { userId: clinics.b.doctor.userId },
+      data: { verification: 'pending', verifiedAt: null, verifiedBy: null },
+    });
+    await check(['dr-synthetic']);
+
+    const a = { userId: clinics.a.doctor.userId };
+    await h.owner.membership.updateMany({
+      where: { ...a, role: 'doctor' },
+      data: { status: 'revoked' },
+    });
+    await check([]);
+    await h.owner.membership.updateMany({
+      where: { ...a, role: 'doctor' },
+      data: { status: 'active' },
+    });
+    await h.owner.user.update({ where: { id: a.userId }, data: { status: 'disabled' } });
+    await check([]);
+    await h.owner.user.update({ where: { id: a.userId }, data: { status: 'active' } });
+    await h.owner.organisation.update({
+      where: { id: clinics.a.org.id },
+      data: { status: 'suspended' },
+    });
+    await check([]);
+  });
+
+  it('caps the list at 500, by name', async () => {
+    // 501 listed, verified synthetic doctors in clinic A, written straight to the database.
+    await h.owner.$executeRaw`
+      WITH u AS (
+        INSERT INTO users (id, email, display_name, updated_at)
+        SELECT gen_random_uuid(), 'bulk-' || i || '@clinic-a.test',
+               'Dr. Bulk ' || lpad(i::text, 3, '0'), now()
+        FROM generate_series(1, 501) AS i
+        RETURNING id, display_name
+      ), m AS (
+        INSERT INTO memberships (id, organisation_id, user_id, role, updated_at)
+        SELECT gen_random_uuid(), ${clinics.a.org.id}::uuid, u.id, 'doctor', now() FROM u
+      )
+      INSERT INTO doctor_profiles
+        (id, organisation_id, user_id, verification, verified_at, public_slug, listed, updated_at)
+      SELECT gen_random_uuid(), ${clinics.a.org.id}::uuid, u.id, 'verified', now(),
+             'dr-' || lower(replace(substr(u.display_name, 5), ' ', '-')), true, now()
+      FROM u`;
+    const res = await directory();
+    expect(res.statusCode).toBe(200);
+    const slugs = PublicDoctorDirectory.parse(res.json()).data.map((d) => d.slug);
+    expect(slugs).toHaveLength(500);
+    expect(slugs[0]).toBe('dr-bulk-001');
+    expect(slugs.at(-1)).toBe('dr-bulk-500');
+    // A full list is logged, so the team knows doctors are left out.
+    const warn = vi.fn();
+    await new PublicDoctorService(h.services).directory({ warn });
+    expect(warn).toHaveBeenCalledWith(expect.stringMatching(/at its cap of 500/));
+  });
+
+  it('limits requests per address', async () => {
+    const statuses: number[] = [];
+    for (let i = 0; i <= PUBLIC_DOCTOR_RATE_LIMIT.max; i++) {
+      statuses.push((await directory('10.9.8.7')).statusCode);
+    }
+    expect(statuses.slice(0, PUBLIC_DOCTOR_RATE_LIMIT.max).every((s) => s === 200)).toBe(true);
+    expect(statuses.at(-1)).toBe(429);
+    expect((await directory('10.9.8.8')).statusCode).toBe(200);
+  });
+});
+
 describe('the patient portal', () => {
   it('names a listed, verified doctor’s page address in the booking options', async () => {
     const phone = '9876500001';
@@ -558,6 +840,7 @@ describe('in the database', () => {
       FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace AND n.nspname = 'public'
       WHERE proname LIKE 'public\\_%' ORDER BY proname`;
     expect(functions).toEqual([
+      { name: 'public_doctor_directory', definer: true, app: true, auth: false, platform: false },
       { name: 'public_doctor_profile', definer: true, app: true, auth: false, platform: false },
       { name: 'public_doctor_slugs', definer: true, app: true, auth: false, platform: false },
     ]);
@@ -567,6 +850,16 @@ describe('in the database', () => {
     await expect(
       withPlatform(h.services.db, (tx) =>
         tx.$queryRawUnsafe('SELECT * FROM public_doctor_slugs()'),
+      ),
+    ).rejects.toThrow(/permission denied/);
+    await expect(
+      withAuth(h.services.db, (tx) =>
+        tx.$queryRawUnsafe('SELECT * FROM public_doctor_directory()'),
+      ),
+    ).rejects.toThrow(/permission denied/);
+    await expect(
+      withPlatform(h.services.db, (tx) =>
+        tx.$queryRawUnsafe('SELECT * FROM public_doctor_directory()'),
       ),
     ).rejects.toThrow(/permission denied/);
   });
@@ -581,6 +874,19 @@ describe('in the database', () => {
       FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace AND n.nspname = 'public'
       WHERE p.proname LIKE 'public\\_%' ORDER BY p.proname`;
     expect(columns).toEqual([
+      {
+        name: 'public_doctor_directory',
+        columns: [
+          'slug',
+          'display_name',
+          'qualifications',
+          'specialty',
+          'organisation_name',
+          'clinics',
+          'languages',
+          'fee_from_paise',
+        ],
+      },
       {
         name: 'public_doctor_profile',
         columns: [

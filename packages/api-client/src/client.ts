@@ -9,6 +9,7 @@ import {
   ConsentStatus,
   DoctorProfile,
   PublicDoctor,
+  PublicDoctorDirectory,
   PublicDoctorList,
   type SaveDoctorPublicProfileBody,
   AwaitingReviewList,
@@ -360,6 +361,9 @@ export function createApiClient(options: ApiClientOptions) {
       request('GET', `/public/doctors/${encodeURIComponent(slug)}`, { schema: PublicDoctor }),
     /** Every public doctor page shown: address and last change (a sitemap). */
     publicDoctors: () => request('GET', '/public/doctors', { schema: PublicDoctorList }),
+    /** Every public doctor page shown, as cards for the home page's directory (at most 500). */
+    publicDoctorDirectory: ({ signal }: { signal?: AbortSignal } = {}) =>
+      request('GET', '/public/doctor-directory', { schema: PublicDoctorDirectory, signal }),
     // Patient app and web portal (patients only).
     portalConsents: () => request('GET', '/portal/consents', { schema: ConsentStatus }),
     acceptConsents: (accept: AcceptConsentsBody['accept']) =>

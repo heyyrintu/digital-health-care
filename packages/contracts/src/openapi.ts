@@ -111,6 +111,7 @@ import {
   PUBLIC_SLUG_MIN,
   PUBLIC_SLUG_PATTERN,
   PublicDoctor,
+  PublicDoctorDirectory,
   PublicDoctorList,
   SaveDoctorPublicProfileBody,
 } from './public-doctors';
@@ -1058,6 +1059,14 @@ const operations: Operation[] = [
     summary: 'Every public doctor page shown (listed and verified): address and last change',
     public: true,
     response: PublicDoctorList,
+  },
+  {
+    method: 'get',
+    path: '/public/doctor-directory',
+    operationId: 'getPublicDoctorDirectory',
+    summary: 'Every public doctor page shown, as directory cards by name (at most 500)',
+    public: true,
+    response: PublicDoctorDirectory,
   },
   {
     method: 'get',

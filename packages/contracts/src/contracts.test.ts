@@ -86,6 +86,7 @@ describe('buildOpenApiDocument', () => {
     );
     expect(publicOps.sort()).toEqual([
       'GET /health',
+      'GET /public/doctor-directory',
       'GET /public/doctors',
       'GET /public/doctors/{slug}',
       'POST /auth/invites/accept',

@@ -139,3 +139,30 @@ export const PublicDoctorList = z.object({
   data: z.array(z.object({ slug: z.string(), updatedAt: z.iso.datetime() })),
 });
 export type PublicDoctorList = z.infer<typeof PublicDoctorList>;
+
+/** At most this many cards in the directory, by name (ADR 0017 addendum). */
+export const PUBLIC_DIRECTORY_MAX = 500;
+
+/**
+ * A card in the home page's "Find a doctor" directory: only what the doctor's own page
+ * also shows. `clinics[].addressLine` is the first line of the clinic's address (null if none);
+ * `feeFromPaise` the lowest fee of the consultations the doctor is scheduled for (null if
+ * none is).
+ */
+export const PublicDoctorCard = z.object({
+  slug: z.string(),
+  name: z.string().nullable(),
+  qualifications: z.string().nullable(),
+  specialty: z.string().nullable(),
+  organisationName: z.string(),
+  clinics: z.array(z.object({ name: z.string(), addressLine: z.string().nullable() })),
+  languages: z.array(z.string()),
+  feeFromPaise: z.number().int().nullable(),
+});
+export type PublicDoctorCard = z.infer<typeof PublicDoctorCard>;
+
+/** Every page shown, as directory cards, by name; at most PUBLIC_DIRECTORY_MAX. */
+export const PublicDoctorDirectory = z.object({
+  data: z.array(PublicDoctorCard).max(PUBLIC_DIRECTORY_MAX),
+});
+export type PublicDoctorDirectory = z.infer<typeof PublicDoctorDirectory>;
