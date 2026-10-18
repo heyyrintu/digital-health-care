@@ -1,4 +1,10 @@
-import { ApiError } from '@dhc/api-client';
+import {
+  ApiError,
+  checkPickedFile,
+  fileCheckMessage,
+  PICK_TYPES,
+  uploadErrorMessage,
+} from '@dhc/api-client';
 import {
   ACCOUNT_CONSENT_KINDS,
   CURRENT_CONSENT_VERSIONS,
@@ -146,3 +152,32 @@ export function keepAttemptKey(e: unknown): boolean {
 
 /** Someone took the slot meanwhile: the day's slots need loading again. */
 export const slotTaken = (e: unknown) => e instanceof ApiError && e.code === 'SLOT_TAKEN';
+
+// ---- Prescriptions and tests (PRD §4.4, §7.1) --------------------------------------
+
+/** What the file input offers: PDFs and photos, as in the Patient app. */
+export const UPLOAD_ACCEPT = PICK_TYPES.join(',');
+
+/**
+ * A chosen result file before it is sent: refused with the reason (not a PDF or a photo,
+ * empty, or over 25 MB), or the media type to send it as (read from the name when the
+ * browser gives none, as some do for HEIC). The server then applies the clinic's limits.
+ */
+export function checkChosenFile(
+  file: Pick<File, 'name' | 'type' | 'size'>,
+  t: Translate,
+): { text: string } | { mediaType: string } {
+  const check = checkPickedFile({ name: file.name, mimeType: file.type, size: file.size });
+  if (check.ok) return { mediaType: check.mediaType };
+  const m = fileCheckMessage(check.reason);
+  return { text: t(m.key, m.params) };
+}
+
+/**
+ * What to show for an upload the server refused: the app's wording for the file, the
+ * 10-result cap and a test reviewed meanwhile, otherwise the usual error message.
+ */
+export function uploadFailureText(e: unknown, t: Translate): string {
+  const known = uploadErrorMessage(e);
+  return known ? t(known.key, known.params) : portalErrorMessage(e, t);
+}

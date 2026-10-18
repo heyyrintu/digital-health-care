@@ -3,7 +3,15 @@
 import type { PatientAccountState } from '@dhc/api-client';
 import type { MeResponse, PortalPatient } from '@dhc/contracts';
 import { Button, cn, Surface } from '@dhc/ui-web';
-import { CalendarDays, CalendarPlus, Home, LogOut, Users } from 'lucide-react';
+import {
+  CalendarDays,
+  CalendarPlus,
+  FileText,
+  FlaskConical,
+  Home,
+  LogOut,
+  Users,
+} from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useSyncExternalStore, type ReactNode } from 'react';
@@ -128,6 +136,8 @@ function PortalNav() {
     { href: '/app', label: t('portal.nav.home'), icon: Home, exact: true },
     { href: '/app/appointments', label: t('patient.nav.appointments'), icon: CalendarDays },
     { href: '/app/book', label: t('booking.book'), icon: CalendarPlus },
+    { href: '/app/prescriptions', label: t('patient.nav.prescriptions'), icon: FileText },
+    { href: '/app/tests', label: t('patient.nav.tests'), icon: FlaskConical },
     { href: '/app/family', label: t('patient.nav.family'), icon: Users },
   ];
   return (

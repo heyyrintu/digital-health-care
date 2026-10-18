@@ -12,6 +12,7 @@ import {
   bookingDates,
   canBookOnline,
   cancelOption,
+  checkChosenFile,
   clinicSlug,
   consentRequired,
   consentsToAccept,
@@ -26,6 +27,8 @@ import {
   portalErrorMessage,
   sessionEndReason,
   slotTaken,
+  UPLOAD_ACCEPT,
+  uploadFailureText,
 } from './patient';
 
 const t = (key: MessageKey, params?: Record<string, string | number>) =>
@@ -233,5 +236,63 @@ describe('booking', () => {
   it('reloads the day when the slot was taken meanwhile', () => {
     expect(slotTaken(apiError(409, 'SLOT_TAKEN'))).toBe(true);
     expect(slotTaken(apiError(422, 'BOOKING_LIMIT'))).toBe(false);
+  });
+});
+
+describe('test results', () => {
+  const file = (name: string, type: string, size = 120_000) => ({ name, type, size });
+
+  it('offers PDFs and photos, as the Patient app does', () => {
+    expect(UPLOAD_ACCEPT).toBe('application/pdf,image/*');
+  });
+
+  it('sends a PDF or a photo as its type, reading HEIC from the name when the browser gives none', () => {
+    expect(checkChosenFile(file('report.pdf', 'application/pdf'), t)).toEqual({
+      mediaType: 'application/pdf',
+    });
+    expect(checkChosenFile(file('IMG_0042.HEIC', ''), t)).toEqual({ mediaType: 'image/heic' });
+    expect(checkChosenFile(file('scan.jpg', 'image/jpg'), t)).toEqual({ mediaType: 'image/jpeg' });
+  });
+
+  it('refuses another type, an empty file and one over 25 MB before sending', () => {
+    expect(checkChosenFile(file('a.gif', 'image/gif'), t)).toEqual({
+      text: 'Choose a PDF or a photo (JPEG, PNG, HEIC or HEIF).',
+    });
+    expect(checkChosenFile(file('a.pdf', 'application/pdf', 0), t)).toEqual({
+      text: 'The file is empty.',
+    });
+    expect(checkChosenFile(file('a.pdf', 'application/pdf', 26 * 1024 * 1024), t)).toEqual({
+      text: 'The file is larger than 25 MB. Choose a smaller file.',
+    });
+  });
+
+  it('words each upload refusal, in English and Hindi', () => {
+    const hi = (key: MessageKey, params?: Record<string, string | number>) =>
+      translate('hi', key, params);
+    const full = apiError(409, 'CONFLICT', { file: 'too_many' });
+    const reviewed = apiError(409, 'CONFLICT', { status: 'reviewed' });
+    const unsupported = apiError(415, 'VALIDATION_FAILED', { file: 'type_not_allowed' });
+    const huge = apiError(413, 'VALIDATION_FAILED');
+    expect(uploadFailureText(full, t)).toBe(
+      'This test already has 10 results. Combine the pages into one file.',
+    );
+    expect(uploadFailureText(reviewed, t)).toBe(
+      'The doctor has reviewed this test. A new result needs a new order.',
+    );
+    expect(uploadFailureText(unsupported, t)).toBe(
+      'Choose a PDF or a photo (JPEG, PNG, HEIC or HEIF).',
+    );
+    expect(uploadFailureText(huge, t)).toBe(
+      'The file is larger than 25 MB. Choose a smaller file.',
+    );
+    for (const e of [full, reviewed, unsupported, huge]) {
+      expect(uploadFailureText(e, hi)).not.toBe(uploadFailureText(e, t));
+      expect(uploadFailureText(e, hi)).not.toMatch(/\{\w+\}/);
+    }
+  });
+
+  it('falls back to the usual wording for anything else', () => {
+    expect(uploadFailureText(new TypeError('fetch failed'), t)).toBe(t('error.network'));
+    expect(uploadFailureText(apiError(404, 'NOT_FOUND'), t)).toBe('API says NOT_FOUND');
   });
 });
