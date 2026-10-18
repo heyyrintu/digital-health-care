@@ -132,9 +132,13 @@ function CatalogueScreen() {
         const item = await api
           .createTestCatalogueItem({ kind: draft.kind, name: draft.name, regions, views }, addKey)
           .catch((e: unknown) => {
-            // The server answered, so nothing was added: a corrected form is a new attempt.
-            // Only a lost answer keeps the key for the retry.
-            if (e instanceof ApiError) setAddKey(crypto.randomUUID());
+            // The server answered that nothing was added, so a corrected form is a new
+            // attempt. A lost answer, a first attempt still running (`in_progress`) or one
+            // whose result is unknown (`unknown`) keeps the key, so a retry cannot add twice.
+            const pending = ['in_progress', 'unknown'].includes(
+              e instanceof ApiError ? (e.fields.idempotencyKey ?? '') : '',
+            );
+            if (e instanceof ApiError && !pending) setAddKey(crypto.randomUUID());
             throw e;
           });
         setAddKey(crypto.randomUUID());
@@ -249,7 +253,7 @@ function CatalogueScreen() {
               ) : (
                 <ul className="mt-3 divide-y divide-border/70">
                   {group.map((item, index) => (
-                    <li key={item.id} data-testid={`catalogue-item-${item.name}`} className={ROW}>
+                    <li key={item.id} data-testid={`catalogue-item-${item.id}`} className={ROW}>
                       <span className="min-w-0">
                         <strong className={item.active ? undefined : 'text-muted-foreground'}>
                           {item.name}

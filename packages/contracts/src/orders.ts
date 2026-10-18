@@ -67,7 +67,10 @@ export const MAX_CATALOGUE_REGIONS = 40;
 /** The most tests, active or not, one clinic's catalogue may hold (the seed adds 26). */
 export const MAX_CATALOGUE_ITEMS = 300;
 
-/** Trimmed, with inner runs of spaces made one. */
+/**
+ * Trimmed of whitespace of any kind (spaces, tabs, newlines), with inner runs of it made one
+ * space; the database refuses whitespace at either end too.
+ */
 const tidy = (max: number) =>
   z
     .string()

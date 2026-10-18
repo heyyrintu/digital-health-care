@@ -82,7 +82,8 @@ type StoredLine = {
  * changed: the clinic may since have renamed the test, dropped a region or view, or
  * deactivated it, and a doctor changing only the side or notes must still be able to save.
  * Its stored test, name, region and views stand while unchanged; a new region, or a view
- * it did not have, must be valid in today's catalogue.
+ * it did not have, must be valid in today's catalogue. Clearing the region or dropping
+ * views is never a new choice: allowed unless the (active) test still lists regions.
  */
 async function checkCatalogue(
   tx: Tx,
@@ -109,31 +110,39 @@ async function checkCatalogue(
   }
   if (checks.length === 0) return;
   const ids = [...new Set(checks.map((c) => c.line.catalogueItemId!))];
+  // Inactive tests too: clearing a stored region from a deactivated test needs no list.
   const items = new Map(
-    (await tx.testCatalogueItem.findMany({ where: { id: { in: ids }, active: true } })).map((i) => [
-      i.id,
-      i,
-    ]),
+    (await tx.testCatalogueItem.findMany({ where: { id: { in: ids } } })).map((i) => [i.id, i]),
   );
+  const notListed = () => invalid('tests', 'A test is not in the catalogue.');
   for (const { line, region, views, whole } of checks) {
     const item = items.get(line.catalogueItemId!);
-    if (!item) throw invalid('tests', 'A test is not in the catalogue.');
-    if (whole && (item.kind !== line.kind || item.name !== line.name)) {
-      throw invalid('tests', 'A test does not match the catalogue.');
+    const active = item?.active ? item : undefined;
+    if (whole) {
+      if (!active) throw notListed();
+      if (active.kind !== line.kind || active.name !== line.name) {
+        throw invalid('tests', 'A test does not match the catalogue.');
+      }
     }
     if (region) {
-      if (
-        item.regions.length > 0 &&
-        (line.region === null || !item.regions.includes(line.region))
-      ) {
-        throw invalid('tests', 'Pick a region from the list.');
-      }
-      if (item.regions.length === 0 && line.region !== null) {
-        throw invalid('tests', 'This test has no region.');
+      if (line.region === null) {
+        // Clearing is never a new choice; only a test that still lists regions needs one.
+        if (active && active.regions.length > 0) {
+          throw invalid('tests', 'Pick a region from the list.');
+        }
+      } else {
+        if (!active) throw notListed();
+        if (active.regions.length === 0) throw invalid('tests', 'This test has no region.');
+        if (!active.regions.includes(line.region)) {
+          throw invalid('tests', 'Pick a region from the list.');
+        }
       }
     }
-    if (views.some((v) => !item.views.includes(v))) {
-      throw invalid('tests', 'Pick views from the list.');
+    if (views.length > 0) {
+      if (!active) throw notListed();
+      if (views.some((v) => !active.views.includes(v))) {
+        throw invalid('tests', 'Pick views from the list.');
+      }
     }
   }
 }

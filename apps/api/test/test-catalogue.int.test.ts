@@ -360,6 +360,11 @@ describe('editing', () => {
     const back = await patch(esr.id, { active: true });
     expect(back.statusCode).toBe(409);
     expect(back.json().error.fields).toEqual({ name: 'taken' });
+    // An inactive test may take an active test's name; only reactivating it would clash.
+    expect((await patch(crp.id, { active: false })).statusCode).toBe(200);
+    const renamed = await patch(crp.id, { name: 'esr' });
+    expect(renamed.statusCode, renamed.body).toBe(200);
+    expect((await patch(crp.id, { active: true })).json().error.fields).toEqual({ name: 'taken' });
     expect((await doctorList()).filter((i) => i.name === 'ESR').map((i) => i.id)).toEqual([
       fresh.id,
     ]);
@@ -635,6 +640,86 @@ describe('draft tests after a catalogue edit', () => {
   });
 });
 
+describe('clearing what a draft stores', () => {
+  it('clears a region the test no longer lists, or from a deactivated test, and drops its views', async () => {
+    const id = await visit();
+    const mri = await named('MRI');
+    const xray = await named('X-ray');
+    const ct = await named('CT');
+    const mriLine = line(mri, { region: 'Knee', side: 'right' });
+    const xrayLine = line(xray, { region: 'Chest', side: 'na', views: ['AP', 'Lateral'] });
+    const ctLine = line(ct, { region: 'Brain', side: 'na' });
+    let rx = await saved(id, [mriLine, xrayLine, ctLine]);
+
+    // While the test still lists regions, one is needed: clearing is refused.
+    const needed = await save(id, [{ ...mriLine, region: null }, xrayLine, ctLine], rx.revision);
+    expect(needed.statusCode).toBe(400);
+    expect(needed.json().error.fields).toEqual({ tests: 'invalid' });
+
+    // The MRI lists no regions now; the X-ray and the CT are deactivated.
+    expect((await patch(mri.id, { regions: [] })).statusCode).toBe(200);
+    expect((await patch(xray.id, { active: false })).statusCode).toBe(200);
+    expect((await patch(ct.id, { active: false })).statusCode).toBe(200);
+    rx = await saved(
+      id,
+      [
+        { ...mriLine, region: null },
+        { ...xrayLine, region: null, views: ['AP'] },
+        { ...ctLine, region: null },
+      ],
+      rx.revision,
+    );
+    expect(rx.tests.map((t) => [t.name, t.region, t.views])).toEqual([
+      ['MRI', null, []],
+      ['X-ray', null, ['AP']],
+      ['CT', null, []],
+    ]);
+    rx = await saved(
+      id,
+      [
+        { ...mriLine, region: null },
+        { ...xrayLine, region: null, views: [] },
+        { ...ctLine, region: null },
+      ],
+      rx.revision,
+    );
+    expect(rx.tests[1]!.views).toEqual([]);
+    // Ticking a dropped view back is a new choice: the test is no longer offered.
+    const reticked = await save(
+      id,
+      [
+        { ...mriLine, region: null },
+        { ...xrayLine, region: null, views: ['Lateral'] },
+        { ...ctLine, region: null },
+      ],
+      rx.revision,
+    );
+    expect(reticked.statusCode).toBe(400);
+
+    // A new choice on a deactivated test is still refused.
+    const picked = await save(
+      id,
+      [
+        { ...mriLine, region: null },
+        { ...xrayLine, region: 'Knee' },
+        { ...ctLine, region: null },
+      ],
+      rx.revision,
+    );
+    expect(picked.statusCode).toBe(400);
+    const viewed = await save(
+      id,
+      [
+        { ...mriLine, region: null },
+        { ...xrayLine, region: null, views: ['PA'] },
+        { ...ctLine, region: null },
+      ],
+      rx.revision,
+    );
+    expect(viewed.statusCode).toBe(400);
+  });
+});
+
 describe('catalogue seed', () => {
   it('re-seeding skips names held in another case or only by an inactive test', async () => {
     const org = clinics.a.org.id;
@@ -678,15 +763,38 @@ describe('database guard rails', () => {
           ...data,
         },
       });
-    await expect(add({ views: ['Frog leg'] })).rejects.toThrow();
-    await expect(add({ views: ['AP', 'AP'] })).rejects.toThrow();
-    await expect(add({ regions: ['Knee', 'knee'] })).rejects.toThrow();
-    await expect(add({ regions: ['x'.repeat(81)] })).rejects.toThrow();
-    await expect(add({ regions: [' Knee'] })).rejects.toThrow();
-    await expect(add({ name: ' Synthetic X-ray' })).rejects.toThrow();
-    await expect(add({ kind: 'blood', regions: ['Knee'] })).rejects.toThrow();
+    /** Prisma reports a CHECK as P2039 with the constraint in the message, a unique as P2002. */
+    const refused = async (data: object, constraint: string) => {
+      const error = (await add(data).then(
+        () => null,
+        (e: unknown) => e,
+      )) as { code?: string; message?: string; meta?: unknown } | null;
+      expect(error, JSON.stringify(data)).not.toBeNull();
+      if (constraint.endsWith('_key')) {
+        expect(error!.code).toBe('P2002');
+        expect(JSON.stringify(error!.meta)).toContain(constraint);
+      } else {
+        expect(error!.code).toBe('P2039');
+        expect(error!.message).toContain(`violates check constraint "${constraint}"`);
+      }
+    };
+    const limits = 'test_catalogue_items_limits_check';
+    await refused({ views: ['Frog leg'] }, limits);
+    await refused({ views: ['AP', 'AP'] }, limits);
+    await refused({ regions: ['Knee', 'knee'] }, limits);
+    await refused({ regions: ['x'.repeat(81)] }, limits);
+    for (const region of [' Knee', 'Knee ', '\tKnee', 'Knee\n']) {
+      await refused({ regions: [region] }, limits);
+    }
+    for (const name of [' Synthetic X-ray', 'Synthetic X-ray\t', '\nSynthetic X-ray']) {
+      await refused({ name }, limits);
+    }
+    await refused({ name: 'x'.repeat(121) }, limits);
+    await expect(add({ name: 'X'.repeat(120), active: false })).resolves.toBeDefined();
+    await refused({ sortOrder: -1 }, limits);
+    await refused({ kind: 'blood', regions: ['Knee'] }, 'test_catalogue_items_shape_check');
     // Active names are unique in any case; an inactive one may repeat.
-    await expect(add({ name: 'x-RAY' })).rejects.toThrow();
+    await refused({ name: 'x-RAY' }, 'test_catalogue_items_active_name_key');
     await expect(add({ name: 'X-ray', active: false })).resolves.toBeDefined();
     await expect(add({ regions: ['Knee'], views: ['AP'] })).resolves.toBeDefined();
   });

@@ -96,8 +96,9 @@ export class TestCatalogueService {
 
   /**
    * Changes what is sent. Regions and views are checked against the stored kind (which
-   * never changes). Names stay unique among active tests, so renaming to, or reactivating
-   * under, a name another active test has is 409 `name: taken`.
+   * never changes). Names stay unique among active tests: renaming an active test to the
+   * name of another active one, or reactivating a test while an active one has its name, is
+   * 409 `name: taken`. An inactive test may take any name, an active test's included.
    */
   async update(
     request: FastifyRequest,

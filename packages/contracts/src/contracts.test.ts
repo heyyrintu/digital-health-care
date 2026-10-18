@@ -285,6 +285,12 @@ describe('test catalogue bodies', () => {
       CreateTestCatalogueItemBody.parse({ kind: 'blood', name: '  Serum   ferritin ' }),
     ).toEqual({ kind: 'blood', name: 'Serum ferritin', regions: [], views: [] });
     expect(fields({ kind: 'blood', name: '   ' })).toEqual(['name']);
+    expect(
+      CreateTestCatalogueItemBody.parse({ kind: 'blood', name: '\tSerum\n ferritin\n' }).name,
+    ).toBe('Serum ferritin');
+    expect(
+      CreateTestCatalogueItemBody.parse({ kind: 'ct', name: 'CT', regions: ['\tChest\n'] }).regions,
+    ).toEqual(['Chest']);
     expect(fields({ kind: 'blood', name: 'x'.repeat(121) })).toEqual(['name']);
   });
 

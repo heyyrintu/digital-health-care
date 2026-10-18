@@ -43,6 +43,19 @@ async function visitInConsultation(db: Db, clinic: Clinic) {
   return visit.id;
 }
 
+/**
+ * A catalogue row by its test's ID (names can repeat once a test is retired): the clinic's
+ * active test of that name, or its only one.
+ */
+async function itemId(db: Db, clinic: Clinic, name: string) {
+  const org = await db.organisation.findUniqueOrThrow({ where: { slug: clinic.slug } });
+  const rows = await db.testCatalogueItem.findMany({
+    where: { organisationId: org.id, name },
+    orderBy: { active: 'desc' },
+  });
+  return `catalogue-item-${rows[0]!.id}`;
+}
+
 test.describe('clinic admin: test catalogue', () => {
   test('the admin adds, edits, reorders and deactivates tests; the doctor orders the new one', async ({
     page,
@@ -57,9 +70,9 @@ test.describe('clinic admin: test catalogue', () => {
     await page.getByRole('link', { name: 'Test catalogue' }).click();
     await expect(page).toHaveURL(/\/clinic\/test-catalogue$/);
     const mri = page.getByTestId('catalogue-mri');
-    await expect(mri.getByTestId('catalogue-item-MRI')).toContainText('16 regions');
+    await expect(mri.getByTestId(await itemId(db, clinic, 'MRI'))).toContainText('16 regions');
     const xray = page.getByTestId('catalogue-xray');
-    await expect(xray.getByTestId('catalogue-item-X-ray')).toContainText(
+    await expect(xray.getByTestId(await itemId(db, clinic, 'X-ray'))).toContainText(
       'Views: AP, PA, Lateral, Oblique, Skyline, Standing',
     );
 
@@ -74,7 +87,7 @@ test.describe('clinic admin: test catalogue', () => {
     await expect(page.locator('main [role=status]')).toHaveText(
       'MRI with contrast added. Doctors can order it now.',
     );
-    const contrast = mri.getByTestId('catalogue-item-MRI with contrast');
+    const contrast = mri.getByTestId(await itemId(db, clinic, 'MRI with contrast'));
     await expect(contrast).toContainText('2 regions');
 
     // A second active test of the same name, in any case, is refused.
@@ -97,7 +110,7 @@ test.describe('clinic admin: test catalogue', () => {
     await expect(mri.getByRole('listitem').first()).toContainText('MRI with contrast');
 
     // ECG is switched off: still listed for the admin, gone for the doctor.
-    const ecg = page.getByTestId('catalogue-other').getByTestId('catalogue-item-ECG');
+    const ecg = page.getByTestId('catalogue-other').getByTestId(await itemId(db, clinic, 'ECG'));
     await ecg.getByRole('button', { name: 'Deactivate' }).click();
     await expect(ecg).toContainText('Inactive');
     await expect(ecg.getByRole('button', { name: 'Reactivate' })).toBeVisible();
@@ -108,7 +121,7 @@ test.describe('clinic admin: test catalogue', () => {
       'MRI with contrast',
     );
     await expect(
-      page.getByTestId('catalogue-other').getByTestId('catalogue-item-ECG'),
+      page.getByTestId('catalogue-other').getByTestId(await itemId(db, clinic, 'ECG')),
     ).toContainText('Inactive');
 
     await page.getByRole('link', { name: 'Audit log' }).click();
@@ -157,7 +170,7 @@ test.describe('clinic admin: test catalogue', () => {
     await page.goto('/clinic/test-catalogue');
     await page
       .getByTestId('catalogue-mri')
-      .getByTestId('catalogue-item-MRI with contrast')
+      .getByTestId(await itemId(db, clinic, 'MRI with contrast'))
       .getByRole('button', { name: 'Edit' })
       .click();
     await page.getByTestId('catalogue-form').getByLabel('Regions').fill('Knee\nBrain');
@@ -179,6 +192,32 @@ test.describe('clinic admin: test catalogue', () => {
     await expect(draftLine.getByLabel('Notes for the lab (printed)')).toHaveValue(
       'Rule out rotator cuff tear',
     );
+
+    // The admin then stops offering the test: the draft still shows what it stores, and
+    // the doctor can clear the region the test no longer offers.
+    await page.reload();
+    await page
+      .getByTestId('catalogue-mri')
+      .getByTestId(await itemId(db, clinic, 'MRI with contrast'))
+      .getByRole('button', { name: 'Deactivate' })
+      .click();
+    await expect(page.locator('main [role=status]')).toContainText(
+      'MRI with contrast deactivated.',
+    );
+    await doctor.reload();
+    await expect(draftLine.getByLabel('Region').locator('option:checked')).toHaveText(
+      'Shoulder (no longer listed)',
+    );
+    await expect(draftLine.getByLabel('Side')).toHaveValue('left');
+    const cleared = doctor.waitForResponse(
+      (r) => r.request().method() === 'PUT' && /\/prescription$/.test(r.url()),
+    );
+    await draftLine.getByLabel('Region').selectOption('');
+    expect((await cleared).status()).toBe(200);
+    await expect(draftLine.getByTestId('test-label')).toHaveText('MRI with contrast, left');
+    await doctor.reload();
+    await expect(draftLine.getByTestId('test-label')).toHaveText('MRI with contrast, left');
+    await expect(draftLine.getByLabel('Region')).toHaveCount(0);
 
     // A doctor cannot open the admin screen.
     await doctor.goto('/clinic/test-catalogue');

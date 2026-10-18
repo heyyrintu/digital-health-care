@@ -11,17 +11,22 @@
 DROP INDEX "test_catalogue_items_organisation_id_name_key";
 CREATE UNIQUE INDEX test_catalogue_items_active_name_key
   ON test_catalogue_items (organisation_id, lower(name)) WHERE active;
+-- The clinic admin's list reads every test, inactive too, in sort order; the partial index
+-- above covers only active rows, so the organisation needs an index of its own.
+CREATE INDEX "test_catalogue_items_organisation_id_sort_order_idx"
+  ON "test_catalogue_items"("organisation_id", "sort_order");
 
 -- The region and view lists, as the API also checks them: each region 1–80 characters (an
--- ordered test copies it into test_orders.region, which allows 80), already trimmed, and
--- each once whatever the case; each view once. Immutable and without side effects, so a
+-- ordered test copies it into test_orders.region, which allows 80), with no whitespace of
+-- any kind (spaces, tabs, newlines) at either end, and each once whatever the case; each
+-- view once. Immutable and without side effects, so a
 -- CHECK may call it (a CHECK cannot hold the subqueries itself).
 CREATE FUNCTION test_catalogue_lists_valid(p_regions text[], p_views text[]) RETURNS boolean
   LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE
   SET search_path = pg_catalog, pg_temp
   AS $$
     SELECT (
-      SELECT coalesce(bool_and(length(r) BETWEEN 1 AND 80 AND r = btrim(r)), true)
+      SELECT coalesce(bool_and(length(r) BETWEEN 1 AND 80 AND r !~ '^\s|\s$'), true)
          AND count(DISTINCT lower(r)) = count(*)
       FROM unnest(p_regions) AS r
     ) AND (
@@ -29,11 +34,14 @@ CREATE FUNCTION test_catalogue_lists_valid(p_regions text[], p_views text[]) RET
     )
   $$;
 
--- Limits the API also checks (CreateTestCatalogueItemBody in @dhc/contracts): a trimmed
--- name, up to 40 regions, and X-ray views only from the six the catalogue offers.
+-- Limits the API also checks (CreateTestCatalogueItemBody in @dhc/contracts): a name of up
+-- to 120 characters (the longest seeded name has 29) with no whitespace of any kind at either
+-- end, up to 40 regions, X-ray views only from the six the catalogue offers, and a sort
+-- position of 0 or more.
 ALTER TABLE test_catalogue_items ADD CONSTRAINT test_catalogue_items_limits_check
   CHECK (
-    name = btrim(name)
+    name !~ '^\s|\s$'
+    AND char_length(name) <= 120
     AND cardinality(regions) <= 40
     AND views <@ ARRAY['AP', 'PA', 'Lateral', 'Oblique', 'Skyline', 'Standing']::text[]
     AND test_catalogue_lists_valid(regions, views)
