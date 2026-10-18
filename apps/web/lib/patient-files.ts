@@ -54,8 +54,24 @@ export class OpenFiles {
   private readonly tabs = new Set<FileTab>();
   /** Each URL with the cancels of its timers. */
   private readonly urls = new Map<string, (() => void)[]>();
+  private ended = 0;
 
   constructor(readonly deps: FileDeps) {}
+
+  /** Changes each time the session ends: a download that started before is then dropped. */
+  get session(): number {
+    return this.ended;
+  }
+
+  /** Keeps a tab from the moment it opens, so a sign-out during the download closes it too. */
+  adopt(tab: FileTab): void {
+    this.tabs.add(tab);
+  }
+
+  /** Forgets a tab the portal closed itself. */
+  forget(tab: FileTab | null): void {
+    if (tab) this.tabs.delete(tab);
+  }
 
   /** Keeps a URL until `ttlMs`, and while `tab` stays open when one is given. */
   track(url: string, ttlMs: number, tab?: FileTab): void {
@@ -83,6 +99,7 @@ export class OpenFiles {
 
   /** The session ended: every tab the portal opened is closed and every URL revoked. */
   closeAll(): void {
+    this.ended += 1;
     for (const tab of this.tabs) {
       try {
         tab.close();
@@ -103,6 +120,8 @@ export class OpenFiles {
 export type OpenOutcome =
   | { kind: 'shown' }
   | { kind: 'saved' }
+  /** The session ended during the download: nothing was shown or saved. */
+  | { kind: 'ended' }
   /** The browser blocked the tab: the page offers `url` as a download link the person clicks. */
   | { kind: 'blocked'; url: string; name: string };
 
@@ -119,22 +138,34 @@ export async function openFile(
   files: OpenFiles,
 ): Promise<OpenOutcome> {
   const { deps } = files;
+  const session = files.session;
   const wanted = bare(mediaType);
   const tab = canShowInBrowser(wanted) ? deps.openTab() : null;
+  if (tab) files.adopt(tab);
+  const drop = () => {
+    tab?.close();
+    files.forget(tab);
+  };
   let blob: Blob;
   try {
     blob = await fetchFile();
   } catch (e) {
-    tab?.close();
+    drop();
     throw e;
   }
+  // Signed out meanwhile: the file is neither shown nor saved.
+  if (files.session !== session) {
+    drop();
+    return { kind: 'ended' };
+  }
   if (!canShowInBrowser(wanted) || bare(blob.type) !== wanted) {
-    tab?.close();
+    drop();
     saveBlob(new Blob([blob], { type: 'application/octet-stream' }), name, files);
     return { kind: 'saved' };
   }
   const url = deps.createUrl(new Blob([blob], { type: wanted }));
   if (!tab || tab.closed) {
+    files.forget(tab);
     files.track(url, SHOWN_URL_MAX_MS);
     return { kind: 'blocked', url, name };
   }
@@ -149,7 +180,10 @@ export async function saveFile(
   name: string,
   files: OpenFiles,
 ): Promise<void> {
-  saveBlob(await fetchFile(), name, files);
+  const session = files.session;
+  const blob = await fetchFile();
+  // Signed out meanwhile: nothing is saved.
+  if (files.session === session) saveBlob(blob, name, files);
 }
 
 function saveBlob(blob: Blob, name: string, files: OpenFiles) {

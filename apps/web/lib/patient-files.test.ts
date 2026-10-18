@@ -196,6 +196,29 @@ describe('OpenFiles on sign-out', () => {
     b.files.release('blob:portal/1');
     expect(b.log.filter((l) => l === 'revoke blob:portal/1')).toHaveLength(1);
   });
+
+  it('closes a tab whose download is still running, and then shows nothing in it', async () => {
+    const b = fakeBrowser();
+    let arrive: (blob: Blob) => void = () => undefined;
+    const pending = openFile(() => new Promise<Blob>((r) => (arrive = r)), PDF, b.files);
+    b.files.closeAll();
+    expect(b.log).toEqual(['tab', 'close']);
+    arrive(pdf);
+    expect(await pending).toEqual({ kind: 'ended' });
+    expect(b.log).toEqual(['tab', 'close', 'close']);
+    expect(b.files.size).toBe(0);
+  });
+
+  it('saves nothing when the session ends during a download', async () => {
+    const b = fakeBrowser();
+    let arrive: (blob: Blob) => void = () => undefined;
+    const pending = saveFile(() => new Promise<Blob>((r) => (arrive = r)), 'a.pdf', b.files);
+    b.files.closeAll();
+    arrive(pdf);
+    await pending;
+    expect(b.log).toEqual([]);
+    expect(b.files.size).toBe(0);
+  });
 });
 
 describe('canShowInBrowser', () => {
