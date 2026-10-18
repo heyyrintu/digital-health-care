@@ -4,12 +4,14 @@ import type { BookingOptions, PortalAppointment, Slot, SlotsResponse } from '@dh
 import { formatInr, istDateKey, shortDate } from '@dhc/domain';
 import { Button, DateStrip, Field, SlotPicker, Surface, Textarea } from '@dhc/ui-web';
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useSearchParams } from 'next/navigation';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import {
   bookingDates,
   canBookOnline,
   keepAttemptKey,
   newAttemptKey,
+  initialDoctor,
   portalErrorMessage,
   slotTaken,
 } from '../../../lib/patient';
@@ -19,7 +21,11 @@ import { PortalShell, type ReadyAccount } from '../shell';
 
 /** PRD §4.3: patient → doctor → clinic → consultation → date → slot → reason → book. */
 export default function BookPage() {
-  return <PortalShell>{(account) => <Book account={account} />}</PortalShell>;
+  return (
+    <Suspense>
+      <PortalShell>{(account) => <Book account={account} />}</PortalShell>
+    </Suspense>
+  );
 }
 
 type Load<T> =
@@ -54,8 +60,12 @@ function Book({ account }: { account: ReadyAccount }) {
 
 function BookForm({ options, account }: { options: BookingOptions; account: ReadyAccount }) {
   const { api, locale, t } = usePatientSession();
+  // `?doctor=<public page address>`: from a doctor's public page, that doctor is picked.
+  const params = useSearchParams();
   const [patientId, setPatientId] = useState(account.selected.id);
-  const [doctorId, setDoctorId] = useState(options.doctors[0]!.userId);
+  // A link naming a doctor this clinic does not list picks nobody: the patient chooses.
+  const [start] = useState(() => initialDoctor(options, params.get('doctor')));
+  const [doctorId, setDoctorId] = useState<string | null>(start.doctorId);
   const [clinicId, setClinicId] = useState(options.clinics[0]!.id);
   const [typeId, setTypeId] = useState(options.consultationTypes[0]!.id);
   const days = useMemo(() => bookingDates(istDateKey(new Date()), options), [options]);
@@ -80,8 +90,9 @@ function BookForm({ options, account }: { options: BookingOptions; account: Read
   const loadDay = useCallback(() => {
     const id = ++dayRequest.current;
     const latest = () => id === dayRequest.current;
-    setDay({ status: 'loading' });
     setSlot(null);
+    if (!doctorId) return setDay({ status: 'loading' });
+    setDay({ status: 'loading' });
     api
       .portalSlots({ doctorId, clinicId, consultationTypeId: typeId, date })
       .then((data) => latest() && setDay({ status: 'ready', data }))
@@ -98,6 +109,7 @@ function BookForm({ options, account }: { options: BookingOptions; account: Read
 
   async function book(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!doctorId) return setError(t('patient.book.pickDoctor'));
     if (!slot) return setError(t('book.pickSlot'));
     setBusy(true);
     setError(null);
@@ -153,7 +165,8 @@ function BookForm({ options, account }: { options: BookingOptions; account: Read
           selectedId={patientId}
           onSelect={setPatientId}
         />
-        {options.doctors.length > 1 && (
+        {start.unmatched && <Notice tone="info">{t('patient.book.doctorNotFound')}</Notice>}
+        {(options.doctors.length > 1 || start.unmatched) && (
           <ChoiceGroup
             label={t('patient.book.doctor')}
             options={options.doctors.map((d, i) => ({
@@ -194,7 +207,10 @@ function BookForm({ options, account }: { options: BookingOptions; account: Read
           <p id="book-time" className="text-sm font-medium">
             {t('patient.book.time')}
           </p>
-          {day.status === 'loading' && <Loading />}
+          {!doctorId && (
+            <p className="text-sm text-muted-foreground">{t('patient.book.pickDoctor')}</p>
+          )}
+          {doctorId && day.status === 'loading' && <Loading />}
           {day.status === 'error' && <LoadError error={day.error} retry={() => loadDay()} />}
           {daySlots &&
             (daySlots.closed ? (

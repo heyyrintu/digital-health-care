@@ -7,8 +7,9 @@ import { Button, Chip, Field, Input, NativeSelect, PageHeader, Surface } from '@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useSession } from '../session-provider';
 import { ClinicShell } from '../shell';
+import { PublicPageCard } from './public-page-card';
 
-/** The doctor's prescription pad and signing PIN (PRD §9.1). Doctors only. */
+/** The doctor's prescription pad, signing PIN (PRD §9.1) and public page. Doctors only. */
 export default function ProfilePage() {
   return <ClinicShell>{(me) => (me.role === 'doctor' ? <Pad /> : <NotAllowed />)}</ClinicShell>;
 }
@@ -200,6 +201,8 @@ function Pad() {
           </div>
         </form>
       </Surface>
+
+      <PublicPageCard profile={profile} onSaved={setProfile} onError={fail} />
 
       <Surface className="p-5 sm:p-6">
         <form className="space-y-4" onSubmit={(e) => void savePin(e)} data-testid="pin-form">

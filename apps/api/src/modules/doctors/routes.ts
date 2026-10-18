@@ -1,4 +1,9 @@
-import { DoctorProfile, SaveDoctorProfileBody, SetSigningPinBody } from '@dhc/contracts';
+import {
+  DoctorProfile,
+  SaveDoctorProfileBody,
+  SaveDoctorPublicProfileBody,
+  SetSigningPinBody,
+} from '@dhc/contracts';
 import type { FastifyPluginAsync } from 'fastify';
 import { authOf, authenticate, requireRole } from '../../plugins/authenticate';
 import type { Services } from '../../services';
@@ -21,6 +26,12 @@ export const doctorRoutes: FastifyPluginAsync<{
   app.put('/doctor-profile', doctor, async (request) => {
     const body = SaveDoctorProfileBody.parse(request.body);
     return DoctorProfile.parse(await profiles.save(request, authOf(request), body));
+  });
+
+  // The public page at /doctor/<slug> (ADR 0017): only the fields sent change.
+  app.patch('/doctor-profile/public', doctor, async (request) => {
+    const body = SaveDoctorPublicProfileBody.parse(request.body);
+    return DoctorProfile.parse(await profiles.savePublic(request, authOf(request), body));
   });
 
   app.put(

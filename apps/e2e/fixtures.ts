@@ -232,6 +232,20 @@ export async function signInAsPatient(
   { keep = false }: { keep?: boolean } = {},
 ) {
   await page.goto(`/app/login?clinic=${clinic.slug}`);
+  await enterPatientCode(page, db, clinic, phone, { keep });
+}
+
+/**
+ * The sign-in steps after the page is open with the clinic filled in (from a link): the
+ * mobile number, then a code the test gives the challenge (no SMS goes out here).
+ */
+export async function enterPatientCode(
+  page: Page,
+  db: Db,
+  clinic: Clinic,
+  phone: string,
+  { keep = false }: { keep?: boolean } = {},
+) {
   await expect(page.getByLabel('Clinic ID')).toHaveValue(clinic.slug);
   await page.getByLabel('Mobile number').fill(phone);
   await page.getByRole('button', { name: 'Send code' }).click();
