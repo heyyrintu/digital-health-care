@@ -19,8 +19,11 @@ import {
   PatientTestOrderList,
   Referral,
   ReferralCounts,
+  ReferralLetterCheck,
   ReferralList,
   VisitReferralList,
+  type Language,
+  type SignReferralLetterBody,
   type CloseReferralBody,
   type CreateReferralBody,
   type ReferralListQuery,
@@ -388,6 +391,24 @@ export function createApiClient(options: ApiClientOptions) {
       request('POST', `/referrals/${encodeURIComponent(id)}/seen`, { schema: Referral }),
     closeReferral: (id: string, body: CloseReferralBody) =>
       request('POST', `/referrals/${encodeURIComponent(id)}/close`, { schema: Referral, body }),
+    /** The referring doctor: the letter as it would print, marked PREVIEW (a PDF). */
+    referralLetterPreview: (id: string, language?: Language) =>
+      requestFile(
+        'GET',
+        `/referrals/${encodeURIComponent(id)}/letter/preview${language ? `?language=${language}` : ''}`,
+      ),
+    /** The referring doctor: sign the letter with the signing PIN (once, while open). */
+    signReferralLetter: (id: string, body: SignReferralLetterBody) =>
+      request('POST', `/referrals/${encodeURIComponent(id)}/letter/sign`, {
+        schema: Referral,
+        body,
+      }),
+    /** Either doctor: the signed letter (a PDF). */
+    referralLetter: (id: string) =>
+      requestFile('GET', `/referrals/${encodeURIComponent(id)}/letter`),
+    /** Public: check a referral letter by the code in its QR. */
+    verifyReferralLetter: (code: string) =>
+      request('POST', '/verify/referral-letter', { schema: ReferralLetterCheck, body: { code } }),
 
     /** Doctor: set or change the signing PIN, confirmed with the account password. */
     setSigningPin: (password: string, pin: string) =>

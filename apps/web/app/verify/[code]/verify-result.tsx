@@ -1,18 +1,22 @@
 'use client';
 
 import { ApiError, createApiClient } from '@dhc/api-client';
-import { PrescriptionCheck } from '@dhc/contracts';
+import { PrescriptionCheck, type ReferralLetterCheck } from '@dhc/contracts';
 import { formatIstDateTime } from '@dhc/domain';
 import { t as translate, type Locale, type MessageKey } from '@dhc/i18n';
 import { Button, cn } from '@dhc/ui-web';
 import { CircleAlert, CircleCheck, CircleX } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
+/** What a QR can name: a prescription (`/verify/<code>`) or a referral letter. */
+export type VerifiedDocument = 'prescription' | 'referral-letter';
+
 type State =
   | { kind: 'loading' }
   | { kind: 'notFound' }
   | { kind: 'error'; message: string }
-  | { kind: 'found'; check: PrescriptionCheck };
+  | { kind: 'found'; check: PrescriptionCheck }
+  | { kind: 'letter'; check: ReferralLetterCheck };
 
 const LOOK = {
   genuine: { icon: CircleCheck, box: 'bg-success-soft text-success' },
@@ -20,8 +24,20 @@ const LOOK = {
   void: { icon: CircleX, box: 'bg-danger-soft text-destructive' },
 } as const;
 
-/** Checks the code with the API and shows what a pharmacist needs to match the paper. */
-export function VerifyResult({ apiBaseUrl, code }: { apiBaseUrl: string; code: string }) {
+/**
+ * Checks the code with the API and shows what a pharmacist (or, for a referral letter, the
+ * doctor or hospital it is addressed to) needs to match the paper. The page's path names
+ * the document, so each code is checked once, with its own endpoint.
+ */
+export function VerifyResult({
+  apiBaseUrl,
+  code,
+  document: kind = 'prescription',
+}: {
+  apiBaseUrl: string;
+  code: string;
+  document?: VerifiedDocument;
+}) {
   const api = useMemo(() => createApiClient({ baseUrl: apiBaseUrl }), [apiBaseUrl]);
   const [state, setState] = useState<State>({ kind: 'loading' });
   const [locale, setLocale] = useState<Locale>('en');
@@ -34,9 +50,14 @@ export function VerifyResult({ apiBaseUrl, code }: { apiBaseUrl: string; code: s
 
   useEffect(() => {
     let current = true;
-    api
-      .request('POST', '/verify', { schema: PrescriptionCheck, body: { code } })
-      .then((check) => current && setState({ kind: 'found', check }))
+    const checked: Promise<State> =
+      kind === 'referral-letter'
+        ? api.verifyReferralLetter(code).then((check) => ({ kind: 'letter', check }))
+        : api
+            .request('POST', '/verify', { schema: PrescriptionCheck, body: { code } })
+            .then((check) => ({ kind: 'found', check }));
+    checked
+      .then((next) => current && setState(next))
       .catch((e) => {
         if (!current) return;
         if (e instanceof ApiError && (e.status === 404 || e.status === 400)) {
@@ -48,12 +69,14 @@ export function VerifyResult({ apiBaseUrl, code }: { apiBaseUrl: string; code: s
     return () => {
       current = false;
     };
-  }, [api, code]);
+  }, [api, code, kind]);
 
   return (
     <div className="surface w-full max-w-lg space-y-5 p-6 sm:p-8" data-testid="verify-result">
       <div className="flex items-center justify-between gap-3">
-        <h1 className="font-display text-2xl font-extrabold">{t('verify.title')}</h1>
+        <h1 className="font-display text-2xl font-extrabold">
+          {t(kind === 'referral-letter' ? 'verify.letterTitle' : 'verify.title')}
+        </h1>
         <Button
           type="button"
           variant="outline"
@@ -71,7 +94,7 @@ export function VerifyResult({ apiBaseUrl, code }: { apiBaseUrl: string; code: s
       )}
       {state.kind === 'notFound' && (
         <p role="alert" className="rounded-xl bg-danger-soft px-4 py-3 text-sm text-destructive">
-          {t('verify.notFound')}
+          {t(kind === 'referral-letter' ? 'verify.letterNotFound' : 'verify.notFound')}
         </p>
       )}
       {state.kind === 'error' && (
@@ -80,6 +103,7 @@ export function VerifyResult({ apiBaseUrl, code }: { apiBaseUrl: string; code: s
         </p>
       )}
       {state.kind === 'found' && <Found check={state.check} locale={locale} t={t} />}
+      {state.kind === 'letter' && <LetterFound check={state.check} locale={locale} t={t} />}
     </div>
   );
 }
@@ -175,6 +199,83 @@ function Found({
         </div>
       )}
       <p className="text-xs text-muted-foreground">{t('verify.note')}</p>
+    </>
+  );
+}
+
+/** A calendar date (YYYY-MM-DD) as `6 Oct 2026`. */
+const dayOf = (date: string, locale: Locale) =>
+  new Date(`${date}T00:00:00Z`).toLocaleDateString(locale === 'hi' ? 'hi-IN' : 'en-IN', {
+    timeZone: 'UTC',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+
+/** A referral letter: who signed it, for whom (initials) and to whom; no clinical text. */
+function LetterFound({
+  check,
+  locale,
+  t,
+}: {
+  check: ReferralLetterCheck;
+  locale: Locale;
+  t: (key: MessageKey, params?: Record<string, string | number>) => string;
+}) {
+  const look = LOOK[check.status];
+  const Icon = look.icon;
+  const rows: [MessageKey, string][] = [
+    ['verify.signedAt', formatIstDateTime(check.signedAt, locale)],
+    ['verify.doctor', [check.doctor.name, check.doctor.qualifications].filter(Boolean).join(', ')],
+    [
+      'verify.registration',
+      [check.doctor.registrationNumber, check.doctor.council].filter(Boolean).join(', '),
+    ],
+    ['verify.clinic', check.clinicName],
+    [
+      'verify.patient',
+      [
+        check.patient.initials,
+        check.patient.ageYears !== null
+          ? t('pdf.ageYears', { years: check.patient.ageYears })
+          : null,
+        check.patient.gender ? t(`gender.${check.patient.gender}`) : null,
+      ]
+        .filter(Boolean)
+        .join(' · '),
+    ],
+    [
+      'verify.recipient',
+      [check.recipient.name, check.recipient.specialty, check.recipient.hospital]
+        .filter(Boolean)
+        .join(', '),
+    ],
+    ['verify.urgency', t(`referrals.urgency.${check.urgency}`)],
+    ['verify.visitDate', dayOf(check.visitDate, locale)],
+  ];
+  return (
+    <>
+      <div className={cn('flex items-start gap-3 rounded-xl px-4 py-3', look.box)} role="status">
+        <Icon aria-hidden className="mt-0.5 size-6 shrink-0" />
+        <div>
+          <p className="m-0 text-lg font-bold" data-testid="verify-status">
+            {t(`verify.${check.status}`)}
+          </p>
+          <p className="m-0 text-sm">{t('verify.letterGenuineDetail')}</p>
+        </div>
+      </div>
+      {check.signatureMethod === 'test_key' && (
+        <p className="text-sm font-medium text-destructive">{t('sign.testKey')}</p>
+      )}
+      <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+        {rows.map(([key, value]) => (
+          <div key={key} className="contents">
+            <dt className="text-muted-foreground">{t(key)}</dt>
+            <dd className="m-0 font-medium [overflow-wrap:anywhere]">{value || '—'}</dd>
+          </div>
+        ))}
+      </dl>
+      <p className="text-xs text-muted-foreground">{t('verify.letterNote')}</p>
     </>
   );
 }

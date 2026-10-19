@@ -23,6 +23,14 @@ const referral: Referral = {
   closeNote: null,
   role: 'receiving',
   canClose: true,
+  letter: {
+    signedAt: '2026-10-06T05:30:00.000Z',
+    language: 'en',
+    paperSize: 'a5',
+    signatureMethod: 'test_key',
+    verificationUrl: 'https://app.test/verify/referral/ABCDEFGHJKMNPQRSTVWXYZ01',
+  },
+  canSignLetter: false,
 };
 
 describe('summaryOf', () => {
@@ -31,6 +39,7 @@ describe('summaryOf', () => {
     expect(summary).not.toHaveProperty('reason');
     expect(summary).not.toHaveProperty('notes');
     expect(summary).not.toHaveProperty('closeNote');
+    expect(summary).not.toHaveProperty('letter');
     expect(summary).toMatchObject({
       id: referral.id,
       status: 'seen',

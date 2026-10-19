@@ -8,6 +8,7 @@ import { FileText, PenLine } from 'lucide-react';
 import Link from 'next/link';
 import { useState, type FormEvent } from 'react';
 import { useSession } from '../session-provider';
+import { openPdf, SigningPinField } from '../signing';
 
 type Mode = null | 'sign' | 'amend' | 'void';
 
@@ -62,20 +63,7 @@ export function SignPanel({
     setProblem(null);
   };
 
-  /** Opens a PDF in a new tab. The tab opens first, so the browser does not block it. */
-  const openPdf = async (path: string) => {
-    const tab = window.open('', '_blank');
-    try {
-      const blob = await api.requestFile('GET', path);
-      const url = URL.createObjectURL(blob);
-      if (tab) tab.location.href = url;
-      else window.location.href = url;
-      setTimeout(() => URL.revokeObjectURL(url), 60_000);
-    } catch (e) {
-      tab?.close();
-      onError(e);
-    }
-  };
+  const open = (path: string) => openPdf(() => api.requestFile('GET', path), onError);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -126,28 +114,7 @@ export function SignPanel({
           />
         </div>
       )}
-      {mode !== 'amend' && (
-        <div className="max-w-56 space-y-1.5">
-          <Label htmlFor="rx-sign-pin" className={fieldLabel}>
-            {t('sign.pin')}
-          </Label>
-          <Input
-            id="rx-sign-pin"
-            required
-            inputMode="numeric"
-            autoComplete="off"
-            pattern="\d{6}"
-            maxLength={6}
-            className="tabular tracking-[0.3em]"
-            aria-describedby="rx-sign-pin-hint"
-            value={pin}
-            onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
-          />
-          <p id="rx-sign-pin-hint" className="text-xs text-muted-foreground">
-            {t('sign.pinHint')}
-          </p>
-        </div>
-      )}
+      {mode !== 'amend' && <SigningPinField id="rx-sign-pin" value={pin} onChange={setPin} />}
       {problem && (
         <p role="alert" className="text-sm font-medium text-destructive">
           {problem}
@@ -188,7 +155,7 @@ export function SignPanel({
                   type="button"
                   variant="link"
                   className="h-auto px-0 py-0"
-                  onClick={() => void openPdf(`/prescriptions/${v.id}/pdf`)}
+                  onClick={() => void open(`/prescriptions/${v.id}/pdf`)}
                 >
                   {t('sign.openPdf')}
                 </Button>
@@ -235,7 +202,7 @@ export function SignPanel({
               type="button"
               variant="outline"
               disabled={!prescription || blocked !== null}
-              onClick={() => void openPdf(`/appointments/${appointmentId}/prescription/preview`)}
+              onClick={() => void open(`/appointments/${appointmentId}/prescription/preview`)}
             >
               <FileText aria-hidden />
               {t('sign.preview')}
@@ -285,7 +252,7 @@ export function SignPanel({
           <Button
             type="button"
             variant="outline"
-            onClick={() => void openPdf(`/prescriptions/${prescription.id}/pdf`)}
+            onClick={() => void open(`/prescriptions/${prescription.id}/pdf`)}
           >
             <FileText aria-hidden />
             {t('sign.openPdf')}

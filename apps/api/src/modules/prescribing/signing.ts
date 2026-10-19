@@ -55,7 +55,15 @@ export function verificationCode(): string {
   return out;
 }
 
-const sha256 = (data: Buffer) => createHash('sha256').update(data).digest();
+/** "Asha Verma" → "A. V.": what a public QR check shows of the patient. */
+export const initialsOf = (name: string) =>
+  name
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => `${[...part][0]!.toUpperCase()}.`)
+    .join(' ');
+
+export const sha256 = (data: Buffer) => createHash('sha256').update(data).digest();
 const BAD_CODE = () =>
   new AppError(
     404,
@@ -525,11 +533,7 @@ export class SigningService {
     const { row, latest, profile, tests } = found;
     const patient = row.appointment.patient;
     const names = await staffNames(this.s.db, [row.doctorUserId]);
-    const initials = patient.name
-      .split(/\s+/)
-      .filter(Boolean)
-      .map((part) => `${[...part][0]!.toUpperCase()}.`)
-      .join(' ');
+    const initials = initialsOf(patient.name);
     return {
       status:
         row.status === 'void' ? 'void' : row.status === 'superseded' ? 'superseded' : 'genuine',
