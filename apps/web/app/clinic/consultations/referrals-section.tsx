@@ -203,11 +203,17 @@ function ReferDialog({
     api
       .request('GET', '/doctors', { schema: DoctorList })
       .then((list) => current && setDoctors(list.data.filter((d) => d.userId !== me?.user.id)))
-      .catch(() => current && setDoctors([]));
+      .catch((e: unknown) => {
+        if (!current) return;
+        if (e instanceof ApiError && e.status === 401) return void signOut('expired');
+        // A failed load is not "no other doctor": the select stays disabled and the error shows.
+        setDoctors(null);
+        setFailure(e instanceof ApiError ? e.message : t('error.network'));
+      });
     return () => {
       current = false;
     };
-  }, [open, api, me?.user.id]);
+  }, [open, api, me?.user.id, signOut, t]);
 
   const set = <K extends keyof Draft>(field: K, value: Draft[K]) =>
     setDraft((d) => ({ ...d, [field]: value }));
