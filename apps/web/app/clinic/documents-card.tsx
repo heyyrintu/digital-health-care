@@ -117,7 +117,12 @@ export function DocumentsCard({
     async (cursor?: string) => {
       try {
         const page = await api.patientDocuments(patientId, { appointmentId, cursor });
-        setRows((current) => (cursor ? [...(current ?? []), ...page.data] : page.data));
+        setRows((current) => {
+          if (!cursor) return page.data;
+          // A double click can ask for the same page twice: keep each document once.
+          const seen = new Set((current ?? []).map((d) => d.id));
+          return [...(current ?? []), ...page.data.filter((d) => !seen.has(d.id))];
+        });
         setNextCursor(page.nextCursor);
       } catch (e) {
         failRef.current(e);
@@ -372,6 +377,14 @@ function ShareDialog({
   const [key, setKey] = useState(() => crypto.randomUUID());
   // The chosen file once uploaded, so a retry shares it instead of uploading it again.
   const uploaded = useRef<{ file: File; id: string } | null>(null);
+  // The latest settings and wording, read when an error arrives, so their changes do not
+  // reset a dialog the doctor is filling in.
+  const settingsRef = useRef(settings);
+  const tRef = useRef(t);
+  useEffect(() => {
+    settingsRef.current = settings;
+    tRef.current = t;
+  }, [settings, t]);
 
   useEffect(() => {
     if (!open) return;
@@ -388,12 +401,12 @@ function ShareDialog({
         if (!current) return;
         if (e instanceof ApiError && e.status === 401) return void signOut('expired');
         setSheets(null);
-        setFailure(documentErrorText(e, t, settings));
+        setFailure(documentErrorText(e, tRef.current, settingsRef.current));
       });
     return () => {
       current = false;
     };
-  }, [open, api, signOut, t, settings]);
+  }, [open, api, signOut]);
 
   const set = <K extends keyof Draft>(field: K, value: Draft[K]) =>
     setDraft((d) => ({ ...d, [field]: value }));
