@@ -7,6 +7,7 @@ import {
   FileSignature,
   FlaskConical,
   IndianRupee,
+  Library,
   ListOrdered,
   ScrollText,
   Send,
@@ -76,6 +77,10 @@ export function ClinicShell({ children }: { children: (me: MeResponse) => ReactN
                 },
                 { href: '/clinic/merges', label: t('dashboard.merges'), icon: GitMerge },
               ]
+            : []),
+          // The document library (PRD §7.3): kept by clinic admins and doctors.
+          ...(me.role === 'clinic_admin' || me.role === 'doctor'
+            ? [{ href: '/clinic/library', label: t('dashboard.library'), icon: Library }]
             : []),
           ...(me.role === 'doctor'
             ? [

@@ -46,6 +46,12 @@ const Env = z
      */
     TRUST_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(1),
     /**
+     * Uploaded PDFs rebuilt at once (threat model T27). Each rebuild's worker can use up to
+     * about 600 MB of the API's memory on hostile files: size the container for it
+     * (runbook `deploy.md`).
+     */
+    PDF_REBUILD_CONCURRENCY: z.coerce.number().int().min(1).max(4).default(1),
+    /**
      * Comma-separated networks of those proxies (the load balancer's subnets). When set,
      * X-Forwarded-For is trusted only from a peer inside them. When unset, TRUST_PROXY_HOPS
      * must be 0 unless the API port can be reached only from the load balancer.

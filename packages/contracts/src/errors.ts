@@ -24,6 +24,8 @@ export const ErrorCode = z.enum([
   'CONSENT_REQUIRED',
   'PATIENT_MERGED',
   'CHART_RESTRICTED',
+  /** 503: the server cannot take this now (busy, or a part of it is broken); try again later. */
+  'UNAVAILABLE',
 ]);
 export type ErrorCode = z.infer<typeof ErrorCode>;
 

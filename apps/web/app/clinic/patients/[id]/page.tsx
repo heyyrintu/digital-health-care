@@ -20,6 +20,7 @@ import { PatientForm } from '../../patient-form';
 import { TagList, TagPicker } from '../../patient-tags';
 import { MergePanel } from '../merge-panel';
 import { TestOrdersCard } from '../test-orders-card';
+import { DocumentsCard } from '../../documents-card';
 import { useSession } from '../../session-provider';
 import { ClinicShell, canRegister, canTag } from '../../shell';
 
@@ -307,6 +308,17 @@ function PatientView({ role }: { role: string }) {
       {/* A merged duplicate's tests show on the kept record, which the banner links to. */}
       {(role === 'doctor' || role === 'front_desk') && !merged && (
         <TestOrdersCard key={patient.id} patientId={patient.id} role={role} />
+      )}
+      {/* Shared documents are clinical content: doctors only (PRD §3.2, §7.3). */}
+      {role === 'doctor' && !merged && (
+        <Surface className="p-4 sm:p-6">
+          <DocumentsCard
+            key={patient.id}
+            patientId={patient.id}
+            patientName={patient.name}
+            canShare
+          />
+        </Surface>
       )}
 
       <div className="grid gap-4 sm:gap-6 lg:grid-cols-2">

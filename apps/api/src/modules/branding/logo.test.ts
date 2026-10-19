@@ -2,7 +2,7 @@ import { LOGO_MAX_BYTES } from '@dhc/contracts';
 import { deflateSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
 import { AppError } from '../../errors';
-import { acceptLogo, inspectLogo, sniffLogoType } from './logo';
+import { acceptLogo, inspectImage, inspectLogo, sniffLogoType } from './logo';
 import { SAMPLE_SVG, sampleJpeg, samplePng, sampleWebp } from './logo-samples';
 
 const reason = (mediaType: string, data: Buffer) => {
@@ -144,6 +144,39 @@ describe('inspectLogo', () => {
       expect(inspectLogo(samplePng({ extra: [['zTXt', broken]] }))).toBe('not_an_image');
       const utf16 = Buffer.from('<script>alert(1)</script>', 'utf16le');
       expect(inspectLogo(samplePng({ extra: [['tEXt', utf16]] }))).toBe('not_an_image');
+    });
+
+    it('bounds compressed PNG text: 4 MB inflated in all and 64 text chunks, keeping nothing', () => {
+      const text = (bytes: number) =>
+        Buffer.concat([Buffer.from('Comment\0\0'), deflateSync(Buffer.alloc(bytes, 0x61))]);
+      const chunks = (count: number, body: Buffer) =>
+        Array.from({ length: count }, () => ['zTXt', body] as [string, Buffer]);
+      const limits = { maxDimension: 10_000, maxPixels: 50_000_000 };
+      // Many small chunks: up to 64 pass, one more is refused.
+      expect(inspectImage(samplePng({ extra: chunks(64, text(100)) }), limits)).toMatchObject({
+        type: 'png',
+      });
+      expect(inspectImage(samplePng({ extra: chunks(65, text(100)) }), limits)).toBe(
+        'not_an_image',
+      );
+      // Four chunks of just under 1 MB each fit in 4 MB; a fifth does not, though each one
+      // alone is within the per-chunk limit. The file stays small: these are bombs.
+      const big = text(1024 * 1024 - 1);
+      expect(big.length).toBeLessThan(2048);
+      expect(inspectImage(samplePng({ extra: chunks(4, big) }), limits)).toMatchObject({
+        type: 'png',
+      });
+      const bomb = samplePng({ extra: chunks(300, big) });
+      const before = process.memoryUsage().rss;
+      const started = performance.now();
+      expect(inspectImage(bomb, limits)).toBe('not_an_image');
+      expect(performance.now() - started).toBeLessThan(1000);
+      expect(process.memoryUsage().rss - before).toBeLessThan(64 * 1024 * 1024);
+      // Markup in the last of many small chunks is still found.
+      const last = Buffer.concat([Buffer.from('Comment\0\0'), deflateSync(html)]);
+      expect(inspectLogo(samplePng({ extra: [...chunks(10, text(100)), ['zTXt', last]] }))).toBe(
+        'not_an_image',
+      );
     });
 
     it('refuses a JPEG cut short or with a bad segment length', () => {

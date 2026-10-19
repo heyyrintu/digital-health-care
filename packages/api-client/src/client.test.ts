@@ -71,6 +71,35 @@ describe('createApiClient', () => {
     expect((init.headers as Record<string, string>)['content-type']).toBe('application/pdf');
   });
 
+  it('uploads a document file, then shares it by ID with an idempotency key', async () => {
+    const fileId = '00000000-0000-4000-8000-000000000002';
+    const patientId = '00000000-0000-4000-8000-000000000003';
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        json(201, {
+          id: fileId,
+          mediaType: 'image/webp',
+          sizeBytes: 42,
+          uploadedAt: '2026-10-06T10:00:00.000Z',
+        }),
+      )
+      .mockResolvedValueOnce(json(200, { data: [], nextCursor: null }));
+    const client = createApiClient({ baseUrl: 'https://api.test/v1', fetch });
+    const file = new Blob(['RIFF'], { type: 'image/webp' });
+
+    await expect(client.uploadDocumentFile(file)).resolves.toMatchObject({ id: fileId });
+    const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('https://api.test/v1/document-files');
+    expect(init.body).toBe(file);
+    expect((init.headers as Record<string, string>)['content-type']).toBe('image/webp');
+
+    await client.patientDocuments(patientId, { appointmentId: fileId });
+    expect(fetch.mock.calls[1]![0]).toBe(
+      `https://api.test/v1/patients/${patientId}/documents?appointmentId=${fileId}`,
+    );
+  });
+
   it('turns the standard error shape into an ApiError', async () => {
     const fetch = vi.fn(async () =>
       json(409, {

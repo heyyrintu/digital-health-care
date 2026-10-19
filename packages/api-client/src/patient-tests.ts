@@ -169,6 +169,8 @@ const SHARE_TYPES: Record<string, { label: string; extension: string; uti: strin
   'application/pdf': { label: 'PDF', extension: 'pdf', uti: 'com.adobe.pdf' },
   'image/jpeg': { label: 'JPEG', extension: 'jpg', uti: 'public.jpeg' },
   'image/png': { label: 'PNG', extension: 'png', uti: 'public.png' },
+  // Shared documents may be WebP (results never are).
+  'image/webp': { label: 'WebP', extension: 'webp', uti: 'org.webmproject.webp' },
   'image/heic': { label: 'HEIC', extension: 'heic', uti: 'public.heic' },
   'image/heif': { label: 'HEIF', extension: 'heif', uti: 'public.heif' },
 };

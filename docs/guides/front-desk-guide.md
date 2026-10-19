@@ -48,4 +48,4 @@ If a patient was registered twice, open either record and choose **Merge a dupli
 - Patient lost their old phone number → verify photo ID in person, then **Change number**.
 
 ## Privacy
-You can see appointments, contact details and bills, not clinical notes. Never share patient details over personal phones or chats.
+You can see appointments, contact details and bills, not clinical notes. Documents doctors share with patients (and the clinic's document library) are not on your screens either: if a patient asks for an exercise sheet or a report, a doctor shares it to their portal. Never share patient details over personal phones or chats.
