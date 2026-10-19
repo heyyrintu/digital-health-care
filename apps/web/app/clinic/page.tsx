@@ -12,6 +12,7 @@ import { AgeGender, TagChip } from './patient-bits';
 import { useSession } from './session-provider';
 import { PracticeCard } from './practice-card';
 import { PriceListCard } from './price-list-card';
+import { ReferralsCard } from './referrals-card';
 import { ResultsAwaiting } from './results-awaiting';
 import { ScreensCard } from './screens-card';
 import { PolicyCard } from './policy-card';
@@ -21,7 +22,8 @@ import { StaffCard } from './staff-card';
 
 /**
  * Signed-in staff home: patient search and registration; doctors see their test results
- * waiting for review; admins also manage staff and settings.
+ * waiting for review and their new and open referrals; admins also manage staff and
+ * settings.
  */
 export default function ClinicDashboard() {
   return (
@@ -30,7 +32,12 @@ export default function ClinicDashboard() {
         me.role === 'patient' ? null : (
           <div className="space-y-6">
             {me.role === 'clinic_admin' && <ClinicFigures />}
-            {me.role === 'doctor' && <ResultsAwaiting />}
+            {me.role === 'doctor' && (
+              <div className="grid items-start gap-6 xl:grid-cols-2">
+                <ResultsAwaiting />
+                <ReferralsCard />
+              </div>
+            )}
             <PatientSearch />
             {me.role === 'clinic_admin' && (
               <div className="grid items-start gap-6 xl:grid-cols-2">

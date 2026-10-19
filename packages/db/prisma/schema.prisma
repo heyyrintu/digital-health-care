@@ -235,6 +235,25 @@ enum TestOrderStatus {
   reviewed
 }
 
+/// internal: to a doctor of the same organisation; external: to someone outside it.
+enum ReferralKind {
+  internal
+  external
+}
+
+enum ReferralUrgency {
+  routine
+  soon
+  urgent
+}
+
+/// sent → seen (the receiving doctor opened it; internal only) → closed. Forward only.
+enum ReferralStatus {
+  sent
+  seen
+  closed
+}
+
 enum MembershipStatus {
   /// Created by a staff invite; becomes active when the invite is completed.
   invited
@@ -292,6 +311,7 @@ model Organisation {
   testCatalogueItems     TestCatalogueItem[]
   testOrders             TestOrder[]
   testResults            TestResult[]
+  referrals              Referral[]
 
   @@map("organisations")
 }
@@ -511,6 +531,7 @@ model Patient {
   allergies    Allergy[]
   conditions   MedicalCondition[]
   medications  CurrentMedication[]
+  referrals    Referral[]
 
   @@unique([organisationId, uhid])
   @@index([organisationId, phone])
@@ -535,7 +556,8 @@ model UhidSettings {
 model OrganisationSettings {
   organisationId    String   @id @map("organisation_id") @db.Uuid
   /// shared: every doctor sees the full chart. own_patients: a doctor sees a patient's
-  /// chart once the patient has been checked in to them (PRD §3.2).
+  /// chart once the patient has been checked in to them, or while an internal referral of
+  /// the patient to them is open (PRD §3.2, §7.2).
   chartModel        String   @default("shared") @map("chart_model")
   /// Non-critical safety rules hidden from doctors (catalogue "Visibility only" rules).
   hiddenSafetyRules String[] @default([]) @map("hidden_safety_rules")
@@ -772,6 +794,7 @@ model Appointment {
   prescriptions    Prescription[]
   bill             Bill?
   testOrders       TestOrder[]
+  referrals        Referral[]
 
   @@unique([doctorUserId, clinicId, date, tokenNumber])
   @@index([organisationId, date])
@@ -1469,6 +1492,50 @@ model TestResult {
 
   @@index([testOrderId])
   @@map("test_results")
+}
+
+/// A referral made at a visit (PRD §7.2): to a doctor of the same organisation (internal)
+/// or to someone outside it (external), with a reason, urgency and notes. Internal
+/// referrals open the patient's chart to the receiving doctor under "own patients only"
+/// while not closed. Never deleted; after it is made only the status and what goes with
+/// it change (database trigger).
+model Referral {
+  id                    String          @id @default(uuid()) @db.Uuid
+  organisationId        String          @map("organisation_id") @db.Uuid
+  /// The visit it was made at; its patient and doctor are the referral's (trigger).
+  appointmentId         String          @map("appointment_id") @db.Uuid
+  patientId             String          @map("patient_id") @db.Uuid
+  referringDoctorUserId String          @map("referring_doctor_user_id") @db.Uuid
+  kind                  ReferralKind
+  /// Internal only: a doctor of the organisation, not the referring one.
+  receivingDoctorUserId String?         @map("receiving_doctor_user_id") @db.Uuid
+  /// External only: who the patient is sent to (name required, the rest optional).
+  externalName          String?         @map("external_name")
+  externalSpecialty     String?         @map("external_specialty")
+  externalHospital      String?         @map("external_hospital")
+  externalPhone         String?         @map("external_phone")
+  reason                String
+  urgency               ReferralUrgency
+  notes                 String?
+  status                ReferralStatus  @default(sent)
+  sentAt                DateTime        @map("sent_at") @db.Timestamptz(3)
+  seenAt                DateTime?       @map("seen_at") @db.Timestamptz(3)
+  closedAt              DateTime?       @map("closed_at") @db.Timestamptz(3)
+  /// The referring or the receiving doctor.
+  closedByUserId        String?         @map("closed_by_user_id") @db.Uuid
+  closeNote             String?         @map("close_note")
+  createdAt             DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt             DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+  appointment  Appointment  @relation(fields: [appointmentId], references: [id], onDelete: Restrict)
+  patient      Patient      @relation(fields: [patientId], references: [id], onDelete: Restrict)
+
+  @@index([appointmentId])
+  @@index([patientId])
+  @@index([organisationId, receivingDoctorUserId, status])
+  @@index([organisationId, referringDoctorUserId, status])
+  @@map("referrals")
 }
 
 model AuditLog {
