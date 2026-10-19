@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 /**
  * Attachments and the clinic document library through the API (PRD §7.3), part 1: clinic
  * admins and doctors upload sheets to the library and rename, replace, archive and restore
@@ -7,6 +6,7 @@ import { createHash } from 'node:crypto';
  * checks and the clinic's limits, immutability after a sheet changes, tenancy, the
  * database's own guards and the audit log. Personas and files are synthetic.
  */
+import { createHash } from 'node:crypto';
 import {
   CURRENT_CONSENT_VERSIONS,
   DocumentFile,
@@ -22,7 +22,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { SAMPLE_SVG, samplePng, sampleWebp } from '../src/modules/branding/logo-samples';
 import { samplePdf } from '../src/modules/documents/document-samples';
 import { everyActiveContent } from '../src/modules/documents/pdf-attack-samples';
-import { rebuildPdf } from '../src/modules/documents/pdf-rebuild';
+import { PDF_REBUILD_LIMITS, PdfRebuilder, rebuildPdf } from '../src/modules/documents/pdf-rebuild';
 import {
   addStaff,
   bearer,
@@ -419,6 +419,22 @@ describe('uploads', () => {
     expect((await audits('document.file_uploaded')).length).toBe(3);
   });
 
+  it('answers 503 busy, with Retry-After, when the clinic already has rebuilds in progress', async () => {
+    const pdf = h.services.pdf;
+    h.services.pdf = new PdfRebuilder({ ...PDF_REBUILD_LIMITS, perOrganisation: 0 });
+    try {
+      const res = await send(doctor, SHEET);
+      expect(res.statusCode, res.body).toBe(503);
+      expect(res.headers['retry-after']).toBe('60');
+      expect(res.json().error).toMatchObject({ code: 'UNAVAILABLE', fields: { file: 'busy' } });
+      // Images do not wait for the rebuild.
+      expect((await uploaded(doctor, samplePng(), 'image/png')).mediaType).toBe('image/png');
+    } finally {
+      h.services.pdf = pdf;
+    }
+    expect(await h.owner.documentFile.count()).toBe(1);
+  });
+
   it('stores and serves a PDF rebuilt from its pages, never the upload', async () => {
     // A script that runs on open, page actions, a link and an attachment.
     const upload = everyActiveContent();
@@ -439,7 +455,12 @@ describe('uploads', () => {
       /OpenAction|JavaScript|\/JS\b|\/AA\b|\/Annots|\/EmbeddedFile|app\.alert/,
     );
     const [audit] = await audits('document.file_uploaded');
-    expect(audit!.metadata).toMatchObject({ sha256: row.sha256, sizeBytes: row.sizeBytes });
+    expect(audit!.metadata).toMatchObject({
+      sha256: row.sha256,
+      sizeBytes: row.sizeBytes,
+      originalSha256: sha256(upload),
+      originalSizeBytes: upload.length,
+    });
   });
 });
 

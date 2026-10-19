@@ -1,7 +1,7 @@
+import { createRequire } from 'node:module';
 import { isMainThread, parentPort, workerData } from 'node:worker_threads';
 import { deflateSync } from 'node:zlib';
 import {
-  decodePDFRawStream,
   ParseSpeeds,
   PDFArray,
   PDFDict,
@@ -25,8 +25,10 @@ import { checkOwnPdf } from './pdf-scan.ts';
  *
  * 1. The upload is loaded with pdf-lib. Encrypted files are refused as such; files with no
  *    pages or more than `maxPages` are refused. While loading, pdf-lib inflates object and
- *    cross-reference streams into buffers outside the worker's capped heap, so no stream may
- *    decode to more than `MAX_DECODED` bytes (a small file cannot inflate to gigabytes).
+ *    cross-reference streams into buffers outside the worker's capped heap, so its decoders
+ *    are capped (`capDecoders`): all streams and filter stages of one rebuild together may
+ *    decode to at most `maxDecodedBytes`, and a stream may chain at most `maxFilters`
+ *    filters (a small file cannot inflate to gigabytes).
  * 2. Each page dictionary is cut down to what draws the page (`PAGE_KEYS`: the boxes,
  *    rotation, resources, contents and transparency group), so annotations (links, form
  *    fields, stamps), page actions (`/AA`), thumbnails, metadata and structure are never
@@ -40,14 +42,18 @@ import { checkOwnPdf } from './pdf-scan.ts';
  *    the same bytes.
  * 4. Objects the new pages do not reach are dropped. Every object that is left is walked
  *    (without recursion): keys in `BLOCKED` are removed from dictionaries, an entry whose
- *    value is a blocked name (`/S /JavaScript`, `/Type /EmbeddedFile`) is removed, a blocked
- *    name in an array becomes `null`, and an object pdf-lib could not parse (which it would
- *    write back byte for byte) becomes `null`. Stream data is copied as it is, except that a
- *    stream with no filter is Flate-compressed, so no text of the upload's (an object
- *    hidden in a page's content, say) is left in plain view.
+ *    value is a blocked name (`/S /JavaScript`, `/S /URI`, `/Type /EmbeddedFile`) is removed,
+ *    a blocked name in an array or as an object of its own becomes `null`, and an object
+ *    pdf-lib could not parse (which it would write back byte for byte) becomes `null`. Stream
+ *    dictionaries lose their external-file keys (`/F`, `/FFilter`, `/FDecodeParms`) and a
+ *    form's reference to another file's page (`/Ref`); XMP `/Metadata` goes everywhere.
+ *    Stream data is copied as it is, except that a stream with no usable filter (none, an
+ *    empty array, `null`, anything but names) is Flate-compressed, so no text of the
+ *    upload's (an object hidden in a page's content, say) is left in plain view.
  * 5. The document is written with object streams off: a classic cross-reference table, every
- *    object in plain view. The output is then checked by `checkOwnPdf` (`pdf-scan.ts`) and
- *    returned only if it passes.
+ *    object in plain view. An output over `maxOutputBytes` is refused (`too_large`); otherwise
+ *    it is checked by `checkOwnPdf` (`pdf-scan.ts`) and returned only if it passes. The same
+ *    upload gives the same bytes for a given pdf-lib, Node and zlib version.
  *
  * The file imports only pdf-lib, Node and `pdf-scan.ts`, and uses only type syntax Node can
  * strip, so the same file runs as a worker from source (vitest, tsx) and from the build.
@@ -87,43 +93,118 @@ export const BLOCKED = new Set([
   'ImportData',
   'AA',
   'OpenAction',
+  'URI',
+  'URL',
+  'Metadata',
 ]);
+
+/** Keys removed from stream dictionaries: data in another file, or another file's page. */
+const STREAM_KEYS_DROPPED = ['F', 'FFilter', 'FDecodeParms', 'Ref'];
+
+/** Limits of one rebuild (the worker's own; time and heap are set by `pdf-rebuild.ts`). */
+export interface RewriteLimits {
+  maxPages: number;
+  /** Bytes all of pdf-lib's stream decoders together may produce. */
+  maxDecodedBytes: number;
+  /** Filters one stream may chain. */
+  maxFilters: number;
+  /** Largest output kept. */
+  maxOutputBytes: number;
+}
 
 /** What the rebuild gives: the new file, or why the upload is refused. */
 export type RewriteOutcome =
   | { ok: true; data: Uint8Array; pages: number }
-  | { ok: false; reason: 'encrypted' | 'too_many_pages' | 'not_a_document'; detail: string };
+  | {
+      ok: false;
+      /**
+       * The upload's fault (`encrypted`, `too_many_pages`, `not_a_document`, `too_large`), or
+       * ours (`unavailable`: the rebuild itself is broken).
+       */
+      reason: 'encrypted' | 'too_many_pages' | 'not_a_document' | 'too_large' | 'unavailable';
+      detail: string;
+    };
 
 const PRODUCER = 'Digital Healthcare';
 
-/** Most bytes one stream may decode to while the upload is loaded. */
-export const MAX_DECODED = 64 * 1024 * 1024;
+/** Bytes decoded so far in this rebuild, against `maxDecodedBytes`. */
+const decoding = { used: 0, budget: Infinity, maxFilters: Infinity };
 
 /**
- * Caps how far pdf-lib's stream decoders may grow their buffer. The decoders are not
- * exported, so the shared base class is found from a decoder pdf-lib hands out. Applied to
- * the copy of pdf-lib the calling thread loaded (in the API, only the rebuild's worker).
+ * Caps pdf-lib's stream decoders (point 1 above), in the copy of pdf-lib this thread loaded:
+ * in the API, only the rebuild's worker. pdf-lib does not export its decoders, so the
+ * CommonJS modules it is built from are patched: `ensureBuffer` of the decoders' base class
+ * (every buffer a decoder grows, at every filter stage, is charged to the budget) and
+ * `decodePDFRawStream` (which pdf-lib's parser calls through its module object, so the
+ * wrapper is what it gets). Each patch is checked to take effect; if pdf-lib changed and it
+ * does not, this throws, and the rebuild reports itself broken rather than run uncapped.
  */
+export function setDecodeLimits(limits: Pick<RewriteLimits, 'maxDecodedBytes' | 'maxFilters'>) {
+  decoding.used = 0;
+  decoding.budget = limits.maxDecodedBytes;
+  decoding.maxFilters = limits.maxFilters;
+}
+
 let capped = false;
-function capDecodedStreams() {
+export function capDecoders() {
   if (capped) return;
-  const probe = decodePDFRawStream(
-    PDFRawStream.of(
-      PDFContext.create().obj({ Filter: 'FlateDecode' }),
-      deflateSync(Buffer.alloc(0)),
-    ),
-  );
-  let proto: object | null = Object.getPrototypeOf(probe) as object | null;
-  while (proto && !Object.prototype.hasOwnProperty.call(proto, 'ensureBuffer')) {
-    proto = Object.getPrototypeOf(proto) as object | null;
-  }
-  if (!proto) throw new Error('pdf-lib decoders have no ensureBuffer to cap');
-  const base = proto as { ensureBuffer(requested: number): Uint8Array };
-  const ensureBuffer = base.ensureBuffer;
-  base.ensureBuffer = function (this: unknown, requested: number) {
-    if (requested > MAX_DECODED) throw new Error('stream decodes to too much data');
-    return ensureBuffer.call(this, requested);
+  const require = createRequire(import.meta.url);
+  const lib = require('pdf-lib') as { PDFRawStream: unknown };
+  const decodeModule = require('pdf-lib/cjs/core/streams/decode.js') as {
+    decodePDFRawStream: (stream: PDFRawStream) => unknown;
   };
+  const DecodeStream = (
+    require('pdf-lib/cjs/core/streams/DecodeStream.js') as {
+      default: { prototype: { ensureBuffer(requested: number): Uint8Array; buffer?: Uint8Array } };
+    }
+  ).default;
+  const base = DecodeStream.prototype;
+  const ensureBuffer = base.ensureBuffer;
+  base.ensureBuffer = function (this: { buffer?: Uint8Array }, requested: number) {
+    const before = this.buffer?.byteLength ?? 0;
+    const buffer = ensureBuffer.call(this, requested);
+    decoding.used += Math.max(0, buffer.byteLength - before);
+    if (decoding.used > decoding.budget) throw new Error('decoded data over budget');
+    return buffer;
+  };
+  const decode = decodeModule.decodePDFRawStream;
+  decodeModule.decodePDFRawStream = (stream) => {
+    const filter = stream.dict.lookup(PDFName.of('Filter'));
+    if (filter instanceof PDFArray && filter.size() > decoding.maxFilters) {
+      throw new Error('too many filters');
+    }
+    return decode(stream);
+  };
+  // Both patches must be the ones pdf-lib's parser uses (`ByteStream.fromPDFRawStream`, how
+  // it reads object and cross-reference streams), on the classes this module imported.
+  const ByteStream = (
+    require('pdf-lib/cjs/core/parser/ByteStream.js') as {
+      default: { fromPDFRawStream(stream: PDFRawStream): unknown };
+    }
+  ).default;
+  const context = PDFContext.create();
+  const probe = decode(
+    PDFRawStream.of(context.obj({ Filter: 'FlateDecode' }), deflateSync(Buffer.alloc(0))),
+  ) as unknown as object;
+  const saved = { ...decoding };
+  let chainCapped = false;
+  try {
+    decoding.maxFilters = 0;
+    ByteStream.fromPDFRawStream(
+      PDFRawStream.of(context.obj({ Filter: ['FlateDecode'] }), deflateSync(Buffer.alloc(0))),
+    );
+  } catch (error) {
+    chainCapped = String(error).includes('too many filters');
+  } finally {
+    Object.assign(decoding, saved);
+  }
+  if (
+    lib.PDFRawStream !== PDFRawStream ||
+    !chainCapped ||
+    !(probe instanceof (DecodeStream as unknown as new () => object))
+  ) {
+    throw new Error('pdf-lib decoders could not be capped');
+  }
   capped = true;
 }
 
@@ -167,8 +248,12 @@ function dropUnreachable(context: PDFContext) {
 function neuter(context: PDFContext) {
   const todo: PDFObject[] = [];
   for (const [ref, object] of context.enumerateIndirectObjects()) {
-    if (object instanceof PDFInvalidObject) context.assign(ref, PDFNull);
-    else todo.push(object);
+    // An unparsed object, or a blocked name as an object of its own (`/S 6 0 R`).
+    if (object instanceof PDFInvalidObject || (object instanceof PDFName && isBlocked(object))) {
+      context.assign(ref, PDFNull);
+    } else {
+      todo.push(object);
+    }
   }
   const seen = new Set<PDFObject>();
   while (todo.length > 0) {
@@ -176,6 +261,7 @@ function neuter(context: PDFContext) {
     if (seen.has(object)) continue;
     seen.add(object);
     if (object instanceof PDFStream) {
+      for (const key of STREAM_KEYS_DROPPED) object.dict.delete(PDFName.of(key));
       todo.push(object.dict);
     } else if (object instanceof PDFDict) {
       for (const [key, value] of object.entries()) {
@@ -202,10 +288,18 @@ function neuter(context: PDFContext) {
   }
 }
 
-/** Flate-compresses every stream that has no filter (see above). */
+/** Whether a stream has a filter a reader applies: a name, or a non-empty array of names. */
+function hasFilter(stream: PDFRawStream) {
+  const filter = stream.dict.lookup(PDFName.of('Filter'));
+  if (filter instanceof PDFName) return true;
+  if (!(filter instanceof PDFArray) || filter.size() === 0) return false;
+  return filter.asArray().every((item) => stream.dict.context.lookup(item) instanceof PDFName);
+}
+
+/** Flate-compresses every stream with no usable filter (see above). */
 function compressPlainStreams(context: PDFContext) {
   for (const [ref, object] of context.enumerateIndirectObjects()) {
-    if (!(object instanceof PDFRawStream) || object.dict.has(PDFName.of('Filter'))) continue;
+    if (!(object instanceof PDFRawStream) || hasFilter(object)) continue;
     const dict = object.dict.clone(context);
     dict.delete(PDFName.of('DecodeParms'));
     dict.set(PDFName.of('Filter'), PDFName.of('FlateDecode'));
@@ -217,10 +311,15 @@ function compressPlainStreams(context: PDFContext) {
  * Rebuilds a PDF from its pages (above). Throws only on a fault of its own; anything wrong
  * with the upload is an outcome.
  */
-export async function rewritePdf(input: Uint8Array, maxPages: number): Promise<RewriteOutcome> {
-  const refuse = (reason: 'too_many_pages' | 'not_a_document', detail: string) =>
+export async function rewritePdf(
+  input: Uint8Array,
+  limits: RewriteLimits,
+): Promise<RewriteOutcome> {
+  const { maxPages } = limits;
+  const refuse = (reason: 'too_many_pages' | 'not_a_document' | 'too_large', detail: string) =>
     ({ ok: false, reason, detail }) as const;
-  capDecodedStreams();
+  capDecoders();
+  setDecodeLimits(limits);
   let source: PDFDocument;
   try {
     // Loaded even when encrypted, to tell that case apart (pdf-lib's own error for it is not
@@ -266,6 +365,7 @@ export async function rewritePdf(input: Uint8Array, maxPages: number): Promise<R
       // Nothing else runs on this thread: no need to yield every 50 objects.
       objectsPerTick: Infinity,
     });
+    if (data.length > limits.maxOutputBytes) return refuse('too_large', `output ${data.length}`);
     const problem = checkOwnPdf(data);
     if (problem) return refuse('not_a_document', `post-check: ${problem}`);
     return { ok: true, data, pages: copied.length };
@@ -278,7 +378,7 @@ export async function rewritePdf(input: Uint8Array, maxPages: number): Promise<R
 export interface RewriteJob {
   task: 'rebuild-pdf';
   data: Uint8Array;
-  maxPages: number;
+  limits: RewriteLimits;
 }
 
 // As a worker: rebuild the file it was given, post the outcome and end.
@@ -287,12 +387,13 @@ if (!isMainThread && parentPort && (workerData as RewriteJob | undefined)?.task 
   console.warn = () => {};
   const job = workerData as RewriteJob;
   const port = parentPort;
-  rewritePdf(job.data, job.maxPages).then(
+  rewritePdf(job.data, job.limits).then(
     (outcome) => port.postMessage(outcome, outcome.ok ? [outcome.data.buffer as ArrayBuffer] : []),
+    // A fault of the rebuild itself (pdf-lib could not be capped, say): not the upload's.
     (error: unknown) =>
       port.postMessage({
         ok: false,
-        reason: 'not_a_document',
+        reason: 'unavailable',
         detail: `worker: ${String(error)}`,
       } satisfies RewriteOutcome),
   );

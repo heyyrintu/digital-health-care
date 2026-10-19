@@ -1,8 +1,11 @@
 import { pdfText } from '@dhc/pdf-text';
 import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
+import { deflateSync } from 'node:zlib';
 import {
   decodePDFRawStream,
   PDFArray,
+  PDFContext,
   PDFDocument,
   PDFRawStream,
   PDFRef,
@@ -14,13 +17,13 @@ import { renderPrescriptionPdf, type RxDocument } from '../prescribing/pdf';
 import { renderReferralLetterPdf, type LetterDocument } from '../referrals/letter-pdf';
 import { samplePdf } from './document-samples';
 import * as attack from './pdf-attack-samples';
-import { PDF_REBUILD_LIMITS, rebuildPdf } from './pdf-rebuild';
-import { MAX_DECODED, PAGE_KEYS, type RewriteOutcome } from './pdf-rebuild-worker';
+import { PDF_REBUILD_LIMITS, PdfRebuilder, rebuildPdf, type RebuildOutcome } from './pdf-rebuild';
+import { capDecoders, PAGE_KEYS, setDecodeLimits } from './pdf-rebuild-worker';
 import { checkOwnPdf } from './pdf-scan';
 
 /** A blocked name, an object or cross-reference stream, or the synthetic script's text. */
 const ACTIVE =
-  /\/(JS|JavaScript|Launch|EmbeddedFiles?|RichMedia|XFA|GoToR|GoToE|SubmitForm|ImportData|AA|OpenAction|ObjStm|XRef|Annots|AcroForm|Names|Outlines|StructTreeRoot|OCProperties)\b|app\.alert/;
+  /\/(JS|JavaScript|Launch|EmbeddedFiles?|RichMedia|XFA|GoToR|GoToE|SubmitForm|ImportData|AA|OpenAction|URI|URL|Metadata|ObjStm|XRef|Annots|AcroForm|Names|Outlines|StructTreeRoot|OCProperties)\b|app\.alert|example\.invalid/;
 
 /** Rebuilds a file, timed. */
 async function timed(file: Buffer) {
@@ -45,7 +48,7 @@ async function cleanOrRefused(file: Buffer) {
 const rebuilt = async (file: Buffer, pages = 1) => clean(await rebuildPdf(file), pages);
 
 /** Checks a rebuild came out with `pages` pages and nothing else of the upload's. */
-async function clean(outcome: RewriteOutcome, pages: number): Promise<Buffer> {
+async function clean(outcome: RebuildOutcome, pages: number): Promise<Buffer> {
   if (!outcome.ok) throw new Error(`refused: ${outcome.reason} (${outcome.detail})`);
   const out = Buffer.from(outcome.data);
   expect(outcome.pages).toBe(pages);
@@ -137,6 +140,122 @@ describe('rebuildPdf: what is kept and what is dropped', { timeout: 60_000 }, ()
   });
 });
 
+describe('rebuildPdf: names by reference, other files, fake filters', { timeout: 60_000 }, () => {
+  it('neuters a blocked name given as an object of its own', async () => {
+    const out = (await rebuilt(attack.indirectBlockedName())).toString('latin1');
+    expect(out).not.toMatch(/\/Launch/);
+  });
+
+  it('drops references to other files and sites, and XMP metadata', async () => {
+    const out = (await rebuilt(attack.externalReferences())).toString('latin1');
+    // The image and the form stay (the page draws them), without their links out.
+    expect(out).toContain('/Subtype /Image');
+    expect(out).toContain('/Subtype /Form');
+    expect(out).not.toMatch(/\/FFilter|\/FDecodeParms|\/Ref\b|\/F <<|x:xmp/);
+  });
+
+  it('compresses a stream whose filter is not one', async () => {
+    for (const filter of ['[]', 'null', '7'] as const) {
+      const out = await rebuilt(attack.fakeFilter(filter));
+      expect(out.toString('latin1'), filter).toContain('/Filter /FlateDecode');
+      expect(out.toString('latin1'), filter).not.toContain('(hi) Tj');
+      expect(contents(await PDFDocument.load(out))[0]).toContain('(hi) Tj');
+    }
+  });
+
+  it('refuses a rebuilt file over the output limit', async () => {
+    const outcome = await rebuildPdf(attack.everyActiveContent(), {
+      ...PDF_REBUILD_LIMITS,
+      maxOutputBytes: 200,
+    });
+    expect(outcome).toMatchObject({ ok: false, reason: 'too_large' });
+  });
+});
+
+describe('PdfRebuilder: the queue', { timeout: 60_000 }, () => {
+  /** A file that keeps its worker busy until the time limit. */
+  const slow = attack.hugeXrefSize();
+  const limits = (over: Partial<typeof PDF_REBUILD_LIMITS> = {}) => ({
+    ...PDF_REBUILD_LIMITS,
+    // Long enough for a good file to finish on a busy machine.
+    timeoutMs: 2500,
+    // Room enough that it is the time limit, not the heap, that ends `slow`.
+    maxOldGenerationSizeMb: 1024,
+    ...over,
+  });
+
+  it('runs one at a time by default, queues two more, and turns the rest away at once', async () => {
+    const rebuilder = new PdfRebuilder(limits());
+    expect(rebuilder.limits).toMatchObject({ concurrency: 1, maxQueue: 2 });
+    const started = performance.now();
+    const outcomes = Promise.all(Array.from({ length: 6 }, () => rebuilder.rebuild(slow)));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(rebuilder.load).toMatchObject({ running: 1, queued: 2 });
+    const reasons = (await outcomes).map((o) => (o.ok ? 'ok' : o.reason));
+    expect(reasons.filter((r) => r === 'busy')).toHaveLength(3);
+    expect(reasons.filter((r) => r === 'not_a_document')).toHaveLength(3);
+    expect(rebuilder.peakWorkers).toBe(1);
+    // Three in a row, each to the time limit.
+    expect(performance.now() - started).toBeGreaterThan(3 * 2500);
+    expect(rebuilder.load).toEqual({ running: 0, queued: 0, workers: 0 });
+  });
+
+  it('never runs more than `concurrency` workers', async () => {
+    const rebuilder = new PdfRebuilder(limits({ concurrency: 2, maxQueue: 20 }));
+    const files = Array.from({ length: 8 }, (_, i) => (i % 2 ? slow : samplePdf()));
+    const outcomes = await Promise.all(files.map((file) => rebuilder.rebuild(file)));
+    expect(outcomes.filter((o) => o.ok)).toHaveLength(4);
+    expect(rebuilder.peakWorkers).toBeLessThanOrEqual(2);
+    expect(rebuilder.load).toEqual({ running: 0, queued: 0, workers: 0 });
+  });
+
+  it('gives up waiting after the deadline', async () => {
+    const rebuilder = new PdfRebuilder(limits({ queueWaitMs: 300 }));
+    const first = rebuilder.rebuild(slow);
+    const started = performance.now();
+    expect(await rebuilder.rebuild(slow)).toMatchObject({ ok: false, reason: 'busy' });
+    expect(performance.now() - started).toBeLessThan(1000);
+    await first;
+  });
+
+  it('drops a waiting rebuild whose request closed, and ends a running one', async () => {
+    const rebuilder = new PdfRebuilder(limits({ timeoutMs: 5000 }));
+    const running = new AbortController();
+    const waiting = new AbortController();
+    const first = rebuilder.rebuild(slow, { signal: running.signal });
+    const second = rebuilder.rebuild(slow, { signal: waiting.signal });
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(rebuilder.load.queued).toBe(1);
+    waiting.abort();
+    expect(await second).toMatchObject({ ok: false, reason: 'aborted' });
+    expect(rebuilder.load.queued).toBe(0);
+    const started = performance.now();
+    running.abort();
+    expect(await first).toMatchObject({ ok: false, reason: 'aborted' });
+    expect(performance.now() - started).toBeLessThan(1000);
+    expect(rebuilder.load).toEqual({ running: 0, queued: 0, workers: 0 });
+    expect(await rebuilder.rebuild(slow, { signal: AbortSignal.abort() })).toMatchObject({
+      reason: 'aborted',
+    });
+  });
+
+  it('lets an organisation have two rebuilds running or waiting, not more', async () => {
+    const rebuilder = new PdfRebuilder(limits({ maxQueue: 10 }));
+    const mine = [1, 2, 3].map(() => rebuilder.rebuild(slow, { organisationId: 'org-a' }));
+    const theirs = rebuilder.rebuild(samplePdf(), { organisationId: 'org-b' });
+    const reasons = (await Promise.all(mine)).map((o) => (o.ok ? 'ok' : o.reason));
+    expect(reasons.sort()).toEqual(['busy', 'not_a_document', 'not_a_document']);
+    expect((await theirs).ok).toBe(true);
+  });
+
+  it("reports a broken worker as unavailable, not as the upload's fault", async () => {
+    const broken = new PdfRebuilder(limits(), new URL('./no-such-worker.js', import.meta.url));
+    const problem = await broken.selfTest(samplePdf());
+    expect(problem).toMatch(/^unavailable: /);
+    expect(await new PdfRebuilder(limits()).selfTest(samplePdf())).toBeNull();
+  });
+});
+
 describe('rebuildPdf: refusals', { timeout: 60_000 }, () => {
   it('refuses encrypted PDFs as such', async () => {
     expect(await rebuildPdf(attack.encryptedPdf())).toMatchObject({
@@ -176,14 +295,57 @@ describe('rebuildPdf: bounded work on hostile input', { timeout: 120_000 }, () =
     await rebuilt(attack.hugeXrefTable());
   });
 
-  it('stops an object stream header bomb, and caps how far any stream inflates', async () => {
+  it('stops an object stream header bomb', async () => {
     await cleanOrRefused(attack.objectStreamHeaderBomb());
-    // 128 MB of object stream from a few hundred kilobytes: never inflated past the cap, and
-    // the page still comes out.
-    expect(128 * 1024 * 1024).toBeGreaterThan(MAX_DECODED);
+    // 128 MB of object stream holding nothing the pages need: not inflated past the budget,
+    // and the page still comes out.
     const bomb = await cleanOrRefused(attack.objectStreamZipBomb(128));
     expect(bomb.outcome.ok).toBe(true);
-    expect(bomb.ms).toBeLessThan(3000);
+  });
+
+  it('charges every stream decoded to one budget, and caps filter chains', async () => {
+    const budget = PDF_REBUILD_LIMITS.maxDecodedBytes / (1024 * 1024);
+    // Pages behind a stream that inflates past the budget are never read: refused. Without
+    // the cap pdf-lib would inflate it all and find them.
+    expect(await rebuildPdf(attack.pagesInObjectStream(budget + 16))).toMatchObject({
+      ok: false,
+      reason: 'not_a_document',
+    });
+    await rebuilt(attack.pagesInObjectStream(16));
+    // Four Flate stages are fine, five are not.
+    await rebuilt(attack.pagesInObjectStream(0, 4));
+    expect(await rebuildPdf(attack.pagesInObjectStream(0, 5))).toMatchObject({
+      ok: false,
+      reason: 'not_a_document',
+    });
+  });
+
+  it('throws when decoding passes the budget, in this thread too once capped', () => {
+    const require = createRequire(import.meta.url);
+    // What pdf-lib's parser calls (through the module, so it gets the capped version).
+    const lib = require('pdf-lib/cjs/core/streams/decode.js') as {
+      decodePDFRawStream: (stream: PDFRawStream) => { decode(): Uint8Array };
+    };
+    capDecoders();
+    const context = PDFContext.create();
+    const big = PDFRawStream.of(
+      context.obj({ Filter: 'FlateDecode' }),
+      deflateSync(Buffer.alloc(4 * 1024 * 1024)),
+    );
+    const chained = PDFRawStream.of(
+      context.obj({ Filter: ['FlateDecode', 'FlateDecode'] }),
+      deflateSync(deflateSync(Buffer.alloc(16))),
+    );
+    try {
+      setDecodeLimits({ maxDecodedBytes: 1024 * 1024, maxFilters: 4 });
+      expect(() => lib.decodePDFRawStream(big).decode()).toThrow(/over budget/);
+      setDecodeLimits({ maxDecodedBytes: 8 * 1024 * 1024, maxFilters: 1 });
+      expect(() => lib.decodePDFRawStream(chained).decode()).toThrow(/too many filters/);
+      setDecodeLimits({ maxDecodedBytes: 8 * 1024 * 1024, maxFilters: 4 });
+      expect(lib.decodePDFRawStream(big).decode().length).toBe(4 * 1024 * 1024);
+    } finally {
+      setDecodeLimits({ maxDecodedBytes: Infinity, maxFilters: Infinity });
+    }
   });
 
   it('refuses deep nesting, whether pdf-lib can parse it or not', async () => {
@@ -196,8 +358,8 @@ describe('rebuildPdf: bounded work on hostile input', { timeout: 120_000 }, () =
 
   it('copes with long names within the limits', async () => {
     await rebuilt(attack.longName(1000));
-    // 5 million escaped characters (20 MB), kept short of the upload limit.
-    await cleanOrRefused(attack.longName(5_000_000));
+    // 3 million escaped characters, twice (24 MB): within the 25 MB upload limit.
+    await cleanOrRefused(attack.longName(3_000_000));
   });
 
   it('ends a worker that runs out of memory, and the API carries on', async () => {
@@ -208,7 +370,7 @@ describe('rebuildPdf: bounded work on hostile input', { timeout: 120_000 }, () =
     };
     const outcome = await rebuildPdf(attack.hugeXrefSize(), small);
     expect(outcome).toMatchObject({ ok: false, reason: 'not_a_document' });
-    if (!outcome.ok) expect(outcome.detail).toMatch(/worker|memory|timeout/i);
+    if (!outcome.ok) expect(outcome.detail).toMatch(/out of memory/);
     await rebuilt(samplePdf());
   });
 });

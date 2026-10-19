@@ -118,12 +118,18 @@ export class DocumentsService {
     request: FastifyRequest,
     actor: Actor,
     file: UploadedFile,
+    signal?: AbortSignal,
   ): Promise<DocumentFile> {
     const settings = await withTenant(this.s.db, actor.organisationId, (tx) =>
       readSettings(tx, actor.organisationId),
     );
     // A PDF comes back rebuilt (threat model T27): only those bytes are stored and served.
-    const { extension, mediaType, data } = await acceptDocument(settings, file, request.log);
+    const { extension, mediaType, data } = await acceptDocument(settings, file, {
+      pdf: this.s.pdf,
+      log: request.log,
+      organisationId: actor.organisationId,
+      signal,
+    });
     const digest = sha256(data);
     // No patient data, title or file name in the key (threat model T4).
     const key = `organisations/${actor.organisationId}/documents/${uniqueSuffix()}.${extension}`;
@@ -146,6 +152,10 @@ export class DocumentsService {
           mediaType: row.mediaType,
           sizeBytes: row.sizeBytes,
           sha256: digest,
+          // A PDF is stored as rebuilt: what was uploaded, for tracing it back.
+          ...(data === file.data
+            ? {}
+            : { originalSizeBytes: file.data.length, originalSha256: sha256(file.data) }),
           by: actor.role,
         });
         return {

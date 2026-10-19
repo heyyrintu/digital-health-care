@@ -76,6 +76,8 @@ const FILE_REASONS = [
   'too_many_pixels',
   'too_many_pages',
   'encrypted',
+  'busy',
+  'unavailable',
 ] as const;
 
 /**

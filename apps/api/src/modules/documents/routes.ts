@@ -84,8 +84,23 @@ export const documentRoutes: FastifyPluginAsync<{
   };
 
   app.post('/document-files', upload, async (request, reply) => {
-    const file = await documents.uploadFile(request, authOf(request), documentFile(request));
-    return reply.status(201).send(DocumentFile.parse(file));
+    // A client that goes away before the answer: its PDF leaves the rebuild queue.
+    const gone = new AbortController();
+    const onClose = () => {
+      if (!reply.raw.writableFinished) gone.abort();
+    };
+    reply.raw.once('close', onClose);
+    try {
+      const file = await documents.uploadFile(
+        request,
+        authOf(request),
+        documentFile(request),
+        gone.signal,
+      );
+      return reply.status(201).send(DocumentFile.parse(file));
+    } finally {
+      reply.raw.off('close', onClose);
+    }
   });
 
   app.get('/library-documents', library, async (request) => {

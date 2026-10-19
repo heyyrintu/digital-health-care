@@ -42,6 +42,11 @@ describe('checkOwnPdf', () => {
       expect(check(out), name).toMatch(/blocked name/);
     }
     expect(check(text.replace('/Type /Catalog', '/Type /ObjStm'))).toMatch(/blocked name \/ObjStm/);
+    for (const name of ['/URI', '/URL', '/Metadata']) {
+      expect(check(text.replace('/Type /Catalog', `/Type /Catalog /X ${name}`)), name).toMatch(
+        /blocked name/,
+      );
+    }
   });
 
   it('fails on object and cross-reference streams (pdf-lib with object streams on)', async () => {
@@ -83,6 +88,16 @@ describe('checkOwnPdf', () => {
       ),
     );
     expect(check(deep)).toMatch(/nested too deep/);
+  });
+
+  it('fails on a stream pointing at another file', async () => {
+    for (const key of ['F', 'FFilter', 'FDecodeParms', 'Ref']) {
+      const out = await own((doc) => {
+        const stream = doc.context.stream('q Q', { [key]: 1 });
+        doc.catalog.set(PDFName.of('X'), doc.context.register(stream));
+      });
+      expect(check(out), key).toMatch(new RegExp(`has /${key}`));
+    }
   });
 
   it('fails on an object header in stream data, in linear time', async () => {

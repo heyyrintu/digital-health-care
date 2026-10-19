@@ -59,6 +59,12 @@ describe('document files on the web', () => {
     expect(documentErrorText(refused({ file: 'too_many_pages' }), t, clinic)).toMatch(
       /more than 500 pages/,
     );
+    expect(documentErrorText(refused({ file: 'busy' }, 'UNAVAILABLE', 503), t, clinic)).toBe(
+      'Too many files are being checked right now; try again in a minute.',
+    );
+    expect(
+      documentErrorText(refused({ file: 'unavailable' }, 'UNAVAILABLE', 503), t, clinic),
+    ).toMatch(/cannot be checked right now/);
     expect(documentErrorText(refused({ file: 'encrypted' }), t, clinic)).toMatch(
       /password-protected/,
     );

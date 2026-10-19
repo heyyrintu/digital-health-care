@@ -1,13 +1,14 @@
 import {
   checkDocumentUpload,
   DOCUMENT_MEDIA_TYPES,
+  MAX_UPLOAD_MB,
   type DocumentType,
   type OrganisationSettings,
 } from '@dhc/contracts';
 import { AppError } from '../../errors';
 import { inspectImage, MARKUP } from '../branding/logo';
 import type { UploadedFile } from '../orders/upload';
-import { PDF_REBUILD_LIMITS, rebuildPdf } from './pdf-rebuild';
+import { PDF_REBUILD_LIMITS, type PdfRebuilder } from './pdf-rebuild';
 
 /**
  * Content checks for document files (threat model T27). A document is opened by patients
@@ -53,6 +54,8 @@ export type ContentRefusal =
 
 /** Why an upload is refused: the clinic's limits, or its content. */
 export type DocumentRefusal = ContentRefusal | 'too_large' | 'type_not_allowed';
+/** Why an upload could not be checked now (503): `busy` (try again) or `unavailable`. */
+export type DocumentUnavailable = 'busy' | 'unavailable';
 
 /** How large a document image may decode to. */
 export const DOCUMENT_IMAGE_LIMITS = { maxDimension: 10_000, maxPixels: 50_000_000 } as const;
@@ -127,22 +130,54 @@ const MESSAGES: Record<ContentRefusal, string> = {
 export interface RebuildLog {
   info(details: object, message: string): void;
   warn(details: object, message: string): void;
+  error(details: object, message: string): void;
 }
+
+/** What `acceptDocument` needs to rebuild a PDF. */
+export interface RebuildContext {
+  /** The process's rebuilder (`Services.pdf`). */
+  pdf: PdfRebuilder;
+  log?: RebuildLog;
+  /** The uploader's organisation: it has at most two rebuilds running or waiting. */
+  organisationId?: string;
+  /** Aborts when the request closes: a waiting rebuild then leaves the queue. */
+  signal?: AbortSignal;
+}
+
+/** A 503 the client should retry (`busy`) or that is ours to fix (`unavailable`). */
+const unavailable = (reason: 'busy' | 'unavailable') =>
+  reason === 'busy'
+    ? new AppError(
+        503,
+        'UNAVAILABLE',
+        'Too many files are being checked right now; try again in a minute.',
+        { file: 'busy' },
+        { 'retry-after': '60' },
+      )
+    : new AppError(
+        503,
+        'UNAVAILABLE',
+        'PDFs cannot be checked right now. Try again later, or upload the document as an image.',
+        { file: 'unavailable' },
+      );
 
 /**
  * Checks an uploaded document against the clinic's limits (`checkDocumentUpload`: one of
  * its document types, within its largest file) and its content (`inspectDocument`), and
- * rebuilds a PDF (`rebuildPdf`). SVG and HTML are refused by name. Returns the type, the
+ * rebuilds a PDF (`context.pdf`). SVG and HTML are refused by name. Returns the type, the
  * extension to store it under and the bytes to store: the upload for an image, the rebuilt
- * file for a PDF. 400 with `fields.file` set to the reason otherwise.
+ * file for a PDF (refused as `too_large` when the rebuilt file is over the clinic's limit).
+ * 400 with `fields.file` set to the reason otherwise; 503 when the rebuild is busy or broken.
  */
 export async function acceptDocument(
   settings: Pick<OrganisationSettings, 'maxUploadMb' | 'uploadTypes'>,
   file: UploadedFile,
-  log?: RebuildLog,
+  context: RebuildContext,
 ): Promise<{ type: DocumentType; extension: string; mediaType: string; data: Buffer }> {
   const refuse = (reason: DocumentRefusal, message: string) =>
     new AppError(400, 'VALIDATION_FAILED', message, { file: reason });
+  const tooLarge = () =>
+    refuse('too_large', `The file is larger than this clinic’s ${settings.maxUploadMb} MB limit.`);
   if (REFUSED_DOCUMENT_MEDIA_TYPES.includes(file.mediaType)) {
     throw refuse(
       'type_not_allowed',
@@ -157,12 +192,7 @@ export async function acceptDocument(
   if (check === 'type_not_allowed') {
     throw refuse('type_not_allowed', 'This clinic does not accept this type of file.');
   }
-  if (check === 'too_large') {
-    throw refuse(
-      'too_large',
-      `The file is larger than this clinic’s ${settings.maxUploadMb} MB limit.`,
-    );
-  }
+  if (check === 'too_large') throw tooLarge();
   const declared = (Object.keys(DOCUMENT_MEDIA_TYPES) as DocumentType[]).find(
     (t) => DOCUMENT_MEDIA_TYPES[t] === file.mediaType,
   )!;
@@ -180,15 +210,42 @@ export async function acceptDocument(
     mediaType: DOCUMENT_MEDIA_TYPES[declared],
   };
   if (declared !== 'pdf') return { ...accepted, data: file.data };
-  const rebuilt = await rebuildPdf(file.data);
+  const { log } = context;
+  const rebuilt = await context.pdf.rebuild(file.data, {
+    organisationId: context.organisationId,
+    signal: context.signal,
+  });
   if (!rebuilt.ok) {
+    const details = {
+      reason: rebuilt.reason,
+      detail: rebuilt.detail.slice(0, 200),
+      sizeBytes: file.data.length,
+    };
+    if (rebuilt.reason === 'unavailable') {
+      // The rebuild itself is broken (worker missing, pdf-lib changed): ours, not the user's.
+      log?.error(details, 'PDF rebuild failed');
+      throw unavailable('unavailable');
+    }
+    if (rebuilt.reason === 'busy' || rebuilt.reason === 'aborted') {
+      log?.info(details, 'PDF rebuild not run');
+      throw unavailable('busy');
+    }
     // A rebuilt file failing its own check is a gap in the rebuild: worth a warning.
-    const level = rebuilt.detail.startsWith('post-check') ? 'warn' : 'info';
-    log?.[level](
-      { reason: rebuilt.reason, detail: rebuilt.detail.slice(0, 200), sizeBytes: file.data.length },
+    log?.[rebuilt.detail.startsWith('post-check') ? 'warn' : 'info'](
+      details,
       'Uploaded PDF refused by the rebuild',
     );
+    if (rebuilt.reason === 'too_large') throw tooLarge();
     throw refuse(rebuilt.reason, MESSAGES[rebuilt.reason]);
+  }
+  // The rebuilt file can be larger than the upload (object streams written out).
+  const limit = Math.min(settings.maxUploadMb, MAX_UPLOAD_MB) * 1024 * 1024;
+  if (rebuilt.data.byteLength > limit) {
+    log?.info(
+      { sizeBytes: file.data.length, rebuiltBytes: rebuilt.data.byteLength },
+      'Rebuilt PDF over the limit',
+    );
+    throw tooLarge();
   }
   return {
     ...accepted,

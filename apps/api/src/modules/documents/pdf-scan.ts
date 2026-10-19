@@ -11,8 +11,10 @@
  * - the table lists exactly the objects in the file, at the offsets where they start, and
  *   `startxref` points at it; the trailer has `/Root` and `/Size` and no `/Encrypt`,
  *   `/Prev` or `/XRefStm`;
- * - no object stream or cross-reference stream (`/ObjStm`, `/XRef`), and none of the names
- *   in `BLOCKED` anywhere outside stream data, with `#xx` escapes decoded;
+ * - no object stream or cross-reference stream (`/ObjStm`, `/XRef`), none of the names in
+ *   `BLOCKED` (actions, URIs, XMP metadata) anywhere outside stream data, with `#xx`
+ *   escapes decoded, and no stream dictionary pointing at another file (`/F`, `/FFilter`,
+ *   `/FDecodeParms`, `/Ref`);
  * - no stream's data holds an `n g obj` header (an object a lenient reader could find in
  *   it; the rebuild compresses streams that had no filter, and compressed data matches by
  *   chance about once in 10^14 bytes).
@@ -36,9 +38,15 @@ const BLOCKED = new Set([
   'ImportData',
   'AA',
   'OpenAction',
+  'URI',
+  'URL',
+  'Metadata',
   'ObjStm',
   'XRef',
 ]);
+
+/** Keys a stream dictionary may not have: data in another file, or another file's page. */
+const STREAM_KEYS_REFUSED = ['F', 'FFilter', 'FDecodeParms', 'Ref'];
 
 /** Deepest nesting of arrays and dictionaries accepted. */
 export const MAX_DEPTH = 100;
@@ -268,6 +276,9 @@ function check(data: Uint8Array) {
     if (next === 'stream') {
       if (value.kind !== 'dict') fail(`stream ${number} without dictionary`);
       const dict = value.kind === 'dict' ? value.entries : new Map<string, Value>();
+      for (const key of STREAM_KEYS_REFUSED) {
+        if (dict.has(key)) fail(`stream ${number} has /${key}`);
+      }
       const length = dict.get('Length');
       if (length?.kind !== 'number' || !INTEGER.test(length.text)) fail(`stream ${number} length`);
       read.endOfLine();

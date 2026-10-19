@@ -333,3 +333,66 @@ export const encryptedPdf = () =>
     ],
     '/Encrypt 4 0 R ',
   );
+
+/**
+ * The page tree packed in an object stream followed by `mb` megabytes of padding, compressed
+ * through `filters` Flate stages. Its pages can be read only by inflating the whole stream,
+ * so the rebuild's decoding budget and filter-chain cap decide whether the file comes out.
+ */
+export function pagesInObjectStream(mb: number, filters = 1): Buffer {
+  const pages = '<< /Type /Pages /Kids [3 0 R] /Count 1 >>';
+  const page = '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] >>';
+  const header = `2 0 3 ${pages.length + 1} `;
+  let data: Buffer = Buffer.alloc(
+    header.length + pages.length + page.length + 2 + mb * 1024 * 1024,
+    0x20,
+  );
+  data.write(`${header}${pages} ${page}`, 'latin1');
+  for (let i = 0; i < filters; i++) data = deflateSync(data, { level: 9 });
+  const chain = filters === 1 ? '/FlateDecode' : `[${' /FlateDecode'.repeat(filters)} ]`;
+  return objectsPdf(
+    [
+      [1, '<< /Type /Catalog /Pages 2 0 R >>'],
+      [4, stream(`/Type /ObjStm /N 2 /First ${header.length} /Filter ${chain}`, data)],
+    ],
+    '',
+  );
+}
+
+/** A page with `resources` and a plain content stream (`contentDict` added to its dictionary). */
+const pageWith = (resources: string, extra: string[] = [], contentDict = '') =>
+  objectsPdf(
+    [
+      [1, '<< /Type /Catalog /Pages 2 0 R >>'],
+      [2, '<< /Type /Pages /Kids [3 0 R] /Count 1 >>'],
+      [
+        3,
+        `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 200 200] /Resources ${resources} /Contents 4 0 R >>`,
+      ],
+      [4, stream(contentDict, Buffer.from('BT /F1 12 Tf 10 10 Td (hi) Tj ET', 'latin1'))],
+      ...extra.map((body, i): [number, string] => [5 + i, body]),
+    ],
+    '',
+  );
+
+/** A launch action whose `/S` is a name given by reference (`/S 6 0 R`, `6 0 obj /Launch`). */
+export const indirectBlockedName = () =>
+  pageWith('<< /Properties << /P 5 0 R >> >>', [
+    '<< /Type /Action /S 6 0 R /F (calc.exe) >>',
+    '/Launch',
+  ]);
+
+/** References to other files and sites: an external image, a reference XObject, a URI action. */
+export const externalReferences = () =>
+  pageWith(
+    '<< /XObject << /Im1 5 0 R /Fm1 6 0 R >> /Properties << /U << /S /URI /URI (https://example.invalid/beacon) >> >> >>',
+    [
+      '<< /Type /XObject /Subtype /Image /Width 1 /Height 1 /BitsPerComponent 8 /ColorSpace /DeviceGray /F << /FS /URL /F (https://example.invalid/beacon) >> /FFilter /DCTDecode /FDecodeParms << >> /Metadata 7 0 R /Length 1 >>\nstream\n\x00\nendstream',
+      '<< /Type /XObject /Subtype /Form /BBox [0 0 1 1] /Ref << /F << /FS /URL /F (https://example.invalid/x.pdf) >> /Page 0 >> /Length 0 >>\nstream\n\nendstream',
+      '<< /Type /Metadata /Subtype /XML /Length 9 >>\nstream\n<x:xmp/>\n\nendstream',
+    ],
+  );
+
+/** A page whose content stream claims a filter that is not one: `[]`, `null` or a number. */
+export const fakeFilter = (filter: '[]' | 'null' | '7') =>
+  pageWith('<< >>', [], `/Filter ${filter}`);

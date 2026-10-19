@@ -9,6 +9,8 @@ export class AppError extends Error {
     readonly code: ErrorCode,
     message: string,
     readonly fields?: Record<string, string>,
+    /** Response headers to send with it, e.g. `Retry-After` on a 503. */
+    readonly headers?: Record<string, string>,
   ) {
     super(message);
     this.name = 'AppError';
@@ -57,6 +59,7 @@ export function registerErrorHandling(app: FastifyInstance) {
 
   app.setErrorHandler((error: FastifyError | AppError | ZodError, request, reply) => {
     if (error instanceof AppError) {
+      if (error.headers) reply.headers(error.headers);
       return send(reply, request, error.statusCode, error.code, error.message, error.fields);
     }
     if (error instanceof ZodError) {

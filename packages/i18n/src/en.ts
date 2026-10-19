@@ -1608,6 +1608,9 @@ export const en = {
     'This PDF is password-protected or encrypted; save or print it as an unprotected PDF and upload that.',
   'documents.file.too_many_pages':
     'The PDF has more than 500 pages. Split it into smaller files and try again.',
+  'documents.file.busy': 'Too many files are being checked right now; try again in a minute.',
+  'documents.file.unavailable':
+    'PDFs cannot be checked right now. Try again later, or upload the document as an image.',
   'library.title': 'Document library',
   'library.sub':
     'Reusable sheets doctors share with patients: exercise sheets, diet charts and information.',
