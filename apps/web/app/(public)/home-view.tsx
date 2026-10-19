@@ -218,7 +218,10 @@ function DoctorCard({ card, locale, t }: { card: PublicDoctorCard; locale: Local
         </p>
       )}
       <p className="m-0 mt-2 text-sm [overflow-wrap:anywhere]">
-        {t('doctorPage.at', { organisation: card.organisationName })}
+        {/* The clinic's display name only: the home page itself stays unbranded. */}
+        {t('doctorPage.at', {
+          organisation: card.organisationDisplayName ?? card.organisationName,
+        })}
       </p>
       {places.length > 0 && (
         <ul className="m-0 mt-1 list-none space-y-0.5 p-0">

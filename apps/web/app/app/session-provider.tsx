@@ -53,6 +53,8 @@ interface PatientSessionContext {
   endedReason: SignOutReason | null;
   /** Sends the patient's access token; `api.portal*` are the portal's endpoints. */
   api: ApiClient;
+  /** The API's base URL (public reads without the token, such as the clinic's branding). */
+  apiBaseUrl: string;
   /** Onboarding step, the family and whose records are shown; reset on sign-out. */
   account: PatientAccount;
   /** The tabs and object URLs of files opened in this session; closed and revoked when it ends. */
@@ -466,6 +468,7 @@ export function PatientSessionProvider({
       me,
       endedReason,
       api,
+      apiBaseUrl,
       account,
       files,
       documentUrls,
@@ -481,6 +484,7 @@ export function PatientSessionProvider({
       me,
       endedReason,
       api,
+      apiBaseUrl,
       account,
       files,
       documentUrls,

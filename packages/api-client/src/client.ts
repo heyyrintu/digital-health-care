@@ -8,6 +8,9 @@ import {
   BookingOptions,
   ConsentStatus,
   DoctorProfile,
+  OrganisationBranding,
+  PublicBranding,
+  type UpdateOrganisationBrandingBody,
   PublicDoctor,
   PublicDoctorDirectory,
   PublicDoctorList,
@@ -364,6 +367,22 @@ export function createApiClient(options: ApiClientOptions) {
     /** Every public doctor page shown, as cards for the home page's directory (at most 500). */
     publicDoctorDirectory: ({ signal }: { signal?: AbortSignal } = {}) =>
       request('GET', '/public/doctor-directory', { schema: PublicDoctorDirectory, signal }),
+    /** An active organisation's saved branding (the portal's sign-in); 404 when it has none. */
+    publicBranding: (slug: string, { signal }: { signal?: AbortSignal } = {}) =>
+      request('GET', `/public/organisations/${encodeURIComponent(slug)}/branding`, {
+        schema: PublicBranding,
+        signal,
+      }),
+    // Clinic admin: the organisation's branding.
+    organisationBranding: () =>
+      request('GET', '/organisation-branding', { schema: OrganisationBranding }),
+    saveOrganisationBranding: (body: UpdateOrganisationBrandingBody) =>
+      request('PUT', '/organisation-branding', { schema: OrganisationBranding, body }),
+    /** The logo file itself: PNG, JPEG or WebP, up to 512 KB (check `LOGO_MAX_BYTES` first). */
+    uploadOrganisationLogo: (file: Blob) =>
+      uploadFile('/organisation-branding/logo', file, { schema: OrganisationBranding }),
+    deleteOrganisationLogo: () =>
+      request('DELETE', '/organisation-branding/logo', { schema: OrganisationBranding }),
     // Patient app and web portal (patients only).
     portalConsents: () => request('GET', '/portal/consents', { schema: ConsentStatus }),
     acceptConsents: (accept: AcceptConsentsBody['accept']) =>

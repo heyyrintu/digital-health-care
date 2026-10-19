@@ -6,6 +6,7 @@ import { Button, Input, NativeSelect, PageHeader } from '@dhc/ui-web';
 import { Search } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { BrandingCard } from './branding-card';
 import { ClinicFigures } from './clinic-figures';
 import { AgeGender, TagChip } from './patient-bits';
 import { useSession } from './session-provider';
@@ -39,6 +40,7 @@ export default function ClinicDashboard() {
                 <ScreensCard />
                 <SettingsCard />
                 <PolicyCard />
+                <BrandingCard />
               </div>
             )}
           </div>

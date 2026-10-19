@@ -15,6 +15,9 @@ import {
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useSyncExternalStore, type ReactNode } from 'react';
+import { accentStyle, brandName, logoSrc } from '../../lib/branding';
+import { BrandLogo } from '../brand';
+import { usePublicBranding } from './branding';
 import { ConsentsStep } from './consents';
 import { LoadError, Loading, PortalPage } from './parts';
 import { PatientForm } from './patient-form';
@@ -45,9 +48,11 @@ function useAccount(enabled: boolean): PatientAccountState {
  * on this number; only then does the page get the family.
  */
 export function PortalShell({ children }: { children: (account: ReadyAccount) => ReactNode }) {
-  const { status, me, account, signOut, t } = usePatientSession();
+  const { status, me, account, signOut, t, apiBaseUrl } = usePatientSession();
   const router = useRouter();
   const state = useAccount(status === 'signedIn');
+  // The signed-in clinic's branding (none saved: the platform look).
+  const branding = usePublicBranding(me?.organisation.slug);
 
   useEffect(() => {
     if (status === 'signedOut') router.replace('/app/login');
@@ -93,18 +98,33 @@ export function PortalShell({ children }: { children: (account: ReadyAccount) =>
     }
   }
 
+  const clinicName = brandName(me.organisation.name, branding);
+  const logo = branding ? logoSrc(apiBaseUrl, branding.logoUrl) : null;
+  // The accent only on the clinic's own marks (the stripe and the initial's tile): the
+  // pages' tabs and chips keep the platform colours they were checked against.
+  const accent = accentStyle(branding?.accentColour);
+
   return (
     <div className="min-h-dvh bg-background font-sans text-foreground">
       <header className="sticky top-0 z-10 border-b bg-card/95 backdrop-blur print:hidden">
-        <div className="mx-auto flex max-w-2xl items-center gap-3 px-4 py-2.5">
-          <span
-            className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-primary font-display font-bold text-primary-foreground"
-            aria-hidden
-          >
-            {me.organisation.name.slice(0, 1).toUpperCase()}
-          </span>
+        {accent && <div aria-hidden className="h-1 bg-primary" style={accent} />}
+        <div
+          className="mx-auto flex max-w-2xl items-center gap-3 px-4 py-2.5"
+          data-testid="portal-brand"
+        >
+          {logo ? (
+            <BrandLogo src={logo} className="h-9 max-w-32" />
+          ) : (
+            <span
+              className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-primary font-display font-bold text-primary-foreground"
+              style={accent}
+              aria-hidden
+            >
+              {clinicName.slice(0, 1).toUpperCase()}
+            </span>
+          )}
           <div className="min-w-0 flex-1">
-            <p className="truncate font-display text-sm font-bold">{me.organisation.name}</p>
+            <p className="truncate font-display text-sm font-bold">{clinicName}</p>
             <p data-testid="signed-in-as" className="truncate text-xs text-muted-foreground">
               {t('portal.signedInAs', { phone: me.user.phone ?? '' })}
             </p>

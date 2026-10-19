@@ -2,7 +2,7 @@ import type { PublicDoctor } from '@dhc/contracts';
 import { t } from '@dhc/i18n';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { publicSiteUrl } from '../../../lib/config';
+import { publicApiBaseUrl, publicSiteUrl } from '../../../lib/config';
 import { loadPublicDoctor as loadDoctor } from '../../../lib/public-doctor-server';
 import {
   bookingHref,
@@ -68,7 +68,11 @@ export default async function DoctorPage({ params }: Props) {
         // Escaped JSON (no `<`), so nothing typed into the profile can end the tag.
         dangerouslySetInnerHTML={{ __html: jsonLdScript(physicianJsonLd(doctor, url)) }}
       />
-      <DoctorProfileView doctor={doctor} bookHref={bookingHref(doctor)} />
+      <DoctorProfileView
+        doctor={doctor}
+        bookHref={bookingHref(doctor)}
+        apiBaseUrl={publicApiBaseUrl()}
+      />
     </main>
   );
 }

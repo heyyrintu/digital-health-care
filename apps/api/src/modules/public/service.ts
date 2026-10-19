@@ -8,6 +8,7 @@ import {
 import { withPublic } from '@dhc/db';
 import { AppError } from '../../errors';
 import type { Services } from '../../services';
+import { readPublicBranding, toOrganisationBranding, type PublicBrandingRow } from './branding';
 
 /** One body for a page that does not exist, is not listed or is not verified (ADR 0017). */
 export const PAGE_NOT_FOUND = () => new AppError(404, 'NOT_FOUND', 'Not found.');
@@ -34,8 +35,11 @@ export interface PublicDoctorRow {
   updated_at: Date;
 }
 
-/** Maps the function's row to the page, field by field, so nothing else can slip through. */
-export function toPublicDoctor(row: PublicDoctorRow): PublicDoctor {
+/**
+ * Maps the function's row to the page, field by field, so nothing else can slip through.
+ * `branding` is the organisation's row of `public_organisation_branding` (none: undefined).
+ */
+export function toPublicDoctor(row: PublicDoctorRow, branding?: PublicBrandingRow): PublicDoctor {
   return {
     slug: row.slug,
     name: row.display_name,
@@ -44,7 +48,11 @@ export function toPublicDoctor(row: PublicDoctorRow): PublicDoctor {
     registration: { number: row.registration_number, council: row.council },
     about: row.about,
     languages: [...row.languages],
-    organisation: { slug: row.organisation_slug, name: row.organisation_name },
+    organisation: {
+      slug: row.organisation_slug,
+      name: row.organisation_name,
+      branding: toOrganisationBranding(branding),
+    },
     clinics: row.clinics.map((c) => ({ name: c.name, address: c.address })),
     consultationTypes: row.consultation_types.map((t) => ({
       name: t.name,
@@ -66,6 +74,7 @@ export interface PublicDoctorCardRow {
   clinics: { name: string; addressLine: string | null }[];
   languages: string[];
   fee_from_paise: number | null;
+  organisation_display_name: string | null;
 }
 
 /** Maps a directory row to its card, field by field, as `toPublicDoctor` does. */
@@ -76,6 +85,7 @@ export function toPublicDoctorCard(row: PublicDoctorCardRow): PublicDoctorCard {
     qualifications: row.qualifications,
     specialty: row.specialty,
     organisationName: row.organisation_name,
+    organisationDisplayName: row.organisation_display_name,
     clinics: row.clinics.map((c) => ({ name: c.name, addressLine: c.addressLine })),
     languages: [...row.languages],
     feeFromPaise: row.fee_from_paise,
@@ -91,13 +101,16 @@ export function toPublicDoctorCard(row: PublicDoctorCardRow): PublicDoctorCard {
 export class PublicDoctorService {
   constructor(private readonly s: Services) {}
 
+  /** The page, with its organisation's branding read in the same transaction. */
   async get(slug: string): Promise<PublicDoctor> {
-    const [row] = await withPublic(
-      this.s.db,
-      (tx) => tx.$queryRaw<PublicDoctorRow[]>`SELECT * FROM public_doctor_profile(${slug})`,
-    );
-    if (!row) throw PAGE_NOT_FOUND();
-    return toPublicDoctor(row);
+    const found = await withPublic(this.s.db, async (tx) => {
+      const [row] = await tx.$queryRaw<
+        PublicDoctorRow[]
+      >`SELECT * FROM public_doctor_profile(${slug})`;
+      return row ? { row, branding: await readPublicBranding(tx, row.organisation_slug) } : null;
+    });
+    if (!found) throw PAGE_NOT_FOUND();
+    return toPublicDoctor(found.row, found.branding);
   }
 
   async list(): Promise<PublicDoctorList> {

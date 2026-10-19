@@ -17,6 +17,7 @@ import { orderRoutes } from './modules/orders/routes';
 import { UPLOAD_RATE_LIMIT } from './modules/orders/upload';
 import { prescribingRoutes } from './modules/prescribing/routes';
 import { billingRoutes } from './modules/billing/routes';
+import { brandingRoutes } from './modules/branding/routes';
 import { queueRoutes } from './modules/queue/routes';
 import { reportRoutes } from './modules/reports/routes';
 import { platformRoutes } from './modules/platform/routes';
@@ -122,6 +123,7 @@ export function buildApp({
     app.register(auditRoutes, { prefix: '/v1', services });
     app.register(reportRoutes, { prefix: '/v1', services });
     app.register(settingsRoutes, { prefix: '/v1', services });
+    app.register(brandingRoutes, { prefix: '/v1', services, uploadRateLimit });
     app.register(portalRoutes, { prefix: '/v1', services, uploadRateLimit });
     app.register(deviceRoutes, { prefix: '/v1', services });
     app.register(syncRoutes, { prefix: '/v1', services });

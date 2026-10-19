@@ -1,6 +1,7 @@
 export * from './appointments';
 export * from './audit';
 export * from './billing';
+export * from './branding';
 export * from './auth';
 export * from './consultations';
 export * from './dashboard';

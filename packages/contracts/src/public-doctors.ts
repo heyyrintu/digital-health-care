@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { NO_BRANDING, PublicOrganisationBranding } from './branding';
 import { ConsultationMode } from './scheduling';
 
 // ---- Public doctor pages (Build Plan §5.1; ADR 0017; API guide §3u) -------------------
@@ -120,7 +121,15 @@ export const PublicDoctor = z.object({
   registration: z.object({ number: z.string().nullable(), council: z.string().nullable() }),
   about: z.string().nullable(),
   languages: z.array(z.string()),
-  organisation: z.object({ slug: z.string(), name: z.string() }),
+  /**
+   * `branding`: what the organisation's clinic admin chose for its pages (all null: none;
+   * missing, as from an API older than branding: none).
+   */
+  organisation: z.object({
+    slug: z.string(),
+    name: z.string(),
+    branding: PublicOrganisationBranding.default(() => ({ ...NO_BRANDING })),
+  }),
   clinics: z.array(z.object({ name: z.string(), address: z.string().nullable() })),
   consultationTypes: z.array(
     z.object({
@@ -155,6 +164,11 @@ export const PublicDoctorCard = z.object({
   qualifications: z.string().nullable(),
   specialty: z.string().nullable(),
   organisationName: z.string(),
+  /**
+   * The organisation's branded display name (null: none). The home page stays unbranded,
+   * so the card carries no colour or logo.
+   */
+  organisationDisplayName: z.string().nullable().default(null),
   clinics: z.array(z.object({ name: z.string(), addressLine: z.string().nullable() })),
   languages: z.array(z.string()),
   feeFromPaise: z.number().int().nullable(),

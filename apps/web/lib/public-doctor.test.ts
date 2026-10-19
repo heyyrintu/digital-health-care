@@ -21,7 +21,11 @@ const doctor: PublicDoctor = {
   registration: { number: 'TEST-12345', council: 'Test Medical Council' },
   about: 'Synthetic about text.',
   languages: ['English', 'Hindi'],
-  organisation: { slug: 'demo-clinic', name: 'Demo Clinic' },
+  organisation: {
+    slug: 'demo-clinic',
+    name: 'Demo Clinic',
+    branding: { displayName: null, accentColour: null, logoUrl: null },
+  },
   clinics: [{ name: 'Main clinic', address: '1 Test Road' }],
   consultationTypes: [
     { name: 'In-person consultation', mode: 'in_person', durationMin: 15, feePaise: 80000 },
