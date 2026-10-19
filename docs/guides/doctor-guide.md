@@ -58,7 +58,15 @@ The full flow, with what is still to come:
 ## After signing
 - Wrong detail? Use **Amend** with a reason: it starts version 2 with the same lines for you to correct and sign; version 1 stays valid until then and its QR shows *Superseded* afterwards. Or **Void** with a reason and your PIN: the PDF is stamped VOID and the QR shows *Void*. Finish or sign an open amendment before voiding. Never re-issue manually.
 - **Versions** on the card lists every version with its status and PDF.
-- Refer, send attachments (exercise sheets), or send a payment link from the patient sheet.
+- Refer from the consultation screen (see **Referrals** below). Sending attachments (exercise sheets) and payment links from the patient sheet come later.
+
+## Referrals
+Available now on the web.
+- **Refer:** on the consultation screen, once the patient has checked in (also after you sign), the **Referrals** card has **Refer**. Choose **A doctor in this clinic** and pick the doctor, or **Someone outside the clinic** and enter their name (specialty, hospital or clinic, and phone are optional). Add the reason, the urgency (Routine, Soon or Urgent) and any notes, then **Send referral**. The card lists the visit's referrals with their status.
+- **Your referrals:** **Referrals** in the menu has two tabs. **Received** lists patients referred to you, **Sent** those you referred, newest first, with the urgency and the status: *Sent*, *Seen* (the doctor you referred to opened it) or *Closed*. The dashboard's **Referrals** card shows how many new referrals are waiting for you.
+- **Opening a referral** shows the reason and notes, with links to the patient and the visit. Opening one sent to you marks it *Seen*. Either doctor closes it with **Close referral**, with an optional note (for example what you found or planned); a closed referral cannot be reopened, so make a new one if needed.
+- **The chart:** if your clinic shows each doctor only their own patients, a referral sent to you opens the patient's chart, visit notes, prescriptions and tests to you until it is closed, as if you had seen the patient (not if the visit it was made at is cancelled). The referral's page says so while it applies. You can update the chart's allergies, conditions and medicines; the referring doctor's visit notes and prescription stay theirs. A referral outside the clinic opens nothing.
+- **Not yet:** the signed referral letter (PDF), sending it to the patient or the other doctor, attachments, and referrals in the Clinic app.
 
 ## Ask AI
 Ask questions about this patient's record ("When was the last MRI?"). Answers show their sources; if something is not in the record, it says so. It never changes the chart.

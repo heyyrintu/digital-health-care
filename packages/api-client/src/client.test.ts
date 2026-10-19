@@ -380,4 +380,31 @@ describe('platform console calls', () => {
     expect(init.method).toBe('PATCH');
     expect(JSON.parse(init.body as string)).toEqual({ listed: true });
   });
+  it('makes referral calls with their paths, bodies and query', async () => {
+    const fetch = vi.fn(async () => json(500, { error: { code: 'INTERNAL', message: 'x' } }));
+    const client = createApiClient({ baseUrl: 'https://api.test/v1', fetch });
+    const body = {
+      kind: 'external' as const,
+      external: { name: 'City Hospital', specialty: null, hospital: null, phone: null },
+      reason: 'Opinion',
+      urgency: 'routine' as const,
+      notes: null,
+    };
+    await expect(client.createReferral('a 1', body, 'key-12345')).rejects.toBeInstanceOf(ApiError);
+    await expect(client.referrals({ box: 'received', status: 'sent' })).rejects.toBeInstanceOf(
+      ApiError,
+    );
+    await expect(client.markReferralSeen('r1')).rejects.toBeInstanceOf(ApiError);
+    await expect(client.closeReferral('r1', { note: null })).rejects.toBeInstanceOf(ApiError);
+    const calls = fetch.mock.calls as unknown as [string, RequestInit][];
+    expect(calls.map(([url, init]) => `${init.method} ${url}`)).toEqual([
+      'POST https://api.test/v1/appointments/a%201/referrals',
+      'GET https://api.test/v1/referrals?box=received&status=sent',
+      'POST https://api.test/v1/referrals/r1/seen',
+      'POST https://api.test/v1/referrals/r1/close',
+    ]);
+    expect(JSON.parse(calls[0]![1].body as string)).toEqual(body);
+    expect((calls[0]![1].headers as Record<string, string>)['idempotency-key']).toBe('key-12345');
+    expect(JSON.parse(calls[3]![1].body as string)).toEqual({ note: null });
+  });
 });

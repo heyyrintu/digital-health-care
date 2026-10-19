@@ -20,6 +20,7 @@ export * from './platform';
 export * from './prescriptions';
 export * from './public-doctors';
 export * from './queue';
+export * from './referrals';
 export * from './scheduling';
 export * from './portal';
 export * from './settings';
