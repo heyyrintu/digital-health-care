@@ -53,11 +53,11 @@ ALTER TABLE organisation_branding
   ADD CONSTRAINT organisation_branding_display_name_check
     CHECK (length(display_name) BETWEEN 1 AND 80
            AND btrim(display_name) = display_name
-           AND display_name !~ '[\x01-\x1f\x7f\u061c\u200b-\u200f\u202a-\u202e\u2060\u2066-\u2069\ufeff]'),
+           AND display_name !~ '[\x01-\x1f\x7f-\x9f\u061c\u200b-\u200f\u2028\u2029\u202a-\u202e\u2060\u2066-\u2069\ufeff]'),
   ADD CONSTRAINT organisation_branding_tagline_check
     CHECK (length(tagline) BETWEEN 1 AND 120
            AND btrim(tagline) = tagline
-           AND tagline !~ '[\x01-\x1f\x7f\u061c\u200b-\u200f\u202a-\u202e\u2060\u2066-\u2069\ufeff]'),
+           AND tagline !~ '[\x01-\x1f\x7f-\x9f\u061c\u200b-\u200f\u2028\u2029\u202a-\u202e\u2060\u2066-\u2069\ufeff]'),
   ADD CONSTRAINT organisation_branding_accent_colour_check
     CHECK (accent_colour ~ '^#[0-9a-f]{6}$'),
   -- A logo is all of its fields or none of them.

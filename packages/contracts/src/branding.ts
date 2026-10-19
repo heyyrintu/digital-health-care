@@ -60,15 +60,16 @@ export const isReadableAccent = (hex: string) =>
   ACCENT_PATTERN.test(hex) && contrastRatio(hex, '#ffffff') >= MIN_ACCENT_CONTRAST;
 
 /**
- * Characters a branding text may not hold: control characters; the bidirectional marks,
- * embeddings, overrides and isolates (and the Arabic letter mark) that could make a name
- * read as something else; and invisible ones (zero-width spaces and joiners, the word
+ * Characters a branding text may not hold: control characters (C0, DEL and C1) and the
+ * line and paragraph separators, which would break it across lines; the bidirectional
+ * marks, embeddings, overrides and isolates (and the Arabic letter mark) that could make a
+ * name read as something else; and invisible ones (zero-width spaces and joiners, the word
  * joiner, the byte-order mark) that could hide text in it. The database's CHECK spells
  * out the same list.
  */
 const UNSAFE_TEXT =
   // eslint-disable-next-line no-control-regex
-  /[\u0000-\u001f\u007f\u061c\u200b-\u200f\u202a-\u202e\u2060\u2066-\u2069\ufeff]/u;
+  /[\u0000-\u001f\u007f-\u009f\u061c\u200b-\u200f\u2028\u2029\u202a-\u202e\u2060\u2066-\u2069\ufeff]/u;
 
 /** A branding text as typed: trimmed, empty means none, up to `max` characters. */
 const brandText = (max: number) =>

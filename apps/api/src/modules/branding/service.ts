@@ -121,11 +121,13 @@ export class BrandingService {
     let stored = false;
     let replaced: string | null = null;
     try {
+      // The file goes first, outside the transaction, so a slow store holds no connection
+      // or lock; its key is new, and a row that never commits gets it removed below.
+      await this.s.files.put(key, file.data);
+      stored = true;
       const out = await withTenant(this.s.db, actor.organisationId, async (tx) => {
         await this.lock(tx, actor);
         const before = await this.row(tx, actor);
-        await this.s.files.put(key, file.data);
-        stored = true;
         const logo = {
           logoKey: key,
           logoMediaType: LOGO_MEDIA_TYPES[image.type],

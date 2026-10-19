@@ -460,23 +460,24 @@ describe('logo upload', () => {
     await uploadLogo(adminA, 'image/png', old);
     const oldKey = (await h.owner.organisationBranding.findFirstOrThrow()).logoKey!;
     const put = vi.spyOn(h.services.files, 'put');
-    // Only the transaction that writes a logo file fails, the way `mode` says.
+    // Only the transaction that saves a logo (the first after its file is written) fails,
+    // the way `mode` says.
     let mode: 'rollback' | 'lost_after_commit' = 'rollback';
+    let seen = put.mock.calls.length;
     const tx = vi.spyOn(db, '$transaction').mockImplementation(((
       fn: (t: unknown) => Promise<unknown>,
     ) => {
-      const writes = put.mock.calls.length;
-      const wrote = () => put.mock.calls.length > writes;
+      const saving = put.mock.calls.length > seen;
+      seen = put.mock.calls.length;
+      if (!saving) return original(fn);
       if (mode === 'rollback') {
         return original(async (t: unknown) => {
-          const result = await fn(t);
-          if (wrote()) throw new Error('rolled back');
-          return result;
+          await fn(t);
+          throw new Error('rolled back');
         });
       }
-      return original(fn).then((result) => {
-        if (wrote()) throw new Error('connection lost after commit');
-        return result;
+      return original(fn).then(() => {
+        throw new Error('connection lost after commit');
       });
     }) as never);
     try {
@@ -676,6 +677,8 @@ describe('in the database', () => {
       { displayName: 'Arabic\u061cmark' },
       { tagline: 'Word\u2060joiner' },
       { tagline: 'Bom\ufeffx' },
+      { displayName: 'Next\u0085line' },
+      { tagline: 'Line\u2028sep' },
       { tagline: 'y'.repeat(121) },
       { accentColour: '#1A6B5C' },
       { accentColour: 'red' },
