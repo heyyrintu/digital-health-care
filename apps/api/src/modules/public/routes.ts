@@ -1,4 +1,9 @@
-import { PublicDoctor, PublicDoctorList, PublicDoctorParams } from '@dhc/contracts';
+import {
+  PublicDoctor,
+  PublicDoctorDirectory,
+  PublicDoctorList,
+  PublicDoctorParams,
+} from '@dhc/contracts';
 import type { FastifyPluginAsync } from 'fastify';
 import type { Services } from '../../services';
 import { PAGE_NOT_FOUND, PublicDoctorService } from './service';
@@ -31,6 +36,12 @@ export const publicDoctorRoutes: FastifyPluginAsync<{ services: Services }> = as
   app.get('/public/doctors', LIMITED, async (_request, reply) => {
     reply.header('Cache-Control', CACHE);
     return PublicDoctorList.parse(await doctors.list());
+  });
+
+  // The home page's "Find a doctor" list: the same limit and caching as the sitemap list.
+  app.get('/public/doctor-directory', LIMITED, async (request, reply) => {
+    reply.header('Cache-Control', CACHE);
+    return PublicDoctorDirectory.parse(await doctors.directory(request.log));
   });
 
   app.get('/public/doctors/:slug', LIMITED, async (request, reply) => {

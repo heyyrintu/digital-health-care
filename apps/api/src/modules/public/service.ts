@@ -1,4 +1,10 @@
-import type { PublicDoctor, PublicDoctorList } from '@dhc/contracts';
+import {
+  PUBLIC_DIRECTORY_MAX,
+  type PublicDoctor,
+  type PublicDoctorCard,
+  type PublicDoctorDirectory,
+  type PublicDoctorList,
+} from '@dhc/contracts';
 import { withPublic } from '@dhc/db';
 import { AppError } from '../../errors';
 import type { Services } from '../../services';
@@ -50,6 +56,32 @@ export function toPublicDoctor(row: PublicDoctorRow): PublicDoctor {
   };
 }
 
+/** A row of `public_doctor_directory()`: only the columns the function declares. */
+export interface PublicDoctorCardRow {
+  slug: string;
+  display_name: string | null;
+  qualifications: string | null;
+  specialty: string | null;
+  organisation_name: string;
+  clinics: { name: string; addressLine: string | null }[];
+  languages: string[];
+  fee_from_paise: number | null;
+}
+
+/** Maps a directory row to its card, field by field, as `toPublicDoctor` does. */
+export function toPublicDoctorCard(row: PublicDoctorCardRow): PublicDoctorCard {
+  return {
+    slug: row.slug,
+    name: row.display_name,
+    qualifications: row.qualifications,
+    specialty: row.specialty,
+    organisationName: row.organisation_name,
+    clinics: row.clinics.map((c) => ({ name: c.name, addressLine: c.addressLine })),
+    languages: [...row.languages],
+    feeFromPaise: row.fee_from_paise,
+  };
+}
+
 /**
  * Public doctor pages, read without a user across organisations. Runs as `dhc_app` with no
  * organisation set (`withPublic`), where no tenant row is visible, and reads only through
@@ -75,5 +107,24 @@ export class PublicDoctorService {
         SELECT slug, updated_at FROM public_doctor_slugs()`,
     );
     return { data: rows.map((r) => ({ slug: r.slug, updatedAt: r.updated_at.toISOString() })) };
+  }
+
+  /**
+   * The home page's directory: a card per page shown, by name, at most 500. A full list
+   * means doctors may be missing from the home page, so it is logged for the team (ADR 0017
+   * addendum: time to move the search into the API).
+   */
+  async directory(log?: { warn: (msg: string) => void }): Promise<PublicDoctorDirectory> {
+    const rows = await withPublic(
+      this.s.db,
+      (tx) => tx.$queryRaw<PublicDoctorCardRow[]>`SELECT * FROM public_doctor_directory()`,
+    );
+    if (rows.length >= PUBLIC_DIRECTORY_MAX) {
+      log?.warn(
+        `Public doctor directory is at its cap of ${PUBLIC_DIRECTORY_MAX}: ` +
+          'doctors last by name are left out of the home page',
+      );
+    }
+    return { data: rows.map(toPublicDoctorCard) };
   }
 }

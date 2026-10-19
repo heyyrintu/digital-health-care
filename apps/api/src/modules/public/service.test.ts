@@ -1,6 +1,11 @@
-import { PublicDoctor } from '@dhc/contracts';
+import { PublicDoctor, PublicDoctorCard } from '@dhc/contracts';
 import { describe, expect, it } from 'vitest';
-import { toPublicDoctor, type PublicDoctorRow } from './service';
+import {
+  toPublicDoctor,
+  toPublicDoctorCard,
+  type PublicDoctorCardRow,
+  type PublicDoctorRow,
+} from './service';
 
 const row: PublicDoctorRow = {
   slug: 'dr-synthetic',
@@ -49,6 +54,58 @@ describe('toPublicDoctor', () => {
     } as unknown as PublicDoctorRow;
     const json = JSON.stringify(toPublicDoctor(grown));
     for (const leaked of ['7a4f0d6c', '+91', '"id"', 'followUp', 'Prepayment']) {
+      expect(json).not.toContain(leaked);
+    }
+  });
+});
+
+describe('toPublicDoctorCard', () => {
+  const card: PublicDoctorCardRow = {
+    slug: 'dr-synthetic',
+    display_name: 'Dr. Synthetic',
+    qualifications: 'MBBS',
+    specialty: 'General medicine',
+    organisation_name: 'Demo Clinic',
+    clinics: [
+      { name: 'Main clinic', addressLine: '1 Test Road, Testpur' },
+      { name: 'Branch clinic', addressLine: null },
+    ],
+    languages: ['English', 'Hindi'],
+    fee_from_paise: 50000,
+  };
+
+  it('maps the directory row to the card', () => {
+    expect(PublicDoctorCard.parse(toPublicDoctorCard(card))).toEqual({
+      slug: 'dr-synthetic',
+      name: 'Dr. Synthetic',
+      qualifications: 'MBBS',
+      specialty: 'General medicine',
+      organisationName: 'Demo Clinic',
+      clinics: [
+        { name: 'Main clinic', addressLine: '1 Test Road, Testpur' },
+        { name: 'Branch clinic', addressLine: null },
+      ],
+      languages: ['English', 'Hindi'],
+      feeFromPaise: 50000,
+    });
+  });
+
+  it('keeps a doctor with no name, clinic or fee', () => {
+    expect(
+      toPublicDoctorCard({ ...card, display_name: null, clinics: [], fee_from_paise: null }),
+    ).toMatchObject({ name: null, clinics: [], feeFromPaise: null });
+  });
+
+  it('copies only the known fields, even if a row or its JSON grew more', () => {
+    const grown = {
+      ...card,
+      user_id: '7a4f0d6c-5b8e-4f1c-9d54-6e7f8091a2b3',
+      organisation_slug: 'demo-clinic',
+      registration_number: 'TEST-1',
+      clinics: [{ name: 'Main clinic', addressLine: null, id: 'c1', phone: '+910000000000' }],
+    } as unknown as PublicDoctorCardRow;
+    const json = JSON.stringify(toPublicDoctorCard(grown));
+    for (const leaked of ['7a4f0d6c', '+91', '"id"', 'demo-clinic', 'TEST-1']) {
       expect(json).not.toContain(leaked);
     }
   });
