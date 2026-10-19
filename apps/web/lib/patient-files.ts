@@ -1,6 +1,6 @@
 /**
- * Opening the patient's files on the web portal: a prescription PDF and an uploaded test
- * result (threat model T12, T24). The file is fetched by the API client with the bearer
+ * Opening the patient's files on the web portal: a prescription PDF, an uploaded test
+ * result and a document the clinic shared (threat model T12, T24, T27). The file is fetched by the API client with the bearer
  * token in the header (never in a URL) and shown from an object URL in a new tab, only when
  * it is the type the page expects and a type the browser shows safely; anything else is
  * saved under a name that says nothing about the test. Every tab and object URL is kept in
@@ -39,7 +39,7 @@ export const TAB_POLL_MS = 5_000;
 export const CLICKED_URL_TTL_MS = 1_000;
 
 /** Types every current browser shows in a tab; HEIC and HEIF photos are saved instead. */
-const SHOWN = new Set(['application/pdf', 'image/jpeg', 'image/png']);
+const SHOWN = new Set(['application/pdf', 'image/jpeg', 'image/png', 'image/webp']);
 
 /** A media type without parameters, lowercased: `application/pdf; charset=x` → `application/pdf`. */
 const bare = (type: string) => type.split(';')[0]!.trim().toLowerCase();

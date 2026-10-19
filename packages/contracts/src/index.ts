@@ -6,6 +6,7 @@ export * from './auth';
 export * from './consultations';
 export * from './dashboard';
 export * from './devices';
+export * from './documents';
 export * from './errors';
 export * from './health';
 export * from './invites';

@@ -22,6 +22,7 @@ import { ChartPanel } from '../chart-panel';
 import { NotesForm } from '../notes-form';
 import { PrescriptionCard } from '../prescription-card';
 import { ReferralsSection } from '../referrals-section';
+import { DocumentsCard } from '../../documents-card';
 
 /** Quiet time after the last keystroke before the notes save. */
 const AUTOSAVE_MS = 1200;
@@ -323,6 +324,17 @@ function ConsultationScreen({ id, me }: { id: string; me: MeResponse }) {
                   a.doctorUserId === me.user.id &&
                   ['checked_in', 'in_consultation', 'completed'].includes(a.status)
                 }
+              />
+            </Surface>
+          )}
+          {me.role === 'doctor' && (
+            <Surface className="p-5 sm:p-6">
+              <DocumentsCard
+                key={a.id}
+                patientId={a.patient.id}
+                patientName={a.patient.name}
+                appointmentId={a.id}
+                canShare
               />
             </Surface>
           )}
