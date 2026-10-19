@@ -120,7 +120,7 @@ export function buildApp({
     app.register(medicineRoutes, { prefix: '/v1', services });
     app.register(billingRoutes, { prefix: '/v1', services });
     app.register(orderRoutes, { prefix: '/v1', services, uploadRateLimit });
-    app.register(referralRoutes, { prefix: '/v1', services });
+    app.register(referralRoutes, { prefix: '/v1', services, signInRateLimit });
     app.register(staffRoutes, { prefix: '/v1', services });
     app.register(auditRoutes, { prefix: '/v1', services });
     app.register(reportRoutes, { prefix: '/v1', services });

@@ -27,7 +27,7 @@ const NOT_FOUND = () => new AppError(404, 'NOT_FOUND', 'Not found.');
 const fromDbDate = (date: Date) => date.toISOString().slice(0, 10);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const referralInclude = {
+export const referralInclude = {
   patient: {
     select: {
       id: true,
@@ -37,8 +37,21 @@ const referralInclude = {
     },
   },
   appointment: { select: { date: true } },
+  letter: {
+    select: {
+      signedAt: true,
+      language: true,
+      paperSize: true,
+      signatureMethod: true,
+      verificationCode: true,
+    },
+  },
 } as const;
-type ReferralRow = Prisma.ReferralGetPayload<{ include: typeof referralInclude }>;
+export type ReferralRow = Prisma.ReferralGetPayload<{ include: typeof referralInclude }>;
+
+/** The public page a referral letter's QR opens. */
+export const letterVerificationUrl = (webBaseUrl: string, code: string) =>
+  `${webBaseUrl}/verify/referral/${code}`;
 
 /** Newest first; the ID breaks ties so a cursor always names one place. */
 const listOrder = [{ sentAt: 'desc' }, { id: 'asc' }] as const;
@@ -59,13 +72,13 @@ const partyOf = (userId: string) => ({
 });
 
 /**
- * Referrals (PRD §7.2), slice 1: the visit's doctor refers the patient to another doctor
+ * Referrals (PRD §7.2): the visit's doctor refers the patient to another doctor
  * of the organisation or outside it; the receiving doctor's opening it marks it seen; either
  * doctor closes it. Only the two doctors read a referral (anyone else gets 404), and only
  * doctors reach these routes: referrals carry clinical content, which the front desk and
  * clinic admins do not see (PRD §3.2). An internal referral that is not closed opens the
  * patient's chart to the receiving doctor (`assertChartAccess`). Audited without patient
- * data or the clinical text.
+ * data or the clinical text. The signed letter is `ReferralLetterService` (`letter.ts`).
  */
 export class ReferralService {
   constructor(private readonly s: Services) {}
@@ -239,7 +252,7 @@ export class ReferralService {
   /** One referral, for either of its doctors; every view is audited. */
   async get(request: FastifyRequest, actor: Actor, id: string): Promise<Referral> {
     const row = await withTenant(this.s.db, actor.organisationId, async (tx) => {
-      const found = await this.find(tx, actor, id);
+      const found = await findReferral(tx, actor, id);
       await this.audit(tx, request, actor, 'referral.viewed', id);
       return found;
     });
@@ -252,7 +265,7 @@ export class ReferralService {
    */
   async markSeen(request: FastifyRequest, actor: Actor, id: string): Promise<Referral> {
     const row = await withTenant(this.s.db, actor.organisationId, async (tx) => {
-      const found = await this.lock(tx, actor, id);
+      const found = await lockReferral(tx, actor, id);
       if (found.receivingDoctorUserId !== actor.userId) {
         throw new AppError(403, 'FORBIDDEN', 'Only the receiving doctor marks a referral seen.');
       }
@@ -279,7 +292,7 @@ export class ReferralService {
     body: CloseReferralBody,
   ): Promise<Referral> {
     const row = await withTenant(this.s.db, actor.organisationId, async (tx) => {
-      const found = await this.lock(tx, actor, id);
+      const found = await lockReferral(tx, actor, id);
       if (found.status === 'closed') {
         throw new AppError(409, 'CONFLICT', 'This referral is already closed.', {
           status: 'closed',
@@ -313,23 +326,8 @@ export class ReferralService {
     });
   }
 
-  /** The referral if the actor is one of its doctors; 404 otherwise, as for another clinic's. */
-  private async find(tx: Tx, actor: Actor, id: string): Promise<ReferralRow> {
-    const row = await tx.referral.findFirst({
-      where: { id, ...partyOf(actor.userId) },
-      include: referralInclude,
-    });
-    if (!row) throw NOT_FOUND();
-    return row;
-  }
-
-  /** Row-locked, so a close and a mark-seen of one referral happen one after the other. */
-  private async lock(tx: Tx, actor: Actor, id: string): Promise<ReferralRow> {
-    await tx.$queryRaw`SELECT id FROM referrals WHERE id = ${id}::uuid FOR UPDATE`;
-    return this.find(tx, actor, id);
-  }
-
-  private async out(rows: ReferralRow[], actor: Actor): Promise<Referral[]> {
+  /** Rows as the API returns them, with the doctors' names. */
+  async out(rows: ReferralRow[], actor: Actor): Promise<Referral[]> {
     const names = await staffNames(
       this.s.db,
       rows.flatMap((r) => [
@@ -369,6 +367,17 @@ export class ReferralService {
         closeNote: r.closeNote,
         role: r.referringDoctorUserId === actor.userId ? 'referring' : 'receiving',
         canClose: r.status !== 'closed',
+        letter: r.letter
+          ? {
+              signedAt: r.letter.signedAt.toISOString(),
+              language: r.letter.language,
+              paperSize: r.letter.paperSize,
+              signatureMethod: r.letter.signatureMethod as 'test_key' | 'cloud_dsc',
+              verificationUrl: letterVerificationUrl(this.s.webBaseUrl, r.letter.verificationCode),
+            }
+          : null,
+        canSignLetter:
+          r.referringDoctorUserId === actor.userId && r.status !== 'closed' && !r.letter,
       };
     });
   }
@@ -390,6 +399,25 @@ export class ReferralService {
       metadata,
     });
   }
+}
+
+/** The referral if the actor is one of its doctors; 404 otherwise, as for another clinic's. */
+export async function findReferral(tx: Tx, actor: Actor, id: string): Promise<ReferralRow> {
+  const row = await tx.referral.findFirst({
+    where: { id, ...partyOf(actor.userId) },
+    include: referralInclude,
+  });
+  if (!row) throw NOT_FOUND();
+  return row;
+}
+
+/**
+ * Row-locked, so a close, a mark-seen and a letter signing of one referral happen one
+ * after the other.
+ */
+export async function lockReferral(tx: Tx, actor: Actor, id: string): Promise<ReferralRow> {
+  await tx.$queryRaw`SELECT id FROM referrals WHERE id = ${id}::uuid FOR UPDATE`;
+  return findReferral(tx, actor, id);
 }
 
 /** A list row: the referral without its clinical text. */

@@ -407,4 +407,28 @@ describe('platform console calls', () => {
     expect((calls[0]![1].headers as Record<string, string>)['idempotency-key']).toBe('key-12345');
     expect(JSON.parse(calls[3]![1].body as string)).toEqual({ note: null });
   });
+  it('makes referral letter calls with their paths and bodies', async () => {
+    const fetch = vi.fn(async () => json(500, { error: { code: 'INTERNAL', message: 'x' } }));
+    const client = createApiClient({ baseUrl: 'https://api.test/v1', fetch });
+    await expect(client.referralLetterPreview('r1')).rejects.toBeInstanceOf(ApiError);
+    await expect(client.referralLetterPreview('r1', 'hi')).rejects.toBeInstanceOf(ApiError);
+    await expect(client.signReferralLetter('r1', { pin: '482916' })).rejects.toBeInstanceOf(
+      ApiError,
+    );
+    await expect(client.referralLetter('r 1')).rejects.toBeInstanceOf(ApiError);
+    await expect(client.verifyReferralLetter('ABC')).rejects.toBeInstanceOf(ApiError);
+    const calls = fetch.mock.calls as unknown as [string, RequestInit][];
+    expect(calls.map(([url, init]) => `${init.method} ${url}`)).toEqual([
+      'GET https://api.test/v1/referrals/r1/letter/preview',
+      'GET https://api.test/v1/referrals/r1/letter/preview?language=hi',
+      'POST https://api.test/v1/referrals/r1/letter/sign',
+      'GET https://api.test/v1/referrals/r%201/letter',
+      'POST https://api.test/v1/verify/referral-letter',
+    ]);
+    expect((calls[0]![1].headers as Record<string, string>).accept).toBe(
+      'application/pdf, application/json',
+    );
+    expect(JSON.parse(calls[2]![1].body as string)).toEqual({ pin: '482916' });
+    expect(JSON.parse(calls[4]![1].body as string)).toEqual({ code: 'ABC' });
+  });
 });

@@ -1,6 +1,10 @@
 import type { Db } from '@dhc/db';
+import { pdfText } from '@dhc/pdf-text';
 import { createHash, randomBytes } from 'node:crypto';
-import { expect, setUpFromInvite, test, type Clinic } from '../fixtures';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { E2E_FILE_STORE_DIR } from '../env';
+import { expect, setUpFromInvite, setUpPrescriptionPad, test, type Clinic } from '../fixtures';
 
 const WEB_URL = 'http://localhost:3300';
 const today = () => new Date(Date.now() + 330 * 60_000).toISOString().slice(0, 10);
@@ -185,5 +189,165 @@ test.describe('referrals', () => {
     await expect(sent).toContainText('To Dr. Second Synthetic');
     await expect(sent).toContainText('To Dr Meera Iyer, Cardiology');
     await expect(sent.getByTestId('referral-status')).toHaveText(['Sent', 'Closed']);
+  });
+
+  test('the referring doctor previews and signs the letter; the receiver downloads it; its QR checks it', async ({
+    page,
+    browser,
+    clinic,
+    db,
+  }) => {
+    // Two doctors, a PDF preview, signing and the QR page: allow for slow CI runners.
+    test.setTimeout(120_000);
+    const password = 'doctor synthetic passphrase';
+    const pin = '482916';
+    await setUpFromInvite(page, clinic.inviteLink('doctor'), password);
+    const secondLink = await inviteSecondDoctor(db, clinic);
+    const context = await browser.newContext({ baseURL: WEB_URL });
+    const second = await context.newPage();
+    await setUpFromInvite(second, secondLink, 'second doctor synthetic passphrase');
+    const { patient, visitId } = await visitInConsultation(db, clinic);
+    await setUpPrescriptionPad(page, db, clinic, { prefix: 'SD', password, pin });
+
+    // A referral to the second doctor (the dialog is covered above).
+    const visit = await db.appointment.findUniqueOrThrow({ where: { id: visitId } });
+    const receiver = await db.user.findUniqueOrThrow({
+      where: { email: `second-doctor@${clinic.slug}.test` },
+    });
+    const referral = await db.referral.create({
+      data: {
+        organisationId: visit.organisationId,
+        appointmentId: visitId,
+        patientId: patient.id,
+        referringDoctorUserId: visit.doctorUserId,
+        kind: 'internal',
+        receivingDoctorUserId: receiver.id,
+        reason: 'Persistent knee effusion; arthroscopy?',
+        urgency: 'urgent',
+        sentAt: new Date(),
+      },
+    });
+
+    // The receiver sees that no letter is signed yet, and cannot sign one.
+    await second.goto(`/clinic/referrals/${referral.id}`);
+    const theirs = second.getByTestId('referral-letter');
+    await expect(theirs).toContainText('The referring doctor has not signed a letter.');
+    await expect(theirs.getByRole('button', { name: 'Sign letter' })).toHaveCount(0);
+
+    // The referring doctor previews the letter (a PDF in a new tab), then signs it.
+    await page.goto(`/clinic/referrals/${referral.id}`);
+    const card = page.getByTestId('referral-letter');
+    await expect(card).toContainText('No letter yet.');
+    const preview = page.waitForResponse(
+      (r) =>
+        r.request().method() === 'GET' &&
+        /\/referrals\/[^/]+\/letter\/preview$/.test(new URL(r.url()).pathname),
+    );
+    const previewTab = page.waitForEvent('popup');
+    await card.getByRole('button', { name: 'Preview letter' }).click();
+    const previewed = await preview;
+    expect(previewed.status()).toBe(200);
+    expect(previewed.headers()['content-type']).toBe('application/pdf');
+    await (await previewTab).close();
+
+    await card.getByLabel('Letter language').selectOption({ label: 'English' });
+    await card.getByRole('button', { name: 'Sign letter' }).click();
+    await expect(card).toContainText('Once signed, the letter cannot change.');
+    await card.getByLabel('Signing PIN').fill('000000');
+    await card.getByRole('button', { name: 'Sign now' }).click();
+    await expect(card.getByRole('alert')).toHaveText('That PIN is not right.');
+    await card.getByLabel('Signing PIN').fill(pin);
+    await card.getByRole('button', { name: 'Sign now' }).click();
+    await expect(card.getByRole('status')).toHaveText('Letter signed.');
+    await expect(card.getByTestId('referral-letter-signed')).toContainText('English');
+    await expect(card.getByRole('button', { name: 'Sign letter' })).toHaveCount(0);
+    await expect(card).toContainText('Test signature: not legally valid');
+
+    // Download: the signed letter, with the recipient and the reason.
+    const download = page.waitForResponse(
+      (r) =>
+        r.request().method() === 'GET' &&
+        /\/referrals\/[^/]+\/letter$/.test(new URL(r.url()).pathname),
+    );
+    const downloadTab = page.waitForEvent('popup');
+    await card.getByRole('button', { name: 'Download letter' }).click();
+    const file = await download;
+    expect(file.status()).toBe(200);
+    expect(file.headers()['content-type']).toBe('application/pdf');
+    // The browser's copy is a blob; check the stored file, against its recorded hash.
+    const letter = await db.referralLetter.findUniqueOrThrow({
+      where: { referralId: referral.id },
+    });
+    const stored = await readFile(join(E2E_FILE_STORE_DIR, letter.pdfFileKey));
+    expect(createHash('sha256').update(stored).digest('hex')).toBe(letter.pdfSha256);
+    const text = pdfText(stored);
+    expect(text).toContain('To: Dr. Second Synthetic');
+    expect(text).toContain('Persistent knee effusion; arthroscopy?');
+    expect(text).toContain('Urgency: Urgent');
+    await (await downloadTab).close();
+
+    // The receiver downloads it too, and it stays valid after they close the referral.
+    await second.reload();
+    await expect(theirs.getByTestId('referral-letter-signed')).toBeVisible();
+    await second.getByRole('button', { name: 'Close referral' }).click();
+    await expect(second.locator('main').getByRole('status')).toHaveText('Referral closed.');
+    await expect(theirs).toContainText('The referral is closed; the signed letter stays valid.');
+    const theirDownload = second.waitForResponse(
+      (r) =>
+        r.request().method() === 'GET' &&
+        /\/referrals\/[^/]+\/letter$/.test(new URL(r.url()).pathname),
+    );
+    const theirTab = second.waitForEvent('popup');
+    await theirs.getByRole('button', { name: 'Download letter' }).click();
+    expect((await theirDownload).status()).toBe(200);
+    await (await theirTab).close();
+    await context.close();
+
+    // The QR page checks it: genuine, with the patient's initials only.
+    const qr = await page.context().newPage();
+    await qr.goto(`/verify/referral/${letter.verificationCode}`);
+    await expect(qr.getByRole('heading', { name: 'Referral letter check' })).toBeVisible();
+    await expect(qr.getByTestId('verify-status')).toHaveText('Genuine');
+    const result = qr.getByTestId('verify-result');
+    await expect(result).toContainText('Dr. Second Synthetic');
+    await expect(result).toContainText('Urgent');
+    await expect(result).not.toContainText(patient.name);
+    await expect(result).not.toContainText('knee effusion');
+    // A prescription's QR page does not know a letter's code.
+    await qr.goto(`/verify/${letter.verificationCode}`);
+    await expect(qr.getByTestId('verify-result').getByRole('alert')).toContainText(
+      'No prescription matches this code.',
+    );
+
+    // A referral closed elsewhere while its page is open: signing is refused, and the card
+    // shows the referral as it now is.
+    const later = await db.referral.create({
+      data: {
+        organisationId: visit.organisationId,
+        appointmentId: visitId,
+        patientId: patient.id,
+        referringDoctorUserId: visit.doctorUserId,
+        kind: 'external',
+        externalName: 'Dr Meera Iyer',
+        reason: 'Cardiology opinion before surgery.',
+        urgency: 'routine',
+        sentAt: new Date(),
+      },
+    });
+    await page.goto(`/clinic/referrals/${later.id}`);
+    await card.getByRole('button', { name: 'Sign letter' }).click();
+    const closedAt = new Date();
+    await db.referral.update({
+      where: { id: later.id },
+      data: { status: 'closed', closedAt, closedByUserId: visit.doctorUserId },
+    });
+    await card.getByLabel('Signing PIN').fill(pin);
+    await card.getByRole('button', { name: 'Sign now' }).click();
+    await expect(page.locator('main').getByRole('alert')).toHaveText(
+      'This referral is closed; a letter can no longer be signed.',
+    );
+    await expect(card).toContainText('No letter was signed before the referral was closed.');
+    await expect(card.getByRole('button', { name: 'Sign now' })).toHaveCount(0);
+    await expect(page.getByTestId('referral-status')).toHaveText('Closed');
   });
 });

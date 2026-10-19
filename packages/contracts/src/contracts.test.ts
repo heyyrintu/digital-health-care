@@ -78,7 +78,7 @@ describe('buildOpenApiDocument', () => {
     expect(doc.components.schemas.ErrorResponse).toMatchObject({ type: 'object' });
   });
 
-  it('marks only sign-in, health, waiting-room screen, QR check, public doctor page and public branding endpoints as public', () => {
+  it('marks only sign-in, health, waiting-room screen, QR checks, public doctor page and public branding endpoints as public', () => {
     const publicOps = Object.entries(doc.paths).flatMap(([path, ops]) =>
       Object.entries(ops)
         .filter(([, op]) => (op as { security?: unknown[] }).security?.length === 0)
@@ -104,6 +104,7 @@ describe('buildOpenApiDocument', () => {
       'POST /platform/auth/mfa/verify',
       'POST /platform/auth/refresh',
       'POST /verify',
+      'POST /verify/referral-letter',
     ]);
   });
 

@@ -312,6 +312,8 @@ model Organisation {
   testOrders             TestOrder[]
   testResults            TestResult[]
   referrals              Referral[]
+  referralLetters        ReferralLetter[]
+  referralLetterChecks   ReferralLetterVerification[]
 
   @@map("organisations")
 }
@@ -1527,15 +1529,62 @@ model Referral {
   createdAt             DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt             DateTime        @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  organisation Organisation @relation(fields: [organisationId], references: [id])
-  appointment  Appointment  @relation(fields: [appointmentId], references: [id], onDelete: Restrict)
-  patient      Patient      @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  organisation Organisation    @relation(fields: [organisationId], references: [id])
+  appointment  Appointment     @relation(fields: [appointmentId], references: [id], onDelete: Restrict)
+  patient      Patient         @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  letter       ReferralLetter?
 
   @@index([appointmentId])
   @@index([patientId])
   @@index([organisationId, receivingDoctorUserId, status])
   @@index([organisationId, referringDoctorUserId, status])
   @@map("referrals")
+}
+
+/// The signed referral letter PDF (PRD §7.2): at most one per referral, signed by its
+/// referring doctor with the signing PIN while the referral was not closed. Insert-only:
+/// it never changes and is never deleted (triggers), and closing the referral leaves it
+/// valid. The PDF is in the file store by key, with its SHA-256 and signature (ADR 0008).
+model ReferralLetter {
+  id                String    @id @default(uuid()) @db.Uuid
+  organisationId    String    @map("organisation_id") @db.Uuid
+  referralId        String    @unique @map("referral_id") @db.Uuid
+  /// The referral's referring doctor (trigger).
+  signedByUserId    String    @map("signed_by_user_id") @db.Uuid
+  language          Language
+  paperSize         PaperSize @map("paper_size")
+  /// The layout it was rendered with (`referral-1`).
+  templateVersion   String    @map("template_version")
+  pdfFileKey        String    @map("pdf_file_key")
+  pdfSha256         String    @map("pdf_sha256")
+  /// `test_key` (development and staging) or `cloud_dsc`.
+  signatureMethod   String    @map("signature_method")
+  signature         String
+  signerCertificate String    @map("signer_certificate")
+  /// The code in the QR (`/verify/referral/<code>`); its hash is the public lookup.
+  verificationCode  String    @unique @map("verification_code")
+  signedAt          DateTime  @map("signed_at") @db.Timestamptz(3)
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organisation Organisation                @relation(fields: [organisationId], references: [id])
+  referral     Referral                    @relation(fields: [referralId], references: [id], onDelete: Restrict)
+  verification ReferralLetterVerification?
+
+  @@map("referral_letters")
+}
+
+/// The QR lookup for referral letters, like `prescription_verifications`: a hash of the
+/// code and the IDs, nothing clinical; read without a session by the sign-in role.
+model ReferralLetterVerification {
+  codeHash         String   @id @map("code_hash")
+  organisationId   String   @map("organisation_id") @db.Uuid
+  referralLetterId String   @unique @map("referral_letter_id") @db.Uuid
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  organisation   Organisation   @relation(fields: [organisationId], references: [id])
+  referralLetter ReferralLetter @relation(fields: [referralLetterId], references: [id])
+
+  @@map("referral_letter_verifications")
 }
 
 model AuditLog {

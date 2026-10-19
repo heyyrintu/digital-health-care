@@ -1,5 +1,7 @@
 import { z } from 'zod';
 import { CursorQuery, page } from './pagination';
+import { Language } from './patients';
+import { PaperSize, SignatureMethod, SigningPin, VerifyPrescriptionBody } from './prescriptions';
 
 // ---- Referrals (PRD §7.2; API guide §3w) ----------------------------------------------
 //
@@ -9,7 +11,9 @@ import { CursorQuery, page } from './pagination';
 // seen (internal only), and either doctor closes it with an optional note. An internal
 // referral that is not closed opens the patient's chart to the receiving doctor under the
 // "own patients only" chart model. Doctors only: referrals carry clinical content.
-// Not built yet: the signed letter PDF, sending it, and attachments.
+// The referring doctor may sign a referral letter PDF with their signing PIN while the
+// referral is open; it never changes afterwards, and closing the referral leaves it
+// valid. Not built yet: sending the letter, and attachments.
 
 export const ReferralKind = z.enum(['internal', 'external']);
 export type ReferralKind = z.infer<typeof ReferralKind>;
@@ -142,6 +146,20 @@ export const ReferralSummary = z.object({
 });
 export type ReferralSummary = z.infer<typeof ReferralSummary>;
 
+/** The signed referral letter (one per referral, immutable once signed). */
+export const ReferralLetter = z.object({
+  signedAt: z.iso.datetime(),
+  /** The letter's language: the patient's unless the doctor chose the other. */
+  language: Language,
+  /** The referring doctor's pad size when it was signed. */
+  paperSize: PaperSize,
+  /** `test_key` signatures are for development and staging only. */
+  signatureMethod: SignatureMethod,
+  /** The public page its QR opens (`/verify/referral/<code>`). */
+  verificationUrl: z.url(),
+});
+export type ReferralLetter = z.infer<typeof ReferralLetter>;
+
 /** One referral, for the referring or the receiving doctor. */
 export const Referral = ReferralSummary.extend({
   reason: z.string(),
@@ -152,8 +170,66 @@ export const Referral = ReferralSummary.extend({
   role: z.enum(['referring', 'receiving']),
   /** True while it is not closed (either doctor may close it). */
   canClose: z.boolean(),
+  /** The signed letter, or null before it is signed. */
+  letter: ReferralLetter.nullable(),
+  /**
+   * For the referring doctor while the referral is not closed and has no letter yet: the
+   * letter may be previewed and signed (the server still checks the pad and the PIN).
+   */
+  canSignLetter: z.boolean(),
 });
 export type Referral = z.infer<typeof Referral>;
+
+// ---- The referral letter (PRD §7.2) --------------------------------------------------
+
+/** `GET /referrals/{id}/letter/preview`: leave the language out for the patient's. */
+export const ReferralLetterPreviewQuery = z.object({ language: Language.optional() });
+export type ReferralLetterPreviewQuery = z.infer<typeof ReferralLetterPreviewQuery>;
+
+/** `POST /referrals/{id}/letter/sign`: the PIN, and the language (the patient's if left out). */
+export const SignReferralLetterBody = z.object({
+  pin: SigningPin,
+  language: Language.optional(),
+});
+export type SignReferralLetterBody = z.infer<typeof SignReferralLetterBody>;
+
+/** `POST /verify/referral-letter`: the code from the letter's QR. */
+export const VerifyReferralLetterBody = VerifyPrescriptionBody;
+export type VerifyReferralLetterBody = z.infer<typeof VerifyReferralLetterBody>;
+
+/**
+ * What anyone holding the letter sees after scanning its QR: enough to match the paper
+ * (who signed it, when, for whom and to whom), and no clinical text: no reason, notes or
+ * diagnoses, and the patient as initials only.
+ */
+export const ReferralLetterCheck = z.object({
+  /** A signed letter stays genuine; closing the referral does not withdraw it. */
+  status: z.enum(['genuine']),
+  signedAt: z.iso.datetime(),
+  signatureMethod: SignatureMethod,
+  doctor: z.object({
+    name: z.string().nullable(),
+    qualifications: z.string().nullable(),
+    registrationNumber: z.string().nullable(),
+    council: z.string().nullable(),
+  }),
+  clinicName: z.string(),
+  patient: z.object({
+    initials: z.string(),
+    ageYears: z.number().int().nullable(),
+    gender: z.enum(['female', 'male', 'other']).nullable(),
+  }),
+  /** Who the letter is addressed to, as printed (no phone number). */
+  recipient: z.object({
+    kind: ReferralKind,
+    name: z.string().nullable(),
+    specialty: z.string().nullable(),
+    hospital: z.string().nullable(),
+  }),
+  urgency: ReferralUrgency,
+  visitDate: z.iso.date(),
+});
+export type ReferralLetterCheck = z.infer<typeof ReferralLetterCheck>;
 
 export const ReferralList = page(ReferralSummary);
 export type ReferralList = z.infer<typeof ReferralList>;
