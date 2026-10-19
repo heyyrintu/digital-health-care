@@ -282,6 +282,7 @@ model Organisation {
   receiptSettings        ReceiptSettings?
   idempotencyKeys        IdempotencyKey[]
   settings               OrganisationSettings?
+  branding               OrganisationBranding?
   safetyAlerts           SafetyAlert[]
   doctorProfiles         DoctorProfile[]
   medicineRequests       MedicineRequest[]
@@ -545,6 +546,30 @@ model OrganisationSettings {
   organisation Organisation @relation(fields: [organisationId], references: [id])
 
   @@map("organisation_settings")
+}
+
+/// The organisation's branding (Build Plan §5.1), one row per organisation; no row means the
+/// platform look. Published to anonymous visitors only through the `public_organisation_*`
+/// and `public_doctor_directory` functions (ADR 0017 addendum 2), so it has its own table.
+model OrganisationBranding {
+  organisationId String   @id @map("organisation_id") @db.Uuid
+  /// 1–80 characters; shown instead of the organisation's name on public pages.
+  displayName    String?  @map("display_name")
+  /// #rrggbb, lowercase, with at least 4.5:1 contrast with white text (checked by the API).
+  accentColour   String?  @map("accent_colour")
+  /// Up to 120 characters, shown on the portal's sign-in.
+  tagline        String?
+  /// The logo in the file store: key, media type (PNG, JPEG or WebP), size and SHA-256.
+  logoKey        String?  @map("logo_key")
+  logoMediaType  String?  @map("logo_media_type")
+  logoSizeBytes  Int?     @map("logo_size_bytes")
+  logoSha256     String?  @map("logo_sha256")
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id])
+
+  @@index([logoSha256])
+  @@map("organisation_branding")
 }
 
 /// Configurable patient label (Priority, Emergency, VIP, ...).

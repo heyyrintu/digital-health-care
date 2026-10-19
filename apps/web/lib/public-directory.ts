@@ -21,8 +21,8 @@ export function searchText(text: string): string {
 }
 
 /**
- * What a card can be found by: the doctor's name, specialty, organisation, and each clinic's
- * name and first address line.
+ * What a card can be found by: the doctor's name, specialty, organisation (its name and
+ * display name), and each clinic's name and first address line.
  */
 function haystack(card: PublicDoctorCard): string {
   return searchText(
@@ -30,6 +30,7 @@ function haystack(card: PublicDoctorCard): string {
       card.name,
       card.specialty,
       card.organisationName,
+      card.organisationDisplayName,
       ...card.clinics.flatMap((c) => [c.name, c.addressLine]),
     ]
       .filter(Boolean)

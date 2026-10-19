@@ -30,6 +30,8 @@ interface SessionContext {
   /** Why the last session ended, for a message on the sign-in page. */
   endedReason: SignOutReason | null;
   api: ApiClient;
+  /** The API's base URL (the branding card's logo preview is served from there). */
+  apiBaseUrl: string;
   locale: Locale;
   setLocale(locale: Locale): void;
   t(key: MessageKey, params?: Record<string, string | number>): string;
@@ -151,13 +153,14 @@ export function SessionProvider({
       me,
       endedReason,
       api,
+      apiBaseUrl,
       locale,
       setLocale,
       t: (key, params) => translate(locale, key, params),
       startSession,
       signOut,
     }),
-    [status, me, endedReason, api, locale, startSession, signOut],
+    [status, me, endedReason, api, apiBaseUrl, locale, startSession, signOut],
   );
 
   return (

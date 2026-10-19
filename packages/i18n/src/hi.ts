@@ -1320,6 +1320,7 @@ export const hi: Record<MessageKey, string> = {
   // Clinic admin: the test catalogue doctors order from (PRD §7.1, §9.2).
   'dashboard.testCatalogue': 'जाँच सूची',
   'audit.area.testCatalogue': 'जाँच सूची',
+  'audit.area.branding': 'ब्रांडिंग',
   'catalogue.title': 'जाँच सूची',
   'catalogue.sub':
     'वे जाँचें जिनमें से डॉक्टर ऑर्डर करते समय चुनते हैं। जो जाँचें पहले ही ऑर्डर हो चुकी हैं, वे वैसी ही रहती हैं, चाहे आप यहाँ कुछ भी बदलें।',
@@ -1444,4 +1445,42 @@ export const hi: Record<MessageKey, string> = {
   'doctorPage.busy': 'इस समय बहुत से लोग डॉक्टर पेज खोल रहे हैं। कृपया एक मिनट बाद फिर कोशिश करें।',
   'doctorPage.retry': 'फिर कोशिश करें',
   'doctorPage.numberVerified': 'पंजीकरण संख्या सत्यापित',
+  'branding.title': 'ब्रांडिंग',
+  'branding.intro':
+    'आपके डॉक्टरों के सार्वजनिक पेज और मरीज़ पोर्टल के साइन-इन पर आपका क्लिनिक कैसा दिखे। प्लेटफ़ॉर्म का होम पेज बिना ब्रांडिंग के रहता है।',
+  'branding.displayName': 'दिखाया जाने वाला नाम (वैकल्पिक)',
+  'branding.displayNameHint': 'सार्वजनिक पेजों पर “{name}” की जगह दिखता है। अधिकतम 80 अक्षर।',
+  'branding.tagline': 'टैगलाइन (वैकल्पिक)',
+  'branding.taglineHint': 'पोर्टल साइन-इन पर नाम के नीचे एक छोटी पंक्ति। अधिकतम 120 अक्षर।',
+  'branding.accent': 'मुख्य रंग (वैकल्पिक)',
+  'branding.accentHint':
+    'सफ़ेद अक्षरों वाले बटनों का रंग, जैसे अपॉइंटमेंट बुक करें। सफ़ेद के साथ इसका कंट्रास्ट कम से कम 4.5:1 होना चाहिए।',
+  'branding.accentPick': 'रंग चुनें',
+  'branding.contrast': 'सफ़ेद अक्षरों के साथ कंट्रास्ट: {ratio}',
+  'branding.accentLowContrast':
+    'सफ़ेद अक्षरों के लिए बहुत हल्का: कम से कम 4.5:1 कंट्रास्ट चाहिए। गहरा रंग चुनें।',
+  'branding.accentInvalid': '#1a6b5c जैसा रंग लिखें।',
+  'branding.displayNameInvalid': 'एक ही पंक्ति में अधिकतम 80 अक्षर लिखें।',
+  'branding.taglineInvalid': 'एक ही पंक्ति में अधिकतम 120 अक्षर लिखें।',
+  'branding.save': 'ब्रांडिंग सहेजें',
+  'branding.saved': 'ब्रांडिंग सहेजी गई।',
+  'branding.logo': 'लोगो',
+  'branding.logoHint':
+    'स्थिर PNG, JPEG या WebP इमेज, अधिकतम 512 KB, हर तरफ़ 4096 पिक्सेल और कुल 40 लाख पिक्सेल तक। SVG और एनिमेटेड इमेज स्वीकार नहीं हैं।',
+  'branding.logoChoose': 'लोगो अपलोड करें',
+  'branding.logoRemove': 'लोगो हटाएँ',
+  'branding.logoNone': 'अभी कोई लोगो नहीं है।',
+  'branding.logoSaved': 'लोगो सहेजा गया।',
+  'branding.logoRemoved': 'लोगो हटाया गया।',
+  'branding.logoSvg': 'SVG लोगो स्वीकार नहीं हैं। लोगो को PNG, JPEG या WebP में सहेजें।',
+  'branding.logoTooLarge': 'लोगो 512 KB से बड़ा है। इसे छोटा सहेजकर फिर कोशिश करें।',
+  'branding.logoTooManyPixels':
+    'लोगो बहुत बड़ा है: हर तरफ़ अधिकतम 4096 पिक्सेल और कुल 40 लाख पिक्सेल। इसे छोटा सहेजें।',
+  'branding.logoAnimated':
+    'एनिमेटेड लोगो स्वीकार नहीं हैं। स्थिर इमेज को PNG, JPEG या WebP में सहेजें।',
+  'branding.logoType': 'PNG, JPEG या WebP इमेज चुनें।',
+  'branding.logoNotImage':
+    'यह फ़ाइल साधारण इमेज नहीं है। लोगो को फिर से PNG, JPEG या WebP में एक्सपोर्ट करें।',
+  'branding.preview': 'पूर्वावलोकन',
+  'branding.previewHint': 'आपके डॉक्टरों के पेज का ऊपरी हिस्सा और बुक बटन ऐसे दिखेंगे।',
 };

@@ -76,6 +76,7 @@ describe('PublicDoctorCard', () => {
       'feeFromPaise',
       'languages',
       'name',
+      'organisationDisplayName',
       'organisationName',
       'qualifications',
       'slug',
@@ -94,6 +95,7 @@ describe('PublicDoctorCard', () => {
       qualifications: null,
       specialty: null,
       organisationName: 'Demo Clinic',
+      organisationDisplayName: null,
       clinics: [{ name: 'Main clinic', addressLine: null, phone: '+910000000000' }],
       languages: [],
       feeFromPaise: null,
@@ -124,7 +126,11 @@ describe('PublicDoctor', () => {
       'specialty',
       'updatedAt',
     ]);
-    expect(Object.keys(PublicDoctor.shape.organisation.shape).sort()).toEqual(['name', 'slug']);
+    expect(Object.keys(PublicDoctor.shape.organisation.shape).sort()).toEqual([
+      'branding',
+      'name',
+      'slug',
+    ]);
     expect(Object.keys(PublicDoctor.shape.clinics.element.shape).sort()).toEqual([
       'address',
       'name',
