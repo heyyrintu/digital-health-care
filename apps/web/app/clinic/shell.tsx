@@ -9,6 +9,7 @@ import {
   IndianRupee,
   ListOrdered,
   ScrollText,
+  Send,
   GitMerge,
   Pill,
   UserPlus,
@@ -78,6 +79,7 @@ export function ClinicShell({ children }: { children: (me: MeResponse) => ReactN
             : []),
           ...(me.role === 'doctor'
             ? [
+                { href: '/clinic/referrals', label: t('dashboard.referrals'), icon: Send },
                 {
                   href: '/clinic/profile',
                   label: t('dashboard.prescriptionPad'),

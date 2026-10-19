@@ -93,7 +93,7 @@ test.describe('clinic admin: chart, safety alerts and files', () => {
     await setUpFromInvite(doctor, clinic.inviteLink('doctor'), 'doctor synthetic passphrase');
     await doctor.goto(`/clinic/consultations/${visitId}`);
     await expect(doctor.getByRole('alert').filter({ hasText: 'chart' })).toContainText(
-      'This clinic opens a patient’s chart only to the doctors who have seen them.',
+      'This clinic opens a patient’s chart only to the doctors who have seen them, or who have an open referral for them.',
     );
     await context.close();
   });

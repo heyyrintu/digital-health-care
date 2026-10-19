@@ -17,6 +17,13 @@ import {
   type SaveDoctorPublicProfileBody,
   AwaitingReviewList,
   PatientTestOrderList,
+  Referral,
+  ReferralCounts,
+  ReferralList,
+  VisitReferralList,
+  type CloseReferralBody,
+  type CreateReferralBody,
+  type ReferralListQuery,
   PortalAppointment,
   PortalAppointmentList,
   PortalPrescriptionList,
@@ -351,6 +358,36 @@ export function createApiClient(options: ApiClientOptions) {
     /** Doctor: one result's file. */
     testResultFile: (resultId: string) =>
       requestFile('GET', `/test-results/${encodeURIComponent(resultId)}/file`, { accept: '*/*' }),
+
+    // Referrals (PRD §7.2). Doctors only.
+    /** The visit's doctor: refer the patient. Send the same `idempotencyKey` when retrying. */
+    createReferral: (appointmentId: string, body: CreateReferralBody, idempotencyKey?: string) =>
+      request('POST', `/appointments/${encodeURIComponent(appointmentId)}/referrals`, {
+        schema: Referral,
+        body,
+        idempotencyKey,
+      }),
+    /** The referrals made at a visit that the signed-in doctor sent or received. */
+    visitReferrals: (appointmentId: string) =>
+      request('GET', `/appointments/${encodeURIComponent(appointmentId)}/referrals`, {
+        schema: VisitReferralList,
+      }),
+    /** One page of received or sent referrals, newest first. */
+    referrals: (query: {
+      box: ReferralListQuery['box'];
+      status?: ReferralListQuery['status'];
+      cursor?: string;
+      limit?: number;
+    }) => request('GET', '/referrals', { schema: ReferralList, query: { ...query } }),
+    /** New and open referrals, for the dashboard. */
+    referralCounts: () => request('GET', '/referrals/counts', { schema: ReferralCounts }),
+    referral: (id: string) =>
+      request('GET', `/referrals/${encodeURIComponent(id)}`, { schema: Referral }),
+    /** The receiving doctor opened it: sent becomes seen (no change otherwise). */
+    markReferralSeen: (id: string) =>
+      request('POST', `/referrals/${encodeURIComponent(id)}/seen`, { schema: Referral }),
+    closeReferral: (id: string, body: CloseReferralBody) =>
+      request('POST', `/referrals/${encodeURIComponent(id)}/close`, { schema: Referral, body }),
 
     /** Doctor: set or change the signing PIN, confirmed with the account password. */
     setSigningPin: (password: string, pin: string) =>
