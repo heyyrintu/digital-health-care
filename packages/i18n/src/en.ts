@@ -1317,6 +1317,7 @@ export const en = {
   // Clinic admin: the test catalogue doctors order from (PRD §7.1, §9.2).
   'dashboard.testCatalogue': 'Test catalogue',
   'audit.area.testCatalogue': 'Test catalogue',
+  'audit.area.branding': 'Branding',
   'catalogue.title': 'Test catalogue',
   'catalogue.sub':
     'The tests doctors pick from when they order. Tests already ordered keep what was ordered, whatever you change here.',
@@ -1442,6 +1443,45 @@ export const en = {
     'Too many people are opening doctor pages at the moment. Please try again in a minute.',
   'doctorPage.retry': 'Try again',
   'doctorPage.numberVerified': 'Registration number verified',
+  'branding.title': 'Branding',
+  'branding.intro':
+    'How your clinic looks on its doctors’ public pages and on the patient portal’s sign-in. The platform’s home page stays unbranded.',
+  'branding.displayName': 'Display name (optional)',
+  'branding.displayNameHint': 'Shown instead of “{name}” on public pages. Up to 80 characters.',
+  'branding.tagline': 'Tagline (optional)',
+  'branding.taglineHint':
+    'A short line under the name on the portal sign-in. Up to 120 characters.',
+  'branding.accent': 'Accent colour (optional)',
+  'branding.accentHint':
+    'The colour of buttons with white text, such as Book an appointment. It needs at least 4.5:1 contrast with white.',
+  'branding.accentPick': 'Pick a colour',
+  'branding.contrast': 'Contrast with white text: {ratio}',
+  'branding.accentLowContrast':
+    'Too light for white text: it needs at least 4.5:1 contrast. Choose a darker colour.',
+  'branding.accentInvalid': 'Use a colour like #1a6b5c.',
+  'branding.displayNameInvalid': 'Use up to 80 characters, on one line.',
+  'branding.taglineInvalid': 'Use up to 120 characters, on one line.',
+  'branding.save': 'Save branding',
+  'branding.saved': 'Branding saved.',
+  'branding.logo': 'Logo',
+  'branding.logoHint':
+    'A still PNG, JPEG or WebP image, up to 512 KB, 4096 pixels on a side and 4 million pixels in all. SVG and animated images are not accepted.',
+  'branding.logoChoose': 'Upload logo',
+  'branding.logoRemove': 'Remove logo',
+  'branding.logoNone': 'No logo yet.',
+  'branding.logoSaved': 'Logo saved.',
+  'branding.logoRemoved': 'Logo removed.',
+  'branding.logoSvg': 'SVG logos are not accepted. Save the logo as PNG, JPEG or WebP.',
+  'branding.logoTooLarge': 'The logo is larger than 512 KB. Save it smaller and try again.',
+  'branding.logoTooManyPixels':
+    'The logo is too large: at most 4096 pixels on a side and 4 million pixels in all. Save it smaller.',
+  'branding.logoAnimated':
+    'Animated logos are not accepted. Save a still image as PNG, JPEG or WebP.',
+  'branding.logoType': 'Choose a PNG, JPEG or WebP image.',
+  'branding.logoNotImage':
+    'This file is not a plain image. Export the logo again as PNG, JPEG or WebP.',
+  'branding.preview': 'Preview',
+  'branding.previewHint': 'How the header of your doctors’ pages and the Book button will look.',
 } as const;
 
 export type MessageKey = keyof typeof en;

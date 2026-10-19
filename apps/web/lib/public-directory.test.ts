@@ -17,6 +17,7 @@ const card = (over: Partial<PublicDoctorCard>): PublicDoctorCard => ({
   qualifications: 'MBBS',
   specialty: 'General medicine',
   organisationName: 'Demo Clinic',
+  organisationDisplayName: null,
   clinics: [],
   languages: [],
   feeFromPaise: null,
@@ -37,7 +38,12 @@ const cards = [
     specialty: 'dermatology ',
     clinics: [{ name: 'Branch clinic', addressLine: null }],
   }),
-  card({ slug: 'dr-synthetic', specialty: 'Orthopaedics', organisationName: 'Bone Clinic' }),
+  card({
+    slug: 'dr-synthetic',
+    specialty: 'Orthopaedics',
+    organisationName: 'Bone Clinic',
+    organisationDisplayName: 'Joint Care Synthetic',
+  }),
   card({ slug: 'dr-no-specialty', name: null, specialty: null, organisationName: 'Nameless' }),
 ];
 const slugs = (list: PublicDoctorCard[]) => list.map((c) => c.slug);
@@ -65,6 +71,8 @@ describe('filterDirectory', () => {
     ['testpur', ['dr-asha-test']],
     ['branch clinic', ['dr-ravi-test']],
     ['bone', ['dr-synthetic']],
+    // The organisation's display name too.
+    ['joint care', ['dr-synthetic']],
     ['nameless', ['dr-no-specialty']],
     // Every word must match, in any order.
     ['test asha', ['dr-asha-test']],

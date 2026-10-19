@@ -49,6 +49,12 @@ import {
   SaveBillBody,
   UpdatePriceListItemBody,
 } from './billing';
+import {
+  LOGO_MEDIA_TYPES,
+  OrganisationBranding,
+  PublicBranding,
+  UpdateOrganisationBrandingBody,
+} from './branding';
 import { DashboardQuery, DashboardReport } from './dashboard';
 import { ErrorResponse } from './errors';
 import {
@@ -236,10 +242,10 @@ interface Operation {
   status?: 200 | 201 | 204;
   /** The response is a PDF file instead of JSON. */
   pdf?: boolean;
-  /** The request body is a file (an uploaded result) instead of JSON. */
-  upload?: boolean;
-  /** The response is an uploaded file (PDF or image) instead of JSON. */
-  file?: boolean;
+  /** The request body is a file (an uploaded result, or `logo`: a PNG, JPEG or WebP logo). */
+  upload?: boolean | 'logo';
+  /** The response is an uploaded file (PDF or image, or `logo`) instead of JSON. */
+  file?: boolean | 'logo';
   /** For a 201 that a retry answers with 200 and the same body: what that 200 means. */
   replay?: string;
 }
@@ -453,6 +459,58 @@ const operations: Operation[] = [
     summary: 'Set the chart model, hidden safety rules and upload limits (clinic admin)',
     body: UpdateOrganisationSettingsBody,
     response: OrganisationSettings,
+  },
+  {
+    method: 'get',
+    path: '/organisation-branding',
+    operationId: 'getOrganisationBranding',
+    summary: 'The organisation’s display name, accent colour, tagline and logo (clinic admin)',
+    response: OrganisationBranding,
+  },
+  {
+    method: 'put',
+    path: '/organisation-branding',
+    operationId: 'updateOrganisationBranding',
+    summary:
+      'Set the display name, accent colour (at least 4.5:1 with white) and tagline (clinic admin)',
+    body: UpdateOrganisationBrandingBody,
+    response: OrganisationBranding,
+  },
+  {
+    method: 'post',
+    path: '/organisation-branding/logo',
+    operationId: 'uploadOrganisationLogo',
+    summary:
+      'Upload or replace the logo; the body is the file: PNG, JPEG or WebP, up to 512 KB, never SVG (clinic admin)',
+    upload: 'logo',
+    response: OrganisationBranding,
+  },
+  {
+    method: 'delete',
+    path: '/organisation-branding/logo',
+    operationId: 'deleteOrganisationLogo',
+    summary: 'Remove the logo (clinic admin)',
+    response: OrganisationBranding,
+  },
+  {
+    method: 'get',
+    path: '/public/organisations/{slug}/branding',
+    operationId: 'getPublicBranding',
+    summary: 'An active organisation’s branding for the portal’s sign-in; 404 if none is saved',
+    public: true,
+    pathParams: [
+      { name: 'slug', schema: { type: 'string', pattern: '^[a-z0-9][a-z0-9-]{1,62}$' } },
+    ],
+    response: PublicBranding,
+  },
+  {
+    method: 'get',
+    path: '/public/logos/{sha256}',
+    operationId: 'getPublicLogo',
+    summary: 'An active organisation’s logo by its SHA-256 (cacheable); 404 otherwise',
+    public: true,
+    pathParams: [{ name: 'sha256', schema: { type: 'string', pattern: '^[0-9a-f]{64}$' } }],
+    file: 'logo',
   },
   {
     method: 'get',
@@ -1571,6 +1629,13 @@ const binary = Object.fromEntries(
     .map((type) => [type, { schema: { type: 'string', format: 'binary' } }]),
 );
 
+const logoBinary = Object.fromEntries(
+  Object.values(LOGO_MEDIA_TYPES).map((type) => [
+    type,
+    { schema: { type: 'string', format: 'binary' } },
+  ]),
+);
+
 export function buildOpenApiDocument(options: { version: string; serverUrl?: string }) {
   const paths: Record<string, Record<string, unknown>> = {};
   for (const op of operations) {
@@ -1598,7 +1663,14 @@ export function buildOpenApiDocument(options: { version: string; serverUrl?: str
             },
           }
         : {}),
-      ...(op.upload ? { requestBody: { required: true, content: binary } } : {}),
+      ...(op.upload
+        ? {
+            requestBody: {
+              required: true,
+              content: op.upload === 'logo' ? logoBinary : binary,
+            },
+          }
+        : {}),
       responses: {
         [String(status)]: op.pdf
           ? {
@@ -1606,7 +1678,10 @@ export function buildOpenApiDocument(options: { version: string; serverUrl?: str
               content: { 'application/pdf': { schema: { type: 'string', format: 'binary' } } },
             }
           : op.file
-            ? { description: 'The file, as uploaded', content: binary }
+            ? {
+                description: 'The file, as uploaded',
+                content: op.file === 'logo' ? logoBinary : binary,
+              }
             : status === 204 || !op.response
               ? { description: 'No content' }
               : {

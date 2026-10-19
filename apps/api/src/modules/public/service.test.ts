@@ -33,13 +33,35 @@ describe('toPublicDoctor', () => {
       registration: { number: 'TEST-1', council: 'Test Medical Council' },
       about: null,
       languages: ['English'],
-      organisation: { slug: 'demo-clinic', name: 'Demo Clinic' },
+      organisation: {
+        slug: 'demo-clinic',
+        name: 'Demo Clinic',
+        branding: { displayName: null, accentColour: null, logoUrl: null },
+      },
       clinics: [{ name: 'Main clinic', address: null }],
       consultationTypes: [
         { name: 'In person', mode: 'in_person', durationMin: 15, feePaise: 50000 },
       ],
       updatedAt: '2026-10-18T10:00:00.000Z',
     });
+  });
+
+  it('adds the organisation’s branding, with the logo’s address', () => {
+    const sha = 'ab'.repeat(32);
+    const page = toPublicDoctor(row, {
+      organisation_slug: 'demo-clinic',
+      organisation_name: 'Demo Clinic',
+      display_name: 'Demo Care',
+      accent_colour: '#1a6b5c',
+      tagline: 'Not on the doctor page',
+      logo_sha256: sha,
+    });
+    expect(PublicDoctor.parse(page).organisation.branding).toEqual({
+      displayName: 'Demo Care',
+      accentColour: '#1a6b5c',
+      logoUrl: `public/logos/${sha}`,
+    });
+    expect(JSON.stringify(page)).not.toContain('Not on the doctor page');
   });
 
   it('copies only the known fields, even if a row or its JSON grew more', () => {
@@ -72,6 +94,7 @@ describe('toPublicDoctorCard', () => {
     ],
     languages: ['English', 'Hindi'],
     fee_from_paise: 50000,
+    organisation_display_name: null,
   };
 
   it('maps the directory row to the card', () => {
@@ -87,7 +110,19 @@ describe('toPublicDoctorCard', () => {
       ],
       languages: ['English', 'Hindi'],
       feeFromPaise: 50000,
+      organisationDisplayName: null,
     });
+  });
+
+  it('carries the organisation’s display name, never its colour or logo', () => {
+    const out = toPublicDoctorCard({
+      ...card,
+      organisation_display_name: 'Demo Care',
+      accent_colour: '#1a6b5c',
+      logo_sha256: 'cd'.repeat(32),
+    } as unknown as PublicDoctorCardRow);
+    expect(out.organisationDisplayName).toBe('Demo Care');
+    expect(JSON.stringify(out)).not.toMatch(/1a6b5c|cdcd|logo/);
   });
 
   it('keeps a doctor with no name, clinic or fee', () => {

@@ -6,17 +6,24 @@ import { t as translate, type Locale, type MessageKey } from '@dhc/i18n';
 import { Button, buttonVariants, ModeIcon } from '@dhc/ui-web';
 import { BadgeCheck, CalendarPlus, Languages, MapPin } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { accentStyle, brandName, logoSrc } from '../../../lib/branding';
+import { BrandLogo } from '../../brand';
 
 /**
  * The page's visible part. Rendered in English on the server (what search engines and the
- * cache keep); `?lang=hi` or the toggle switch it to Hindi in the browser.
+ * cache keep); `?lang=hi` or the toggle switch it to Hindi in the browser. The clinic's
+ * branding: its logo and display name above the profile, and its accent (a validated
+ * colour, as CSS variables) for the page's buttons; none set, the platform look.
  */
 export function DoctorProfileView({
   doctor,
   bookHref,
+  apiBaseUrl,
 }: {
   doctor: PublicDoctor;
   bookHref: string;
+  /** Where the browser reaches the API (the logo is served from there). */
+  apiBaseUrl: string;
 }) {
   const [locale, setLocale] = useState<Locale>('en');
   const t = (key: MessageKey, params?: Record<string, string | number>) =>
@@ -29,11 +36,22 @@ export function DoctorProfileView({
     document.documentElement.lang = locale;
   }, [locale]);
 
-  const name = doctor.name ?? doctor.organisation.name;
+  const { branding } = doctor.organisation;
+  const clinicName = brandName(doctor.organisation.name, branding);
+  const name = doctor.name ?? clinicName;
+  const logo = logoSrc(apiBaseUrl, branding.logoUrl);
 
   return (
-    <article className="mx-auto w-full max-w-2xl space-y-5" data-testid="doctor-page">
-      <div className="flex justify-end">
+    <article
+      className="mx-auto w-full max-w-2xl space-y-5"
+      data-testid="doctor-page"
+      style={accentStyle(branding.accentColour)}
+    >
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex min-w-0 items-center gap-3" data-testid="clinic-brand">
+          {logo && <BrandLogo src={logo} className="h-10 max-w-40" />}
+          <span className="truncate font-display font-bold">{clinicName}</span>
+        </div>
         <Button
           type="button"
           variant="outline"
@@ -67,7 +85,7 @@ export function DoctorProfileView({
               <p className="m-0 text-sm font-semibold text-primary">{doctor.specialty}</p>
             )}
             <p className="m-0 text-sm text-muted-foreground">
-              {t('doctorPage.at', { organisation: doctor.organisation.name })}
+              {t('doctorPage.at', { organisation: clinicName })}
             </p>
           </div>
         </div>

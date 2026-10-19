@@ -13,7 +13,10 @@ import {
   portalErrorMessage,
   signedInDestination,
 } from '../../../lib/patient';
+import { accentStyle, brandName, logoSrc } from '../../../lib/branding';
 import { postPatientSession, type SessionTokens } from '../../../lib/session-client';
+import { BrandLogo } from '../../brand';
+import { usePublicBranding } from '../branding';
 import { Notice } from '../parts';
 import { PatientLocaleToggle, usePatientSession } from '../session-provider';
 
@@ -30,10 +33,19 @@ export default function PatientLoginPage() {
 
 /** Patient sign-in (PRD §4.1): clinic and mobile number, then the 6-digit code sent by SMS. */
 function Login() {
-  const { status, endedReason, me, signOut, startSession, t } = usePatientSession();
+  const { status, endedReason, me, signOut, startSession, t, apiBaseUrl } = usePatientSession();
   const router = useRouter();
   const params = useSearchParams();
   const [clinic, setClinic] = useState('');
+  // The clinic's branding, for a link that names the clinic (`?clinic=<id>`) only, and only
+  // while the clinic field still holds that clinic: what is typed into the field, or
+  // remembered from last time, gets the platform look, so the page never shows one clinic's
+  // name while signing in to another.
+  const linkClinic = params.get('clinic');
+  const linkBranding = usePublicBranding(linkClinic ? clinicSlug(linkClinic) : null);
+  const branding =
+    linkBranding && clinicSlug(clinic) === linkBranding.organisation.slug ? linkBranding : null;
+  const logo = branding ? logoSrc(apiBaseUrl, branding.logoUrl) : null;
   const [phone, setPhone] = useState('');
   const [challenge, setChallenge] = useState<string | null>(null);
   const [code, setCode] = useState('');
@@ -138,16 +150,35 @@ function Login() {
 
   return (
     <main className="grid min-h-dvh place-items-center bg-hero px-4 py-10 font-sans text-foreground">
-      <div className="surface w-full max-w-md p-6 sm:p-8">
+      <div
+        className="surface w-full max-w-md p-6 sm:p-8"
+        style={accentStyle(branding?.accentColour)}
+      >
         <div className="mb-6 flex items-start justify-between gap-3">
-          <span
-            className="grid h-12 w-12 place-items-center rounded-2xl bg-primary text-primary-foreground shadow-button"
-            aria-hidden
-          >
-            <HeartPulse className="size-6" />
-          </span>
+          {logo ? (
+            <BrandLogo src={logo} className="h-12 max-w-48" />
+          ) : (
+            <span
+              className="grid h-12 w-12 place-items-center rounded-2xl bg-primary text-primary-foreground shadow-button"
+              aria-hidden
+            >
+              <HeartPulse className="size-6" />
+            </span>
+          )}
           <PatientLocaleToggle />
         </div>
+        {branding && (
+          <div className="mb-3" data-testid="portal-brand">
+            <p className="font-display text-lg font-bold [overflow-wrap:anywhere]">
+              {brandName(branding.organisation.name, branding)}
+            </p>
+            {branding.tagline && (
+              <p className="text-sm text-muted-foreground [overflow-wrap:anywhere]">
+                {branding.tagline}
+              </p>
+            )}
+          </div>
+        )}
         <p className="text-[11px] font-bold uppercase tracking-wide text-primary">
           {t('portal.title')}
         </p>

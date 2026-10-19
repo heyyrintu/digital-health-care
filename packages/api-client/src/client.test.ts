@@ -329,6 +329,48 @@ describe('platform console calls', () => {
     await expect(missing.publicDoctor('nobody')).rejects.toMatchObject({ status: 404 });
   });
 
+  it('reads a clinic’s public branding without a token', async () => {
+    const branding = {
+      organisation: { slug: 'demo-clinic', name: 'Demo Clinic' },
+      displayName: 'Demo Care',
+      accentColour: '#1a6b5c',
+      tagline: null,
+      logoUrl: null,
+      logoKey: 'should not survive parsing',
+    };
+    const fetch = vi.fn(async () => json(200, branding));
+    const client = createApiClient({ baseUrl: 'https://api.test/v1', fetch });
+    const result = await client.publicBranding('demo-clinic');
+    expect(result).not.toHaveProperty('logoKey');
+    expect(result.displayName).toBe('Demo Care');
+    const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('https://api.test/v1/public/organisations/demo-clinic/branding');
+    expect((init.headers as Record<string, string>).authorization).toBeUndefined();
+  });
+
+  it('uploads a logo as the file itself, typed by the file', async () => {
+    const fetch = vi.fn(async () =>
+      json(400, {
+        error: {
+          code: 'VALIDATION_FAILED',
+          message: 'x',
+          fields: { file: 'svg_not_allowed' },
+          requestId: 'req_1',
+        },
+      }),
+    );
+    const client = createApiClient({ baseUrl: 'https://api.test/v1', fetch });
+    const file = new Blob(['<svg/>'], { type: 'image/svg+xml' });
+    await expect(client.uploadOrganisationLogo(file)).rejects.toMatchObject({
+      status: 400,
+      fields: { file: 'svg_not_allowed' },
+    });
+    const [url, init] = fetch.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toBe('https://api.test/v1/organisation-branding/logo');
+    expect(init.method).toBe('POST');
+    expect((init.headers as Record<string, string>)['content-type']).toBe('image/svg+xml');
+  });
+
   it('saves the public page with PATCH', async () => {
     const fetch = vi.fn(async () => json(500, { error: { code: 'INTERNAL', message: 'x' } }));
     const client = createApiClient({ baseUrl: 'https://api.test/v1', fetch });

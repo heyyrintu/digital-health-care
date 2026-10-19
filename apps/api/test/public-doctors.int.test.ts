@@ -341,7 +341,11 @@ describe('GET /v1/public/doctors/:slug', () => {
       registration: { number: 'TEST-SA', council: 'Test Medical Council' },
       about: 'Synthetic about text.',
       languages: ['English', 'हिन्दी'],
-      organisation: { slug: 'clinic-a', name: 'Synthetic Clinic A' },
+      organisation: {
+        slug: 'clinic-a',
+        name: 'Synthetic Clinic A',
+        branding: { displayName: null, accentColour: null, logoUrl: null },
+      },
       clinics: [
         { name: 'Branch clinic', address: null },
         { name: 'Clinic with retired type', address: null },
@@ -553,6 +557,7 @@ describe('GET /v1/public/doctor-directory', () => {
         qualifications: 'MBBS, MD',
         specialty: 'General medicine',
         organisationName: 'Clinic B',
+        organisationDisplayName: null,
         clinics: [{ name: 'Clinic B main', addressLine: '9 Other Street' }],
         languages: [],
         feeFromPaise: 99900,
@@ -563,6 +568,7 @@ describe('GET /v1/public/doctor-directory', () => {
         qualifications: 'MBBS, MD',
         specialty: 'General medicine',
         organisationName: 'Synthetic Clinic A',
+        organisationDisplayName: null,
         clinics: [
           { name: 'Branch clinic', addressLine: null },
           { name: 'Clinic with retired type', addressLine: null },
@@ -817,6 +823,7 @@ describe('in the database', () => {
       'consultation_types',
       'memberships',
       'organisations',
+      'organisation_branding',
       'audit_logs',
     ]) {
       const [row] = await asPublic((tx) =>
@@ -843,6 +850,15 @@ describe('in the database', () => {
       { name: 'public_doctor_directory', definer: true, app: true, auth: false, platform: false },
       { name: 'public_doctor_profile', definer: true, app: true, auth: false, platform: false },
       { name: 'public_doctor_slugs', definer: true, app: true, auth: false, platform: false },
+      // Organisation branding (ADR 0017 addendum 2), pinned in branding.int.test.ts.
+      {
+        name: 'public_organisation_branding',
+        definer: true,
+        app: true,
+        auth: false,
+        platform: false,
+      },
+      { name: 'public_organisation_logo', definer: true, app: true, auth: false, platform: false },
     ]);
     await expect(
       withAuth(h.services.db, (tx) => tx.$queryRawUnsafe('SELECT * FROM public_doctor_slugs()')),
@@ -885,6 +901,8 @@ describe('in the database', () => {
           'clinics',
           'languages',
           'fee_from_paise',
+          // Version 2 (migration 20261019090000): the organisation's display name.
+          'organisation_display_name',
         ],
       },
       {
@@ -906,6 +924,18 @@ describe('in the database', () => {
         ],
       },
       { name: 'public_doctor_slugs', columns: ['slug', 'updated_at'] },
+      {
+        name: 'public_organisation_branding',
+        columns: [
+          'organisation_slug',
+          'organisation_name',
+          'display_name',
+          'accent_colour',
+          'tagline',
+          'logo_sha256',
+        ],
+      },
+      { name: 'public_organisation_logo', columns: ['file_key', 'media_type', 'size_bytes'] },
     ]);
     // Called from inside another organisation, the function still answers only for the
     // page asked about: it widens nothing for a signed-in clinic.
