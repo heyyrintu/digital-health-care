@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 /**
  * Attachments and the clinic document library through the API (PRD §7.3), part 1: clinic
  * admins and doctors upload sheets to the library and rename, replace, archive and restore
@@ -20,6 +21,8 @@ import { withTenant } from '@dhc/db';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { SAMPLE_SVG, samplePng, sampleWebp } from '../src/modules/branding/logo-samples';
 import { samplePdf } from '../src/modules/documents/document-samples';
+import { everyActiveContent } from '../src/modules/documents/pdf-attack-samples';
+import { rebuildPdf } from '../src/modules/documents/pdf-rebuild';
 import {
   addStaff,
   bearer,
@@ -45,6 +48,18 @@ let typeId: string;
 const SHEET = samplePdf({ text: 'Synthetic knee exercises, week 1' });
 const SHEET_V2 = samplePdf({ text: 'Synthetic knee exercises, week 2' });
 const REPORT = samplePdf({ text: 'Synthetic MRI report' });
+/** What the API stores for each: the PDF rebuilt from its pages (the same bytes every time). */
+async function rebuilt(pdf: Buffer) {
+  const outcome = await rebuildPdf(pdf);
+  if (!outcome.ok) throw new Error(outcome.detail);
+  return Buffer.from(outcome.data);
+}
+const STORED = {
+  sheet: await rebuilt(SHEET),
+  sheetV2: await rebuilt(SHEET_V2),
+  report: await rebuilt(REPORT),
+};
+const sha256 = (data: Buffer) => createHash('sha256').update(data).digest('hex');
 const NOTE = 'Synthetic note: do these twice a day.';
 
 beforeEach(async () => {
@@ -194,7 +209,7 @@ describe('the clinic library', () => {
       category: 'exercise',
       language: 'en',
       mediaType: 'application/pdf',
-      sizeBytes: SHEET.length,
+      sizeBytes: STORED.sheet.length,
       archived: false,
       shareCount: 0,
     });
@@ -228,14 +243,14 @@ describe('the clinic library', () => {
     const replaced = LibraryDocument.parse(
       (await call('PATCH', `/library-documents/${made.id}`, admin, { fileId: v2 })).json(),
     );
-    expect(replaced.sizeBytes).toBe(SHEET_V2.length);
+    expect(replaced.sizeBytes).toBe(STORED.sheetV2.length);
     const file = await call('GET', `/library-documents/${made.id}/file`, doctor);
     expect(file.statusCode).toBe(200);
     expect(file.headers['content-type']).toBe('application/pdf');
     expect(file.headers['x-content-type-options']).toBe('nosniff');
     expect(file.headers['content-security-policy']).toContain('sandbox');
     expect(file.headers['cache-control']).toBe('no-store');
-    expect(file.rawPayload.equals(SHEET_V2)).toBe(true);
+    expect(file.rawPayload.equals(STORED.sheetV2)).toBe(true);
 
     // Archive: out of the active list, into the archive; changing it needs a restore first.
     const archived = LibraryDocument.parse(
@@ -268,8 +283,9 @@ describe('the clinic library', () => {
     const uploads = await audits('document.file_uploaded');
     expect(uploads[0]!.metadata).toMatchObject({
       mediaType: 'application/pdf',
-      sizeBytes: SHEET.length,
-      sha256: expect.stringMatching(/^[0-9a-f]{64}$/),
+      sizeBytes: STORED.sheet.length,
+      // The hash of the rebuilt file, not of the upload.
+      sha256: sha256(STORED.sheet),
       by: 'clinic_admin',
     });
     for (const entry of [...created, ...updated, ...uploads]) {
@@ -379,10 +395,10 @@ describe('uploads', () => {
     expect(await refused(samplePng(), 'application/pdf')).toBe('type_mismatch');
     expect(
       await refused(
-        samplePdf({ catalogExtra: '/OpenAction << /S /JavaScript /JS (synthetic) >> ' }),
+        samplePdf({ trailerExtra: '/Encrypt << /Filter /Standard >> ' }),
         'application/pdf',
       ),
-    ).toBe('active_content');
+    ).toBe('encrypted');
     expect(await refused(Buffer.alloc(0), 'application/pdf')).toBe('empty');
     expect((await send(doctor, Buffer.from('GIF89a'), 'image/gif')).statusCode).toBe(415);
     expect((await send(doctor, Buffer.from('{}'), 'application/json')).statusCode).toBe(415);
@@ -401,6 +417,29 @@ describe('uploads', () => {
     // Only the accepted ones were stored and audited.
     expect(await h.owner.documentFile.count()).toBe(3);
     expect((await audits('document.file_uploaded')).length).toBe(3);
+  });
+
+  it('stores and serves a PDF rebuilt from its pages, never the upload', async () => {
+    // A script that runs on open, page actions, a link and an attachment.
+    const upload = everyActiveContent();
+    expect(upload.toString('latin1')).toMatch(/\/OpenAction/);
+    const made = await sheet(admin, {}, upload);
+    const row = await h.owner.documentFile.findFirstOrThrow({ orderBy: { uploadedAt: 'desc' } });
+    expect(row.sha256).not.toBe(sha256(upload));
+    expect(row.mediaType).toBe('application/pdf');
+    const file = await call('GET', `/library-documents/${made.id}/file`, doctor);
+    expect(file.statusCode).toBe(200);
+    expect(file.headers['content-type']).toBe('application/pdf');
+    const served = file.rawPayload;
+    expect(sha256(served)).toBe(row.sha256);
+    expect(served.length).toBe(row.sizeBytes);
+    expect(served.equals(await rebuilt(upload))).toBe(true);
+    const text = served.toString('latin1');
+    expect(text).not.toMatch(
+      /OpenAction|JavaScript|\/JS\b|\/AA\b|\/Annots|\/EmbeddedFile|app\.alert/,
+    );
+    const [audit] = await audits('document.file_uploaded');
+    expect(audit!.metadata).toMatchObject({ sha256: row.sha256, sizeBytes: row.sizeBytes });
   });
 });
 
@@ -449,7 +488,7 @@ describe('sharing with a patient', () => {
 
     const file = await call('GET', `/patient-documents/${report.id}/file`, doctor);
     expect(file.statusCode).toBe(200);
-    expect(file.rawPayload.equals(REPORT)).toBe(true);
+    expect(file.rawPayload.equals(STORED.report)).toBe(true);
     expect(file.headers['content-disposition']).toMatch(
       /^inline; filename="document-[0-9a-f]{8}\.pdf"$/,
     );
@@ -650,12 +689,12 @@ describe('sharing with a patient', () => {
       id: shared.id,
       title: 'Knee exercises',
       language: 'en',
-      sizeBytes: SHEET.length,
+      sizeBytes: STORED.sheet.length,
     });
     const file = await call('GET', `/patient-documents/${shared.id}/file`, doctor);
-    expect(file.rawPayload.equals(SHEET)).toBe(true);
+    expect(file.rawPayload.equals(STORED.sheet)).toBe(true);
     const library = await call('GET', `/library-documents/${made.id}/file`, admin);
-    expect(library.rawPayload.equals(SHEET_V2)).toBe(true);
+    expect(library.rawPayload.equals(STORED.sheetV2)).toBe(true);
   });
 
   it('withdraws a share: the record stays for the clinic, and the patient stops seeing it', async () => {

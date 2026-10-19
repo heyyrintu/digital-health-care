@@ -1606,8 +1606,8 @@ export const en = {
   'documents.file.too_many_pixels': 'The image is too large. Save it smaller and try again.',
   'documents.file.encrypted':
     'This PDF is password-protected or encrypted; save or print it as an unprotected PDF and upload that.',
-  'documents.file.active_content':
-    'The PDF contains scripts, attachments or forms. Print it to a new PDF and try again.',
+  'documents.file.too_many_pages':
+    'The PDF has more than 500 pages. Split it into smaller files and try again.',
   'library.title': 'Document library',
   'library.sub':
     'Reusable sheets doctors share with patients: exercise sheets, diet charts and information.',

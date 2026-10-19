@@ -109,7 +109,8 @@ export class DocumentsService {
   // ---- Files ------------------------------------------------------------------------
 
   /**
-   * Stores an uploaded document file for later use by the uploader. The file is written
+   * Stores an uploaded document file for later use by the uploader: an image as sent, a PDF
+   * as rebuilt from its pages (`acceptDocument`). The file is written
    * before its row, outside the transaction (a slow store holds no connection); if the row
    * then fails to commit, the file is removed again.
    */
@@ -121,19 +122,20 @@ export class DocumentsService {
     const settings = await withTenant(this.s.db, actor.organisationId, (tx) =>
       readSettings(tx, actor.organisationId),
     );
-    const { extension } = acceptDocument(settings, file);
-    const digest = sha256(file.data);
+    // A PDF comes back rebuilt (threat model T27): only those bytes are stored and served.
+    const { extension, mediaType, data } = await acceptDocument(settings, file, request.log);
+    const digest = sha256(data);
     // No patient data, title or file name in the key (threat model T4).
     const key = `organisations/${actor.organisationId}/documents/${uniqueSuffix()}.${extension}`;
-    await this.s.files.put(key, file.data);
+    await this.s.files.put(key, data);
     try {
       return await withTenant(this.s.db, actor.organisationId, async (tx) => {
         const row = await tx.documentFile.create({
           data: {
             organisationId: actor.organisationId,
             fileKey: key,
-            mediaType: file.mediaType,
-            sizeBytes: file.data.length,
+            mediaType,
+            sizeBytes: data.length,
             sha256: digest,
             uploadedByUserId: actor.userId,
             uploadedByRole: actor.role,

@@ -56,7 +56,9 @@ describe('document files on the web', () => {
   });
 
   it('words the server’s refusals', () => {
-    expect(documentErrorText(refused({ file: 'active_content' }), t, clinic)).toMatch(/scripts/);
+    expect(documentErrorText(refused({ file: 'too_many_pages' }), t, clinic)).toMatch(
+      /more than 500 pages/,
+    );
     expect(documentErrorText(refused({ file: 'encrypted' }), t, clinic)).toMatch(
       /password-protected/,
     );

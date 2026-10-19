@@ -7,6 +7,8 @@ export default defineConfig({
     'support-reset-authenticator': 'src/scripts/support-reset-authenticator.ts',
     'support-verify-doctor': 'src/scripts/support-verify-doctor.ts',
     'support-platform-operator': 'src/scripts/support-platform-operator.ts',
+    // Started as a worker thread by `pdf-rebuild.ts`, from beside the server.
+    'pdf-rebuild-worker': 'src/modules/documents/pdf-rebuild-worker.ts',
   },
   format: ['esm'],
   platform: 'node',

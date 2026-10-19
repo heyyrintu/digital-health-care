@@ -7,40 +7,38 @@ import {
 import { AppError } from '../../errors';
 import { inspectImage, MARKUP } from '../branding/logo';
 import type { UploadedFile } from '../orders/upload';
-import { scanPdf } from './pdf-scan';
+import { PDF_REBUILD_LIMITS, rebuildPdf } from './pdf-rebuild';
 
 /**
  * Content checks for document files (threat model T27). A document is opened by patients
  * in their browser, so beyond the clinic's limits (`checkDocumentUpload`: type and size)
- * the API accepts only a file whose bytes are, from start to end, the PDF or still image
- * it was sent as:
+ * the API keeps only a file it can vouch for:
  *
  * - **Images** (JPEG, PNG, WebP) go through the logo checks (`inspectImage`): the whole
  *   structure is walked and must end where the image ends (a ZIP, PDF or HTML page appended
  *   to it, a polyglot, is refused), no markup or script in the first kilobyte or any
  *   metadata block, no animation, and at most 10,000 pixels on a side and 50 million in all
  *   (a phone camera's 48-megapixel photo fits), so a small file cannot decode to a huge
- *   image in a patient's browser.
- * - **PDFs** must start with the `%PDF-` header at the first byte (readers accept junk
- *   before it, which is where an HTML page would hide in a polyglot), hold no markup in the
- *   first kilobyte, and end with `%%EOF` and nothing but whitespace after it (anything
- *   appended is refused). The file is then read in one linear pass (`pdf-scan.ts`): its
- *   syntax is tokenised strictly (comments, strings, stream lengths; stray delimiters,
- *   run-together tokens, names over 256 bytes and streams not opened by their object are
- *   refused), its cross-reference is checked so that every object a reader can reach is
- *   one the scan read, and active content is refused: JavaScript, launch actions, embedded
- *   files, rich media, XFA, additional actions (`/AA`), form submission and data import,
- *   remote go-to actions, and an `/OpenAction` that is an action, also inside
- *   Flate-compressed object streams (bounded in number, size and header). Encrypted PDFs
- *   are refused as such (`encrypted`).
+ *   image in a patient's browser. The image is stored as sent.
+ * - **PDFs** are not stored as sent: they are rebuilt from their pages. Cheap checks first:
+ *   the `%PDF-` header at the first byte (readers accept junk before it, which is where an
+ *   HTML page would hide in a polyglot), no markup in the first kilobyte, and `%%EOF` at the
+ *   end with nothing but whitespace after it. Then `rebuildPdf` (`pdf-rebuild.ts`), in a
+ *   worker thread with capped memory and a time limit, copies only the pages (what draws
+ *   them) into a new PDF the API writes itself, with no document actions, scripts,
+ *   attachments, forms, links or other annotations, bookmarks or metadata of the upload, and
+ *   checks that output (`pdf-scan.ts`). Only the rebuilt file is stored, hashed and served.
+ *   Encrypted PDFs are refused as such (`encrypted`), as are PDFs over 500 pages
+ *   (`too_many_pages`); a file the rebuild cannot read within its limits is
+ *   `not_a_document`.
  * - **SVG and HTML** are refused by name (their media types) and by content (an image whose
  *   bytes start with markup).
  *
- * Not checked: content streams themselves (page drawing), fonts and images inside a PDF.
- * The web app opens files from `blob:` URLs, which do not carry the API's `nosniff` and
- * sandbox headers, so for the in-app viewer these checks are the server's main control and
- * the browser's own PDF and image viewers are the remaining one (threat model T27). Malware
- * scanning comes with the files module (Build Plan §6.6), as for results and logos.
+ * Not checked: what page content draws (content streams, fonts and images inside a PDF are
+ * copied as they are) and image pixels. The web app opens files from `blob:` URLs, which do
+ * not carry the API's `nosniff` and sandbox headers, so the browser's own PDF and image
+ * viewers are the remaining control (threat model T27). Malware scanning comes with the
+ * files module (Build Plan §6.6), as for results and logos.
  */
 
 /** Why a document's bytes are refused. */
@@ -50,7 +48,7 @@ export type ContentRefusal =
   | 'not_a_document'
   | 'animated'
   | 'too_many_pixels'
-  | 'active_content'
+  | 'too_many_pages'
   | 'encrypted';
 
 /** Why an upload is refused: the clinic's limits, or its content. */
@@ -77,23 +75,24 @@ const pdfHeadHasMarkup = (head: Buffer) => {
   return PDF_HEAD_MARKUP.some((token) => text.includes(token));
 };
 
-/** Checks a PDF's bytes (above); 'ok' or why it is refused. */
-export function inspectPdf(
-  data: Buffer,
-): 'ok' | 'type_mismatch' | 'not_a_document' | 'active_content' | 'encrypted' {
+/**
+ * The cheap checks on an uploaded PDF, before it is rebuilt (above): 'ok' or why it is
+ * refused.
+ */
+export function precheckPdf(data: Buffer): 'ok' | 'type_mismatch' | 'not_a_document' {
   if (!/^%PDF-[12]\.\d/.test(data.subarray(0, 8).toString('latin1'))) return 'type_mismatch';
   if (pdfHeadHasMarkup(data.subarray(0, 1024))) return 'not_a_document';
   // Nothing but whitespace after the last end-of-file marker.
   const tail = data.subarray(Math.max(0, data.length - 1024)).toString('latin1');
   const eof = tail.lastIndexOf('%%EOF');
   if (eof < 0 || !/^[\s\0]*$/.test(tail.slice(eof + 5))) return 'not_a_document';
-  // Structure, cross-reference and active content, in one linear pass (`pdf-scan.ts`).
-  return scanPdf(data);
+  return 'ok';
 }
 
 /**
- * What a document's bytes are, or why they are refused, given the type it was sent as.
- * Pure: the clinic's limits are checked separately (`acceptDocument`).
+ * What a document's bytes are, or why they are refused, given the type it was sent as: for
+ * a PDF, only the cheap checks (the rebuild is `acceptDocument`'s). Pure: the clinic's
+ * limits are checked separately.
  */
 export function inspectDocument(
   declared: DocumentType,
@@ -101,7 +100,7 @@ export function inspectDocument(
 ): DocumentType | ContentRefusal {
   if (data.length === 0) return 'empty';
   if (declared === 'pdf') {
-    const pdf = inspectPdf(data);
+    const pdf = precheckPdf(data);
     return pdf === 'ok' ? 'pdf' : pdf;
   }
   const image = inspectImage(data, DOCUMENT_IMAGE_LIMITS);
@@ -121,20 +120,27 @@ const MESSAGES: Record<ContentRefusal, string> = {
     'The image is too large: at most 10,000 pixels on a side and 50 million pixels in all. Save it smaller.',
   encrypted:
     'This PDF is password-protected or encrypted; save or print it as an unprotected PDF and upload that.',
-  active_content:
-    'The PDF contains scripts, attachments or interactive forms, which are not accepted. Print it to a new PDF and try again.',
+  too_many_pages: `The PDF has more than ${PDF_REBUILD_LIMITS.maxPages} pages. Split it into smaller files.`,
 };
+
+/** Logs why the rebuild refused a PDF (never the file or its name). */
+export interface RebuildLog {
+  info(details: object, message: string): void;
+  warn(details: object, message: string): void;
+}
 
 /**
  * Checks an uploaded document against the clinic's limits (`checkDocumentUpload`: one of
- * its document types, within its largest file) and its content (`inspectDocument`). SVG and
- * HTML are refused by name. Returns the type and the extension to store it under; 400 with
- * `fields.file` set to the reason otherwise.
+ * its document types, within its largest file) and its content (`inspectDocument`), and
+ * rebuilds a PDF (`rebuildPdf`). SVG and HTML are refused by name. Returns the type, the
+ * extension to store it under and the bytes to store: the upload for an image, the rebuilt
+ * file for a PDF. 400 with `fields.file` set to the reason otherwise.
  */
-export function acceptDocument(
+export async function acceptDocument(
   settings: Pick<OrganisationSettings, 'maxUploadMb' | 'uploadTypes'>,
   file: UploadedFile,
-): { type: DocumentType; extension: string } {
+  log?: RebuildLog,
+): Promise<{ type: DocumentType; extension: string; mediaType: string; data: Buffer }> {
   const refuse = (reason: DocumentRefusal, message: string) =>
     new AppError(400, 'VALIDATION_FAILED', message, { file: reason });
   if (REFUSED_DOCUMENT_MEDIA_TYPES.includes(file.mediaType)) {
@@ -168,5 +174,24 @@ export function acceptDocument(
         : found;
     throw refuse(reason, MESSAGES[reason]);
   }
-  return { type: declared, extension: documentExtension(declared) };
+  const accepted = {
+    type: declared,
+    extension: documentExtension(declared),
+    mediaType: DOCUMENT_MEDIA_TYPES[declared],
+  };
+  if (declared !== 'pdf') return { ...accepted, data: file.data };
+  const rebuilt = await rebuildPdf(file.data);
+  if (!rebuilt.ok) {
+    // A rebuilt file failing its own check is a gap in the rebuild: worth a warning.
+    const level = rebuilt.detail.startsWith('post-check') ? 'warn' : 'info';
+    log?.[level](
+      { reason: rebuilt.reason, detail: rebuilt.detail.slice(0, 200), sizeBytes: file.data.length },
+      'Uploaded PDF refused by the rebuild',
+    );
+    throw refuse(rebuilt.reason, MESSAGES[rebuilt.reason]);
+  }
+  return {
+    ...accepted,
+    data: Buffer.from(rebuilt.data.buffer, rebuilt.data.byteOffset, rebuilt.data.byteLength),
+  };
 }

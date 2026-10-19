@@ -74,7 +74,7 @@ const FILE_REASONS = [
   'not_a_document',
   'animated',
   'too_many_pixels',
-  'active_content',
+  'too_many_pages',
   'encrypted',
 ] as const;
 
