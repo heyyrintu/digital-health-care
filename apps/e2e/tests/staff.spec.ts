@@ -16,7 +16,7 @@ test.describe('clinic admin: staff', () => {
 
     const mobile = syntheticMobile();
     await page.getByLabel('Email or mobile number').fill(mobile);
-    await page.getByLabel('Name (optional)').fill('Synthetic Receptionist');
+    await page.getByLabel('Name (optional)', { exact: true }).fill('Synthetic Receptionist');
     await page.getByLabel('Role').selectOption('front_desk');
     await page.getByRole('button', { name: 'Create invite link' }).click();
     const inviteLink = await page.getByTestId('invite-link').innerText();
