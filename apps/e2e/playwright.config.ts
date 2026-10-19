@@ -71,6 +71,14 @@ export default defineConfig({
         API_BASE_URL: API_URL,
         NEXT_TELEMETRY_DISABLED: '1',
         // `next start` runs in production, where the portal's consents need both documents.
+        // Canonical links and the sitemap on the public pages (required in production).
+        PUBLIC_SITE_URL: WEB_URL,
+        // Doctors listed by different tests a few seconds apart must all show: keep the
+        // public pages' API answers one second, not five minutes (a doctor page still
+        // rebuilds with a fresh list; see apps/web/lib/config.ts).
+        PUBLIC_API_CACHE_SECONDS: '1',
+        // Below 60 seconds only with this test-only flag.
+        DHC_E2E: '1',
         PRIVACY_NOTICE_URL: 'https://example.com/privacy',
         TERMS_URL: 'https://example.com/terms',
       },

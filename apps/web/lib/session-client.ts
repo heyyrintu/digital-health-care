@@ -58,6 +58,8 @@ async function postTo<T>(url: string, body?: unknown, accessToken?: string): Pro
     body: body === undefined ? undefined : JSON.stringify(body),
     credentials: 'same-origin',
     cache: 'no-store',
+    // A sign-out still reaches the server when the page is closed or navigates right after.
+    keepalive: url.endsWith('/logout'),
   });
   if (response.status === 204) return undefined as T;
   const payload: unknown = await response.json().catch(() => undefined);

@@ -52,6 +52,20 @@ export async function withAuth<T>(db: Db, fn: (tx: Tx) => Promise<T>): Promise<T
 }
 
 /**
+ * Runs `fn` as the `dhc_app` role with **no** organisation set, for requests without a
+ * user (the public doctor pages, ADR 0017). Row-level security then hides every row of
+ * every tenant table; what such a request may learn comes only from the `public_*`
+ * functions, which return the columns a doctor chose to publish.
+ */
+export async function withPublic<T>(db: Db, fn: (tx: Tx) => Promise<T>): Promise<T> {
+  return db.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe('SET LOCAL ROLE dhc_app');
+    await tx.$executeRaw`SELECT set_config('app.organisation_id', '', true)`;
+    return fn(tx);
+  });
+}
+
+/**
  * Runs `fn` as the `dhc_platform` role (platform console, ADR 0016): platform operators,
  * their sessions and platform-level audit inserts. It has no grant on any tenant table;
  * what it may know about organisations comes only from the `platform_*` functions, which

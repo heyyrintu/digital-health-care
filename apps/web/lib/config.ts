@@ -13,6 +13,50 @@ export function publicApiBaseUrl(): string {
   ).replace(/\/+$/, '');
 }
 
+/**
+ * The public website's own address (canonical links, OpenGraph, schema markup, sitemap),
+ * read when pages render: PUBLIC_SITE_URL, else WEB_BASE_URL (the API's name for the same
+ * origin). In development, the development server; in production one of them must be set,
+ * or every canonical link would point at localhost.
+ */
+export function publicSiteUrl(env: Record<string, string | undefined> = process.env): string {
+  const url = env.PUBLIC_SITE_URL?.trim() || env.WEB_BASE_URL?.trim();
+  if (!url && env.NODE_ENV === 'production') {
+    throw new Error('PUBLIC_SITE_URL (or WEB_BASE_URL) must be set in production.');
+  }
+  return (url || 'http://localhost:3000').replace(/\/+$/, '');
+}
+
+/** The shortest fetch cache time outside the browser tests (seconds). */
+export const PUBLIC_API_CACHE_FLOOR = 60;
+let warnedCacheFloor = false;
+
+/**
+ * Seconds the public pages keep the API's answers in Next's fetch cache: 300 (as long as
+ * the pages themselves), or shorter with PUBLIC_API_CACHE_SECONDS, never below 60 unless
+ * the test-only flag DHC_E2E=1 is also set (the browser tests use 1, so doctors different
+ * tests list seconds apart all show). A lower value without it is raised to 60, with one
+ * warning; 0 and anything over 300 or not a whole number are ignored (300).
+ */
+export function publicApiCacheSeconds(
+  env: Record<string, string | undefined> = process.env,
+  warn: (message: string) => void = console.warn,
+): number {
+  const value = Number(env.PUBLIC_API_CACHE_SECONDS?.trim() || NaN);
+  if (!Number.isInteger(value) || value < 1 || value > 300) return 300;
+  if (value < PUBLIC_API_CACHE_FLOOR && env.DHC_E2E !== '1') {
+    if (!warnedCacheFloor) {
+      warnedCacheFloor = true;
+      warn(
+        `PUBLIC_API_CACHE_SECONDS=${value} is below ${PUBLIC_API_CACHE_FLOOR}, which only the ` +
+          `browser tests may use (DHC_E2E=1); using ${PUBLIC_API_CACHE_FLOOR}.`,
+      );
+    }
+    return PUBLIC_API_CACHE_FLOOR;
+  }
+  return value;
+}
+
 /** The privacy notice and terms of use, by consent kind. */
 export type ConsentDocumentUrls = { privacy_notice?: string; terms?: string };
 

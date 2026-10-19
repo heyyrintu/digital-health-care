@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { MAX_TEST_ORDERS, TestOrder, TestOrderLine } from './orders';
 import { Language } from './patients';
+import { DoctorPublicProfile } from './public-doctors';
 
 export const MedicineRoute = z.enum([
   'oral',
@@ -251,6 +252,8 @@ export const DoctorProfile = z.object({
   pinSet: z.boolean(),
   /** Too many wrong PINs: signing waits until then. */
   pinLockedUntil: z.iso.datetime().nullable(),
+  /** The public page at `/doctor/<slug>` (ADR 0017). */
+  publicProfile: DoctorPublicProfile,
 });
 export type DoctorProfile = z.infer<typeof DoctorProfile>;
 

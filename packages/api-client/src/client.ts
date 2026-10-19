@@ -7,6 +7,11 @@ import {
   type UpdateTestCatalogueItemBody,
   BookingOptions,
   ConsentStatus,
+  DoctorProfile,
+  PublicDoctor,
+  PublicDoctorDirectory,
+  PublicDoctorList,
+  type SaveDoctorPublicProfileBody,
   AwaitingReviewList,
   PatientTestOrderList,
   PortalAppointment,
@@ -347,6 +352,18 @@ export function createApiClient(options: ApiClientOptions) {
     /** Doctor: set or change the signing PIN, confirmed with the account password. */
     setSigningPin: (password: string, pin: string) =>
       request('PUT', '/doctor-profile/signing-pin', { schema: NoContent, body: { password, pin } }),
+    /** Doctor: the public page's address, listing, about and languages (only fields sent change). */
+    saveDoctorPublicProfile: (body: SaveDoctorPublicProfileBody) =>
+      request('PATCH', '/doctor-profile/public', { schema: DoctorProfile, body }),
+    // Public website (no sign-in).
+    /** A listed, verified doctor's public page; 404 for any other address. */
+    publicDoctor: (slug: string) =>
+      request('GET', `/public/doctors/${encodeURIComponent(slug)}`, { schema: PublicDoctor }),
+    /** Every public doctor page shown: address and last change (a sitemap). */
+    publicDoctors: () => request('GET', '/public/doctors', { schema: PublicDoctorList }),
+    /** Every public doctor page shown, as cards for the home page's directory (at most 500). */
+    publicDoctorDirectory: ({ signal }: { signal?: AbortSignal } = {}) =>
+      request('GET', '/public/doctor-directory', { schema: PublicDoctorDirectory, signal }),
     // Patient app and web portal (patients only).
     portalConsents: () => request('GET', '/portal/consents', { schema: ConsentStatus }),
     acceptConsents: (accept: AcceptConsentsBody['accept']) =>

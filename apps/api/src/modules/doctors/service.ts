@@ -1,4 +1,10 @@
-import type { DoctorProfile, Role, SaveDoctorProfileBody, SetSigningPinBody } from '@dhc/contracts';
+import type {
+  DoctorProfile,
+  Role,
+  SaveDoctorProfileBody,
+  SaveDoctorPublicProfileBody,
+  SetSigningPinBody,
+} from '@dhc/contracts';
 import { Prisma, withAuth, withTenant, type Tx } from '@dhc/db';
 import type { FastifyRequest } from 'fastify';
 import { hashPassword, verifyPassword } from '../../auth/password';
@@ -35,6 +41,40 @@ export function signingGaps(profile: ProfileRow | null, signerReady: boolean): S
   if (!profile?.signingPinHash) gaps.push('pin');
   if (!signerReady) gaps.push('service');
   return gaps;
+}
+
+/** The constraint a database error names (Prisma's driver adapter puts it in `meta`). */
+export function violatedConstraint(error: unknown): string | null {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError)) return null;
+  const meta = JSON.stringify(error.meta ?? {});
+  return /(doctor_profiles_[a-z_]+?_(?:key|check))/.exec(meta)?.[1] ?? null;
+}
+
+/** The database's CHECK constraints on the public page, by the field they guard. */
+const PUBLIC_CHECKS: Record<string, [field: string, code: string]> = {
+  doctor_profiles_public_slug_check: ['slug', 'invalid'],
+  doctor_profiles_about_check: ['about', 'invalid'],
+  doctor_profiles_languages_check: ['languages', 'invalid'],
+  doctor_profiles_listed_slug_check: ['slug', 'required'],
+};
+
+/**
+ * What a refused public-page save means for the doctor. Only the address's own unique
+ * index is "taken" (who holds it, here or elsewhere, is not said); a CHECK the contract did
+ * not catch is a 400 on its field. Anything else is not the doctor's to fix and is rethrown.
+ */
+export function publicSaveError(error: unknown): unknown {
+  const constraint = violatedConstraint(error);
+  if (constraint === 'doctor_profiles_public_slug_key') {
+    return new AppError(409, 'CONFLICT', 'That page address is taken.', { slug: 'taken' });
+  }
+  const check = constraint ? PUBLIC_CHECKS[constraint] : undefined;
+  if (check) {
+    return new AppError(400, 'VALIDATION_FAILED', 'Check the public page fields.', {
+      [check[0]]: check[1],
+    });
+  }
+  return error;
 }
 
 export const findProfile = (tx: Tx, actor: { organisationId: string; userId: string }) =>
@@ -138,6 +178,69 @@ export class DoctorProfileService {
         entityType: 'doctor_profile',
         entityId: row.id,
         metadata: { reverify },
+      });
+      return this.out(row);
+    });
+  }
+
+  /**
+   * Sets the public page (ADR 0017): its address, whether it is listed, the about text and
+   * languages. Only the fields sent change. The address is unique across organisations; the
+   * page shows only once the registration is verified.
+   */
+  async savePublic(
+    request: FastifyRequest,
+    actor: Actor,
+    body: SaveDoctorPublicProfileBody,
+  ): Promise<DoctorProfile> {
+    return withTenant(this.s.db, actor.organisationId, async (tx) => {
+      const existing = await findProfile(tx, actor);
+      const before = {
+        slug: existing?.publicSlug ?? null,
+        listed: existing?.listed ?? false,
+        about: existing?.about ?? null,
+        languages: existing?.languages ?? [],
+      };
+      const after = {
+        slug: body.slug !== undefined ? body.slug : before.slug,
+        listed: body.listed ?? before.listed,
+        about: body.about !== undefined ? body.about : before.about,
+        languages: body.languages ?? before.languages,
+      };
+      if (after.listed && !after.slug) {
+        throw new AppError(400, 'VALIDATION_FAILED', 'Choose a page address to list the page.', {
+          slug: 'required',
+        });
+      }
+      // Field names only, never their values, in the audit entry.
+      const changed = (Object.keys(after) as (keyof typeof after)[]).filter(
+        (key) => JSON.stringify(after[key]) !== JSON.stringify(before[key]),
+      );
+      if (changed.length === 0) return this.out(existing);
+      const data = {
+        publicSlug: after.slug,
+        listed: after.listed,
+        about: after.about,
+        languages: after.languages,
+        publicUpdatedAt: this.s.now(),
+      };
+      let row: ProfileRow;
+      try {
+        row = existing
+          ? await tx.doctorProfile.update({ where: { id: existing.id }, data })
+          : await tx.doctorProfile.create({
+              data: { ...data, organisationId: actor.organisationId, userId: actor.userId },
+            });
+      } catch (error) {
+        throw publicSaveError(error);
+      }
+      await writeAudit(tx, request, {
+        action: 'doctor_profile.public_updated',
+        organisationId: actor.organisationId,
+        actorUserId: actor.userId,
+        entityType: 'doctor_profile',
+        entityId: row.id,
+        metadata: { fields: changed },
       });
       return this.out(row);
     });
@@ -262,6 +365,13 @@ export class DoctorProfileService {
       pinSet: Boolean(row?.signingPinHash),
       pinLockedUntil:
         row?.pinLockedUntil && row.pinLockedUntil > now ? row.pinLockedUntil.toISOString() : null,
+      publicProfile: {
+        slug: row?.publicSlug ?? null,
+        listed: row?.listed ?? false,
+        about: row?.about ?? null,
+        languages: row?.languages ?? [],
+        live: Boolean(row?.listed && row.publicSlug && row.verification === 'verified'),
+      },
     };
   }
 }

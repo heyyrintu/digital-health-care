@@ -1156,6 +1156,18 @@ model DoctorProfile {
   signingPinHash     String?            @map("signing_pin_hash")
   pinFailedCount     Int                @default(0) @map("pin_failed_count")
   pinLockedUntil     DateTime?          @map("pin_locked_until") @db.Timestamptz(3)
+  /// The public page's address, `/doctor/<publicSlug>` (ADR 0017): lowercase letters, digits
+  /// and single hyphens, 3–60 characters, unique across all organisations (CHECK and index
+  /// in migration 20261018150000_public_doctor_pages).
+  publicSlug         String?            @unique @map("public_slug")
+  /// The doctor opted in to the public page. Shown only once the registration is verified.
+  listed             Boolean            @default(false)
+  /// Shown on the public page, up to 1000 characters.
+  about              String?
+  /// Languages the doctor consults in, as typed (up to 8, each 1–40 characters).
+  languages          String[]           @default([])
+  /// When the public fields last changed (sitemap lastmod); updatedAt also moves with PIN attempts.
+  publicUpdatedAt    DateTime?          @map("public_updated_at") @db.Timestamptz(3)
   createdAt          DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt          DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
 

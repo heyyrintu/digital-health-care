@@ -78,7 +78,7 @@ describe('buildOpenApiDocument', () => {
     expect(doc.components.schemas.ErrorResponse).toMatchObject({ type: 'object' });
   });
 
-  it('marks only sign-in, health, waiting-room screen and QR check endpoints as public', () => {
+  it('marks only sign-in, health, waiting-room screen, QR check and public doctor page endpoints as public', () => {
     const publicOps = Object.entries(doc.paths).flatMap(([path, ops]) =>
       Object.entries(ops)
         .filter(([, op]) => (op as { security?: unknown[] }).security?.length === 0)
@@ -86,6 +86,9 @@ describe('buildOpenApiDocument', () => {
     );
     expect(publicOps.sort()).toEqual([
       'GET /health',
+      'GET /public/doctor-directory',
+      'GET /public/doctors',
+      'GET /public/doctors/{slug}',
       'POST /auth/invites/accept',
       'POST /auth/invites/complete',
       'POST /auth/invites/inspect',

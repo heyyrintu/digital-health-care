@@ -6,7 +6,10 @@
 Least privilege; access by role and organisation; clinical data only for treating doctors and the patient; every record view of clinical data is logged.
 
 ## Roles
-Patient, Doctor, Front desk, Clinic Admin, Platform Admin (no clinical access), Verifier (public QR page). Permission matrix: PRD v3.0 §3.2.
+Patient, Doctor, Front desk, Clinic Admin, Platform Admin (no clinical access), Verifier (public QR page), Visitor (public doctor pages). Permission matrix: PRD v3.0 §3.2.
+
+## Public doctor pages
+A doctor publishes their own page (`/doctor/<slug>`) from the profile page: the address, whether it is listed, an about text and languages (`PATCH /doctor-profile/public`, doctor role, own profile only; audited as `doctor_profile.public_updated` with field names only). Clinic admins and the front desk cannot edit it, as for the prescription pad. Anyone may read a page without signing in, but only while it is listed and the platform team has verified the registration, the doctor is an active doctor of an active organisation, and only the published fields: name, qualifications, specialty, verified registration, about, languages, the organisation's name and slug, the clinics (name, address) and consultation types (name, mode, minutes, fee) the doctor is scheduled for. The home page (`/`) lists every page shown as a card (name, qualifications, specialty, the organisation's name, the scheduled clinics' names and the first line of their addresses, languages and the lowest fee), so a visitor can find doctors without knowing their address; it shows nothing a doctor's page does not. The read runs as `dhc_app` with no organisation set and goes only through the `public_doctor_*` database functions (`public_doctor_profile`, `public_doctor_slugs`, `public_doctor_directory`; ADR 0017), so it cannot reach patients or any other tenant row.
 
 ## Production access (engineering)
 | Access | Who | How | Review |

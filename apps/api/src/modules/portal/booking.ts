@@ -102,6 +102,17 @@ export class PortalBookingService {
         where: { role: 'doctor', status: 'active' },
         select: { userId: true },
       });
+      // Public pages that are shown (listed and verified), so `/app/book?doctor=<slug>` from
+      // a doctor's page picks them.
+      const listed = await tx.doctorProfile.findMany({
+        where: {
+          userId: { in: doctors.map((d) => d.userId) },
+          listed: true,
+          verification: 'verified',
+        },
+        select: { userId: true, publicSlug: true },
+      });
+      const slugs = new Map(listed.map((p) => [p.userId, p.publicSlug]));
       const rules = await this.rules(tx, actor);
       const names = await doctorNames(
         this.s,
@@ -109,7 +120,11 @@ export class PortalBookingService {
       );
       return {
         doctors: doctors
-          .map((d) => ({ userId: d.userId, displayName: names.get(d.userId) ?? null }))
+          .map((d) => ({
+            userId: d.userId,
+            displayName: names.get(d.userId) ?? null,
+            publicSlug: slugs.get(d.userId) ?? null,
+          }))
           .sort((a, b) => (a.displayName ?? '').localeCompare(b.displayName ?? '')),
         clinics: clinics.map((c) => ({ id: c.id, name: c.name, address: c.address })),
         consultationTypes: types.map((t) => ({

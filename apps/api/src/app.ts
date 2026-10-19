@@ -21,6 +21,7 @@ import { queueRoutes } from './modules/queue/routes';
 import { reportRoutes } from './modules/reports/routes';
 import { platformRoutes } from './modules/platform/routes';
 import { portalRoutes } from './modules/portal/routes';
+import { publicDoctorRoutes } from './modules/public/routes';
 import { settingsRoutes } from './modules/settings/routes';
 import { schedulingRoutes } from './modules/scheduling/routes';
 import { staffRoutes } from './modules/staff/routes';
@@ -113,6 +114,7 @@ export function buildApp({
     app.register(clinicalRoutes, { prefix: '/v1', services });
     app.register(prescribingRoutes, { prefix: '/v1', services, signInRateLimit });
     app.register(doctorRoutes, { prefix: '/v1', services, signInRateLimit });
+    app.register(publicDoctorRoutes, { prefix: '/v1', services });
     app.register(medicineRoutes, { prefix: '/v1', services });
     app.register(billingRoutes, { prefix: '/v1', services });
     app.register(orderRoutes, { prefix: '/v1', services, uploadRateLimit });
