@@ -210,8 +210,12 @@ export type PrescriptionView = z.infer<typeof PrescriptionView>;
 
 // ---- Signing (PRD §6.6) -------------------------------------------------------------
 
-/** Six digits approve each signature on the web (biometrics on the phone apps, later). */
-const Pin = z.string().regex(/^\d{6}$/, 'Enter the 6-digit signing PIN.');
+/**
+ * Six digits approve each signature on the web (biometrics on the phone apps, later):
+ * prescriptions and referral letters alike.
+ */
+export const SigningPin = z.string().regex(/^\d{6}$/, 'Enter the 6-digit signing PIN.');
+const Pin = SigningPin;
 
 export const SignPrescriptionBody = z.object({
   /** The revision on screen, so the doctor signs exactly what they reviewed. */

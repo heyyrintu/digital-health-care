@@ -1,4 +1,5 @@
 import { pdfText } from '@dhc/pdf-text';
+import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import {
   formatDate,
@@ -85,6 +86,14 @@ describe('dates on the PDF', () => {
 // Shaping Hindi is CPU-heavy (about 0.7 s per document here); a busy CI runner running
 // every package's tests at once can take several times longer than the 5 s default.
 describe('renderPrescriptionPdf', { timeout: 30_000 }, () => {
+  // Pins the `rx-2` layout: if this hash changes, the template (or pdf-kit.ts) changed, so bump the template version.
+  it('renders the fixed `rx-2` sample to the same bytes as when the version was set', async () => {
+    const pdf = await renderPrescriptionPdf(doc());
+    expect(createHash('sha256').update(pdf).digest('hex')).toBe(
+      '5069ff702e071538f06c999a8f80469950c86b64dcff411c452f968fd97fe395',
+    );
+  });
+
   it('renders the same bytes for the same prescription, so its hash can be checked', async () => {
     const a = await renderPrescriptionPdf(doc());
     const b = await renderPrescriptionPdf(doc());

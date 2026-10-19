@@ -26,8 +26,11 @@ import { SigningService } from './signing';
 
 const IdParams = z.object({ id: z.uuid() });
 
-/** Public QR checks: enough for a busy pharmacy counter, too few to walk through codes. */
-const VERIFY_RATE_LIMIT = { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } };
+/**
+ * Public QR checks (prescriptions and referral letters, each route counted on its own):
+ * enough for a busy pharmacy counter, too few to walk through codes.
+ */
+export const VERIFY_RATE_LIMIT = { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } };
 
 export const sendPdf = (reply: FastifyReply, file: Buffer, filename: string) =>
   reply

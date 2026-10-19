@@ -10,11 +10,13 @@ import { useParams } from 'next/navigation';
 import { useEffect, useState, type FormEvent } from 'react';
 import { useSession } from '../../session-provider';
 import { ClinicShell, NotAllowed } from '../../shell';
+import { LetterCard } from '../letter-card';
 import { ReferralStatusChip, UrgencyChip, useRecipient } from '../referral-bits';
 
 /**
  * One referral for its referring or receiving doctor. The receiving doctor's opening it
- * marks it seen; either doctor closes it with an optional note.
+ * marks it seen; either doctor closes it with an optional note. The referring doctor signs
+ * the referral letter while it is open; both download it once signed.
  */
 export default function ReferralPage() {
   const { id } = useParams<{ id: string }>();
@@ -72,6 +74,11 @@ function ReferralScreen({ id }: { id: string }) {
       current = false;
     };
   }, [api, id, signOut, t]);
+
+  const fail = (e: unknown) => {
+    if (e instanceof ApiError && e.status === 401) return void signOut('expired');
+    setError(e instanceof ApiError ? e.message : t('error.network'));
+  };
 
   async function close(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -213,6 +220,8 @@ function ReferralScreen({ id }: { id: string }) {
           </Link>
         </div>
       </Surface>
+
+      <LetterCard referral={r} onChanged={setReferral} onError={fail} />
 
       {r.canClose && (
         <Surface className="p-5 sm:p-6">
