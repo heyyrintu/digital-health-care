@@ -217,11 +217,8 @@ export class AuthService {
         });
         return { error: INVALID_LOGIN() };
       }
-      await tx.user.update({
-        where: { id: user.id },
-        data: { failedLoginCount: 0, lockedUntil: null },
-      });
-
+      // The failure count is not reset here: only a correct authenticator code resets it,
+      // so someone who knows the password cannot keep guessing codes across sign-ins.
       const roles = (
         await tx.membership.findMany({
           where: {
@@ -293,6 +290,7 @@ export class AuthService {
           action: 'auth.mfa.failed',
           organisationId: claims.organisationId,
           actorUserId: user.id,
+          metadata: { reason: step === null ? 'wrong_code' : 'code_reused' },
         });
         return { error: INVALID_CODE() };
       }
@@ -307,14 +305,39 @@ export class AuthService {
       });
       if (!membership) return { error: INVALID_LOGIN() };
 
-      await tx.user.update({
-        where: { id: user.id },
-        data: {
-          mfaLastUsedStep: step,
-          failedLoginCount: 0,
-          lastLoginAt: now,
+      // Compare-and-swap on everything checked above, so a concurrent change wins: of two
+      // requests with the same code only one moves the step on; a disable, an authenticator
+      // reset, or a lock written by a concurrent fifth wrong attempt, is never undone by a
+      // code that was valid a moment before.
+      const accepted = await tx.user.updateMany({
+        where: {
+          id: user.id,
+          status: 'active',
+          // The code was checked against this secret: a reset meanwhile makes it void.
+          mfaSecret: user.mfaSecret,
+          failedLoginCount: user.failedLoginCount,
+          AND: [
+            { OR: [{ mfaLastUsedStep: null }, { mfaLastUsedStep: { lt: step } }] },
+            { OR: [{ lockedUntil: null }, { lockedUntil: { lte: now } }] },
+          ],
         },
+        data: { mfaLastUsedStep: step, failedLoginCount: 0, lockedUntil: null, lastLoginAt: now },
       });
+      if (accepted.count !== 1) {
+        // Say what won: another request with this code, or another change to the account.
+        const latest = await tx.user.findUnique({
+          where: { id: user.id },
+          select: { mfaLastUsedStep: true },
+        });
+        const reused = latest?.mfaLastUsedStep != null && latest.mfaLastUsedStep >= step;
+        await writeAudit(tx, request, {
+          action: 'auth.mfa.failed',
+          organisationId: claims.organisationId,
+          actorUserId: user.id,
+          metadata: { reason: reused ? 'code_reused' : 'changed_meanwhile' },
+        });
+        return { error: INVALID_CODE() };
+      }
       const tokens = await this.startSession(
         tx,
         request,
