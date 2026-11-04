@@ -8,6 +8,7 @@ import {
   CalendarPlus,
   FileText,
   FlaskConical,
+  FolderOpen,
   Home,
   LogOut,
   Users,
@@ -158,6 +159,7 @@ function PortalNav() {
     { href: '/app/book', label: t('booking.book'), icon: CalendarPlus },
     { href: '/app/prescriptions', label: t('patient.nav.prescriptions'), icon: FileText },
     { href: '/app/tests', label: t('patient.nav.tests'), icon: FlaskConical },
+    { href: '/app/documents', label: t('patient.nav.documents'), icon: FolderOpen },
     { href: '/app/family', label: t('patient.nav.family'), icon: Users },
   ];
   return (

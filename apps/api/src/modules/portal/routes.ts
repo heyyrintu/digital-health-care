@@ -6,6 +6,8 @@ import {
   PortalAppointment,
   PortalAppointmentList,
   PortalBookBody,
+  PortalDocumentList,
+  PortalDocumentListQuery,
   PortalCancelBody,
   PortalPatient,
   PortalPatientList,
@@ -25,6 +27,7 @@ import { sendResultFile } from '../orders/routes';
 import { registerUploadParser, uploadedFile, uploadRateLimit } from '../orders/upload';
 import { sendPdf } from '../prescribing/routes';
 import { PortalBookingService } from './booking';
+import { PortalDocumentsService } from './documents';
 import { PortalOrdersService } from './orders';
 import { PortalService } from './service';
 
@@ -39,6 +42,7 @@ export const portalRoutes: FastifyPluginAsync<{
   const portal = new PortalService(services);
   const booking = new PortalBookingService(services);
   const orders = new PortalOrdersService(services);
+  const documents = new PortalDocumentsService(services);
   registerUploadParser(app);
   const patientOnly = { preHandler: [authenticate(services), requireRole('patient')] };
 
@@ -129,5 +133,16 @@ export const portalRoutes: FastifyPluginAsync<{
   app.get('/portal/test-results/:id/file', patientOnly, async (request, reply) => {
     const { id } = IdParams.parse(request.params);
     return sendResultFile(reply, await orders.resultFile(request, authOf(request), id));
+  });
+
+  // Documents doctors shared (PRD §7.3): the family's, not withdrawn; opening marks them opened.
+  app.get('/portal/documents', patientOnly, async (request) => {
+    const query = PortalDocumentListQuery.parse(request.query);
+    return PortalDocumentList.parse(await documents.list(request, authOf(request), query));
+  });
+
+  app.get('/portal/documents/:id/file', patientOnly, async (request, reply) => {
+    const { id } = IdParams.parse(request.params);
+    return sendResultFile(reply, await documents.file(request, authOf(request), id));
   });
 };

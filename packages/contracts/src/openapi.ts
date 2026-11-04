@@ -99,6 +99,21 @@ import {
   VisitReferralList,
 } from './referrals';
 import {
+  CreateLibraryDocumentBody,
+  DOCUMENT_MEDIA_TYPES,
+  DocumentFile,
+  LibraryDocument,
+  LibraryDocumentList,
+  LibraryDocumentQuery,
+  PatientDocument,
+  PatientDocumentList,
+  PatientDocumentListQuery,
+  PortalDocumentList,
+  PortalDocumentListQuery,
+  ShareDocumentBody,
+  UpdateLibraryDocumentBody,
+} from './documents';
+import {
   OrganisationSettings,
   UPLOAD_MEDIA_TYPES,
   UpdateOrganisationSettingsBody,
@@ -255,10 +270,13 @@ interface Operation {
   status?: 200 | 201 | 204;
   /** The response is a PDF file instead of JSON. */
   pdf?: boolean;
-  /** The request body is a file (an uploaded result, or `logo`: a PNG, JPEG or WebP logo). */
-  upload?: boolean | 'logo';
-  /** The response is an uploaded file (PDF or image, or `logo`) instead of JSON. */
-  file?: boolean | 'logo';
+  /**
+   * The request body is a file (an uploaded result, `logo`: a PNG, JPEG or WebP logo, or
+   * `document`: a PDF, JPEG, PNG or WebP document).
+   */
+  upload?: boolean | 'logo' | 'document';
+  /** The response is an uploaded file (PDF or image, `logo` or `document`) instead of JSON. */
+  file?: boolean | 'logo' | 'document';
   /** For a 201 that a retry answers with 200 and the same body: what that 200 means. */
   replay?: string;
 }
@@ -644,6 +662,23 @@ const operations: Operation[] = [
     summary: 'A result’s file for one of the family’s tests (patient)',
     pathParams: ['id'],
     file: true,
+  },
+  {
+    method: 'get',
+    path: '/portal/documents',
+    operationId: 'listPortalDocuments',
+    summary:
+      'Documents doctors shared with the family, newest first; withdrawn ones are left out (patient)',
+    query: PortalDocumentListQuery,
+    response: PortalDocumentList,
+  },
+  {
+    method: 'get',
+    path: '/portal/documents/{id}/file',
+    operationId: 'getPortalDocumentFile',
+    summary: 'A shared document’s file for someone on the account; marks it opened (patient)',
+    pathParams: ['id'],
+    file: 'document',
   },
   {
     method: 'get',
@@ -1167,6 +1202,87 @@ const operations: Operation[] = [
     summary: 'The signed referral letter PDF (its referring or receiving doctor)',
     pathParams: ['id'],
     pdf: true,
+  },
+  {
+    method: 'post',
+    path: '/document-files',
+    operationId: 'uploadDocumentFile',
+    summary:
+      'Upload a document file; the body is the file: PDF, JPEG, PNG or WebP within the clinic’s limits (doctor, clinic admin)',
+    upload: 'document',
+    response: DocumentFile,
+    status: 201,
+  },
+  {
+    method: 'get',
+    path: '/library-documents',
+    operationId: 'listLibraryDocuments',
+    summary: 'The clinic library’s sheets, active or archived, newest first (doctor, clinic admin)',
+    query: LibraryDocumentQuery,
+    response: LibraryDocumentList,
+  },
+  {
+    method: 'post',
+    path: '/library-documents',
+    operationId: 'createLibraryDocument',
+    summary: 'Add a sheet to the library from a fresh upload (doctor, clinic admin)',
+    body: CreateLibraryDocumentBody,
+    response: LibraryDocument,
+    status: 201,
+  },
+  {
+    method: 'patch',
+    path: '/library-documents/{id}',
+    operationId: 'updateLibraryDocument',
+    summary:
+      'Rename, recategorise, replace the file, archive or restore a sheet; shares keep what they were sent (doctor, clinic admin)',
+    pathParams: ['id'],
+    body: UpdateLibraryDocumentBody,
+    response: LibraryDocument,
+  },
+  {
+    method: 'get',
+    path: '/library-documents/{id}/file',
+    operationId: 'getLibraryDocumentFile',
+    summary: 'A library sheet’s current file (doctor, clinic admin)',
+    pathParams: ['id'],
+    file: 'document',
+  },
+  {
+    method: 'get',
+    path: '/patients/{id}/documents',
+    operationId: 'listPatientDocuments',
+    summary:
+      'Documents shared with the patient, withdrawn ones included, newest first (doctor; the chart model applies)',
+    pathParams: ['id'],
+    query: PatientDocumentListQuery,
+    response: PatientDocumentList,
+  },
+  {
+    method: 'post',
+    path: '/patients/{id}/documents',
+    operationId: 'shareDocument',
+    summary: 'Share a library sheet or a fresh upload with the patient (doctor)',
+    pathParams: ['id'],
+    body: ShareDocumentBody,
+    response: PatientDocument,
+    status: 201,
+  },
+  {
+    method: 'post',
+    path: '/patient-documents/{id}/withdraw',
+    operationId: 'withdrawPatientDocument',
+    summary: 'Withdraw a shared document: the patient stops seeing it; the record stays (doctor)',
+    pathParams: ['id'],
+    response: PatientDocument,
+  },
+  {
+    method: 'get',
+    path: '/patient-documents/{id}/file',
+    operationId: 'getPatientDocumentFile',
+    summary: 'A shared document’s file (doctor; the chart model applies)',
+    pathParams: ['id'],
+    file: 'document',
   },
   {
     method: 'post',
@@ -1736,6 +1852,14 @@ const binary = Object.fromEntries(
     .map((type) => [type, { schema: { type: 'string', format: 'binary' } }]),
 );
 
+/** Document files: PDF, JPEG, PNG or WebP. */
+const documentBinary = Object.fromEntries(
+  Object.values(DOCUMENT_MEDIA_TYPES).map((type) => [
+    type,
+    { schema: { type: 'string', format: 'binary' } },
+  ]),
+);
+
 const logoBinary = Object.fromEntries(
   Object.values(LOGO_MEDIA_TYPES).map((type) => [
     type,
@@ -1774,7 +1898,12 @@ export function buildOpenApiDocument(options: { version: string; serverUrl?: str
         ? {
             requestBody: {
               required: true,
-              content: op.upload === 'logo' ? logoBinary : binary,
+              content:
+                op.upload === 'logo'
+                  ? logoBinary
+                  : op.upload === 'document'
+                    ? documentBinary
+                    : binary,
             },
           }
         : {}),
@@ -1787,7 +1916,12 @@ export function buildOpenApiDocument(options: { version: string; serverUrl?: str
           : op.file
             ? {
                 description: 'The file, as uploaded',
-                content: op.file === 'logo' ? logoBinary : binary,
+                content:
+                  op.file === 'logo'
+                    ? logoBinary
+                    : op.file === 'document'
+                      ? documentBinary
+                      : binary,
               }
             : status === 204 || !op.response
               ? { description: 'No content' }

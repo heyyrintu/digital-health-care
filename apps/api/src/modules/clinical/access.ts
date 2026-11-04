@@ -5,7 +5,7 @@ import { historyIds, liveId } from '../patients/merged';
 import { readSettings } from '../settings/service';
 
 /** A visit at which the doctor treated the patient: checked in to them, or later. */
-const TREATED: AppointmentStatus[] = ['checked_in', 'in_consultation', 'completed'];
+export const TREATED: AppointmentStatus[] = ['checked_in', 'in_consultation', 'completed'];
 /** A referral that still opens the chart to its receiving doctor: not closed. */
 export const OPEN_REFERRAL: ReferralStatus[] = ['sent', 'seen'];
 

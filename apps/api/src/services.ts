@@ -5,6 +5,7 @@ import { PlatformTokenService, TokenService } from './auth/tokens';
 import type { Config } from './config';
 import { LiveEvents } from './live';
 import { LocalFileStore, type FileStore } from './files';
+import { PdfRebuilder, pdfRebuildLimits } from './modules/documents/pdf-rebuild';
 import {
   RedisQueueProbe,
   queuesNotConfigured,
@@ -40,6 +41,8 @@ export interface Services {
   live: LiveEvents;
   /** Background queues' job counts for the platform console's system health. */
   queues: QueueProbe;
+  /** Rebuilds uploaded PDFs in limited worker threads, one queue per process (T27). */
+  pdf: PdfRebuilder;
   now(): Date;
 }
 
@@ -51,6 +54,7 @@ export function createServices(
     signer?: PrescriptionSigner | null;
     files?: FileStore;
     queues?: QueueProbe;
+    pdf?: PdfRebuilder;
   } = {},
 ): Services {
   const { DATABASE_URL, JWT_SECRET, FIELD_ENCRYPTION_KEY } = config;
@@ -95,6 +99,7 @@ export function createServices(
     queues:
       overrides.queues ??
       (config.REDIS_URL ? new RedisQueueProbe(config.REDIS_URL) : queuesNotConfigured),
+    pdf: overrides.pdf ?? new PdfRebuilder(pdfRebuildLimits(config.PDF_REBUILD_CONCURRENCY)),
     now: overrides.now ?? (() => new Date()),
   };
 }

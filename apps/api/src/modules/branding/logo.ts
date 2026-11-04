@@ -25,9 +25,11 @@ import type { UploadedFile } from '../orders/upload';
  * - the first kilobyte and every metadata block (text chunks, EXIF/XMP, comments) must hold
  *   no markup or script (`<script`, `<html`, `<svg`, `javascript:`, `%PDF-`, ...), so no
  *   reader that sniffs content finds a page or a document in it. Compressed PNG text
- *   (`zTXt`, compressed `iTXt`) is inflated (up to 1 MB; more, or a broken stream, is
- *   refused) and scanned too, and metadata is also scanned with NUL bytes dropped, which
- *   catches UTF-16 text in plain Latin letters;
+ *   (`zTXt`, compressed `iTXt`) is inflated (up to 1 MB a chunk and 4 MB for the whole
+ *   file; more, or a broken stream, is refused) and scanned too, and metadata is also
+ *   scanned with NUL bytes dropped, which catches UTF-16 text in plain Latin letters. Each
+ *   block is checked as it is read and nothing is kept, and a PNG may hold at most 64 text
+ *   chunks, so a small file cannot make the server inflate and hold hundreds of megabytes;
  * - at most 4096 pixels on a side and 4 million pixels in all, so a small file cannot
  *   decode to a huge image in a visitor's browser.
  *
@@ -58,8 +60,11 @@ export const logoExtension = (type: LogoType) => EXTENSIONS[type];
 
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
-/** Markup and document headers no logo has any reason to carry (compared lowercased). */
-const MARKUP = [
+/**
+ * Markup and document headers no logo has any reason to carry (compared lowercased). The
+ * document library's image check reuses this list (`documents/content.ts`).
+ */
+export const MARKUP = [
   '<script',
   '<html',
   '<svg',
@@ -100,32 +105,42 @@ export function sniffLogoType(data: Buffer): LogoType | 'svg' | null {
 interface Walked {
   width: number;
   height: number;
-  /** Metadata payloads to scan for markup (text already inflated). */
-  metadata: Buffer[];
+  /** A metadata block (text already inflated) held markup; each is checked as it is read. */
+  markup: boolean;
   animated: boolean;
 }
 
-/** Inflated text of a compressed PNG text chunk, at most 1 MB; null when it is broken. */
-function inflateText(data: Buffer): Buffer | null {
+/** One compressed PNG text chunk inflates to at most 1 MB. */
+const MAX_TEXT_CHUNK = 1024 * 1024;
+/** All of a PNG's compressed text chunks inflate to at most 4 MB together. */
+export const MAX_INFLATED_TEXT = 4 * 1024 * 1024;
+/** A PNG holds at most this many text chunks (`tEXt`, `zTXt`, `iTXt`). */
+export const MAX_TEXT_CHUNKS = 64;
+
+/** Inflated text of a compressed PNG text chunk, within `budget`; null when broken or too big. */
+function inflateText(data: Buffer, budget: number): Buffer | null {
   try {
-    return inflateSync(data, { maxOutputLength: 1024 * 1024 });
+    return inflateSync(data, { maxOutputLength: Math.min(MAX_TEXT_CHUNK, budget) });
   } catch {
     return null;
   }
 }
 
-/** The text of a PNG `zTXt` or `iTXt` chunk, inflated when compressed; null when broken. */
-function pngText(type: 'zTXt' | 'iTXt', body: Buffer): Buffer | null {
+/**
+ * The text of a PNG `zTXt` or `iTXt` chunk, inflated when compressed (within `budget`
+ * bytes); null when broken or over the budget.
+ */
+function pngText(type: 'zTXt' | 'iTXt', body: Buffer, budget: number): Buffer | null {
   const keywordEnd = body.indexOf(0);
   if (keywordEnd < 0) return null;
-  if (type === 'zTXt') return inflateText(body.subarray(keywordEnd + 2));
+  if (type === 'zTXt') return inflateText(body.subarray(keywordEnd + 2), budget);
   const compressed = body[keywordEnd + 1] === 1;
   // Language tag and translated keyword, each NUL-terminated.
   const languageEnd = body.indexOf(0, keywordEnd + 3);
   const translatedEnd = languageEnd < 0 ? -1 : body.indexOf(0, languageEnd + 1);
   if (translatedEnd < 0) return null;
   const text = body.subarray(translatedEnd + 1);
-  return compressed ? inflateText(text) : body;
+  return compressed ? inflateText(text, budget) : body;
 }
 
 /** PNG chunks of an animation (APNG). */
@@ -138,7 +153,9 @@ function walkPng(data: Buffer): Walked | null {
   let height = 0;
   let sawData = false;
   let animated = false;
-  const metadata: Buffer[] = [];
+  let markup = false;
+  let texts = 0;
+  let inflated = 0;
   for (let index = 0; at + 12 <= data.length; index++) {
     const length = data.readUInt32BE(at);
     const type = data.subarray(at + 4, at + 8).toString('latin1');
@@ -159,14 +176,21 @@ function walkPng(data: Buffer): Walked | null {
     else if (type === 'IEND') {
       // The image ends here, and so must the file.
       return sawData && length === 0 && at === data.length
-        ? { width, height, metadata, animated }
+        ? { width, height, markup, animated }
         : null;
     } else if (APNG_CHUNKS.has(type)) animated = true;
-    else if (type === 'zTXt' || type === 'iTXt') {
-      const text = pngText(type, body);
-      if (!text) return null;
-      metadata.push(body, text);
-    } else if (type !== 'IHDR' && type !== 'PLTE') metadata.push(body);
+    else if (type === 'zTXt' || type === 'iTXt' || type === 'tEXt') {
+      // Text is checked as it is read and nothing is kept: many chunks, each inflating to
+      // a megabyte, must not add up in memory (a decompression bomb in the server).
+      if (++texts > MAX_TEXT_CHUNKS) return null;
+      if (metadataHasMarkup(body)) markup = true;
+      if (type !== 'tEXt') {
+        const text = pngText(type, body, MAX_INFLATED_TEXT - inflated);
+        if (!text) return null;
+        if (text !== body) inflated += text.length;
+        if (metadataHasMarkup(text)) markup = true;
+      }
+    } else if (type !== 'IHDR' && type !== 'PLTE' && metadataHasMarkup(body)) markup = true;
   }
   return null;
 }
@@ -184,7 +208,7 @@ function walkJpeg(data: Buffer): Walked | null {
   let width = 0;
   let height = 0;
   let sawFrame = false;
-  const metadata: Buffer[] = [];
+  let markup = false;
   while (at < data.length) {
     if (data[at] !== 0xff) return null;
     while (data[at] === 0xff) at++; // fill bytes
@@ -192,7 +216,7 @@ function walkJpeg(data: Buffer): Walked | null {
     const marker = data[at]!;
     at++;
     if (marker === 0xd9) {
-      return sawFrame && at === data.length ? { width, height, metadata, animated: false } : null;
+      return sawFrame && at === data.length ? { width, height, markup, animated: false } : null;
     }
     if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd7)) continue; // no length
     if (marker === 0xd8 || marker === 0x00) return null;
@@ -207,7 +231,8 @@ function walkJpeg(data: Buffer): Walked | null {
       height = body.readUInt16BE(1);
       width = body.readUInt16BE(3);
     } else if ((marker >= 0xe0 && marker <= 0xef) || marker === 0xfe) {
-      metadata.push(body); // APPn (EXIF, XMP, ICC) and comments
+      // APPn (EXIF, XMP, ICC) and comments.
+      if (metadataHasMarkup(body)) markup = true;
     }
     at += length;
     if (marker === 0xda) {
@@ -245,7 +270,7 @@ function walkWebp(data: Buffer): Walked | null {
   let width = 0;
   let height = 0;
   let animated = false;
-  const metadata: Buffer[] = [];
+  let markup = false;
   for (let index = 0; at < data.length; index++) {
     if (at + 8 > data.length) return null;
     const type = data.subarray(at, at + 4).toString('latin1');
@@ -276,17 +301,56 @@ function walkWebp(data: Buffer): Walked | null {
       }
     } else if (WEBP_ANIMATION_CHUNKS.has(type)) {
       animated = true;
-    } else if (!WEBP_IMAGE_CHUNKS.has(type)) {
-      metadata.push(body);
+    } else if (!WEBP_IMAGE_CHUNKS.has(type) && metadataHasMarkup(body)) {
+      markup = true;
     }
     at += 8 + padded;
   }
-  return at === data.length && width > 0 ? { width, height, metadata, animated } : null;
+  return at === data.length && width > 0 ? { width, height, markup, animated } : null;
 }
 
 /** Markup in a metadata block, as bytes or with NUL bytes dropped (UTF-16 text). */
-const metadataHasMarkup = (block: Buffer) =>
-  hasMarkup(block) || (block.includes(0) && hasMarkup(Buffer.from(block.filter((b) => b !== 0))));
+function metadataHasMarkup(block: Buffer): boolean {
+  return (
+    hasMarkup(block) || (block.includes(0) && hasMarkup(Buffer.from(block.filter((b) => b !== 0))))
+  );
+}
+
+/** How large an image may decode to: pixels on a side, and in all. */
+export interface ImageLimits {
+  maxDimension: number;
+  maxPixels: number;
+}
+
+/** Why an image's bytes are refused, whatever it is for. */
+export type ImageRefusal = Exclude<LogoRefusal, 'too_large' | 'type_not_allowed'>;
+
+/**
+ * The still image a file's bytes hold (PNG, JPEG or WebP, walked from start to end with no
+ * markup in its head or metadata, not animated, within `limits`), or why they are refused.
+ * Pure. Logos use it with their own limits (`inspectLogo`); the document library with its
+ * own (`documents/content.ts`).
+ */
+export function inspectImage(data: Buffer, limits: ImageLimits): LogoImage | ImageRefusal {
+  if (data.length === 0) return 'empty';
+  const type = sniffLogoType(data);
+  if (type === 'svg') return 'svg_not_allowed';
+  if (!type) return 'type_mismatch';
+  const walked = type === 'png' ? walkPng(data) : type === 'jpeg' ? walkJpeg(data) : walkWebp(data);
+  if (!walked || walked.width < 1 || walked.height < 1) return 'not_an_image';
+  if (hasMarkup(data.subarray(0, 1024)) || walked.markup) {
+    return 'not_an_image';
+  }
+  if (walked.animated) return 'animated';
+  if (
+    walked.width > limits.maxDimension ||
+    walked.height > limits.maxDimension ||
+    walked.width * walked.height > limits.maxPixels
+  ) {
+    return 'too_many_pixels';
+  }
+  return { type, width: walked.width, height: walked.height };
+}
 
 /**
  * The image a logo's bytes hold, or why they are refused. Pure: used on upload, and again
@@ -295,23 +359,7 @@ const metadataHasMarkup = (block: Buffer) =>
 export function inspectLogo(data: Buffer): LogoImage | LogoRefusal {
   if (data.length === 0) return 'empty';
   if (data.length > LOGO_MAX_BYTES) return 'too_large';
-  const type = sniffLogoType(data);
-  if (type === 'svg') return 'svg_not_allowed';
-  if (!type) return 'type_mismatch';
-  const walked = type === 'png' ? walkPng(data) : type === 'jpeg' ? walkJpeg(data) : walkWebp(data);
-  if (!walked || walked.width < 1 || walked.height < 1) return 'not_an_image';
-  if (hasMarkup(data.subarray(0, 1024)) || walked.metadata.some(metadataHasMarkup)) {
-    return 'not_an_image';
-  }
-  if (walked.animated) return 'animated';
-  if (
-    walked.width > LOGO_MAX_DIMENSION ||
-    walked.height > LOGO_MAX_DIMENSION ||
-    walked.width * walked.height > LOGO_MAX_PIXELS
-  ) {
-    return 'too_many_pixels';
-  }
-  return { type, width: walked.width, height: walked.height };
+  return inspectImage(data, { maxDimension: LOGO_MAX_DIMENSION, maxPixels: LOGO_MAX_PIXELS });
 }
 
 const MESSAGES: Record<LogoRefusal, string> = {

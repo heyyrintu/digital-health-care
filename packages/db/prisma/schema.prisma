@@ -254,6 +254,27 @@ enum ReferralStatus {
   closed
 }
 
+/// What a clinic library sheet or a shared document is about (PRD §7.3).
+enum DocumentCategory {
+  exercise
+  diet
+  information
+  other
+}
+
+/// The language a document is written in: English, Hindi or another.
+enum DocumentLanguage {
+  en
+  hi
+  other
+}
+
+/// Where a shared document came from: the clinic library or a one-off upload.
+enum PatientDocumentSource {
+  library
+  upload
+}
+
 enum MembershipStatus {
   /// Created by a staff invite; becomes active when the invite is completed.
   invited
@@ -314,6 +335,9 @@ model Organisation {
   referrals              Referral[]
   referralLetters        ReferralLetter[]
   referralLetterChecks   ReferralLetterVerification[]
+  documentFiles          DocumentFile[]
+  libraryDocuments       LibraryDocument[]
+  patientDocuments       PatientDocument[]
 
   @@map("organisations")
 }
@@ -534,6 +558,7 @@ model Patient {
   conditions   MedicalCondition[]
   medications  CurrentMedication[]
   referrals    Referral[]
+  documents    PatientDocument[]
 
   @@unique([organisationId, uhid])
   @@index([organisationId, phone])
@@ -797,6 +822,7 @@ model Appointment {
   bill             Bill?
   testOrders       TestOrder[]
   referrals        Referral[]
+  documents        PatientDocument[]
 
   @@unique([doctorUserId, clinicId, date, tokenNumber])
   @@index([organisationId, date])
@@ -1585,6 +1611,100 @@ model ReferralLetterVerification {
   referralLetter ReferralLetter @relation(fields: [referralLetterId], references: [id])
 
   @@map("referral_letter_verifications")
+}
+
+/// One stored document file (PRD §7.3): a PDF, JPEG, PNG or WebP uploaded by a doctor or a
+/// clinic admin, in the file store by key (never a public URL) with its type, size and
+/// SHA-256. Never changes or is deleted (trigger); `attachedAt` is set once, when a fresh
+/// upload is first used for a library sheet or a share. A file is a version: a library
+/// sheet given a new file points at a new row, and shares keep the row they were made with.
+model DocumentFile {
+  id               String    @id @default(uuid()) @db.Uuid
+  organisationId   String    @map("organisation_id") @db.Uuid
+  /// `organisations/<org>/documents/<random>.<ext>` (database check).
+  fileKey          String    @unique @map("file_key")
+  mediaType        String    @map("media_type")
+  sizeBytes        Int       @map("size_bytes")
+  sha256           String
+  uploadedByUserId String    @map("uploaded_by_user_id") @db.Uuid
+  /// doctor or clinic_admin (database check).
+  uploadedByRole   Role      @map("uploaded_by_role")
+  uploadedAt       DateTime  @map("uploaded_at") @db.Timestamptz(3)
+  attachedAt       DateTime? @map("attached_at") @db.Timestamptz(3)
+
+  organisation     Organisation      @relation(fields: [organisationId], references: [id])
+  libraryDocuments LibraryDocument[]
+  patientDocuments PatientDocument[]
+
+  @@map("document_files")
+}
+
+/// A reusable sheet in the clinic library (PRD §7.3): exercise sheets, diet charts,
+/// information leaflets. Renamed, given a new file, archived and restored by clinic admins
+/// and doctors; never deleted (trigger), since shares point at it.
+model LibraryDocument {
+  id               String            @id @default(uuid()) @db.Uuid
+  organisationId   String            @map("organisation_id") @db.Uuid
+  title            String
+  category         DocumentCategory?
+  language         DocumentLanguage
+  /// The current version; shares keep the version they were made with.
+  fileId           String            @map("file_id") @db.Uuid
+  createdByUserId  String            @map("created_by_user_id") @db.Uuid
+  archivedAt       DateTime?         @map("archived_at") @db.Timestamptz(3)
+  archivedByUserId String?           @map("archived_by_user_id") @db.Uuid
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organisation Organisation      @relation(fields: [organisationId], references: [id])
+  file         DocumentFile      @relation(fields: [fileId], references: [id], onDelete: Restrict)
+  shares       PatientDocument[]
+
+  @@index([organisationId, archivedAt])
+  @@index([fileId])
+  @@map("library_documents")
+}
+
+/// A document shared with a patient by a doctor (PRD §7.3; the PRD's Attachment): a library
+/// sheet or a one-off upload (a report), with an optional note. Keeps its own title,
+/// category and language and the exact file it was shared with. Part of the clinical
+/// record. Withdrawing hides it from the patient; only the first opening by the patient and
+/// the withdrawal are ever written after it is made, and it is never deleted (trigger).
+model PatientDocument {
+  id                String                @id @default(uuid()) @db.Uuid
+  organisationId    String                @map("organisation_id") @db.Uuid
+  patientId         String                @map("patient_id") @db.Uuid
+  /// The visit it was shared at, when shared from the consultation screen.
+  appointmentId     String?               @map("appointment_id") @db.Uuid
+  source            PatientDocumentSource
+  /// Library shares only.
+  libraryDocumentId String?               @map("library_document_id") @db.Uuid
+  fileId            String                @map("file_id") @db.Uuid
+  title             String
+  category          DocumentCategory?
+  language          DocumentLanguage?
+  /// To the patient; shown to them with the document.
+  note              String?
+  sharedByUserId    String                @map("shared_by_user_id") @db.Uuid
+  sharedAt          DateTime              @map("shared_at") @db.Timestamptz(3)
+  /// The first time the patient (or a family member on the account) opened it.
+  openedAt          DateTime?             @map("opened_at") @db.Timestamptz(3)
+  withdrawnAt       DateTime?             @map("withdrawn_at") @db.Timestamptz(3)
+  withdrawnByUserId String?               @map("withdrawn_by_user_id") @db.Uuid
+  createdAt         DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  organisation    Organisation     @relation(fields: [organisationId], references: [id])
+  patient         Patient          @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  appointment     Appointment?     @relation(fields: [appointmentId], references: [id], onDelete: Restrict)
+  libraryDocument LibraryDocument? @relation(fields: [libraryDocumentId], references: [id], onDelete: Restrict)
+  file            DocumentFile     @relation(fields: [fileId], references: [id], onDelete: Restrict)
+
+  @@index([patientId])
+  @@index([appointmentId])
+  @@index([libraryDocumentId])
+  @@index([fileId])
+  @@map("patient_documents")
 }
 
 model AuditLog {

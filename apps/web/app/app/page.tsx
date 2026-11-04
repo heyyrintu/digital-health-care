@@ -9,6 +9,7 @@ import {
   ChevronRight,
   FileText,
   FlaskConical,
+  FolderOpen,
   ShieldCheck,
   Users,
 } from 'lucide-react';
@@ -48,6 +49,7 @@ function Home({ account }: { account: ReadyAccount }) {
     { href: '/app/appointments', label: t('patient.nav.appointments'), icon: CalendarDays },
     { href: '/app/prescriptions', label: t('patient.nav.prescriptions'), icon: FileText },
     { href: '/app/tests', label: t('patient.nav.tests'), icon: FlaskConical },
+    { href: '/app/documents', label: t('patient.nav.documents'), icon: FolderOpen },
     { href: '/app/family', label: t('patient.nav.family'), icon: Users },
     { href: '/app/privacy', label: t('patient.nav.privacy'), icon: ShieldCheck },
   ];

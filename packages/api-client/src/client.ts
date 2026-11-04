@@ -27,6 +27,16 @@ import {
   type CloseReferralBody,
   type CreateReferralBody,
   type ReferralListQuery,
+  DocumentFile,
+  LibraryDocument,
+  LibraryDocumentList,
+  PatientDocument,
+  PatientDocumentList,
+  PortalDocumentList,
+  type CreateLibraryDocumentBody,
+  type LibraryDocumentQuery,
+  type ShareDocumentBody,
+  type UpdateLibraryDocumentBody,
   PortalAppointment,
   PortalAppointmentList,
   PortalPrescriptionList,
@@ -410,6 +420,50 @@ export function createApiClient(options: ApiClientOptions) {
     verifyReferralLetter: (code: string) =>
       request('POST', '/verify/referral-letter', { schema: ReferralLetterCheck, body: { code } }),
 
+    // Attachments and the clinic document library (PRD §7.3).
+    /**
+     * Doctor or clinic admin: upload a document file (PDF, JPEG, PNG or WebP; check
+     * `checkDocumentUpload` first), then name it by ID in a sheet or a share within 24 hours.
+     */
+    uploadDocumentFile: (file: Blob) =>
+      uploadFile('/document-files', file, { schema: DocumentFile }),
+    /** Doctor or clinic admin: the library's active (default) or archived sheets. */
+    libraryDocuments: (query: Partial<LibraryDocumentQuery> = {}) =>
+      request('GET', '/library-documents', { schema: LibraryDocumentList, query: { ...query } }),
+    createLibraryDocument: (body: CreateLibraryDocumentBody, idempotencyKey?: string) =>
+      request('POST', '/library-documents', { schema: LibraryDocument, body, idempotencyKey }),
+    /** Rename, recategorise, replace the file, archive or restore. */
+    updateLibraryDocument: (id: string, body: UpdateLibraryDocumentBody) =>
+      request('PATCH', `/library-documents/${encodeURIComponent(id)}`, {
+        schema: LibraryDocument,
+        body,
+      }),
+    libraryDocumentFile: (id: string) =>
+      requestFile('GET', `/library-documents/${encodeURIComponent(id)}/file`, { accept: '*/*' }),
+    /** Doctor: one page of the documents shared with a patient, newest first. */
+    patientDocuments: (
+      patientId: string,
+      query: { appointmentId?: string; cursor?: string } = {},
+    ) =>
+      request('GET', `/patients/${encodeURIComponent(patientId)}/documents`, {
+        schema: PatientDocumentList,
+        query: { ...query },
+      }),
+    /** Doctor: share a library sheet or a fresh upload with the patient. */
+    shareDocument: (patientId: string, body: ShareDocumentBody, idempotencyKey?: string) =>
+      request('POST', `/patients/${encodeURIComponent(patientId)}/documents`, {
+        schema: PatientDocument,
+        body,
+        idempotencyKey,
+      }),
+    /** Doctor: the patient stops seeing it; the record stays. */
+    withdrawPatientDocument: (id: string) =>
+      request('POST', `/patient-documents/${encodeURIComponent(id)}/withdraw`, {
+        schema: PatientDocument,
+      }),
+    patientDocumentFile: (id: string) =>
+      requestFile('GET', `/patient-documents/${encodeURIComponent(id)}/file`, { accept: '*/*' }),
+
     /** Doctor: set or change the signing PIN, confirmed with the account password. */
     setSigningPin: (password: string, pin: string) =>
       request('PUT', '/doctor-profile/signing-pin', { schema: NoContent, body: { password, pin } }),
@@ -480,6 +534,13 @@ export function createApiClient(options: ApiClientOptions) {
       requestFile('GET', `/portal/test-results/${encodeURIComponent(resultId)}/file`, {
         accept: '*/*',
       }),
+
+    /** The documents doctors shared with the family, newest first. */
+    portalDocuments: (cursor?: string) =>
+      request('GET', '/portal/documents', { schema: PortalDocumentList, query: { cursor } }),
+    /** One shared document's file; opening it marks it opened. */
+    portalDocumentFile: (id: string) =>
+      requestFile('GET', `/portal/documents/${encodeURIComponent(id)}/file`, { accept: '*/*' }),
 
     /** Ends the session of the current access token. */
     logout: () => request('POST', '/auth/logout', { schema: NoContent }),

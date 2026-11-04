@@ -27,6 +27,7 @@ const AREAS = [
   { prefix: 'test_catalogue.', label: 'audit.area.testCatalogue' },
   { prefix: 'organisation.branding', label: 'audit.area.branding' },
   { prefix: 'referral.', label: 'audit.area.referrals' },
+  { prefix: 'document.', label: 'audit.area.documents' },
 ] as const;
 
 const TH = 'px-3 py-2 text-left text-xs font-semibold text-muted-foreground';

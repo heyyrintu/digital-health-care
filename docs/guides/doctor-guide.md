@@ -58,7 +58,7 @@ The full flow, with what is still to come:
 ## After signing
 - Wrong detail? Use **Amend** with a reason: it starts version 2 with the same lines for you to correct and sign; version 1 stays valid until then and its QR shows *Superseded* afterwards. Or **Void** with a reason and your PIN: the PDF is stamped VOID and the QR shows *Void*. Finish or sign an open amendment before voiding. Never re-issue manually.
 - **Versions** on the card lists every version with its status and PDF.
-- Refer from the consultation screen (see **Referrals** below). Sending attachments (exercise sheets) and payment links from the patient sheet come later.
+- Refer from the consultation screen (see **Referrals** below), and share sheets and reports with the patient (see **Documents** below). Payment links from the patient sheet come later.
 
 ## Referrals
 Available now on the web.
@@ -69,6 +69,15 @@ Available now on the web.
 - **Referral letter:** on a referral you sent, the **Referral letter** card makes a signed letter to print or give to the patient. Choose the language (the patient's by default, or English or Hindi), check it with **Preview letter** (marked PREVIEW), then **Sign letter** and enter your signing PIN. You need a complete, verified prescription pad, as for prescriptions, and the letter uses the pad's paper size. It carries your letterhead, the date, the patient's name, age, gender and UHID, who you are referring to, the urgency, the reason, the visit's diagnoses from your notes (never your private notes), your notes and a QR code. You sign it once; it cannot be changed afterwards, so preview first. You cannot sign a letter once the referral is closed. The PIN is the same as for prescriptions: five wrong tries pause all signing for 15 minutes.
 - **After signing:** both you and the doctor you referred to (in this clinic) can **Download letter** at any time, also after the referral is closed: closing does not withdraw the letter. Anyone holding it can scan the QR, which opens a check page showing that it is genuine, who signed it and when, the patient's initials and the recipient, but not the reason or notes. Until the cloud DSC is connected the letter says *Test signature: not legally valid*.
 - **Not yet:** sending the letter to the patient or the other doctor (print it or hand it over for now), the letter in the patient portal, withdrawing a signed letter, attachments, and referrals in the Clinic app.
+
+## Documents
+Available now on the web.
+- **Library:** **Library** in the menu holds the clinic's reusable sheets (exercise sheets, diet charts, information). You and the clinic admin add them with **Add sheet** (a PDF or a JPEG, PNG or WebP image within the clinic's upload limit, a title, an optional category and the language), **Edit** them (a new title or file: patients keep the version they were sent) and **Archive** or **Restore** them. Nothing is deleted.
+- **Uploaded PDFs:** every PDF you upload (a sheet or a report) is rebuilt from its pages before it is kept, so forms and links in uploaded PDFs are removed, as are bookmarks, attachments and comments; the pages look the same. To keep a filled-in form's answers, print it to a new PDF first. Password-protected PDFs and PDFs over 500 pages are refused.
+- **Share:** on the consultation screen and on the patient's page, the **Documents** card has **Share document**. Choose **From the library** and pick a sheet, or **Upload a file (such as a report)** with a title (and, if you like, a category and language), add a note for the patient if you like, and **Share**. The patient (and whoever looks after them on their account) sees it on the portal's **Documents** page with your note; it is marked *New* until they open it. Sending it on WhatsApp or SMS is not available yet: tell the patient it is on the portal.
+- **The record:** everything shared with a patient, sheets and uploads alike, stays on their page under **Documents**: who shared it and when, and when the patient first opened it. The consultation screen's card shows what was shared at that visit. If your clinic shows each doctor only their own patients, the same rule applies as for the chart.
+- **Withdraw:** **Withdraw** (it asks first) hides a document from the patient at once, for example one shared with the wrong person. It stays in the record, marked *Withdrawn* with who withdrew it, and you can still open it. Any doctor who can see the patient's chart can withdraw it.
+- **Not yet:** sending on WhatsApp, SMS or email, push notifications, documents in the Clinic and Patient apps, and patients sending documents to the clinic (other than test results).
 
 ## Ask AI
 Ask questions about this patient's record ("When was the last MRI?"). Answers show their sources; if something is not in the record, it says so. It never changes the chart.

@@ -110,6 +110,16 @@ describe('loadConfig', () => {
     );
     expect(loadConfig({ NODE_ENV: 'development', OTP_DELIVERY: 'log' }).OTP_DELIVERY).toBe('log');
   });
+
+  it('rebuilds one PDF at a time unless told otherwise, and at most four', () => {
+    expect(loadConfig({}).PDF_REBUILD_CONCURRENCY).toBe(1);
+    expect(loadConfig({ PDF_REBUILD_CONCURRENCY: '2' }).PDF_REBUILD_CONCURRENCY).toBe(2);
+    for (const value of ['0', '5', 'two']) {
+      expect(() => loadConfig({ PDF_REBUILD_CONCURRENCY: value }), value).toThrow(
+        /PDF_REBUILD_CONCURRENCY/,
+      );
+    }
+  });
 });
 
 describe('CORS', () => {

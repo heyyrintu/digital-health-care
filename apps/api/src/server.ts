@@ -1,6 +1,7 @@
 import { buildApp } from './app';
 import { corsOrigins, loadConfig, platformAllowlist, proxyTrust } from './config';
 import { scheduleNoShowSweep } from './modules/appointments/no-shows';
+import { samplePdf } from './modules/documents/document-samples';
 import { createServices } from './services';
 
 const config = loadConfig();
@@ -23,6 +24,17 @@ if (trust && !trust.proxies) {
 }
 
 const stopSweep = scheduleNoShowSweep(services, config.NO_SHOW_SWEEP_SECONDS, app.log);
+
+// Rebuild a sample PDF once: a missing worker file or a pdf-lib that can no longer be capped
+// would otherwise show up only as refused uploads (threat model T27).
+void services.pdf.selfTest(samplePdf()).then(
+  (problem) => {
+    if (problem)
+      app.log.error({ problem }, 'PDF rebuild self-test failed: PDF uploads will be refused');
+    else app.log.info('PDF rebuild self-test passed');
+  },
+  (err: unknown) => app.log.error({ err }, 'PDF rebuild self-test failed'),
+);
 
 const shutdown = async (signal: string) => {
   app.log.info({ signal }, 'Shutting down');
