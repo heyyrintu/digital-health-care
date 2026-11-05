@@ -230,6 +230,11 @@ test.describe('public home page', () => {
       await page.getByRole('button', { name: 'English' }).click();
       await expect(page.locator('html')).toHaveAttribute('lang', 'en');
 
+      // The directory and public-page allowlist refresh separately. A newly
+      // published doctor must have propagated to both before following the card.
+      await expect
+        .poll(async () => (await page.request.get(`/doctor/${slug}`)).status(), { timeout: 15_000 })
+        .toBe(200);
       // Open the page from its card.
       await search.fill(`dr synthetic ${tag}`);
       await expect(count).toHaveText('1 doctor');
