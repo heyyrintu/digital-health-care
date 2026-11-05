@@ -78,7 +78,7 @@ describe('buildOpenApiDocument', () => {
     expect(doc.components.schemas.ErrorResponse).toMatchObject({ type: 'object' });
   });
 
-  it('marks only sign-in, health, waiting-room screen, QR checks, public doctor page and public branding endpoints as public', () => {
+  it('marks only sign-in, health, waiting-room screen, QR checks, public doctor/branding, signed pay-only links and verified payment callbacks as public', () => {
     const publicOps = Object.entries(doc.paths).flatMap(([path, ops]) =>
       Object.entries(ops)
         .filter(([, op]) => (op as { security?: unknown[] }).security?.length === 0)
@@ -91,6 +91,7 @@ describe('buildOpenApiDocument', () => {
       'GET /public/doctors/{slug}',
       'GET /public/logos/{sha256}',
       'GET /public/organisations/{slug}/branding',
+      'GET /public/payments/{token}',
       'POST /auth/invites/accept',
       'POST /auth/invites/complete',
       'POST /auth/invites/inspect',
@@ -103,8 +104,11 @@ describe('buildOpenApiDocument', () => {
       'POST /platform/auth/login',
       'POST /platform/auth/mfa/verify',
       'POST /platform/auth/refresh',
+      'POST /public/payments/{token}/check',
+      'POST /public/payments/{token}/checkout',
       'POST /verify',
       'POST /verify/referral-letter',
+      'POST /webhooks/cashfree',
     ]);
   });
 

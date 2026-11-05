@@ -1,4 +1,6 @@
 'use client';
+import { CreatePrepaidBooking, PrepaidBookingView } from '@dhc/contracts';
+import { PrepaidCard } from '../prepaid-card';
 
 import type { BookingOptions, PortalAppointment, Slot, SlotsResponse } from '@dhc/contracts';
 import { formatInr, istDateKey, shortDate } from '@dhc/domain';
@@ -40,7 +42,7 @@ function Book({ account }: { account: ReadyAccount }) {
   const load = useCallback(() => {
     setOptions({ status: 'loading' });
     api
-      .bookingOptions()
+      .bookingOptions(true)
       .then((data) => setOptions({ status: 'ready', data }))
       .catch((error: unknown) => setOptions({ status: 'error', error }));
   }, [api]);
@@ -84,14 +86,16 @@ function BookForm({
   const [reason, setReason] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [prepaid, setPrepaid] = useState<string | null>(null);
+  const [prepayAttempt, setPrepayAttempt] = useState(() => crypto.randomUUID());
   const [booked, setBooked] = useState<PortalAppointment | null>(null);
   // One Idempotency-Key per booking attempt: a retry after a lost answer books once. A
   // changed choice is a new attempt.
   const [attempt, setAttempt] = useState(newAttemptKey);
-  useEffect(
-    () => setAttempt(newAttemptKey()),
-    [patientId, doctorId, clinicId, typeId, slot, reason],
-  );
+  useEffect(() => {
+    setAttempt(newAttemptKey());
+    setPrepayAttempt(crypto.randomUUID());
+  }, [patientId, doctorId, clinicId, typeId, slot, reason]);
 
   // Only the latest slots request may show its day: a retry or reload that answers after
   // the choice changed is dropped.
@@ -123,6 +127,23 @@ function BookForm({
     setBusy(true);
     setError(null);
     try {
+      if (type.requiresPrepayment) {
+        const body = CreatePrepaidBooking.parse({
+          id: prepayAttempt,
+          patientId,
+          doctorUserId: doctorId,
+          clinicId,
+          consultationTypeId: typeId,
+          startAt: slot.start,
+          ...(reason.trim() ? { reason: reason.trim() } : {}),
+        });
+        const result = await api.request('POST', '/portal/prepaid-bookings', {
+          schema: PrepaidBookingView,
+          body,
+        });
+        setPrepaid(result.id);
+        return;
+      }
       setBooked(
         await api.bookPortalAppointment(
           {
@@ -146,6 +167,7 @@ function BookForm({
     }
   }
 
+  if (prepaid) return <PrepaidCard id={prepaid} />;
   if (booked) {
     const when = { date: shortDate(booked.date, locale), time: booked.startTime };
     return (
@@ -250,13 +272,20 @@ function BookForm({
           />
         </Field>
         <div className="space-y-1 text-sm text-muted-foreground">
-          <p>{t('patient.book.fee', { fee: formatInr(type.feePaise, locale) })}</p>
+          {type.requiresPrepayment && <p>{t('prepaid.beforeBook')}</p>}
+          <p>
+            {t(type.requiresPrepayment ? 'prepaid.fee' : 'patient.book.fee', {
+              fee: formatInr(type.feePaise, locale),
+            })}
+          </p>
           <p>{t('portal.book.policy', { minutes: options.cancelCutoffMinutes })}</p>
         </div>
         <Button type="submit" size="lg" className="w-full" disabled={!slot || busy}>
-          {slot
-            ? t('patient.book.confirm', { time: slot.startTime, date: shortDate(date, locale) })
-            : t('booking.book')}
+          {type.requiresPrepayment
+            ? t('prepaid.reserve')
+            : slot
+              ? t('patient.book.confirm', { time: slot.startTime, date: shortDate(date, locale) })
+              : t('booking.book')}
         </Button>
       </Surface>
     </form>

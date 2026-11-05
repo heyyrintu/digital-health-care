@@ -71,7 +71,78 @@ function nextTabAddress(page: Page): Promise<string> {
 test.use({ viewport: { width: 390, height: 844 } });
 
 test.describe('patient portal', () => {
-  test('Pooja Singh signs in by SMS code, accepts the consents, adds Aarav, books, cancels and withdraws consent', async ({
+  for (const width of [390, 1280]) {
+    test(`patient moves a visit once, recovering an interrupted response (${width}px)`, async ({
+      page,
+      clinic,
+      db,
+    }) => {
+      await page.setViewportSize({ width, height: 844 });
+      const { org, doctor, place, type } = await schedule(db, clinic);
+      const phone = syntheticMobile();
+      const patient = await db.patient.create({
+        data: {
+          organisationId: org.id,
+          uhid: 'E2E-MOVE',
+          name: 'Reschedule Patient',
+          phone: `+91${phone}`,
+          dob: new Date('1992-03-14T00:00:00Z'),
+          gender: 'female',
+        },
+      });
+      await signInAsPatient(page, db, clinic, phone);
+      await page.getByRole('checkbox', { name: 'I have read the privacy notice' }).check();
+      await page.getByRole('checkbox', { name: 'I accept the terms of use' }).check();
+      await page.getByRole('checkbox', { name: /health records/i }).check();
+      await page.getByRole('button', { name: 'Accept and continue' }).click();
+      await page.getByRole('navigation').getByRole('link', { name: 'Book appointment' }).click();
+      await page.getByRole('group', { name: 'Date' }).getByRole('button').nth(1).click();
+      await page.locator('[data-slot="09:20"]').click();
+      await page.getByRole('button', { name: /^Book 09:20/ }).click();
+      await expect(page.getByRole('status')).toContainText(/Booked for .* at 09:20/);
+      const original = await db.appointment.findFirstOrThrow({ where: { patientId: patient.id } });
+      await page.getByRole('link', { name: 'Appointments' }).first().click();
+      await page.getByRole('link', { name: 'Reschedule appointment' }).click();
+      await expect(page.getByRole('heading', { name: 'Reschedule appointment' })).toBeVisible();
+      await page.getByRole('group', { name: 'Date' }).getByRole('button').nth(1).click();
+      await page.locator('[data-slot="09:40"]').click();
+      let interrupted = false;
+      const keys: string[] = [];
+      await page.route(`**/portal/appointments/${original.id}/reschedule`, async (route) => {
+        keys.push(route.request().headers()['idempotency-key'] ?? '');
+        const result = await route.fetch();
+        if (!interrupted) {
+          interrupted = true;
+          await route.abort();
+        } else await route.fulfill({ response: result });
+      });
+      await page.getByRole('button', { name: 'Confirm new time' }).click();
+      await expect(page.getByText('The result is not yet known.', { exact: false })).toBeVisible();
+      await expect(page.locator('[data-slot="09:00"]')).toBeDisabled();
+      await page.getByRole('button', { name: 'Check this change again' }).click();
+      await expect(page.getByRole('status')).toContainText(/Appointment moved to .* at 09:40/);
+      expect(keys).toHaveLength(2);
+      expect(keys[0]).toBeTruthy();
+      expect(keys[1]).toBe(keys[0]);
+      const rows = await db.appointment.findMany({ where: { rescheduledFromId: original.id } });
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({
+        patientId: patient.id,
+        clinicId: place.id,
+        doctorUserId: doctor.id,
+        consultationTypeId: type.id,
+        status: 'confirmed',
+      });
+      expect(await db.appointment.findUnique({ where: { id: original.id } })).toMatchObject({
+        status: 'rescheduled',
+      });
+      await page.getByRole('link', { name: 'Appointments' }).first().click();
+      await expect(page.getByTestId('upcoming').getByTestId('appointment')).toHaveCount(1);
+      await expect(page.getByTestId('upcoming')).toContainText('09:40');
+    });
+  }
+
+  test('Pooja Singh signs in by WhatsApp code, accepts the consents, adds Aarav, books, cancels and withdraws consent', async ({
     page,
     clinic,
     db,

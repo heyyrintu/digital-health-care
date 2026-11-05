@@ -1,6 +1,19 @@
 import {
+  PortalProfile,
+  UpdatePortalProfile,
+  PatientReportedEntry,
+  StartPhoneChange,
+  VerifyPhoneChange,
+  PhoneChangeView,
+} from '@dhc/contracts';
+import { PortalProfileService } from './profile';
+import { PatientPhoneChangeService } from './phone-change';
+import { CreatePrepaidBooking, PrepaidBookingView } from '@dhc/contracts';
+import { PrepaidBookingService } from '../../payments/prepaid';
+import {
   AcceptConsentsBody,
   BookingOptions,
+  BookingOptionsQuery,
   ConsentStatus,
   CreatePortalPatientBody,
   PortalAppointment,
@@ -9,6 +22,7 @@ import {
   PortalDocumentList,
   PortalDocumentListQuery,
   PortalCancelBody,
+  PortalRescheduleBody,
   PortalPatient,
   PortalPatientList,
   PortalPrescriptionList,
@@ -39,12 +53,127 @@ export const portalRoutes: FastifyPluginAsync<{
   /** Uploads per client address per minute, shared with the staff routes'. */
   uploadRateLimit: number;
 }> = async (app, { services, uploadRateLimit: uploadMax }) => {
+  app.addHook('onSend', async (_request, reply, payload) => {
+    reply.header('Cache-Control', 'no-store');
+    return payload;
+  });
   const portal = new PortalService(services);
   const booking = new PortalBookingService(services);
   const orders = new PortalOrdersService(services);
   const documents = new PortalDocumentsService(services);
   registerUploadParser(app);
+  app.addContentTypeParser(
+    'image/webp',
+    { parseAs: 'buffer', bodyLimit: 512 * 1024 },
+    (_request, body, done) => done(null, body),
+  );
   const patientOnly = { preHandler: [authenticate(services), requireRole('patient')] };
+
+  const profiles = new PortalProfileService(services);
+  const phones = new PatientPhoneChangeService(services);
+  app.get('/portal/patients/:id/profile', patientOnly, async (request) =>
+    PortalProfile.parse(
+      await profiles.view(request, authOf(request), IdParams.parse(request.params).id),
+    ),
+  );
+  app.put('/portal/patients/:id/profile', patientOnly, async (request) =>
+    PortalProfile.parse(
+      await profiles.update(
+        request,
+        authOf(request),
+        IdParams.parse(request.params).id,
+        UpdatePortalProfile.parse(request.body),
+      ),
+    ),
+  );
+  app.post('/portal/patients/:id/medical-basics', patientOnly, async (request, reply) => {
+    const id = IdParams.parse(request.params).id;
+    const body = PatientReportedEntry.parse(request.body);
+    return idempotent(services, request, reply, async () => ({
+      status: 201,
+      body: PortalProfile.parse(await profiles.report(request, authOf(request), id, body)),
+    }));
+  });
+  app.get('/portal/patients/:id/photo', patientOnly, async (request, reply) => {
+    const file = await profiles.photoBytes(
+      request,
+      authOf(request),
+      IdParams.parse(request.params).id,
+    );
+    return reply
+      .header('X-Content-Type-Options', 'nosniff')
+      .header('Content-Security-Policy', "default-src 'none'; sandbox")
+      .type(file.mediaType)
+      .send(file.data);
+  });
+  app.post(
+    '/portal/patients/:id/photo',
+    { ...patientOnly, bodyLimit: 512 * 1024, onRequest: uploadRateLimit(app, services, uploadMax) },
+    async (request) =>
+      PortalProfile.parse(
+        await profiles.photo(
+          request,
+          authOf(request),
+          IdParams.parse(request.params).id,
+          uploadedFile(request),
+        ),
+      ),
+  );
+  app.delete('/portal/patients/:id/photo', patientOnly, async (request) =>
+    PortalProfile.parse(
+      await profiles.photo(request, authOf(request), IdParams.parse(request.params).id),
+    ),
+  );
+  app.post(
+    '/portal/patients/:id/phone-change',
+    { ...patientOnly, config: { rateLimit: { max: 30, timeWindow: '1 minute' } } },
+    async (request) =>
+      PhoneChangeView.parse(
+        await phones.start(
+          request,
+          authOf(request),
+          IdParams.parse(request.params).id,
+          StartPhoneChange.parse(request.body),
+        ),
+      ),
+  );
+  app.post(
+    '/portal/phone-changes/:id/verify',
+    { ...patientOnly, config: { rateLimit: { max: 30, timeWindow: '1 minute' } } },
+    async (request) =>
+      PhoneChangeView.parse(
+        await phones.verify(
+          request,
+          authOf(request),
+          IdParams.parse(request.params).id,
+          VerifyPhoneChange.parse(request.body),
+        ),
+      ),
+  );
+
+  const prepaid = new PrepaidBookingService(services);
+  app.post('/portal/prepaid-bookings', patientOnly, async (request, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    return PrepaidBookingView.parse(
+      await prepaid.create(request, authOf(request), CreatePrepaidBooking.parse(request.body)),
+    );
+  });
+  app.get('/portal/prepaid-bookings/:id', patientOnly, async (request) =>
+    PrepaidBookingView.parse(
+      await prepaid.view(authOf(request), IdParams.parse(request.params).id),
+    ),
+  );
+  for (const action of ['check', 'close'] as const)
+    app.post(`/portal/prepaid-bookings/:id/${action}`, patientOnly, async (request) =>
+      PrepaidBookingView.parse(
+        await prepaid.check(
+          request,
+          authOf(request),
+          IdParams.parse(request.params).id,
+          action === 'close',
+        ),
+      ),
+    );
 
   app.get('/portal/consents', patientOnly, async (request) =>
     ConsentStatus.parse(await portal.consents(authOf(request))),
@@ -70,7 +199,12 @@ export const portalRoutes: FastifyPluginAsync<{
   });
 
   app.get('/portal/booking-options', patientOnly, async (request) =>
-    BookingOptions.parse(await booking.options(authOf(request))),
+    BookingOptions.parse(
+      await booking.options(
+        authOf(request),
+        BookingOptionsQuery.parse(request.query).prepaid === 'true',
+      ),
+    ),
   );
 
   app.get('/portal/slots', patientOnly, async (request) => {
@@ -89,6 +223,20 @@ export const portalRoutes: FastifyPluginAsync<{
       const created = await booking.book(request, authOf(request), body);
       return { status: 201, body: PortalAppointment.parse(created) };
     });
+  });
+
+  app.get('/portal/appointments/:id', patientOnly, async (request) => {
+    const { id } = IdParams.parse(request.params);
+    return PortalAppointment.parse(await booking.view(authOf(request), id));
+  });
+
+  app.post('/portal/appointments/:id/reschedule', patientOnly, async (request, reply) => {
+    const { id } = IdParams.parse(request.params);
+    const body = PortalRescheduleBody.parse(request.body);
+    return idempotent(services, request, reply, async () => ({
+      status: 201,
+      body: PortalAppointment.parse(await booking.reschedule(request, authOf(request), id, body)),
+    }));
   });
 
   app.post('/portal/appointments/:id/cancel', patientOnly, async (request) => {

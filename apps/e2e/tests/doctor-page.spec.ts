@@ -125,6 +125,11 @@ test.describe('public doctor page', () => {
     const visitor = await browser.newContext({ viewport: { width: 390, height: 844 } });
     try {
       const anon = await visitor.newPage();
+      // Publishing reaches the directory and the page allowlist through separate
+      // one-second caches. Wait for that documented propagation before the visit.
+      await expect
+        .poll(async () => (await anon.request.get(`/doctor/${slug}`)).status(), { timeout: 15_000 })
+        .toBe(200);
       const response = await anon.goto(`/doctor/${slug}`);
       expect(response?.status()).toBe(200);
       await expect(anon.getByRole('heading', { level: 1 })).toHaveText('Dr. Synthetic');

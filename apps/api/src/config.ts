@@ -1,3 +1,5 @@
+import { parseInboxChannels } from './modules/whatsapp-inbox/gateway';
+import { parseMerchants } from './payments/cashfree';
 import { z } from 'zod';
 import { IpAllowlist, hasCatchAll, parseCidrs } from './plugins/ip-allowlist';
 
@@ -22,8 +24,81 @@ const Env = z
     JWT_SECRET: z.string().min(32).optional(),
     /** 32 bytes, base64. */
     FIELD_ENCRYPTION_KEY: z.string().optional(),
-    /** `log` prints sign-in codes to the server log; development only, until the SMS provider (O5). */
-    OTP_DELIVERY: z.enum(['log', 'disabled']).default('disabled'),
+    /** `log` prints sign-in codes to the server log; development only, or use Meta WhatsApp Cloud API. */
+    CASHFREE_ACCEPT_NEW_PAYMENTS: z
+      .enum(['true', 'false'])
+      .default('true')
+      .transform((v) => v === 'true'),
+    CASHFREE_PREPAID_BOOKING_ENABLED: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((v) => v === 'true'),
+    CASHFREE_RECONCILIATION_ENABLED: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((v) => v === 'true'),
+    CASHFREE_REFUNDS_ENABLED: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((v) => v === 'true'),
+    CASHFREE_ENABLED: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((v) => v === 'true'),
+    CASHFREE_MERCHANTS_JSON: z.string().optional(),
+    CASHFREE_LINK_SECRET: z.string().min(32).regex(/^\S+$/).optional(),
+    CASHFREE_WEBHOOK_URL: z.url().optional(),
+    WHATSAPP_OPERATIONS_ENABLED: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((v) => v === 'true'),
+    WHATSAPP_INBOX_ENABLED: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((v) => v === 'true'),
+    WHATSAPP_INBOX_CHANNELS_JSON: z.string().optional(),
+    OTP_DELIVERY: z.enum(['log', 'disabled', 'whatsapp']).default('disabled'),
+    WHATSAPP_ACCESS_TOKEN: z
+      .string()
+      .trim()
+      .regex(/^[^\s]+$/)
+      .optional(),
+    WHATSAPP_PAYMENTS_ENABLED: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((v) => v === 'true'),
+    WHATSAPP_PAYMENT_LINK_SECRET: z.string().min(32).regex(/^\S+$/).optional(),
+    WHATSAPP_RECORDS_ENABLED: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((v) => v === 'true'),
+    WHATSAPP_RECORD_LINK_SECRET: z.string().min(32).regex(/^\S+$/).optional(),
+    WHATSAPP_APPOINTMENTS_ENABLED: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((v) => v === 'true'),
+    WHATSAPP_WEBHOOK_ENABLED: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((v) => v === 'true'),
+    WHATSAPP_APP_SECRET: z.string().min(16).regex(/^\S+$/).optional(),
+    WHATSAPP_WEBHOOK_VERIFY_TOKEN: z.string().min(32).regex(/^\S+$/).optional(),
+    WHATSAPP_BUSINESS_ACCOUNT_ID: z.string().regex(/^\d+$/).optional(),
+    WHATSAPP_PHONE_NUMBER_ID: z.string().regex(/^\d+$/).optional(),
+    // Explicit version: operators choose a supported Graph API version for their Meta app.
+    WHATSAPP_GRAPH_API_VERSION: z
+      .string()
+      .regex(/^v[1-9]\d*\.0$/)
+      .optional(),
+    WHATSAPP_OTP_TEMPLATE_NAME: z
+      .string()
+      .regex(/^[a-z0-9_]+$/)
+      .max(512)
+      .optional(),
+    WHATSAPP_OTP_TEMPLATE_LANGUAGE: z
+      .string()
+      .regex(/^[a-z]{2,3}(?:_[A-Z]{2})?$/)
+      .optional(),
     /** Web app origin; staff invite links point here. */
     WEB_BASE_URL: z.url().default('http://localhost:3000'),
     /** Sign-in requests allowed per client address per minute. */
@@ -86,6 +161,141 @@ const Env = z
       path: ['PLATFORM_ALLOWED_CIDRS'],
     },
   )
+  .superRefine((env, ctx) => {
+    if (env.WHATSAPP_INBOX_ENABLED) {
+      for (const key of [
+        'WHATSAPP_WEBHOOK_ENABLED',
+        'WHATSAPP_ACCESS_TOKEN',
+        'WHATSAPP_GRAPH_API_VERSION',
+      ] as const)
+        if (!env[key])
+          ctx.addIssue({ code: 'custom', path: [key], message: 'Required for WhatsApp inbox' });
+      try {
+        const channels = parseInboxChannels(env.WHATSAPP_INBOX_CHANNELS_JSON ?? '');
+        if (channels.some((c) => c.senderId === env.WHATSAPP_PHONE_NUMBER_ID))
+          ctx.addIssue({
+            code: 'custom',
+            path: ['WHATSAPP_INBOX_CHANNELS_JSON'],
+            message:
+              'Inbox numbers must differ from the shared OTP and automated-notification sender',
+          });
+      } catch {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['WHATSAPP_INBOX_CHANNELS_JSON'],
+          message: 'Configure unique clinic/sender bindings',
+        });
+      }
+    }
+
+    if (
+      (env.CASHFREE_REFUNDS_ENABLED ||
+        env.CASHFREE_RECONCILIATION_ENABLED ||
+        env.CASHFREE_PREPAID_BOOKING_ENABLED) &&
+      !env.CASHFREE_ENABLED
+    )
+      ctx.addIssue({
+        code: 'custom',
+        path: ['CASHFREE_ENABLED'],
+        message: 'Cashfree payment features require the main integration',
+      });
+    if (env.CASHFREE_ENABLED) {
+      try {
+        parseMerchants(env.CASHFREE_MERCHANTS_JSON ?? '');
+      } catch {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['CASHFREE_MERCHANTS_JSON'],
+          message: 'Configure distinct Cashfree merchant accounts by organisation UUID',
+        });
+      }
+      if (!env.CASHFREE_LINK_SECRET)
+        ctx.addIssue({
+          code: 'custom',
+          path: ['CASHFREE_LINK_SECRET'],
+          message: 'Required for payment links',
+        });
+      for (const key of ['WEB_BASE_URL', 'CASHFREE_WEBHOOK_URL'] as const) {
+        let url: URL | null = null;
+        try {
+          if (env[key]) url = new URL(env[key]);
+        } catch {
+          /* Report a configuration issue below. */
+        }
+        if (
+          !url ||
+          url.protocol !== 'https:' ||
+          url.username ||
+          url.password ||
+          url.search ||
+          url.hash
+        )
+          ctx.addIssue({
+            code: 'custom',
+            path: [key],
+            message:
+              'Payment links require public HTTPS URLs without credentials, queries or fragments',
+          });
+      }
+    }
+
+    if (
+      (env.WHATSAPP_OPERATIONS_ENABLED ||
+        env.WHATSAPP_APPOINTMENTS_ENABLED ||
+        env.WHATSAPP_RECORDS_ENABLED ||
+        env.WHATSAPP_PAYMENTS_ENABLED) &&
+      !env.WHATSAPP_WEBHOOK_ENABLED
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['WHATSAPP_WEBHOOK_ENABLED'],
+        message:
+          'Optional WhatsApp messages require callbacks for delivery receipts and STOP replies',
+      });
+    }
+    if (env.WHATSAPP_WEBHOOK_ENABLED) {
+      for (const key of [
+        'WHATSAPP_APP_SECRET',
+        'WHATSAPP_WEBHOOK_VERIFY_TOKEN',
+        'WHATSAPP_PHONE_NUMBER_ID',
+        'WHATSAPP_BUSINESS_ACCOUNT_ID',
+      ] as const) {
+        if (!env[key])
+          ctx.addIssue({
+            code: 'custom',
+            path: [key],
+            message: 'Required for WhatsApp status webhooks',
+          });
+      }
+    }
+    if (env.WHATSAPP_PAYMENTS_ENABLED && !env.WHATSAPP_PAYMENT_LINK_SECRET)
+      ctx.addIssue({
+        code: 'custom',
+        path: ['WHATSAPP_PAYMENT_LINK_SECRET'],
+        message: 'Required for payment notices',
+      });
+    if (env.WHATSAPP_RECORDS_ENABLED && !env.WHATSAPP_RECORD_LINK_SECRET)
+      ctx.addIssue({
+        code: 'custom',
+        path: ['WHATSAPP_RECORD_LINK_SECRET'],
+        message: 'Required for record links',
+      });
+    if (env.OTP_DELIVERY !== 'whatsapp') return;
+    for (const key of [
+      'WHATSAPP_ACCESS_TOKEN',
+      'WHATSAPP_PHONE_NUMBER_ID',
+      'WHATSAPP_GRAPH_API_VERSION',
+      'WHATSAPP_OTP_TEMPLATE_NAME',
+      'WHATSAPP_OTP_TEMPLATE_LANGUAGE',
+    ] as const) {
+      if (!env[key])
+        ctx.addIssue({
+          code: 'custom',
+          path: [key],
+          message: 'Required for WhatsApp OTP delivery',
+        });
+    }
+  })
   // Trusting every address as a proxy is trusting X-Forwarded-For from anyone.
   .refine(
     (env) =>

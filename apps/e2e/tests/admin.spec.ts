@@ -67,6 +67,8 @@ test.describe('clinic admin dashboard', () => {
       'aria-pressed',
       'true',
     );
+    // The previous multi-day report may still be rendering as the range changes.
+    await expect(page.getByTestId('figures-by-day')).toHaveCount(0);
     await expect(figures.getByText('Appointments', { exact: true })).toBeVisible();
     await expect(figures.getByText('No-shows (50%)')).toBeVisible();
     // Seven days: a row per day, today first.

@@ -36,7 +36,7 @@ export function postPlatformSession<T>(
 }
 
 /**
- * The patient portal's session routes (`/api/patient-session/*`): sign-in by SMS code, and
+ * The patient portal's session routes (`/api/patient-session/*`): sign-in by WhatsApp code, and
  * a cookie of its own, so patient and staff sessions never stand in for each other.
  */
 export function postPatientSession<T>(

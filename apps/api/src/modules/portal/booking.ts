@@ -1,3 +1,4 @@
+import { OnlinePaymentsService } from '../../payments/service';
 import {
   ACTIVE_APPOINTMENT_STATUSES,
   type BookingOptions,
@@ -5,11 +6,12 @@ import {
   type PortalAppointmentList,
   type PortalBookBody,
   type PortalCancelBody,
+  type PortalRescheduleBody,
   type PortalPrescription,
   type PortalSlotsQuery,
   type SlotsResponse,
 } from '@dhc/contracts';
-import { withAuth, withTenant, type Prisma, type Tx } from '@dhc/db';
+import { withAuth, withPayments, withTenant, type Prisma, type Tx } from '@dhc/db';
 import { istDate } from '@dhc/domain';
 import type { FastifyRequest } from 'fastify';
 import { AppError } from '../../errors';
@@ -21,6 +23,7 @@ import { loadDaySlots } from '../scheduling/availability';
 import { DEFAULT_BOOKING_RULES, toRules } from '../scheduling/settings';
 import { accountHistoryWhere, accountPhone, ownHistory, ownPatient } from './account';
 import { PortalService } from './service';
+import { historyIds, liveId } from '../patients/merged';
 
 interface Actor {
   userId: string;
@@ -33,9 +36,8 @@ const istTime = (instant: Date) =>
   new Date(instant.getTime() + 330 * 60_000).toISOString().slice(11, 16);
 
 /**
- * Patients book in-person consultations that need no payment at booking. Online modes need
- * the identity check and telemedicine consent, and prepaid ones need Cashfree (PRD §4.3);
- * both come with those features.
+ * In-person self-booking; supporting web clients can opt into gated Cashfree prepayment.
+ * Online modes still require the separate identity/telemedicine consent workflow.
  */
 const bookableType: Prisma.ConsultationTypeWhereInput = {
   active: true,
@@ -44,6 +46,8 @@ const bookableType: Prisma.ConsultationTypeWhereInput = {
 };
 
 const appointmentInclude = {
+  prepaidBooking: true,
+  bill: { select: { id: true } },
   patient: {
     select: {
       id: true,
@@ -52,8 +56,8 @@ const appointmentInclude = {
       mergedInto: { select: { id: true, name: true, uhid: true } },
     },
   },
-  clinic: { select: { name: true } },
-  consultationType: { select: { name: true, mode: true } },
+  clinic: { select: { name: true, active: true } },
+  consultationType: { select: { name: true, mode: true, active: true, requiresPrepayment: true } },
   prescriptions: {
     where: { status: { in: ['signed', 'void'] as ('signed' | 'void')[] } },
     orderBy: { version: 'desc' },
@@ -88,14 +92,24 @@ export class PortalBookingService {
     this.portal = new PortalService(s);
   }
 
-  async options(actor: Actor): Promise<BookingOptions> {
+  private prepaidEnabled(actor: Actor) {
+    return !!(
+      this.s.cashfree?.prepaidBookingEnabled &&
+      this.s.cashfree.acceptNewPayments !== false &&
+      this.s.cashfree.merchants[actor.organisationId]
+    );
+  }
+  private types(actor: Actor) {
+    return this.prepaidEnabled(actor) ? { active: true, mode: 'in_person' as const } : bookableType;
+  }
+  async options(actor: Actor, includePrepaid = false): Promise<BookingOptions> {
     return withTenant(this.s.db, actor.organisationId, async (tx) => {
       const clinics = await tx.clinic.findMany({
         where: { active: true },
         orderBy: { name: 'asc' },
       });
       const types = await tx.consultationType.findMany({
-        where: bookableType,
+        where: includePrepaid ? this.types(actor) : bookableType,
         orderBy: { name: 'asc' },
       });
       const doctors = await tx.membership.findMany({
@@ -133,6 +147,7 @@ export class PortalBookingService {
           mode: t.mode,
           defaultDurationMin: t.defaultDurationMin,
           feePaise: t.feePaise,
+          requiresPrepayment: t.requiresPrepayment,
         })),
         horizonDays: rules.horizonDays,
         cancelCutoffMinutes: rules.cancelCutoffMinutes,
@@ -143,7 +158,7 @@ export class PortalBookingService {
 
   async slots(actor: Actor, query: PortalSlotsQuery): Promise<SlotsResponse> {
     return withTenant(this.s.db, actor.organisationId, async (tx) => {
-      await this.requireBookable(tx, query.consultationTypeId, query.doctorId);
+      await this.requireBookable(tx, actor, query.consultationTypeId, query.doctorId);
       const loaded = await loadDaySlots(
         tx,
         actor.organisationId,
@@ -151,6 +166,12 @@ export class PortalBookingService {
         this.s.now(),
       );
       if (!loaded) throw NOT_FOUND();
+      if (loaded.type.requiresPrepayment)
+        loaded.day.slots = loaded.day.slots.map((slot) =>
+          new Date(slot.start).getTime() < this.s.now().getTime() + 35 * 60000
+            ? { ...slot, available: false, unavailableReason: 'cutoff' as const }
+            : slot,
+        );
       return loaded.day;
     });
   }
@@ -159,12 +180,63 @@ export class PortalBookingService {
     request: FastifyRequest,
     actor: Actor,
     body: PortalBookBody,
+    prepayId?: string,
   ): Promise<PortalAppointment> {
     const phone = await accountPhone(this.s, actor.userId);
-    return withTenant(this.s.db, actor.organisationId, async (tx) => {
+    const run = prepayId ? withPayments : withTenant;
+    return run(this.s.db, actor.organisationId, async (tx) => {
       await this.portal.requireConsents(tx, actor);
       await ownPatient(tx, phone, body.patientId);
-      await this.requireBookable(tx, body.consultationTypeId, body.doctorUserId);
+      const hash = this.s.hashOtp(
+        'prepaid-booking:' + (prepayId ?? ''),
+        JSON.stringify([
+          body.patientId,
+          body.doctorUserId,
+          body.clinicId,
+          body.consultationTypeId,
+          body.startAt,
+          body.reason ?? null,
+        ]),
+      );
+      if (prepayId) {
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`prepaid:${prepayId}`},0))`;
+        const prior = await tx.cashfreeBooking.findUnique({ where: { id: prepayId } });
+        if (prior) {
+          if (prior.createdByUserId !== actor.userId || prior.requestHash !== hash)
+            throw new AppError(409, 'CONFLICT', 'This booking request was already used.');
+          const a = await tx.appointment.findUniqueOrThrow({
+            where: { id: prior.appointmentId },
+            include: appointmentInclude,
+          });
+          return this.toAppointment(
+            a,
+            await doctorNames(this.s, [a.doctorUserId]),
+            (await this.rules(tx, actor)).cancelCutoffMinutes,
+            this.s.now(),
+          );
+        }
+        if (!this.prepaidEnabled(actor))
+          throw new AppError(503, 'BUSINESS_RULE', 'Prepaid booking is unavailable.');
+      }
+      await tx.$queryRaw`SELECT id FROM consultation_types WHERE id=${body.consultationTypeId}::uuid FOR SHARE`;
+      const selectedType = await tx.consultationType.findUnique({
+        where: { id: body.consultationTypeId },
+      });
+      if (!!selectedType?.requiresPrepayment !== !!prepayId)
+        throw new AppError(400, 'VALIDATION_FAILED', 'Use the correct booking payment option.');
+      if (
+        prepayId &&
+        (new Date(body.startAt).getTime() < this.s.now().getTime() + 35 * 60000 ||
+          !selectedType ||
+          selectedType.feePaise < 100 ||
+          selectedType.feePaise > 10000000)
+      )
+        throw new AppError(
+          400,
+          'VALIDATION_FAILED',
+          'Prepaid bookings need a slot at least 35 minutes away and a fee of ₹1–₹1,00,000.',
+        );
+      await this.requireBookable(tx, actor, body.consultationTypeId, body.doctorUserId);
       const rules = await this.rules(tx, actor);
       const now = this.s.now();
 
@@ -215,9 +287,56 @@ export class PortalBookingService {
           reason: body.reason ?? null,
           source: 'app',
           channel: 'patient',
-          status: rules.autoConfirm ? 'confirmed' : 'pending',
+          status: prepayId ? 'pending' : rules.autoConfirm ? 'confirmed' : 'pending',
         },
       );
+      if (prepayId) {
+        const bill = await tx.bill.create({
+          data: {
+            organisationId: actor.organisationId,
+            appointmentId: id,
+            patientId: body.patientId,
+            doctorUserId: body.doctorUserId,
+            createdByUserId: actor.userId,
+            subtotalPaise: selectedType!.feePaise,
+            totalPaise: selectedType!.feePaise,
+            status: 'due',
+          },
+        });
+        await tx.billItem.create({
+          data: {
+            organisationId: actor.organisationId,
+            billId: bill.id,
+            kind: 'consultation',
+            name: selectedType!.name,
+            unitPaise: selectedType!.feePaise,
+            quantity: 1,
+            amountPaise: selectedType!.feePaise,
+            sortOrder: 0,
+          },
+        });
+        const order = await new OnlinePaymentsService(this.s).reserve(
+          tx,
+          request,
+          actor,
+          bill.id,
+          prepayId,
+          phone,
+        );
+        await tx.cashfreeBooking.create({
+          data: {
+            id: prepayId,
+            organisationId: actor.organisationId,
+            appointmentId: id,
+            orderId: order.id,
+            createdByUserId: actor.userId,
+            requestHash: hash,
+            autoConfirm: rules.autoConfirm,
+            expiresAt: order.expiresAt,
+            nextCheckAt: this.s.now(),
+          },
+        });
+      }
       const row = await tx.appointment.findUniqueOrThrow({
         where: { id },
         include: appointmentInclude,
@@ -255,6 +374,131 @@ export class PortalBookingService {
     });
   }
 
+  async view(actor: Actor, id: string): Promise<PortalAppointment> {
+    const phone = await accountPhone(this.s, actor.userId);
+    return withTenant(this.s.db, actor.organisationId, async (tx) => {
+      await this.portal.requireConsents(tx, actor);
+      const row = await tx.appointment.findUnique({ where: { id }, include: appointmentInclude });
+      if (!row) throw NOT_FOUND();
+      await ownHistory(tx, phone, row.patientId);
+      return this.toAppointment(
+        row,
+        await doctorNames(this.s, [row.doctorUserId]),
+        (await this.rules(tx, actor)).cancelCutoffMinutes,
+        this.s.now(),
+      );
+    });
+  }
+
+  async reschedule(
+    request: FastifyRequest,
+    actor: Actor,
+    id: string,
+    body: PortalRescheduleBody,
+  ): Promise<PortalAppointment> {
+    const phone = await accountPhone(this.s, actor.userId);
+    return withTenant(this.s.db, actor.organisationId, async (tx) => {
+      await this.portal.requireConsents(tx, actor);
+      const before = await tx.appointment.findUnique({ where: { id } });
+      if (!before) throw NOT_FOUND();
+      await ownHistory(tx, phone, before.patientId);
+      const patient = await tx.patient.findUniqueOrThrow({ where: { id: before.patientId } });
+      const patientId = liveId(patient);
+      // Like initial booking, keep a consultation's payment policy stable until commit.
+      // A concurrent change to prepayment must be visible before we assess eligibility.
+      await tx.$queryRaw`SELECT id FROM consultation_types WHERE id=${before.consultationTypeId}::uuid FOR SHARE`;
+      // Match booking's lock order; lock the old visit before checking its bill or status.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`portal:${patientId}`}, 0))`;
+      await this.appointments.lockRow(tx, id);
+      const row = await tx.appointment.findUniqueOrThrow({
+        where: { id },
+        include: appointmentInclude,
+      });
+      await ownHistory(tx, phone, row.patientId);
+      const rules = await this.rules(tx, actor);
+      const now = this.s.now();
+      const names = await doctorNames(this.s, [row.doctorUserId]);
+      if (!this.toAppointment(row, names, rules.cancelCutoffMinutes, now).canReschedule)
+        throw new AppError(
+          409,
+          'CONFLICT',
+          'This appointment needs clinic assistance to reschedule.',
+        );
+      if (row.startAt.getTime() === new Date(body.startAt).getTime())
+        throw new AppError(400, 'VALIDATION_FAILED', 'Choose a different appointment time.');
+      await this.requireBookable(tx, actor, row.consultationTypeId, row.doctorUserId);
+      const ids = await historyIds(tx, patientId);
+      if (
+        rules.noShowLimit > 0 &&
+        (await tx.appointment.count({
+          where: {
+            patientId: { in: ids },
+            status: 'no_show',
+            startAt: { gte: new Date(now.getTime() - rules.noShowWindowDays * 86400000) },
+          },
+        })) >= rules.noShowLimit
+      )
+        throw new AppError(409, 'BOOKING_LIMIT', 'Please call the clinic to change this booking.');
+      const duplicate = await tx.appointment.findFirst({
+        where: {
+          id: { not: id },
+          patientId: { in: ids },
+          doctorUserId: row.doctorUserId,
+          date: new Date(istDate(new Date(body.startAt)) + 'T00:00:00.000Z'),
+          status: { in: [...ACTIVE_APPOINTMENT_STATUSES] },
+        },
+      });
+      if (duplicate)
+        throw new AppError(
+          409,
+          'CONFLICT',
+          'This patient already has a visit with this doctor that day.',
+        );
+      const replacementId = await this.appointments.place(
+        tx,
+        request,
+        { ...actor, role: 'patient' },
+        {
+          patientId,
+          doctorUserId: row.doctorUserId,
+          clinicId: row.clinicId,
+          consultationTypeId: row.consultationTypeId,
+          startAt: body.startAt,
+          walkIn: false,
+          overbook: false,
+          reason: row.reason,
+          source: row.source,
+          rescheduledFromId: id,
+          channel: 'patient',
+          status: rules.autoConfirm ? 'confirmed' : 'pending',
+        },
+      );
+      await tx.appointment.update({ where: { id }, data: { status: 'rescheduled' } });
+      await this.appointments.record(
+        tx,
+        { ...actor, role: 'patient' },
+        id,
+        row.status,
+        'rescheduled',
+        now,
+        null,
+      );
+      await writeAudit(tx, request, {
+        action: 'appointment.rescheduled',
+        organisationId: actor.organisationId,
+        actorUserId: actor.userId,
+        entityType: 'appointment',
+        entityId: id,
+        metadata: { replacementId, source: 'patient_app' },
+      });
+      const updated = await tx.appointment.findUniqueOrThrow({
+        where: { id: replacementId },
+        include: appointmentInclude,
+      });
+      return this.toAppointment(updated, names, rules.cancelCutoffMinutes, now);
+    });
+  }
+
   async cancel(
     request: FastifyRequest,
     actor: Actor,
@@ -269,6 +513,13 @@ export class PortalBookingService {
       await ownPatient(tx, phone, row.patientId);
       const rules = await this.rules(tx, actor);
       const now = this.s.now();
+      const hold = await tx.cashfreeBooking.findUnique({ where: { appointmentId: id } });
+      if (hold && hold.state !== 'confirmed')
+        throw new AppError(
+          409,
+          'CONFLICT',
+          'Close the original booking payment before cancelling this reservation.',
+        );
       if (!['pending', 'confirmed'].includes(row.status)) {
         throw new AppError(409, 'CONFLICT', 'This appointment can no longer be cancelled.');
       }
@@ -370,9 +621,14 @@ export class PortalBookingService {
   }
 
   /** The consultation type is open to patients and the doctor is active. */
-  private async requireBookable(tx: Tx, consultationTypeId: string, doctorUserId: string) {
+  private async requireBookable(
+    tx: Tx,
+    actor: Actor,
+    consultationTypeId: string,
+    doctorUserId: string,
+  ) {
     const type = await tx.consultationType.findFirst({
-      where: { AND: [{ id: consultationTypeId }, bookableType] },
+      where: { AND: [{ id: consultationTypeId }, this.types(actor)] },
       select: { id: true },
     });
     if (!type) {
@@ -399,6 +655,13 @@ export class PortalBookingService {
     const prescription = r.prescriptions[0];
     return {
       id: r.id,
+      prepayment: r.prepaidBooking
+        ? {
+            id: r.prepaidBooking.id,
+            state: r.prepaidBooking.state as 'held' | 'confirmed' | 'released' | 'review',
+            expiresAt: r.prepaidBooking.expiresAt.toISOString(),
+          }
+        : null,
       // A merged duplicate's visits show under the record that was kept.
       patient: r.patient.mergedInto ?? {
         id: r.patient.id,
@@ -412,10 +675,27 @@ export class PortalBookingService {
       date: fromDbDate(r.date),
       startAt: r.startAt.toISOString(),
       startTime: istTime(r.startAt),
+      delayMinutes: r.delayMinutes,
+      delayUpdatedAt: r.delayUpdatedAt?.toISOString() ?? null,
       tokenNumber: r.tokenNumber,
       status: r.status,
       reason: r.reason,
+      booking: {
+        doctorUserId: r.doctorUserId,
+        clinicId: r.clinicId,
+        consultationTypeId: r.consultationTypeId,
+      },
+      canReschedule:
+        !r.bill &&
+        !r.prepaidBooking &&
+        r.clinic.active &&
+        r.consultationType.active &&
+        r.consultationType.mode === 'in_person' &&
+        !r.consultationType.requiresPrepayment &&
+        ['pending', 'confirmed'].includes(r.status) &&
+        r.startAt.getTime() - now.getTime() >= cancelCutoffMinutes * 60000,
       canCancel:
+        (!r.prepaidBooking || r.prepaidBooking.state === 'confirmed') &&
         ['pending', 'confirmed'].includes(r.status) &&
         r.startAt.getTime() - now.getTime() >= cancelCutoffMinutes * 60_000,
       prescription: prescription

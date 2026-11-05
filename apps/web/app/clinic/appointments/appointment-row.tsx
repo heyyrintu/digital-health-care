@@ -98,6 +98,11 @@ export function AppointmentRow({
         <p className="text-sm">
           <strong className="tabular font-semibold">
             {a.source === 'walk_in' ? t('appointments.walkInBadge') : a.startTime}
+            {a.delayUpdatedAt && ['pending', 'confirmed', 'checked_in'].includes(a.status) && (
+              <span className="block text-sm">
+                {t('clinicOps.delayBanner', { minutes: a.delayMinutes ?? 0 })}
+              </span>
+            )}
           </strong>{' '}
           ·{' '}
           <Link

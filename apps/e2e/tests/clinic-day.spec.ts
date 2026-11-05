@@ -238,6 +238,7 @@ test.describe('a clinic day', () => {
     await admin.reload();
     const figures = admin.getByTestId('clinic-figures');
     await figures.getByRole('button', { name: 'Today' }).click();
+    await expect(admin.getByTestId('figures-by-day')).toHaveCount(0);
     const tile = (label: string | RegExp) => figures.locator('.surface').filter({ hasText: label });
     await expect(tile('Appointments')).toContainText('3');
     await expect(tile(/^1\s*Completed$/)).toBeVisible();

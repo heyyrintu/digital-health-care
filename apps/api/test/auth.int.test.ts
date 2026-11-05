@@ -73,6 +73,40 @@ describe('patient sign-in with a mobile code', () => {
     });
   });
 
+  it('retires a failed delivery, audits IDs only, and keeps it in the request limit', async () => {
+    let failedCode = '';
+    const sender = vi
+      .spyOn(h.services.otpSender, 'send')
+      .mockImplementationOnce(async (_phone, code) => {
+        failedCode = code;
+        throw new Error('provider response contains sensitive data');
+      });
+    const res = await post('/auth/otp/request', { organisation: 'clinic-a', phone: '9876543210' });
+    sender.mockRestore();
+    expect(res.statusCode).toBe(503);
+    expect(res.json().error.code).toBe('UNAVAILABLE');
+    expect(res.body).not.toContain('sensitive');
+    expect(res.body).not.toContain(failedCode);
+    const challenge = await h.owner.otpChallenge.findFirstOrThrow({
+      where: { phone: '+919876543210' },
+    });
+    expect(challenge.consumedAt).not.toBeNull();
+    expect(
+      (await post('/auth/otp/verify', { challengeId: challenge.id, code: failedCode })).statusCode,
+    ).toBe(401);
+    const audit = await h.owner.auditLog.findFirstOrThrow({
+      where: { action: 'auth.otp.delivery_failed', entityId: challenge.id },
+    });
+    expect(JSON.stringify(audit)).not.toContain(failedCode);
+    expect(JSON.stringify(audit)).not.toContain('9876543210');
+    await requestCode();
+    await requestCode();
+    expect(
+      (await post('/auth/otp/request', { organisation: 'clinic-a', phone: '9876543210' }))
+        .statusCode,
+    ).toBe(429);
+  });
+
   it('accepts a code only once', async () => {
     const { challengeId } = await requestCode();
     const { code } = h.sentCodes.at(-1)!;

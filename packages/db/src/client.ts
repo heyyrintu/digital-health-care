@@ -6,7 +6,15 @@ export type Db = PrismaClient;
 export type Tx = Prisma.TransactionClient;
 
 export function createDb(databaseUrl: string): Db {
-  return new PrismaClient({ adapter: new PrismaPg({ connectionString: databaseUrl }) });
+  // Prisma's pg adapter normalizes timestamptz text as UTC. PostgreSQL must therefore
+  // serialize instants in UTC, regardless of the server/cluster's local TimeZone.
+  // Keep other connection options, but make this last setting authoritative.
+  const url = new URL(databaseUrl);
+  url.searchParams.set(
+    'options',
+    `${url.searchParams.get('options') ?? ''} -c TimeZone=UTC`.trim(),
+  );
+  return new PrismaClient({ adapter: new PrismaPg({ connectionString: url.toString() }) });
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -109,4 +117,27 @@ export async function withNewOrganisation<T>(
     await tx.$executeRaw`SELECT set_config('app.organisation_id', ${row.id}, true)`;
     return fn(tx, row.id);
   });
+}
+
+/** Restricted delivery receipt functions only; no direct tenant or identity table grants. */
+export async function withMessaging<T>(db: Db, fn: (tx: Tx) => Promise<T>): Promise<T> {
+  return db.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe('SET LOCAL ROLE dhc_messaging');
+    return fn(tx);
+  });
+}
+
+/** Internal payment verification work; inherits tenant isolation, never caller-chosen roles. */
+export async function withPayments<T>(
+  db: Db,
+  organisationId: string,
+  fn: (tx: Tx) => Promise<T>,
+  options?: { maxWait: number; timeout: number; isolationLevel?: Prisma.TransactionIsolationLevel },
+): Promise<T> {
+  if (!UUID.test(organisationId)) throw new Error('Invalid organisation ID');
+  return db.$transaction(async (tx) => {
+    await tx.$executeRawUnsafe('SET LOCAL ROLE dhc_payments');
+    await tx.$executeRaw`SELECT set_config('app.organisation_id', ${organisationId}, true)`;
+    return fn(tx);
+  }, options);
 }

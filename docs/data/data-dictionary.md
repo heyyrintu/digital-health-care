@@ -149,3 +149,84 @@ Conventions for every table: `id` (UUID), `organisationId` (except platform-leve
 | Financial | Bill, Payment, Refund, Settlement, Receipt | As required for financial records (confirm with CA) |
 | Patient uploads | MedicalDocument (non-referenced) | Patient-deletable |
 | Logs | AuditLog | Append-only; retained per security policy |
+
+
+## WhatsApp OTP delivery metadata (implemented)
+
+Migration `20261104130000_whatsapp_delivery`:
+
+| Entity | Purpose | Stored fields |
+|---|---|---|
+| WhatsAppDelivery (`whatsapp_deliveries`) | One outbound OTP attempt, linked to its original organisation and challenge | id, organisationId, otpChallengeId (unique), senderPhoneNumberId, providerMessageId (unique within sender), status, lastStatusAt, numeric errorCode, createdAt |
+| WhatsAppStatusEvent (`whatsapp_status_events`) | Durable verified receipt inbox and queue bridge | id, deliveryId, status, occurredAt, numeric errorCode, receivedAt, lastEnqueuedAt, processedAt; unique (deliveryId, status, occurredAt) |
+
+No OTP, recipient number, raw callback, inbound chat or provider error text is stored in these tables. The challenge link is internal and is not exposed by the delivery-log API. `dhc_app` has tenant-scoped SELECT only on deliveries; it has no inbox grants. `dhc_auth` can call only the delivery create/accept/fail functions; `dhc_messaging` can call only receive/claim/process functions and cannot read any table directly. The worker writes `messaging.status_updated` audit events by internal delivery ID and status. No automatic purge job is included in this increment.
+
+
+## Appointment messaging (implemented)
+
+Migration `20261104150000_whatsapp_appointments`:
+
+| Entity | Purpose | Key fields |
+|---|---|---|
+| WhatsAppOptIn (`whatsapp_opt_ins`) | Explicit appointment-message agreement for a number, practice and sender | id, organisationId, normalized phone, senderPhoneNumberId, enabled, monotonic version, changedAt, changedByUserId; unique (organisation, phone, sender) |
+| WhatsAppOptOutEvent (`whatsapp_opt_out_events`) | Replay protection for verified STOP messages | SHA-256 event ID and receivedAt only; no phone or text |
+| WhatsAppDelivery (extended) | Shared OTP/appointment outbox and receipt metadata | kind, nullable OTP source or appointment/patient/opt-in snapshot, optInVersion, appointmentStartAt, dueAt, expiresAt, dispatchLeaseAt, attemptedAt, static skipReason; unique appointment/kind/start/sender |
+
+Only the consent table stores a contact phone, under organisation RLS. Worker functions release that contact for a valid due notice once; Redis jobs and public delivery logs still contain no recipient or clinical details. Source CHECKs distinguish OTP and appointment records. Consent revisions invalidate queued old notices. Queued, sending, skipped and uncertain supplement receipt states. No automatic retention purge is introduced. All application database connections explicitly serialize timestamps in UTC; calendar displays remain IST.
+
+WhatsApp consent now has immutable `category` (`appointments` or `records`), unique with organisation/phone/sender. Record deliveries carry exactly one of prescription/referral-letter/patient-document IDs and an optional link expiry set at send authorization. The delivery-kind check enforces valid source combinations. Unique source/sender indexes prevent duplicate notices for each record; amendment versions are separate sources. Payload text, record titles and patient names are not copied into delivery rows.
+
+`cashfree_orders` stores organisation/bill binding, immutable merchant/environment/amount/currency identity, encrypted original request details and checkout session, provider IDs, expiry and state. A partial unique index allows one creating/active/closing/review order per bill. `cashfree_events` stores only event hash/type/outcome and payment ID/amount/currency for investigation, never raw provider/customer/instrument details. `payments.cashfree_order_id` is unique and requires mode Cashfree; only the internal payment role may create its verified receipt. Both new tables have tenant RLS; application users may read but cannot write them. `dhc_payments` inherits tenant-scoped application permissions for internal verified reconciliation. `auth_cashfree_order` exposes only the ID/organisation mapping to the auth role, never the checkout session or financial details.
+
+Refund implementation (ADR 0022): `cashfree_refunds` records immutable organisation/order/payment/bill binding, amount, currency, reason code, origin, requester and merchant refund ID. Provider refund identity is pinned once known. App requests have `rf` + UUID-without-hyphens IDs and one unresolved request per payment; provider-origin history can contain independent external requests. States are creating, pending, succeeded, cancelled, rejected and review. `refund_entries` is append-only, unique per refund and per RF voucher number, with original payment/bill, amount and ledger posting time. Its per-payment total cannot exceed the original receipt, and a succeeded request cannot commit without an entry. `refund_settings` numbers vouchers per organisation. `cashfree_refund_events` retains a raw-payload hash, refund IDs and processing outcome only. All new tables use tenant RLS; only the internal payment role writes. `cashfree_orders.refund_review_required` blocks new requests after a source/identity/amount discrepancy. Gross `Bill.paidPaise`, original payment rows and original receipt snapshots never decrease; refunded/net totals are derived from confirmed ledger entries.
+
+### Cashfree reconciliation snapshots (ADR 0023)
+
+`cashfree_recon_runs` captures tenant, original merchant/environment, completed IST period, requester or nightly key, queued/running/succeeded/failed state, bounded attempts, dispatch/processing leases and sanitized error/counts. A partial unique index prevents multiple queued/running runs for one account/period. `cashfree_recon_events` stores normalized PG/settlement identifiers, kinds/statuses and signed paise only; `cashfree_recon_settlements` stores UTR and gross/fees/tax/adjustment/net bigint columns. `cashfree_recon_issues` stores discrepancy codes, optional validated local source IDs and expected/reported paise; only review time/user/reason may change after publication. All four tables have tenant RLS. Ordinary application transactions read only; internal payment transactions insert reports and acknowledge review. Completed runs/results are immutable. No raw report/customer/bank/note payload is stored, and no reconciliation write changes a financial ledger.
+
+### Prepaid booking reservations (ADR 0024)
+
+`cashfree_bookings` binds the tenant, appointment, original order (same UUID as the request), creator, keyed request digest, frozen expiry and captured automatic-confirmation policy. State is held/confirmed/released/review; confirmed denotes verified payment, while the appointment may still await clinic approval. `next_check_at` is the durable check/expiry lease. Source IDs, request digest, policy and expiry are immutable. Only the internal payment role writes; tenant application reads use RLS. Appointment/bill-line/counter-payment guards prevent unpaid confirmation, moving a prepaid appointment, editing its quote or collecting through a replacement counter payment. Released/late-paid records remain for financial history and refund review.
+
+### Financial availability notices (ADR 0025)
+
+Migration `20261105030000_portal_finance_notices` adds `payments` opt-ins and optional `whatsapp_deliveries.financial_order_id`, `receipt_payment_id`, `refund_entry_id` references. The last references the refund ledger's `refund_id` primary key. Three source/sender unique indexes prevent duplicate notifications. Kind/source checks and a source/tenant/recipient guard protect immutable financial bindings. Existing outbox leases, attempted/link-expiry fields and delivery states are reused. Inserts of receipts/refund entries and first activation of an order enqueue within their source transaction. Neither outbox processing nor portal read/print changes the financial ledger.
+
+### Patient profile increment (ADR 0027)
+
+`patients.photo_key/photo_media_type` point only to an authenticated private image; neither key is exposed by portal DTOs. `reported_blood_group`, `blood_group_reported_at` and `blood_group_confirmed_at` distinguish an unverified patient report from the existing clinic-recorded blood group. Patient allergy/condition/current-medication reports reuse existing `source=patient` rows. Doctor confirmation retires the original with provenance and creates a doctor row.
+
+`otp_challenges.purpose` is `sign_in` (default for existing clients) or `phone_change`; sign-in rejects the latter. `patient_phone_changes` is an auth-only RLS identity table with request/actor/clinic/patient IDs, normalized old/new numbers, nullable unique purpose-bound challenge IDs while preparing, expiry and completion time. No clinical content, plaintext OTP or refresh/access tokens are stored. Tenant/platform roles have no table grant. Patient/organisation/user foreign keys preserve integrity; resets use cascading truncation only in disposable test databases.
+
+### Patient-origin records (ADR 0028)
+
+`patient_records` holds tenant/patient/uploader IDs, encrypted title/note, category/date, optional same-patient appointment/order references, immutable input identity/file fingerprints, revision and awaiting/ready/deleting/deleted lifecycle. Private file keys never leave the API. Review attribution is separate from first care use. Hidden used rows retain clinical bytes; deleted unused tombstones clear bytes, encrypted details/fingerprints and clinical references.
+
+`patient_record_shares` binds one random hashed/encrypted token to a record, named doctor, immutable grantor, creation/expiry and one-way revocation. It grants file-only access; grantor consent is rechecked. `patient_record_uses` binds a record/revision to the treating doctor/visit and is append-only. Its insert trigger stamps immutable first use on the record. All three tables enforce tenant RLS; auth/platform roles receive no clinical table grants. Purge claims/leases/next-attempt dates on the record make erasure recoverable without Redis.
+
+## Patient data rights and closure (migration 46; ADR 0029)
+
+- `patient_account_access`: clinic/user key, nullable irreversible closure instant. Auth can create/read open rows; tenant role can close its own clinic rows. Shared/exclusive row locks coordinate portal work and closure.
+- `patients.portal_closed_at`: closes patient self-service matching; leaves in-person clinical history intact.
+- `data_rights_requests`: tenant/user/optional subject, kind/area/state, encrypted immutable initial details, encrypted latest reply, assigned doctor, revision, retention policy/review metadata and evidence reference. Terminal decisions immutable.
+- `data_rights_events`: tenant-bound append-only request events, actor/action/time; no free text.
+- `account_closure_attempts`: auth-only durable attempt, purpose-bound challenge reference, expiry and confirmation. OTP challenge purpose `account_close` is refused by normal sign-in.
+- `rights_file_deletions`: tenant-bound private profile-photo deletion queue, next retry/completion. Never used for retained care documents.
+
+ZIP exports stay in process memory and are not stored as blobs. A prepared export request is durable; it does not prove successful delivery to a browser.
+
+## WhatsApp service inbox (migration 47)
+
+- `inbox_channels`: globally unique sender ID, tenant/WABA binding and creation time; immutable after first use.
+- `inbox_threads`: tenant/sender, HMAC contact key, encrypted phone, last four digits, last inbound time, explicit service consent/STOP/source, optional doctor assignment, open/resolved state, unread count and revision.
+- `inbox_messages`: immutable encrypted inbound/outbound content and input hash; sender/provider IDs for deduplication/correlation; direction/kind/status/times; outgoing staff/role and optional template revision. No media URLs or raw webhook payloads.
+- `inbox_templates`: provider identity, name/language/category/status, encrypted body, content hash, supported/enabled flags, revision and authoritative verification time. Local enablement is not provider approval.
+
+All tables have tenant RLS. No patient/chart association is inferred from an unverified WhatsApp number. Mixed-family transcript access/retention needs clinic review. These rows do not supply message pricing or cost reporting.
+
+## Bulk session operations (migration 48)
+
+`clinic_operations` retains immutable encrypted request/preview/snapshot fingerprints and the applied receipt, creator/doctor/kind/revision/expiry. `clinic_operational_updates` is append-only per operation/source appointment, with optional replacement and delay estimate. Both have tenant RLS and cross-tenant source guards. `appointments.delay_minutes` (0–240) and `delay_updated_at` annotate waiting visits without moving them. Source closure is an ordinary scoped availability exception.
+
+`whatsapp_deliveries.operational_update_id` links generic appointment-update intents to the immutable event, deduplicated per event/sender. Its legacy appointment FK stays null; source and replacement are read through the event. Existing callback, consent-version and unknown-outcome rules remain applicable. Jobs carry delivery IDs only.

@@ -1,4 +1,97 @@
+import {
+  PreviewClinicOperation,
+  ApplyClinicOperation,
+  ClinicOperation,
+  ClinicOperationList,
+  ClinicOperationOptions,
+} from './clinic-operations';
+import {
+  InboxQuery,
+  InboxList,
+  InboxMessages,
+  InboxThread,
+  InboxMessage,
+  InboxReply,
+  InboxAction,
+  InboxAssign,
+  InboxConsent,
+  InboxTemplates,
+  InboxTemplate,
+  InboxTemplateToggle,
+  InboxDoctors,
+} from './inbox';
+import {
+  RightsCreate,
+  RightsQuery,
+  RightsList,
+  RightsItem,
+  RightsPatients,
+  RightsAssignment,
+  RightsDecision,
+  RightsExport,
+  RightsReviewers,
+  ClosureStart,
+  ClosureVerify,
+  ClosureView,
+} from './data-rights';
+import {
+  PatientRecord,
+  PatientRecordList,
+  PatientRecordQuery,
+  CreatePatientRecord,
+  UpdatePatientRecord,
+  RecordOptions,
+  CreateRecordShare,
+  RecordShare,
+  RecordShareList,
+  ResolveRecordShare,
+  RecordRevision,
+  UsePatientRecord,
+  RecordPhotoPages,
+  RecordRevoked,
+} from './patient-records';
+import {
+  PortalProfile,
+  UpdatePortalProfile,
+  PatientReportedEntry,
+  StartPhoneChange,
+  PhoneChangeView,
+  VerifyPhoneChange,
+  DoctorBloodReport,
+  ConfirmBloodReport,
+  ProfileConfirmed,
+} from './profile';
+import {
+  PortalBill,
+  PortalBillList,
+  PortalFinanceQuery,
+  PortalReceipt,
+  PortalReceiptList,
+  PortalCheckoutBody,
+  FinanceLinkTarget,
+} from './finance';
+import { CreatePrepaidBooking, PrepaidBookingView, BookingOptionsQuery } from './portal';
+import {
+  CreateReconRun,
+  ReconDetail,
+  ReconOverview,
+  ReconIssueList,
+  ReconSettlementList,
+  ReviewReconIssue,
+  ReconReviewResult,
+} from './reconciliation';
+import { CreateRefundBody, RefundView, RefundVoucher } from './billing';
+import { CreateOnlinePayment, OnlinePaymentView, PublicPayment, PaymentCheckout } from './billing';
+import { CursorQuery } from './pagination';
 import { z } from 'zod';
+import {
+  RecordLinkTarget,
+  PortalReferralLetters,
+  WhatsAppDeliveryList,
+  WhatsAppDeliveryQuery,
+  WhatsAppPreference,
+  SetWhatsAppPreference,
+} from './messaging';
 import {
   AppointmentActionBody,
   AppointmentDetail,
@@ -66,6 +159,7 @@ import {
   PortalAppointmentList,
   PortalBookBody,
   PortalCancelBody,
+  PortalRescheduleBody,
   PortalPatient,
   PortalPatientList,
   PortalPrescriptionList,
@@ -270,6 +364,7 @@ interface Operation {
   status?: 200 | 201 | 204;
   /** The response is a PDF file instead of JSON. */
   pdf?: boolean;
+  zip?: boolean;
   /**
    * The request body is a file (an uploaded result, `logo`: a PNG, JPEG or WebP logo, or
    * `document`: a PDF, JPEG, PNG or WebP document).
@@ -283,6 +378,610 @@ interface Operation {
 
 /** Every endpoint, in one list. Field detail always comes from the Zod schemas. */
 const operations: Operation[] = [
+  {
+    method: 'get',
+    path: '/clinic-operations/options',
+    operationId: 'clinicOperationOptions',
+    summary: 'Active clinic session choices; doctors limited to their sessions',
+    response: ClinicOperationOptions,
+  },
+  {
+    method: 'get',
+    path: '/clinic-operations',
+    operationId: 'clinicOperationHistory',
+    summary: 'Bounded durable preview/applied receipts',
+    query: z.object({ cursor: z.uuid().optional() }),
+    response: ClinicOperationList,
+  },
+  {
+    method: 'get',
+    path: '/clinic-operations/{id}',
+    operationId: 'clinicOperation',
+    summary: 'Read an authorised operation receipt',
+    pathParams: ['id'],
+    response: ClinicOperation,
+  },
+  {
+    method: 'post',
+    path: '/clinic-operations/preview',
+    operationId: 'previewClinicOperation',
+    summary:
+      'Frozen session snapshot, manual-review exceptions and proposed target times; no booking changes',
+    body: PreviewClinicOperation,
+    response: ClinicOperation,
+  },
+  {
+    method: 'post',
+    path: '/clinic-operations/{id}/apply',
+    operationId: 'applyClinicOperation',
+    summary:
+      'Creator-confirmed all-or-nothing apply; stale snapshots fail and applied UUID retries recover the receipt',
+    pathParams: ['id'],
+    body: ApplyClinicOperation,
+    response: ClinicOperation,
+  },
+
+  {
+    method: 'get',
+    path: '/inbox',
+    operationId: 'inboxThreads',
+    summary: 'Clinic conversation metadata; contact visibility follows team assignment',
+    query: InboxQuery,
+    response: InboxList,
+  },
+  {
+    method: 'get',
+    path: '/inbox/doctors',
+    operationId: 'inboxDoctors',
+    summary: 'Active clinic doctors for conversation handoff',
+    response: InboxDoctors,
+  },
+  {
+    method: 'get',
+    path: '/inbox/threads/{id}/messages',
+    operationId: 'inboxMessages',
+    summary: 'Encrypted conversation content for front desk or assigned doctor; not clinic admins',
+    pathParams: ['id'],
+    query: InboxQuery,
+    response: InboxMessages,
+  },
+  {
+    method: 'post',
+    path: '/inbox/threads/{id}/messages',
+    operationId: 'sendInboxReply',
+    summary: 'Stable UUID reply, service window/consent checks and at-most-one send authorization',
+    pathParams: ['id'],
+    body: InboxReply,
+    response: InboxMessage,
+  },
+  {
+    method: 'post',
+    path: '/inbox/threads/{id}/action',
+    operationId: 'updateInboxThread',
+    summary: 'Revision-bound read/resolve/reopen',
+    pathParams: ['id'],
+    body: InboxAction,
+    response: InboxThread,
+  },
+  {
+    method: 'post',
+    path: '/inbox/threads/{id}/assign',
+    operationId: 'assignInboxDoctor',
+    summary: 'Hand off to an active doctor; only assigned doctor may release a private thread',
+    pathParams: ['id'],
+    body: InboxAssign,
+    response: InboxThread,
+  },
+  {
+    method: 'post',
+    path: '/inbox/threads/{id}/consent',
+    operationId: 'recordInboxConsent',
+    summary:
+      'Explicit number-holder service-message consent or stop; separate from automated notices',
+    pathParams: ['id'],
+    body: InboxConsent,
+    response: InboxThread,
+  },
+  {
+    method: 'get',
+    path: '/inbox/templates',
+    operationId: 'inboxTemplates',
+    summary: 'Clinic-scoped provider template catalog; staff get enabled service templates only',
+    response: InboxTemplates,
+  },
+  {
+    method: 'post',
+    path: '/inbox/templates/sync',
+    operationId: 'syncInboxTemplates',
+    summary:
+      'Read authoritative Meta template catalog; admin-only; no template creation or approval override',
+    response: InboxTemplates,
+  },
+  {
+    method: 'post',
+    path: '/inbox/templates/{id}',
+    operationId: 'toggleInboxTemplate',
+    summary:
+      'Admin review and revision-bound enable/disable of supported approved utility templates',
+    pathParams: ['id'],
+    body: InboxTemplateToggle,
+    response: InboxTemplate,
+  },
+
+  {
+    method: 'get',
+    path: '/data-rights/patients',
+    operationId: 'rightsPatients',
+    summary: 'Owned rights subjects, without requiring health-data consent',
+    response: RightsPatients,
+  },
+  {
+    method: 'get',
+    path: '/data-rights',
+    operationId: 'rightsRequests',
+    summary: 'Own requests or authorised staff queue; clinical text redacted from admins',
+    query: RightsQuery,
+    response: RightsList,
+  },
+  {
+    method: 'post',
+    path: '/data-rights',
+    operationId: 'createRightsRequest',
+    summary: 'Encrypted correction or erasure-review request, stable UUID retry',
+    body: RightsCreate,
+    response: RightsItem,
+  },
+  {
+    method: 'post',
+    path: '/data-rights/{id}/withdraw',
+    operationId: 'withdrawRightsRequest',
+    summary: 'Withdraw an open owned request',
+    pathParams: ['id'],
+    body: z.object({ revision: z.number().int().positive() }).strict(),
+    response: RightsItem,
+  },
+  {
+    method: 'post',
+    path: '/data-rights/{id}/assign',
+    operationId: 'assignRightsDoctor',
+    summary: 'Assign an active chart-authorised doctor (clinic admin)',
+    pathParams: ['id'],
+    body: RightsAssignment,
+    response: RightsItem,
+  },
+  {
+    method: 'post',
+    path: '/data-rights/{id}/decision',
+    operationId: 'decideRightsRequest',
+    summary:
+      'Apply a validated profile correction or review with correction evidence / retention policy',
+    pathParams: ['id'],
+    body: RightsDecision,
+    response: RightsItem,
+  },
+  {
+    method: 'get',
+    path: '/data-rights/reviewers',
+    operationId: 'rightsReviewers',
+    summary: 'Active clinic doctor choices (clinic admin)',
+    response: RightsReviewers,
+  },
+  {
+    method: 'post',
+    path: '/data-rights/export',
+    operationId: 'exportRightsData',
+    summary:
+      'Bounded private ZIP of current owned patient-facing records; no clinician private notes',
+    body: RightsExport,
+    zip: true,
+  },
+  {
+    method: 'post',
+    path: '/data-rights/closure',
+    operationId: 'startAccountClosure',
+    summary: 'Create durable closure attempt and purpose-bound OTP; retries never resend',
+    body: ClosureStart,
+    response: ClosureView,
+  },
+  {
+    method: 'post',
+    path: '/data-rights/closure/{id}/verify',
+    operationId: 'verifyAccountClosure',
+    summary: 'Verify closure code and revoke clinic patient access; retain care/payment history',
+    pathParams: ['id'],
+    body: ClosureVerify,
+    response: ClosureView,
+  },
+
+  {
+    method: 'get',
+    path: '/portal/bills',
+    operationId: 'portalBills',
+    summary:
+      'Authenticated family bill history with original balances and separate confirmed refunds',
+    query: PortalFinanceQuery,
+    response: PortalBillList,
+  },
+  {
+    method: 'get',
+    path: '/portal/bills/{id}',
+    operationId: 'portalBill',
+    summary: 'Read an owned bill and current checkout state',
+    pathParams: ['id'],
+    response: PortalBill,
+  },
+  {
+    method: 'post',
+    path: '/portal/bills/{id}/checkout',
+    operationId: 'portalBillCheckout',
+    summary:
+      'Prepare or recover the original exact-balance order for an owned bill; never accepts an amount',
+    pathParams: ['id'],
+    body: PortalCheckoutBody,
+    response: PortalBill,
+  },
+  {
+    method: 'post',
+    path: '/portal/bills/{id}/check',
+    operationId: 'portalBillCheck',
+    summary: 'Verify owned payment status; close expired attempts only with provider proof',
+    pathParams: ['id'],
+    response: PortalBill,
+  },
+  {
+    method: 'get',
+    path: '/portal/receipts',
+    operationId: 'portalReceipts',
+    summary: 'Paginated owned payment receipts',
+    query: PortalFinanceQuery,
+    response: PortalReceiptList,
+  },
+  {
+    method: 'get',
+    path: '/portal/receipts/{id}',
+    operationId: 'portalReceipt',
+    summary:
+      'Original receipt with separate refund updates, protected by current family ownership and consent',
+    pathParams: ['id'],
+    response: PortalReceipt,
+  },
+  {
+    method: 'get',
+    path: '/portal/finance-links/{token}',
+    operationId: 'portalFinanceLink',
+    summary: 'Resolve an expiring financial navigation link after independent family authorization',
+    pathParams: ['token'],
+    response: FinanceLinkTarget,
+  },
+
+  {
+    method: 'post',
+    path: '/portal/prepaid-bookings',
+    operationId: 'reservePrepaidBooking',
+    summary:
+      'Patient atomically reserves an in-person slot, immutable server-priced bill and original payment order',
+    body: CreatePrepaidBooking,
+    response: PrepaidBookingView,
+  },
+  {
+    method: 'get',
+    path: '/portal/prepaid-bookings/{id}',
+    operationId: 'readPrepaidBooking',
+    summary: 'Patient reads their family reservation and server-confirmed payment state',
+    pathParams: ['id'],
+    response: PrepaidBookingView,
+  },
+  {
+    method: 'post',
+    path: '/portal/prepaid-bookings/{id}/check',
+    operationId: 'checkPrepaidBooking',
+    summary: 'Recover the original request and verify payment; browser success is not proof',
+    pathParams: ['id'],
+    response: PrepaidBookingView,
+  },
+  {
+    method: 'post',
+    path: '/portal/prepaid-bookings/{id}/close',
+    operationId: 'closePrepaidBooking',
+    summary:
+      'Request provider closure; retain uncertain reservations and confirm an already successful payment',
+    pathParams: ['id'],
+    response: PrepaidBookingView,
+  },
+
+  {
+    method: 'get',
+    path: '/reconciliation/runs',
+    operationId: 'listReconciliationRuns',
+    summary: 'Clinic admin reads saved settlement report history and enablement',
+    query: CursorQuery,
+    response: ReconOverview,
+  },
+  {
+    method: 'post',
+    path: '/reconciliation/runs',
+    operationId: 'requestReconciliation',
+    summary: 'Clinic admin queues a durable read-only report for 1–31 completed IST days',
+    body: CreateReconRun,
+    response: ReconDetail,
+  },
+  {
+    method: 'get',
+    path: '/reconciliation/runs/{id}',
+    operationId: 'reconciliationDetail',
+    summary: 'Clinic admin reads report progress and unreviewed count',
+    pathParams: ['id'],
+    response: ReconDetail,
+  },
+  {
+    method: 'get',
+    path: '/reconciliation/runs/{id}/issues',
+    operationId: 'reconciliationIssues',
+    summary: 'Clinic admin reads immutable discrepancies',
+    pathParams: ['id'],
+    query: CursorQuery,
+    response: ReconIssueList,
+  },
+  {
+    method: 'get',
+    path: '/reconciliation/runs/{id}/settlements',
+    operationId: 'reconciliationSettlements',
+    summary: 'Clinic admin reads gross, fees, tax, adjustments, net and UTR',
+    pathParams: ['id'],
+    query: CursorQuery,
+    response: ReconSettlementList,
+  },
+  {
+    method: 'post',
+    path: '/reconciliation/issues/{id}/review',
+    operationId: 'acknowledgeReconciliationIssue',
+    summary: 'Clinic admin acknowledges review without changing any financial ledger',
+    pathParams: ['id'],
+    body: ReviewReconIssue,
+    response: ReconReviewResult,
+  },
+
+  {
+    method: 'get',
+    path: '/bills/{id}/refunds',
+    operationId: 'listBillRefunds',
+    summary: 'Read refund history, reserved and confirmed amounts for a bill (staff)',
+    pathParams: ['id'],
+    response: RefundView,
+  },
+  {
+    method: 'post',
+    path: '/payments/{id}/refunds',
+    operationId: 'createRefund',
+    summary:
+      'Clinic admin requests a partial/full Cashfree refund with an immutable request ID and reason code',
+    pathParams: ['id'],
+    body: CreateRefundBody,
+    response: RefundView,
+  },
+  {
+    method: 'post',
+    path: '/payments/{id}/refunds/check',
+    operationId: 'syncPaymentRefunds',
+    summary:
+      'Read and reconcile provider/dashboard refunds for a verified payment (staff); never submits money',
+    pathParams: ['id'],
+    response: RefundView,
+  },
+  {
+    method: 'post',
+    path: '/refunds/{id}/check',
+    operationId: 'checkRefund',
+    summary: 'Verify an existing refund; checking never creates a refund (staff)',
+    pathParams: ['id'],
+    response: RefundView,
+  },
+  {
+    method: 'post',
+    path: '/refunds/{id}/retry',
+    operationId: 'recoverRefund',
+    summary:
+      'Clinic admin recovers an unresolved request with its original provider refund ID and idempotency key',
+    pathParams: ['id'],
+    response: RefundView,
+  },
+  {
+    method: 'get',
+    path: '/refunds/{id}/voucher',
+    operationId: 'refundVoucher',
+    summary: 'Read a confirmed refund voucher and its unchanged original receipt (staff)',
+    pathParams: ['id'],
+    response: RefundVoucher,
+  },
+
+  {
+    method: 'get',
+    path: '/bills/{id}/online-payment',
+    operationId: 'getOnlinePayment',
+    summary: 'Read this bill’s online payment state (staff)',
+    pathParams: ['id'],
+    response: OnlinePaymentView,
+  },
+  {
+    method: 'post',
+    path: '/bills/{id}/online-payment',
+    operationId: 'createOnlinePayment',
+    summary:
+      'Reserve the server-priced balance and create or recover one hosted checkout order (front desk, doctor)',
+    pathParams: ['id'],
+    body: CreateOnlinePayment,
+    response: OnlinePaymentView,
+  },
+  ...(['check', 'close'] as const).map((action) => ({
+    method: 'post' as const,
+    path: `/online-payments/{id}/${action}`,
+    operationId: `${action}OnlinePayment`,
+    summary:
+      action === 'close'
+        ? 'Request termination and verify the provider state before releasing the bill (staff)'
+        : 'Reconcile an order and matching successful payment with the original merchant (staff)',
+    pathParams: ['id'],
+    response: OnlinePaymentView,
+  })),
+  {
+    method: 'get',
+    path: '/public/payments/{token}',
+    operationId: 'publicPaymentInfo',
+    summary: 'Pay-only signed link: minimal clinic, amount and status; no health data',
+    public: true,
+    pathParams: [{ name: 'token', schema: { type: 'string', maxLength: 180 } }],
+    response: PublicPayment,
+  },
+  {
+    method: 'post',
+    path: '/public/payments/{token}/checkout',
+    operationId: 'publicPaymentCheckout',
+    summary: 'Get an active hosted checkout session through a signed pay-only link',
+    public: true,
+    pathParams: [{ name: 'token', schema: { type: 'string', maxLength: 180 } }],
+    response: PaymentCheckout,
+  },
+  {
+    method: 'post',
+    path: '/public/payments/{token}/check',
+    operationId: 'publicPaymentCheck',
+    summary: 'Check the provider after checkout; browser success is never proof of payment',
+    public: true,
+    pathParams: [{ name: 'token', schema: { type: 'string', maxLength: 180 } }],
+    response: PublicPayment,
+  },
+  {
+    method: 'post',
+    path: '/webhooks/cashfree',
+    operationId: 'cashfreeWebhook',
+    summary:
+      'Raw-body HMAC callback: payment and refund statuses; sanitized metadata and financial ledger commit atomically',
+    public: true,
+    body: z.union([
+      z.object({
+        type: z.enum([
+          'PAYMENT_SUCCESS_WEBHOOK',
+          'PAYMENT_FAILED_WEBHOOK',
+          'PAYMENT_USER_DROPPED_WEBHOOK',
+        ]),
+        data: z.object({
+          order: z.object({
+            order_id: z.string(),
+            order_amount: z.number(),
+            order_currency: z.string(),
+          }),
+          payment: z.object({
+            cf_payment_id: z.string(),
+            payment_status: z.string(),
+            payment_amount: z.number(),
+            payment_currency: z.string(),
+          }),
+        }),
+      }),
+      z.object({
+        type: z.literal('REFUND_STATUS_WEBHOOK'),
+        data: z.object({
+          refund: z.object({
+            order_id: z.string(),
+            refund_id: z.string(),
+            cf_refund_id: z.union([z.string(), z.number()]),
+            cf_payment_id: z.union([z.string(), z.number()]),
+            refund_amount: z.number(),
+            refund_currency: z.string(),
+            refund_status: z.string(),
+            refund_type: z.string(),
+          }),
+        }),
+      }),
+    ]),
+    response: z.object({ received: z.literal(true) }),
+  },
+
+  ...(['get', 'put'] as const).flatMap((method) => [
+    {
+      method,
+      path: '/patients/{id}/whatsapp-record-preference',
+      operationId: `${method}PatientWhatsAppRecordPreference`,
+      summary: 'Separate consent for generic record availability messages',
+      pathParams: ['id'],
+      ...(method === 'put' ? { body: SetWhatsAppPreference } : {}),
+      response: WhatsAppPreference,
+    },
+    {
+      method,
+      path: '/portal/whatsapp-record-preference',
+      operationId: `${method}PortalWhatsAppRecordPreference`,
+      summary: 'Manage record message consent for the verified account number',
+      ...(method === 'put' ? { body: SetWhatsAppPreference } : {}),
+      response: WhatsAppPreference,
+    },
+  ]),
+  {
+    method: 'get',
+    path: '/portal/record-links/{token}',
+    operationId: 'resolvePortalRecordLink',
+    summary:
+      'Resolve an expiring navigation link after patient authentication and family access checks',
+    pathParams: ['token'],
+    response: RecordLinkTarget,
+  },
+  {
+    method: 'get',
+    path: '/portal/referral-letters',
+    operationId: 'listPortalReferralLetters',
+    summary: 'The family’s signed referral letters',
+    query: CursorQuery,
+    response: PortalReferralLetters,
+  },
+  {
+    method: 'get',
+    path: '/portal/referral-letters/{id}/pdf',
+    operationId: 'portalReferralLetterPdf',
+    summary: 'Open a family referral letter PDF',
+    pathParams: ['id'],
+    file: true,
+  },
+
+  {
+    method: 'get',
+    path: '/patients/{id}/whatsapp-preference',
+    operationId: 'patientWhatsAppPreference',
+    summary: 'Appointment message preference for this patient mobile',
+    pathParams: ['id'],
+    response: WhatsAppPreference,
+  },
+  {
+    method: 'put',
+    path: '/patients/{id}/whatsapp-preference',
+    operationId: 'savePatientWhatsAppPreference',
+    summary: 'Record recipient agreement or revoke appointment messages',
+    pathParams: ['id'],
+    body: SetWhatsAppPreference,
+    response: WhatsAppPreference,
+  },
+  {
+    method: 'get',
+    path: '/portal/whatsapp-preference',
+    operationId: 'portalWhatsAppPreference',
+    summary: 'Appointment message preference for the verified account mobile',
+    response: WhatsAppPreference,
+  },
+  {
+    method: 'put',
+    path: '/portal/whatsapp-preference',
+    operationId: 'savePortalWhatsAppPreference',
+    summary: 'Opt in or out of WhatsApp appointment messages',
+    body: SetWhatsAppPreference,
+    response: WhatsAppPreference,
+  },
+  {
+    method: 'get',
+    path: '/delivery-log',
+    operationId: 'listWhatsAppDeliveries',
+    summary: 'Clinic admin WhatsApp OTP delivery log (no patient data)',
+    query: WhatsAppDeliveryQuery,
+    response: WhatsAppDeliveryList,
+  },
   {
     method: 'get',
     path: '/health',
@@ -582,11 +1281,270 @@ const operations: Operation[] = [
     response: PortalPatient,
     status: 201,
   },
+
+  {
+    method: 'get',
+    path: '/portal/patients/{id}/profile',
+    operationId: 'getPortalProfile',
+    summary: 'Read an owned family profile and medical basics (patient)',
+    pathParams: ['id'],
+    response: PortalProfile,
+  },
+  {
+    method: 'put',
+    path: '/portal/patients/{id}/profile',
+    operationId: 'updatePortalProfile',
+    summary: 'Update owned demographics with version protection (patient)',
+    pathParams: ['id'],
+    body: UpdatePortalProfile,
+    response: PortalProfile,
+  },
+  {
+    method: 'post',
+    path: '/portal/patients/{id}/medical-basics',
+    operationId: 'reportPortalMedicalBasics',
+    summary: 'Report medical basics as unverified (patient)',
+    pathParams: ['id'],
+    body: PatientReportedEntry,
+    response: PortalProfile,
+    status: 201,
+  },
+  {
+    method: 'get',
+    path: '/portal/patients/{id}/photo',
+    operationId: 'getPortalPhoto',
+    summary: 'Read the private family photo (patient)',
+    pathParams: ['id'],
+    file: 'logo',
+  },
+  {
+    method: 'post',
+    path: '/portal/patients/{id}/photo',
+    operationId: 'uploadPortalPhoto',
+    summary: 'Upload a private validated still image, maximum 512 KB (patient)',
+    pathParams: ['id'],
+    upload: 'logo',
+    response: PortalProfile,
+  },
+  {
+    method: 'delete',
+    path: '/portal/patients/{id}/photo',
+    operationId: 'removePortalPhoto',
+    summary: 'Remove the private photo (patient)',
+    pathParams: ['id'],
+    response: PortalProfile,
+  },
+  {
+    method: 'post',
+    path: '/portal/patients/{id}/phone-change',
+    operationId: 'startPatientPhoneChange',
+    summary: 'Request purpose-bound old/new phone codes once per request UUID (patient)',
+    pathParams: ['id'],
+    body: StartPhoneChange,
+    response: PhoneChangeView,
+  },
+  {
+    method: 'post',
+    path: '/portal/phone-changes/{id}/verify',
+    operationId: 'verifyPatientPhoneChange',
+    summary:
+      'Verify both codes and transfer the selected clinic profile; ends clinic patient sessions',
+    pathParams: ['id'],
+    body: VerifyPhoneChange,
+    response: PhoneChangeView,
+  },
+  {
+    method: 'get',
+    path: '/patients/{id}/reported-blood-group',
+    operationId: 'getPatientBloodGroupReport',
+    summary: 'Read a patient blood group report within chart permissions (doctor)',
+    pathParams: ['id'],
+    response: DoctorBloodReport,
+  },
+  {
+    method: 'post',
+    path: '/patients/{id}/reported-blood-group/confirm',
+    operationId: 'confirmPatientBloodGroup',
+    summary: 'Confirm the exact blood report version (doctor)',
+    pathParams: ['id'],
+    body: ConfirmBloodReport,
+    response: ProfileConfirmed,
+  },
+  {
+    method: 'post',
+    path: '/patients/{id}/chart/{kind}/{entryId}/confirm',
+    operationId: 'confirmPatientChartEntry',
+    summary: 'Preserve the patient report and replace it with a confirmed doctor entry',
+    pathParams: ['id', 'kind', 'entryId'],
+    response: ProfileConfirmed,
+  },
+  {
+    method: 'get',
+    path: '/portal/patients/{id}/record-options',
+    operationId: 'getRecordOptions',
+    summary: 'getRecordOptions — authenticated patient ownership or named doctor access',
+    pathParams: ['id'],
+    response: RecordOptions,
+  },
+  {
+    method: 'get',
+    path: '/portal/records',
+    operationId: 'listPatientRecords',
+    summary: 'listPatientRecords — authenticated patient ownership or named doctor access',
+    response: PatientRecordList,
+    query: PatientRecordQuery,
+  },
+  {
+    method: 'post',
+    path: '/portal/patients/{id}/records',
+    operationId: 'createPatientRecord',
+    summary: 'createPatientRecord — authenticated patient ownership or named doctor access',
+    pathParams: ['id'],
+    body: CreatePatientRecord,
+    response: PatientRecord,
+  },
+  {
+    method: 'get',
+    path: '/portal/records/{id}',
+    operationId: 'getPatientRecord',
+    summary: 'getPatientRecord — authenticated patient ownership or named doctor access',
+    pathParams: ['id'],
+    response: PatientRecord,
+  },
+  {
+    method: 'patch',
+    path: '/portal/records/{id}',
+    operationId: 'updatePatientRecord',
+    summary: 'updatePatientRecord — authenticated patient ownership or named doctor access',
+    pathParams: ['id'],
+    body: UpdatePatientRecord,
+    response: PatientRecord,
+  },
+  {
+    method: 'post',
+    path: '/portal/records/{id}/file',
+    operationId: 'uploadPatientRecord',
+    summary: 'uploadPatientRecord — authenticated patient ownership or named doctor access',
+    pathParams: ['id'],
+    response: PatientRecord,
+    upload: 'document',
+  },
+  {
+    method: 'post',
+    path: '/portal/records/{id}/photo-pages',
+    operationId: 'combineRecordPhotoPages',
+    summary: 'combineRecordPhotoPages — authenticated patient ownership or named doctor access',
+    pathParams: ['id'],
+    body: RecordPhotoPages,
+    response: PatientRecord,
+  },
+  {
+    method: 'get',
+    path: '/portal/records/{id}/file',
+    operationId: 'readPatientRecordFile',
+    summary: 'readPatientRecordFile — authenticated patient ownership or named doctor access',
+    pathParams: ['id'],
+    file: 'document',
+  },
+  {
+    method: 'delete',
+    path: '/portal/records/{id}',
+    operationId: 'deleteOrHidePatientRecord',
+    summary: 'deleteOrHidePatientRecord — authenticated patient ownership or named doctor access',
+    pathParams: ['id'],
+    response: PatientRecord,
+  },
+  {
+    method: 'post',
+    path: '/portal/records/{id}/restore',
+    operationId: 'restoreRetainedPatientRecord',
+    summary:
+      'restoreRetainedPatientRecord — authenticated patient ownership or named doctor access',
+    pathParams: ['id'],
+    response: PatientRecord,
+  },
+  {
+    method: 'get',
+    path: '/portal/records/{id}/shares',
+    operationId: 'listPatientRecordShares',
+    summary: 'listPatientRecordShares — authenticated patient ownership or named doctor access',
+    pathParams: ['id'],
+    response: RecordShareList,
+  },
+  {
+    method: 'post',
+    path: '/portal/records/{id}/shares',
+    operationId: 'createPatientRecordShare',
+    summary: 'createPatientRecordShare — authenticated patient ownership or named doctor access',
+    pathParams: ['id'],
+    body: CreateRecordShare,
+    response: RecordShare,
+  },
+  {
+    method: 'delete',
+    path: '/portal/records/{id}/shares/{shareId}',
+    operationId: 'revokePatientRecordShare',
+    summary: 'revokePatientRecordShare — authenticated patient ownership or named doctor access',
+    pathParams: ['id', 'shareId'],
+    response: RecordRevoked,
+  },
+  {
+    method: 'get',
+    path: '/patients/{id}/records',
+    operationId: 'listSharedPatientRecords',
+    summary: 'listSharedPatientRecords — authenticated patient ownership or named doctor access',
+    pathParams: ['id'],
+    response: PatientRecordList,
+    query: PatientRecordQuery,
+  },
+  {
+    method: 'get',
+    path: '/patient-records/{id}',
+    operationId: 'readSharedPatientRecord',
+    summary: 'readSharedPatientRecord — authenticated patient ownership or named doctor access',
+    pathParams: ['id'],
+    response: PatientRecord,
+  },
+  {
+    method: 'get',
+    path: '/patient-records/{id}/file',
+    operationId: 'readSharedPatientRecordFile',
+    summary: 'readSharedPatientRecordFile — authenticated patient ownership or named doctor access',
+    pathParams: ['id'],
+    file: 'document',
+  },
+  {
+    method: 'post',
+    path: '/record-shares/resolve',
+    operationId: 'resolvePatientRecordShare',
+    summary: 'resolvePatientRecordShare — authenticated patient ownership or named doctor access',
+    body: ResolveRecordShare,
+    response: PatientRecord,
+  },
+  {
+    method: 'post',
+    path: '/patient-records/{id}/review',
+    operationId: 'reviewPatientRecord',
+    summary: 'reviewPatientRecord — authenticated patient ownership or named doctor access',
+    pathParams: ['id'],
+    body: RecordRevision,
+    response: PatientRecord,
+  },
+  {
+    method: 'post',
+    path: '/patient-records/{id}/use',
+    operationId: 'usePatientRecordInVisit',
+    summary: 'usePatientRecordInVisit — authenticated patient ownership or named doctor access',
+    pathParams: ['id'],
+    body: UsePatientRecord,
+    response: PatientRecord,
+  },
   {
     method: 'get',
     path: '/portal/booking-options',
     operationId: 'getPortalBookingOptions',
     summary: 'Doctors, clinics and consultations a patient can book, with the rules (patient)',
+    query: BookingOptionsQuery,
     response: BookingOptions,
   },
   {
@@ -610,6 +1568,24 @@ const operations: Operation[] = [
     operationId: 'bookPortalAppointment',
     summary: 'Book one of the account’s patients into an open slot (patient)',
     body: PortalBookBody,
+    response: PortalAppointment,
+    status: 201,
+  },
+  {
+    method: 'get',
+    path: '/portal/appointments/{id}',
+    operationId: 'getPortalAppointment',
+    summary: 'Read an owned family appointment (patient)',
+    pathParams: ['id'],
+    response: PortalAppointment,
+  },
+  {
+    method: 'post',
+    path: '/portal/appointments/{id}/reschedule',
+    operationId: 'reschedulePortalAppointment',
+    summary: 'Move an eligible unbilled visit before the clinic cutoff (patient)',
+    pathParams: ['id'],
+    body: PortalRescheduleBody,
     response: PortalAppointment,
     status: 201,
   },
@@ -1908,27 +2884,32 @@ export function buildOpenApiDocument(options: { version: string; serverUrl?: str
           }
         : {}),
       responses: {
-        [String(status)]: op.pdf
+        [String(status)]: op.zip
           ? {
-              description: 'PDF',
-              content: { 'application/pdf': { schema: { type: 'string', format: 'binary' } } },
+              description: 'Private patient-facing data ZIP',
+              content: { 'application/zip': { schema: { type: 'string', format: 'binary' } } },
             }
-          : op.file
+          : op.pdf
             ? {
-                description: 'The file, as uploaded',
-                content:
-                  op.file === 'logo'
-                    ? logoBinary
-                    : op.file === 'document'
-                      ? documentBinary
-                      : binary,
+                description: 'PDF',
+                content: { 'application/pdf': { schema: { type: 'string', format: 'binary' } } },
               }
-            : status === 204 || !op.response
-              ? { description: 'No content' }
-              : {
-                  description: status === 201 ? 'Created' : 'OK',
-                  content: { 'application/json': { schema: toSchema(op.response) } },
-                },
+            : op.file
+              ? {
+                  description: 'The file, as uploaded',
+                  content:
+                    op.file === 'logo'
+                      ? logoBinary
+                      : op.file === 'document'
+                        ? documentBinary
+                        : binary,
+                }
+              : status === 204 || !op.response
+                ? { description: 'No content' }
+                : {
+                    description: status === 201 ? 'Created' : 'OK',
+                    content: { 'application/json': { schema: toSchema(op.response) } },
+                  },
         ...(op.replay && op.response
           ? {
               '200': {

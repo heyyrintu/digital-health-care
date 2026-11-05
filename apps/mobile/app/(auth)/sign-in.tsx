@@ -11,7 +11,7 @@ import { useSession } from '../../src/session-context';
 import { variant } from '../../src/variant';
 
 /**
- * The sign-in screen for this app: SMS code for patients, password and authenticator for
+ * The sign-in screen for this app: WhatsApp code for patients, password and authenticator for
  * staff. A clinic link (`…/sign-in?clinic=demo-clinic`) fills in the clinic ID.
  */
 export default function SignInRoute() {

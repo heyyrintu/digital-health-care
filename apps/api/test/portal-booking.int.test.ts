@@ -407,3 +407,164 @@ describe('prescriptions', () => {
     expect(audit?.entityId).toBe(own.id);
   });
 });
+
+describe('patient self-rescheduling', () => {
+  const move = (id: string, startAt: string, tokens = patient, key?: string) =>
+    h.app.inject({
+      method: 'POST',
+      url: `/v1/portal/appointments/${id}/reschedule`,
+      headers: { ...bearer(tokens), ...(key ? { 'idempotency-key': key } : {}) },
+      payload: { startAt },
+    });
+
+  it('atomically links the replacement and replays a lost response once', async () => {
+    const original = (
+      await bookAs({ patientId: child, startAt: at(WED, '10:00'), reason: 'Follow up' })
+    ).json();
+    expect(original.canReschedule).toBe(true);
+    const first = await move(original.id, at(WED, '11:00'), patient, 'move-child-1');
+    expect(first.statusCode, first.body).toBe(201);
+    const replacement = PortalAppointment.parse(first.json());
+    expect(replacement).toMatchObject({
+      patient: { id: child },
+      startTime: '11:00',
+      reason: 'Follow up',
+      status: 'confirmed',
+    });
+    const replay = await move(original.id, at(WED, '11:00'), patient, 'move-child-1');
+    expect(replay.statusCode, replay.body).toBe(201);
+    expect(replay.json().id).toBe(replacement.id);
+    expect((await move(original.id, at(WED, '11:15'))).statusCode).toBe(409);
+    expect(await h.owner.appointment.count({ where: { rescheduledFromId: original.id } })).toBe(1);
+    expect(await h.owner.appointment.findUnique({ where: { id: original.id } })).toMatchObject({
+      status: 'rescheduled',
+    });
+    expect(await h.owner.appointment.findUnique({ where: { id: replacement.id } })).toMatchObject({
+      rescheduledFromId: original.id,
+      clinicId,
+      consultationTypeId: typeId,
+      doctorUserId: clinics.a.doctor.userId,
+    });
+  });
+
+  it('rejects foreign access, client overrides, occupied times and dates outside the horizon without releasing the old slot', async () => {
+    const original = (await bookAs({ startAt: at(WED, '10:00') })).json();
+    const outsider = await patientLogin(h, 'clinic-a', '9000000001');
+    await call('POST', '/portal/consents', outsider, { accept: ALL });
+    expect((await call('GET', `/portal/appointments/${original.id}`, outsider)).statusCode).toBe(
+      404,
+    );
+    expect((await move(original.id, at(WED, '11:00'), outsider)).statusCode).toBe(404);
+    expect(
+      (
+        await call('POST', `/portal/appointments/${original.id}/reschedule`, patient, {
+          startAt: at(WED, '11:00'),
+          patientId: stranger,
+        })
+      ).statusCode,
+    ).toBe(400);
+    await bookAs({ patientId: child, startAt: at(WED, '11:00') });
+    expect((await move(original.id, at(WED, '11:00'))).statusCode).toBe(409);
+    expect((await move(original.id, at('2026-12-30', '11:00'))).statusCode).toBe(409);
+    expect((await move(original.id, original.startAt)).statusCode).toBe(400);
+    expect(await h.owner.appointment.findUnique({ where: { id: original.id } })).toMatchObject({
+      status: 'confirmed',
+      startAt: new Date(original.startAt),
+    });
+    expect(await h.owner.appointment.count({ where: { rescheduledFromId: original.id } })).toBe(0);
+  });
+
+  it('applies current confirmation rules and supports moves at the active booking limit', async () => {
+    const original = (await bookAs({ startAt: at(WED, '10:00') })).json();
+    const rules = (await call('GET', '/booking-rules', adminA)).json();
+    await call('PUT', '/booking-rules', adminA, {
+      ...rules,
+      autoConfirm: false,
+      maxActiveBookings: 1,
+    });
+    const result = await move(original.id, at(WED, '11:00'));
+    expect(result.statusCode, result.body).toBe(201);
+    expect(result.json().status).toBe('pending');
+  });
+
+  it('moves merged history onto the live record and accepts only one concurrent replacement', async () => {
+    const original = (await bookAs({ patientId: child, startAt: at(WED, '10:00') })).json();
+    await h.owner.patient.update({
+      where: { id: child },
+      data: { mergedIntoId: neha, mergedAt: h.services.now() },
+    });
+    const results = await Promise.all([
+      move(original.id, at(WED, '11:00')),
+      move(original.id, at(WED, '11:15')),
+    ]);
+    expect(results.map((r) => r.statusCode).sort()).toEqual([201, 409]);
+    expect(results.find((r) => r.statusCode === 201)!.json().patient.id).toBe(neha);
+    expect(await h.owner.appointment.count({ where: { rescheduledFromId: original.id } })).toBe(1);
+  });
+
+  it('waits for a concurrent consultation payment-policy change before moving', async () => {
+    const original = (await bookAs({ startAt: at(WED, '10:00') })).json();
+    let ready!: () => void;
+    let finish!: () => void;
+    const started = new Promise<void>((resolve) => {
+      ready = resolve;
+    });
+    const release = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const update = h.owner.$transaction(async (tx) => {
+      await tx.consultationType.update({
+        where: { id: typeId },
+        data: { requiresPrepayment: true },
+      });
+      ready();
+      await release;
+    });
+    await started;
+    let settled = false;
+    const pending = move(original.id, at(WED, '11:00')).then((result) => {
+      settled = true;
+      return result;
+    });
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      expect(settled).toBe(false);
+    } finally {
+      finish();
+    }
+    await update;
+    const result = await pending;
+    expect(result.statusCode, result.body).toBe(409);
+    expect(await h.owner.appointment.count({ where: { rescheduledFromId: original.id } })).toBe(0);
+    expect(await h.owner.appointment.findUnique({ where: { id: original.id } })).toMatchObject({
+      status: 'confirmed',
+    });
+  });
+
+  it('blocks billed visits and the cancellation cutoff', async () => {
+    const original = (await bookAs({ startAt: at(WED, '10:00') })).json();
+    // Legacy/imported booked visits can already have a bill; they need clinic review.
+    await h.owner.bill.create({
+      data: {
+        organisationId: clinics.a.org.id,
+        appointmentId: original.id,
+        patientId: neha,
+        doctorUserId: clinics.a.doctor.userId,
+        createdByUserId: clinics.a.admin.userId,
+        subtotalPaise: 80000,
+        totalPaise: 80000,
+        status: 'due',
+      },
+    });
+    expect(
+      (await call('GET', `/portal/appointments/${original.id}`, patient)).json().canReschedule,
+    ).toBe(false);
+    expect((await move(original.id, at(WED, '11:00'))).statusCode).toBe(409);
+    const other = (await bookAs({ patientId: child, startAt: at(WED, '10:15') })).json();
+    h.clock.ms = new Date(at(WED, '09:00')).getTime();
+    expect((await move(other.id, at(WED, '11:15'))).statusCode).toBe(409);
+    expect(await h.owner.appointment.findUnique({ where: { id: other.id } })).toMatchObject({
+      status: 'confirmed',
+    });
+  });
+});

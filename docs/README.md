@@ -8,7 +8,7 @@ Living documents for the build. Product scope is in **PRD v3.0 (Final)** and the
 |---|---|---|---|
 | **PRD v3.0 (Final)** | `product/PRD-v3.0-Final.pdf` | Product owner | Scope changes (master copy in Claude Docs) |
 | **Build Plan — Web, iOS and Android** | `product/Build-Plan-Web-iOS-Android.pdf` (+ `.docx`, `build-plan.md`) | Tech lead | End of each phase (master copy in Claude Docs) |
-| Architecture decision records (ADR 0001–0017 + template) | `adr/` | Tech lead | Before a decision is implemented or changed |
+| Architecture decision records (ADR 0001–0028 + template) | `adr/` | Tech lead | Before a decision is implemented or changed |
 | API guide and endpoint catalogue | `api/api-guide.md` | Backend lead | Every API change (reference itself is generated from OpenAPI) |
 | Webhooks guide (Cashfree, WhatsApp, SMS, ABDM) | `api/webhooks.md` | Backend lead | Provider or event change |
 | Data dictionary | `data/data-dictionary.md` | Backend lead | Every migration |
@@ -29,3 +29,23 @@ Documents start as **Draft**. They become **Approved** when the named owner sign
 
 ## Data rule for all documents
 Never paste real patient data (names, phone numbers, prescriptions, screenshots) into any document, ticket, test or prototype tool. Use the synthetic personas in `qa/test-plan.md`.
+
+- [ADR 0023: settlement reconciliation](adr/0023-cashfree-settlement-reconciliation.md) — read-only provider reports, durable snapshots and clinic-admin acknowledgement.
+
+- [ADR 0024: prepaid booking](adr/0024-cashfree-prepaid-booking.md) — atomic reservations, verified confirmation, safe expiry and late-payment review.
+
+- [Current web-first requirements audit](reviews/web-plan-audit-2026-11-05.md) — full PRD/build-plan coverage, implementation evidence, gaps and remaining acceptance.
+
+- [ADR 0025: patient finance and financial notices](adr/0025-patient-finance-and-whatsapp-notices.md) — authenticated dues/receipts, separate refunds and opted-in payment notices.
+
+- [ADR 0026: patient web self-rescheduling](adr/0026-patient-web-self-rescheduling.md) — atomic family-owned replacement, clinic rules and interrupted-response recovery.
+
+- [ADR 0027: patient profiles and verified phone changes](adr/0027-patient-profiles-and-verified-phone-changes.md) — protected family editing, private photos, doctor verification and scoped two-number proof.
+
+- [ADR 0028: patient records and care retention](adr/0028-patient-records-sharing-and-retention.md) — batch/photo uploads, named-doctor links, explicit clinical use and durable unused deletion.
+
+- [ADR 0029: patient data rights and clinic account closure](adr/0029-patient-data-rights-and-clinic-account-closure.md) — private downloads, tracked correction/erasure review and verified clinic-scoped account closure.
+
+- [ADR 0030: WhatsApp inbox and template catalog](adr/0030-clinic-whatsapp-inbox-and-template-catalog.md) — encrypted clinic conversations, private handoffs, service-window authorization and provider template controls. [Activation and recovery](runbooks/whatsapp-inbox.md).
+
+- [ADR 0031: reviewed bulk session changes](adr/0031-reviewed-bulk-clinic-session-operations.md) — atomic preview/apply, financial/care exceptions, source closures, delay estimates and consented generic notices. [Operator guide](runbooks/clinic-session-operations.md).

@@ -68,7 +68,9 @@ export function ClinicShell({ children }: { children: (me: MeResponse) => ReactN
             : []),
           ...(me.role === 'clinic_admin'
             ? [
+                { href: '/clinic/reconciliation', label: t('recon.title'), icon: IndianRupee },
                 { href: '/clinic/audit', label: t('dashboard.auditLog'), icon: ScrollText },
+                { href: '/clinic/delivery-log', label: t('delivery.title'), icon: Send },
                 { href: '/clinic/medicines', label: t('dashboard.medicines'), icon: Pill },
                 {
                   href: '/clinic/test-catalogue',
@@ -78,9 +80,18 @@ export function ClinicShell({ children }: { children: (me: MeResponse) => ReactN
                 { href: '/clinic/merges', label: t('dashboard.merges'), icon: GitMerge },
               ]
             : []),
+          ...(['doctor', 'front_desk', 'clinic_admin'].includes(me.role)
+            ? [{ href: '/clinic/session-operations', label: t('clinicOps.title'), icon: Library }]
+            : []),
+          ...(['doctor', 'front_desk', 'clinic_admin'].includes(me.role)
+            ? [{ href: '/clinic/inbox', label: t('inbox.title'), icon: Library }]
+            : []),
           // The document library (PRD §7.3): kept by clinic admins and doctors.
           ...(me.role === 'clinic_admin' || me.role === 'doctor'
-            ? [{ href: '/clinic/library', label: t('dashboard.library'), icon: Library }]
+            ? [
+                { href: '/clinic/library', label: t('dashboard.library'), icon: Library },
+                { href: '/clinic/data-rights', label: t('dataRights.title'), icon: Library },
+              ]
             : []),
           ...(me.role === 'doctor'
             ? [

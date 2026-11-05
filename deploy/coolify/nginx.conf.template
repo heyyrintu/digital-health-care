@@ -1,0 +1,41 @@
+# Trust only the explicitly supplied Coolify proxy network. Never use 0.0.0.0/0.
+server {
+    listen 8080;
+    server_name _;
+    server_tokens off;
+    set_real_ip_from ${COOLIFY_PROXY_CIDR};
+    real_ip_header X-Forwarded-For;
+    real_ip_recursive on;
+    client_max_body_size 30m;
+    # Docker service addresses can change when API/web are recreated on deployment.
+    resolver 127.0.0.11 valid=5s ipv6=off;
+    set $api_backend api:4000;
+    set $web_backend web:3000;
+
+    # The preview is deliberately not indexed; no URL, query, token or patient logs.
+    access_log off;
+    add_header X-Robots-Tag "noindex, nofollow, noarchive" always;
+
+    location /v1/ {
+        proxy_pass http://$api_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+        proxy_read_timeout 120s;
+    }
+    location / {
+        proxy_pass http://$web_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+        proxy_read_timeout 120s;
+    }
+}

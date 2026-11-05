@@ -1,0 +1,68 @@
+name: Coolify container verification
+
+on:
+  pull_request:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - docker-compose.coolify.yml
+      - deploy/coolify/**
+      - scripts/coolify-*
+      - apps/api/**
+      - apps/workers/**
+      - apps/web/**
+      - packages/**
+      - pnpm-lock.yaml
+      - .github/workflows/coolify-containers.yml
+
+permissions:
+  contents: read
+
+jobs:
+  containers:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+      - name: Create temporary synthetic deployment configuration
+        run: |
+          umask 077
+          node scripts/coolify-env.mjs https://preview.example.com > "$RUNNER_TEMP/coolify.env"
+          sed -i 's|COOLIFY_PROXY_CIDR=|COOLIFY_PROXY_CIDR=127.0.0.0/8|' "$RUNNER_TEMP/coolify.env"
+          printf 'services:\n  gateway:\n    ports:\n      - "127.0.0.1:18080:8080"\n' > "$RUNNER_TEMP/ports.yml"
+      - name: Build, migrate and start
+        run: |
+          docker compose --env-file "$RUNNER_TEMP/coolify.env" -f docker-compose.coolify.yml -f "$RUNNER_TEMP/ports.yml" up -d --build --wait --wait-timeout 180
+      - name: Smoke test and guarded demo bootstrap
+        run: |
+          set -eu
+          compose() { docker compose --env-file "$RUNNER_TEMP/coolify.env" -f docker-compose.coolify.yml -f "$RUNNER_TEMP/ports.yml" "$@"; }
+          curl --fail http://127.0.0.1:18080/health
+          curl --fail http://127.0.0.1:18080/v1/ready
+          curl --fail http://127.0.0.1:18080/clinic/login | grep -q 'Synthetic records only'
+          curl --fail -I http://127.0.0.1:18080/ | grep -qi 'X-Robots-Tag: noindex'
+          # Invite tokens stay in a private temporary file, never CI output/artifacts.
+          umask 077
+          compose exec -T api node dist/seed.js --empty-demo-database > "$RUNNER_TEMP/invites" 2>&1
+          if compose exec -T api node dist/seed.js --empty-demo-database > /dev/null 2>&1; then
+            echo 'ERROR: demo seed accepted a populated database'; exit 1
+          fi
+          DHC_SYNTHETIC_SMOKE=1 node --experimental-strip-types scripts/coolify-smoke.mjs http://127.0.0.1:18080 https://preview.example.com "$RUNNER_TEMP/invites"
+          compose restart api workers web gateway
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:18080/v1/ready; then break; fi
+            sleep 2
+          done
+          curl --fail http://127.0.0.1:18080/v1/ready
+          test "$(compose exec -T postgres psql -U dhc -d dhc -Atc 'SELECT count(*) FROM organisations')" = '1'
+      - name: Clean temporary deployment
+        if: always()
+        run: |
+          docker compose --env-file "$RUNNER_TEMP/coolify.env" -f docker-compose.coolify.yml -f "$RUNNER_TEMP/ports.yml" down -v --remove-orphans
+          rm -f "$RUNNER_TEMP/coolify.env" "$RUNNER_TEMP/invites"

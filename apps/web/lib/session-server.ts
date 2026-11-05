@@ -74,7 +74,11 @@ export function isSameOrigin(request: NextRequest): boolean {
   const origin = request.headers.get('origin');
   if (!origin) return false;
   try {
-    return new URL(origin).host === request.nextUrl.host;
+    // Standalone Next servers can see their internal container hostname in nextUrl.
+    // Compare with the configured public origin, never a forwarded Host supplied by a client.
+    const publicUrl = process.env.WEB_BASE_URL || process.env.PUBLIC_SITE_URL;
+    const expected = publicUrl ? new URL(publicUrl).origin : request.nextUrl.origin;
+    return new URL(origin).origin === expected;
   } catch {
     return false;
   }

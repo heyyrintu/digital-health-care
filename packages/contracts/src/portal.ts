@@ -94,7 +94,7 @@ export type CreatePortalPatientBody = z.infer<typeof CreatePortalPatientBody>;
 
 // ---- Booking, appointments and prescriptions (PRD §4.3, §4.4) -------------------------
 
-/** What a patient can book: in-person consultations without payment at booking, for now. */
+/** In-person booking options; prepaid types appear only for supporting clients when enabled. */
 export const BookingOptions = z.object({
   doctors: z.array(
     z.object({
@@ -112,6 +112,7 @@ export const BookingOptions = z.object({
       mode: ConsultationMode,
       defaultDurationMin: z.number().int(),
       feePaise: z.number().int(),
+      requiresPrepayment: z.boolean().optional(),
     }),
   ),
   horizonDays: z.number().int(),
@@ -133,6 +134,9 @@ export const PortalBookBody = z.object({
 });
 export type PortalBookBody = z.infer<typeof PortalBookBody>;
 
+export const PortalRescheduleBody = z.object({ startAt: z.iso.datetime() }).strict();
+export type PortalRescheduleBody = z.infer<typeof PortalRescheduleBody>;
+
 export const PortalCancelBody = z.object({
   reason: z.string().trim().min(1).max(300).optional(),
 });
@@ -145,7 +149,14 @@ export const PortalPrescriptionRef = z.object({
   status: z.enum(['signed', 'superseded', 'void']),
 });
 
+export const PrepaidBookingState = z.enum(['held', 'confirmed', 'released', 'review']);
 export const PortalAppointment = z.object({
+  delayMinutes: z.number().int().min(0).max(240).optional(),
+  delayUpdatedAt: z.iso.datetime().nullable().optional(),
+  prepayment: z
+    .object({ id: z.uuid(), state: PrepaidBookingState, expiresAt: z.iso.datetime() })
+    .nullable()
+    .optional(),
   id: z.uuid(),
   patient: z.object({ id: z.uuid(), name: z.string(), uhid: z.string() }),
   doctorName: z.string().nullable(),
@@ -162,6 +173,10 @@ export const PortalAppointment = z.object({
   reason: z.string().nullable(),
   /** The patient may still cancel it themselves (booked, and before the cutoff). */
   canCancel: z.boolean(),
+  canReschedule: z.boolean().optional(),
+  booking: z
+    .object({ doctorUserId: z.uuid(), clinicId: z.uuid(), consultationTypeId: z.uuid() })
+    .optional(),
   /** The current signed (or voided) prescription of the visit. */
   prescription: PortalPrescriptionRef.nullable(),
 });
@@ -185,3 +200,22 @@ export type PortalPrescription = z.infer<typeof PortalPrescription>;
 
 export const PortalPrescriptionList = z.object({ data: z.array(PortalPrescription) });
 export type PortalPrescriptionList = z.infer<typeof PortalPrescriptionList>;
+
+export const CreatePrepaidBooking = PortalBookBody.extend({ id: z.uuid() }).strict();
+export type CreatePrepaidBooking = z.infer<typeof CreatePrepaidBooking>;
+export const PrepaidBookingView = z.object({
+  id: z.uuid(),
+  appointmentId: z.uuid(),
+  appointmentStatus: AppointmentStatus,
+  state: PrepaidBookingState,
+  expiresAt: z.iso.datetime(),
+  amountPaise: z.number().int(),
+  orderStatus: z.enum(['creating', 'active', 'closing', 'paid', 'expired', 'terminated', 'review']),
+  paymentUrl: z.url().nullable(),
+  providerAvailable: z.boolean(),
+});
+export type PrepaidBookingView = z.infer<typeof PrepaidBookingView>;
+
+export const BookingOptionsQuery = z.object({
+  prepaid: z.enum(['true', 'false']).default('false'),
+});

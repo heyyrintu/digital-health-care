@@ -3,10 +3,11 @@
 import { ApiError } from '@dhc/api-client';
 import {
   Allergy,
+  ProfileConfirmed,
+  PatientChart,
   CurrentMedication,
   MedicalCondition,
   type ChartSource,
-  type PatientChart,
 } from '@dhc/contracts';
 import { Button, Input, Label, cn } from '@dhc/ui-web';
 import { Plus, TriangleAlert } from 'lucide-react';
@@ -245,6 +246,29 @@ function ChartSection({
                   <span className="inline-flex items-center rounded-full bg-warning-soft px-2 py-0.5 text-[11px] font-semibold text-warning-foreground">
                     {t('chart.unverified')}
                   </span>
+                )}
+                {editable && e.source === 'patient' && (
+                  <Button
+                    type="button"
+                    variant="link"
+                    disabled={busy}
+                    onClick={() =>
+                      void run(async () => {
+                        await api.request(
+                          'POST',
+                          `/patients/${chart.patientId}/chart/${kind}/${e.id}/confirm`,
+                          { schema: ProfileConfirmed },
+                        );
+                        onChange(
+                          await api.request('GET', `/patients/${chart.patientId}/chart`, {
+                            schema: PatientChart,
+                          }),
+                        );
+                      })
+                    }
+                  >
+                    {t('patientProfile.confirmReport')}
+                  </Button>
                 )}
                 {editable && removing !== e.id && (
                   <Button

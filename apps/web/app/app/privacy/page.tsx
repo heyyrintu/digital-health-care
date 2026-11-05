@@ -1,5 +1,7 @@
 'use client';
+import Link from 'next/link';
 
+import { WhatsAppPreferenceCard } from '../../../components/whatsapp-preference-card';
 import { ACCOUNT_CONSENT_KINDS, type ConsentStatus } from '@dhc/contracts';
 import { istDateKey, shortDate } from '@dhc/domain';
 import { Button } from '@dhc/ui-web';
@@ -23,7 +25,10 @@ type Load =
   | { status: 'ready'; data: ConsentStatus };
 
 function Privacy() {
-  const { api, account, locale, t } = usePatientSession();
+  const { api, account, locale, t, signOut } = usePatientSession();
+  const expired = useCallback(() => {
+    void signOut('expired');
+  }, [signOut]);
   const [state, setState] = useState<Load>({ status: 'loading' });
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -55,6 +60,26 @@ function Privacy() {
 
   return (
     <PortalPage title={t('patient.nav.privacy')}>
+      <WhatsAppPreferenceCard
+        category="payments"
+        api={api}
+        t={t}
+        path={'/portal/whatsapp-payment-preference'}
+        onExpired={expired}
+      />
+      <WhatsAppPreferenceCard
+        api={api}
+        path="/portal/whatsapp-preference"
+        t={t}
+        onExpired={expired}
+      />
+      <WhatsAppPreferenceCard
+        category="records"
+        api={api}
+        path="/portal/whatsapp-record-preference"
+        t={t}
+        onExpired={expired}
+      />
       {error && <Notice tone="error">{error}</Notice>}
       {state.status === 'loading' && <Loading />}
       {state.status === 'error' && <LoadError error={state.error} retry={load} />}
@@ -113,7 +138,9 @@ function Privacy() {
           })}
         </ul>
       )}
-      <p className="text-xs text-muted-foreground">{t('patient.privacy.closeAccount')}</p>
+      <Link className="underline" href="/app/data-rights">
+        {t('dataRights.title')}
+      </Link>
     </PortalPage>
   );
 }

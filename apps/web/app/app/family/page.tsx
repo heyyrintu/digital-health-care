@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { istDateKey } from '@dhc/domain';
 import { Surface } from '@dhc/ui-web';
 import { useState } from 'react';
@@ -28,6 +29,12 @@ function Family({ account }: { account: ReadyAccount }) {
         {account.patients.map((p) => (
           <li key={p.id} className="surface space-y-1 p-4 text-sm" data-testid="family-member">
             <p className="font-display text-base font-bold">{p.name}</p>
+            <Link
+              className="inline-block py-2 font-medium underline"
+              href={`/app/family/${p.id}/profile`}
+            >
+              {t('patientProfile.edit')}
+            </Link>
             <p className="text-muted-foreground">
               {t('patient.uhid')} <span className="tabular">{p.uhid}</span>
             </p>

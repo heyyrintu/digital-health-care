@@ -50,6 +50,7 @@ export async function sweepOrganisation(
     const due = await tx.$queryRaw<{ id: string }[]>`
       SELECT id FROM appointments
       WHERE status IN ('pending', 'confirmed') AND end_at <= ${cutoff}
+      AND NOT EXISTS(SELECT 1 FROM cashfree_bookings h WHERE h.appointment_id=appointments.id AND h.state IN ('held','review','released'))
       ORDER BY end_at
       LIMIT ${BATCH}
       FOR UPDATE SKIP LOCKED`;

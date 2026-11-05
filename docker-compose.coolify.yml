@@ -1,0 +1,215 @@
+# Coolify: repository root /, Compose file /docker-compose.coolify.yml.
+# Give ONLY gateway an HTTPS domain, targeting container port 8080. No host ports.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: '10m'
+    max-file: '3'
+
+x-backend: &backend
+  image: dhc-backend:${RELEASE_TAG:-preview}
+  build:
+    context: .
+    dockerfile: Dockerfile
+    target: backend
+  init: true
+  logging: *logging
+  stop_grace_period: 60s
+  security_opt:
+    - no-new-privileges:true
+
+x-app-env: &app-env
+  NODE_ENV: production
+  APP_VERSION: ${RELEASE_TAG:-preview}
+  DATABASE_URL: postgresql://dhc:${POSTGRES_PASSWORD:?Set a random hexadecimal database password}@postgres:5432/dhc
+  REDIS_URL: redis://:${REDIS_PASSWORD:?Set a random hexadecimal Redis password}@redis:6379/0
+  WEB_BASE_URL: ${APP_URL:?Set the public HTTPS URL without a trailing slash}
+  JWT_SECRET: ${JWT_SECRET:?Set an independent random secret of at least 32 characters}
+  FIELD_ENCRYPTION_KEY: ${FIELD_ENCRYPTION_KEY:?Set 32 random bytes encoded as base64}
+  FILE_STORE_DIR: /data/files
+  SIGNER: disabled
+  OTP_DELIVERY: disabled
+  CASHFREE_ENABLED: 'false'
+  CASHFREE_ACCEPT_NEW_PAYMENTS: 'false'
+  CASHFREE_REFUNDS_ENABLED: 'false'
+  CASHFREE_RECONCILIATION_ENABLED: 'false'
+  CASHFREE_PREPAID_BOOKING_ENABLED: 'false'
+  WHATSAPP_WEBHOOK_ENABLED: 'false'
+  WHATSAPP_APPOINTMENTS_ENABLED: 'false'
+  WHATSAPP_OPERATIONS_ENABLED: 'false'
+  WHATSAPP_RECORDS_ENABLED: 'false'
+  WHATSAPP_PAYMENTS_ENABLED: 'false'
+  WHATSAPP_INBOX_ENABLED: 'false'
+
+services:
+  postgres:
+    logging: *logging
+    image: postgres:16-bookworm
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: dhc
+      POSTGRES_USER: dhc
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set a random hexadecimal database password}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U dhc -d dhc']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    mem_limit: 1g
+
+  redis:
+    logging: *logging
+    image: redis:7-bookworm
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?Set a random hexadecimal Redis password}
+    command:
+      [
+        'sh',
+        '-c',
+        'exec redis-server --appendonly yes --maxmemory-policy noeviction --requirepass "$$REDIS_PASSWORD"',
+      ]
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ['CMD-SHELL', 'REDISCLI_AUTH="$$REDIS_PASSWORD" redis-cli ping | grep -q PONG']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    mem_limit: 512m
+
+  migrate:
+    <<: *backend
+    restart: 'no'
+    working_dir: /app
+    environment: *app-env
+    command: ['pnpm', '--filter', '@dhc/db', 'migrate:deploy']
+    depends_on:
+      postgres:
+        condition: service_healthy
+    mem_limit: 768m
+
+  api:
+    <<: *backend
+    restart: unless-stopped
+    environment:
+      <<: *app-env
+      API_PORT: '4000'
+      API_HOST: 0.0.0.0
+      CORS_ORIGINS: ${APP_URL:?Set the public HTTPS URL without a trailing slash}
+      LOG_LEVEL: info
+      PDF_REBUILD_CONCURRENCY: '1'
+      # API is private. Only this stack's gateway/web forward a sanitized client address.
+      TRUST_PROXY_HOPS: '1'
+      PLATFORM_ALLOWED_CIDRS: ${PLATFORM_ALLOWED_CIDRS:-}
+    expose:
+      - '4000'
+    volumes:
+      - private-files:/data/files
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'node', '/app/deploy/coolify/healthcheck.mjs', 'api']
+      interval: 30s
+      timeout: 10s
+      start_period: 40s
+      retries: 3
+    mem_limit: 1536m
+
+  workers:
+    <<: *backend
+    restart: unless-stopped
+    working_dir: /app/apps/workers
+    environment: *app-env
+    command: ['node', 'dist/index.js']
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'node', '/app/deploy/coolify/healthcheck.mjs', 'workers']
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+    mem_limit: 512m
+
+  web:
+    logging: *logging
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: web
+    restart: unless-stopped
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      DEPLOYMENT_MODE: demo
+      API_BASE_URL: ${APP_URL:?Set the public HTTPS URL without a trailing slash}/v1
+      API_INTERNAL_BASE_URL: http://api:4000/v1
+      PUBLIC_SITE_URL: ${APP_URL:?Set the public HTTPS URL without a trailing slash}
+      WEB_BASE_URL: ${APP_URL:?Set the public HTTPS URL without a trailing slash}
+      FORWARD_CLIENT_IP: 'true'
+      # Patient login remains disabled for this preview. Publish reviewed documents
+      # before enabling patient access on a separate real-care deployment.
+      PRIVACY_NOTICE_URL: ${PRIVACY_NOTICE_URL:-}
+      TERMS_URL: ${TERMS_URL:-}
+    expose:
+      - '3000'
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          'fetch("http://127.0.0.1:3000/health",{signal:AbortSignal.timeout(4000)}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))',
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+    mem_limit: 1g
+
+  gateway:
+    logging: *logging
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: gateway
+    restart: unless-stopped
+    environment:
+      COOLIFY_PROXY_CIDR: ${COOLIFY_PROXY_CIDR:?Set the actual Coolify proxy network CIDR}
+      NGINX_ENVSUBST_FILTER: '^COOLIFY_PROXY_CIDR$$'
+    expose:
+      - '8080'
+    depends_on:
+      api:
+        condition: service_healthy
+      web:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'wget -q -O /dev/null http://127.0.0.1:8080/health && wget -q -O /dev/null http://127.0.0.1:8080/v1/ready',
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+    mem_limit: 128m
+
+volumes:
+  postgres-data:
+  redis-data:
+  private-files:

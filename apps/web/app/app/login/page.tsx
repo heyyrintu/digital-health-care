@@ -31,7 +31,7 @@ export default function PatientLoginPage() {
   );
 }
 
-/** Patient sign-in (PRD §4.1): clinic and mobile number, then the 6-digit code sent by SMS. */
+/** Patient sign-in (PRD §4.1): clinic and mobile number, then the 6-digit code sent on WhatsApp. */
 function Login() {
   const { status, endedReason, me, signOut, startSession, t, apiBaseUrl } = usePatientSession();
   const router = useRouter();
