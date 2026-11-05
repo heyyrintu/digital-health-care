@@ -12,7 +12,7 @@ interface Props {
   notice?: string;
 }
 
-/** Patient sign-in: mobile number, then the 6-digit code sent by SMS. */
+/** Patient sign-in: mobile number, then the 6-digit code sent on WhatsApp. */
 export function PatientSignIn({ initialOrganisation, notice }: Props) {
   const { t } = useLocale();
   const [organisation, setOrganisation] = useState(FIXED_ORGANISATION ?? initialOrganisation ?? '');

@@ -21,7 +21,7 @@ import { publicApiBaseUrl, publicApiCacheSeconds } from './config';
  */
 const publicApi = () =>
   createApiClient({
-    baseUrl: publicApiBaseUrl(),
+    baseUrl: process.env.API_INTERNAL_BASE_URL ?? publicApiBaseUrl(),
     fetch: (input, init) =>
       fetch(input, { ...init, next: { revalidate: publicApiCacheSeconds() } }),
   });

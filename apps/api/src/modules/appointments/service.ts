@@ -171,6 +171,9 @@ export class AppointmentService {
           `This appointment is ${appointment.status.replace('_', ' ')} and cannot be changed that way.`,
         );
       }
+      const hold = await tx.cashfreeBooking.findUnique({ where: { appointmentId: id } });
+      if (hold && hold.state !== 'confirmed')
+        throw new AppError(409, 'CONFLICT', 'Verify or close the booking payment first.');
       const now = this.s.now();
       if (
         (body.action === 'start' || body.action === 'complete') &&
@@ -217,6 +220,12 @@ export class AppointmentService {
     return withTenant(this.s.db, actor.organisationId, async (tx) => {
       const old = await this.lockRow(tx, id);
       if (!old) throw NOT_FOUND();
+      if (await tx.cashfreeBooking.findUnique({ where: { appointmentId: id } }))
+        throw new AppError(
+          409,
+          'CONFLICT',
+          'Prepaid bookings cannot be moved. Cancel and review the refund, then book a new slot.',
+        );
       if (!['pending', 'confirmed'].includes(old.status)) {
         throw new AppError(409, 'CONFLICT', 'Only booked appointments can be rescheduled.');
       }
@@ -303,6 +312,33 @@ export class AppointmentService {
       }
       startAt = new Date(Math.floor(now.getTime() / 60_000) * 60_000);
       endAt = new Date(startAt.getTime() + loaded.type.defaultDurationMin * 60_000);
+      // Walk-ins may ignore capacity and weekly hours, but never an explicit closure.
+      const closures = await tx.availabilityException.findMany({
+        where: {
+          type: { in: ['leave', 'holiday'] },
+          startDate: { lte: toDbDate(date) },
+          endDate: { gte: toDbDate(date) },
+          AND: [
+            { OR: [{ doctorUserId: null }, { doctorUserId: p.doctorUserId }] },
+            { OR: [{ clinicId: null }, { clinicId: p.clinicId }] },
+            { OR: [{ consultationTypeId: null }, { consultationTypeId: p.consultationTypeId }] },
+          ],
+        },
+      });
+      if (
+        closures.some(
+          (e) =>
+            !e.startTime ||
+            !e.endTime ||
+            (startAt < new Date(`${date}T${e.endTime}:00+05:30`) &&
+              endAt > new Date(`${date}T${e.startTime}:00+05:30`)),
+        )
+      )
+        throw new AppError(
+          409,
+          'SLOT_TAKEN',
+          'This clinic session is closed. Choose an open session.',
+        );
     } else {
       const wanted = new Date(p.startAt!).toISOString();
       const slot = loaded.day.slots.find((s) => s.start === wanted);
@@ -494,6 +530,8 @@ export class AppointmentService {
       startAt: r.startAt.toISOString(),
       endAt: r.endAt.toISOString(),
       startTime: istTime(r.startAt),
+      delayMinutes: r.delayMinutes,
+      delayUpdatedAt: r.delayUpdatedAt?.toISOString() ?? null,
       status: r.status,
       source: r.source,
       tokenNumber: r.tokenNumber,

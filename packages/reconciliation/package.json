@@ -1,0 +1,22 @@
+{
+  "name": "@dhc/reconciliation",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@dhc/cashfree": "workspace:*",
+    "@dhc/db": "workspace:*",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@dhc/config": "workspace:*"
+  }
+}

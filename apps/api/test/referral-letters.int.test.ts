@@ -6,6 +6,7 @@
  * contents. Personas are synthetic (docs/qa/test-plan.md).
  */
 import {
+  CURRENT_CONSENT_VERSIONS,
   AuditListResponse,
   PrescriptionCheck,
   Referral,
@@ -20,6 +21,7 @@ import { supportVerifyDoctor } from '../src/modules/support/verify-doctor';
 import type { TestKeySigner } from '../src/signing/signer';
 import {
   addStaff,
+  patientLogin,
   bearer,
   createHarness,
   resetDatabase,
@@ -30,6 +32,7 @@ import {
 } from './harness';
 
 const h = createHarness();
+h.services.recordMessagingSender = '1234';
 let clinics: Awaited<ReturnType<typeof seedTwoClinics>>;
 let doctor: TokenResponse;
 let second: StaffFixture;
@@ -671,5 +674,66 @@ describe('audit', () => {
         'referral.letter_viewed',
       ]),
     );
+  });
+});
+
+describe('patient referral letters and optional WhatsApp notices', () => {
+  it('queues only signed letters and lets the family open the immutable PDF after referral closure', async () => {
+    await h.owner.patient.update({ where: { id: patientId() }, data: { phone: '+919000000001' } });
+    expect(
+      (
+        await call('PUT', `/patients/${patientId()}/whatsapp-record-preference`, admin, {
+          enabled: true,
+          recipientAgreed: true,
+        })
+      ).statusCode,
+    ).toBe(200);
+    await readyToSign();
+    const referral = await refer(await visit());
+    expect(await h.owner.whatsAppDelivery.count({ where: { kind: 'referral_ready' } })).toBe(0);
+    const result = await signed(referral.id);
+    const letter = await h.owner.referralLetter.findUniqueOrThrow({
+      where: { referralId: referral.id },
+    });
+    const d = await h.owner.whatsAppDelivery.findFirstOrThrow({
+      where: { referralLetterId: letter.id },
+    });
+    expect(d.kind).toBe('referral_ready');
+    expect((await sign(referral.id)).statusCode).toBe(409);
+    expect(await h.owner.whatsAppDelivery.count({ where: { referralLetterId: letter.id } })).toBe(
+      1,
+    );
+    const mine = await patientLogin(h, 'clinic-a', '9000000001');
+    const accept = Object.entries(CURRENT_CONSENT_VERSIONS).map(([kind, version]) => ({
+      kind,
+      version,
+    }));
+    expect((await call('GET', '/portal/referral-letters', mine)).statusCode).toBe(403);
+    expect((await call('POST', '/portal/consents', mine, { accept })).statusCode).toBe(200);
+    const list = await call('GET', '/portal/referral-letters', mine);
+    expect(list.statusCode, list.body).toBe(200);
+    expect(list.json().data[0].id).toBe(letter.id);
+    expect(JSON.stringify(list.json())).not.toContain(referral.reason);
+    const pdf = await call('GET', `/portal/referral-letters/${letter.id}/pdf`, mine);
+    expect(pdf.statusCode, pdf.body.slice(0, 100)).toBe(200);
+    expect(createHash('sha256').update(pdf.rawPayload).digest('hex')).toBe(letter.pdfSha256);
+    await h.owner.referral.update({
+      where: { id: referral.id },
+      data: {
+        status: 'closed',
+        closedAt: h.services.now(),
+        closedByUserId: clinics.a.doctor.userId,
+      },
+    });
+    expect((await call('GET', `/portal/referral-letters/${letter.id}/pdf`, mine)).statusCode).toBe(
+      200,
+    );
+    const other = await patientLogin(h, 'clinic-a', '9000000002');
+    await call('POST', '/portal/consents', other, { accept });
+    expect((await call('GET', `/portal/referral-letters/${letter.id}/pdf`, other)).statusCode).toBe(
+      404,
+    );
+    expect((await call('GET', '/portal/referral-letters', other)).json().data).toEqual([]);
+    expect(result.letter).not.toBeNull();
   });
 });

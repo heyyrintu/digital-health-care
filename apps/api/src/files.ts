@@ -11,8 +11,8 @@ export interface FileStore {
   put(key: string, data: Buffer): Promise<void>;
   get(key: string): Promise<Buffer>;
   /**
-   * Removes a file whose record never committed (a rolled-back upload). Missing keys are
-   * fine. Never used on a committed record's file.
+   * Removes a rolled-back upload or an erasure-eligible non-retained file. Missing keys are
+   * fine. Never used on a retained clinical record's file.
    */
   delete(key: string): Promise<void>;
 }

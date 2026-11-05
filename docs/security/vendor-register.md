@@ -6,7 +6,7 @@
 |---|---|---|---|---|---|---|---|
 | Cloud hosting | AWS (ap-south-1 Mumbai) | All platform data | India | ☐ | ☐ | — | Decided |
 | Payment gateway | Cashfree Payments | Bill amounts, patient name/phone for links | India | ☐ | ☐ | ☐ | Decided |
-| WhatsApp provider (BSP) | TBD | Phone, message templates (no clinical content) | TBD | ☐ | ☐ | ☐ | Open |
+| WhatsApp | Meta WhatsApp Cloud API (direct) | Phone and sign-in code for authentication; opted-in appointment/record availability and secure financial navigation links, with no diagnosis, notes, receipt files or financial amounts in notice bodies | Confirm with Meta | ☐ | ☐ | ☐ | Provider chosen; credentials and approved template pending |
 | SMS provider (DLT) | TBD | Phone, OTP, message templates | India | ☐ | ☐ | ☐ | Open |
 | Email | TBD (e.g. AWS SES) | Email, documents (receipts, prescriptions) | TBD | ☐ | ☐ | ☐ | Open |
 | Push | Firebase Cloud Messaging, Apple Push | Device tokens, notification text (no clinical content) | Global | ☐ | ☐ | — | Decided |

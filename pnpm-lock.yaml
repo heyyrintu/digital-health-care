@@ -37,6 +37,9 @@ importers:
 
   apps/api:
     dependencies:
+      '@dhc/cashfree':
+        specifier: workspace:*
+        version: link:../../packages/cashfree
       '@dhc/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -49,9 +52,15 @@ importers:
       '@dhc/i18n':
         specifier: workspace:*
         version: link:../../packages/i18n
+      '@dhc/reconciliation':
+        specifier: workspace:*
+        version: link:../../packages/reconciliation
       '@dhc/safety':
         specifier: workspace:*
         version: link:../../packages/safety
+      '@dhc/secure-links':
+        specifier: workspace:*
+        version: link:../../packages/secure-links
       '@fastify/cors':
         specifier: ^11.3.0
         version: 11.3.0
@@ -304,15 +313,36 @@ importers:
 
   apps/workers:
     dependencies:
+      '@dhc/cashfree':
+        specifier: workspace:*
+        version: link:../../packages/cashfree
       '@dhc/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@dhc/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      '@dhc/reconciliation':
+        specifier: workspace:*
+        version: link:../../packages/reconciliation
+      '@dhc/secure-links':
+        specifier: workspace:*
+        version: link:../../packages/secure-links
+      '@prisma/adapter-pg':
+        specifier: 7.10.0
+        version: 7.10.0
+      '@prisma/client':
+        specifier: 7.10.0
+        version: 7.10.0(prisma@7.10.0(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(typescript@5.9.3))(typescript@5.9.3)
       bullmq:
         specifier: ^6.3.11
         version: 6.3.11(ioredis@6.0.0)(pg@8.23.1)
       ioredis:
         specifier: ^6.0.0
         version: 6.0.0
+      pg:
+        specifier: ^8.23.1
+        version: 8.23.1
       zod:
         specifier: ^4.6.5
         version: 4.6.5
@@ -338,6 +368,16 @@ importers:
       '@dhc/i18n':
         specifier: workspace:*
         version: link:../i18n
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
+    devDependencies:
+      '@dhc/config':
+        specifier: workspace:*
+        version: link:../config
+
+  packages/cashfree:
+    dependencies:
       zod:
         specifier: ^4.6.5
         version: 4.6.5
@@ -421,11 +461,33 @@ importers:
         specifier: ^22.20.5
         version: 22.20.5
 
+  packages/reconciliation:
+    dependencies:
+      '@dhc/cashfree':
+        specifier: workspace:*
+        version: link:../cashfree
+      '@dhc/db':
+        specifier: workspace:*
+        version: link:../db
+      zod:
+        specifier: ^4.6.5
+        version: 4.6.5
+    devDependencies:
+      '@dhc/config':
+        specifier: workspace:*
+        version: link:../config
+
   packages/safety:
     dependencies:
       '@dhc/domain':
         specifier: workspace:*
         version: link:../domain
+    devDependencies:
+      '@dhc/config':
+        specifier: workspace:*
+        version: link:../config
+
+  packages/secure-links:
     devDependencies:
       '@dhc/config':
         specifier: workspace:*

@@ -12,6 +12,7 @@ import {
   PrescriptionView,
   type TokenResponse,
 } from '@dhc/contracts';
+import { withMessaging } from '@dhc/db';
 import { seedSampleMedicines } from '@dhc/db';
 import { createHash, randomUUID } from 'node:crypto';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -43,6 +44,7 @@ import {
 } from './harness';
 
 const h = createHarness();
+h.services.recordMessagingSender = '1234';
 let clinics: Awaited<ReturnType<typeof seedTwoClinics>>;
 let doctorA: TokenResponse;
 let clinicId: string;
@@ -707,5 +709,56 @@ describe('amendments, voiding and the QR check', () => {
         where: { action: 'prescription.pdf_viewed', entityId: rx.id },
       }),
     ).toBe(1);
+  });
+});
+
+describe('signed prescription notification outbox', () => {
+  it('queues each signed version once and cancels superseded and void notices', async () => {
+    const patientId = clinics.a.patients[0]!.id;
+    await h.owner.patient.update({ where: { id: patientId }, data: { phone: '+919000000001' } });
+    expect(
+      (
+        await call('PUT', `/patients/${patientId}/whatsapp-record-preference`, doctorA, {
+          enabled: true,
+          recipientAgreed: true,
+        })
+      ).statusCode,
+    ).toBe(200);
+    await readyToSign();
+    const id = await visit();
+    const draft = await saved(id, [await line('Paracetamol 500')]);
+    expect(await h.owner.whatsAppDelivery.count({ where: { kind: 'prescription_ready' } })).toBe(0);
+    const first = await signed(id, draft.revision);
+    const d = await h.owner.whatsAppDelivery.findFirstOrThrow({
+      where: { prescriptionId: first.id },
+    });
+    expect(d.kind).toBe('prescription_ready');
+    const amendment = await call('POST', `/appointments/${id}/prescription/amend`, doctorA, {
+      reason: 'Synthetic correction',
+    });
+    expect(amendment.statusCode).toBe(201);
+    const next = Prescription.parse(amendment.json());
+    const second = await signed(id, next.revision);
+    expect((await h.owner.whatsAppDelivery.findUniqueOrThrow({ where: { id: d.id } })).status).toBe(
+      'skipped',
+    );
+    expect(await h.owner.whatsAppDelivery.count({ where: { prescriptionId: second.id } })).toBe(1);
+    const voided = await call('POST', `/appointments/${id}/prescription/void`, doctorA, {
+      reason: 'Synthetic wrong patient',
+      pin: PIN,
+    });
+    expect(voided.statusCode, voided.body).toBe(200);
+    const secondNotice = await h.owner.whatsAppDelivery.findFirstOrThrow({
+      where: { prescriptionId: second.id },
+    });
+    expect(secondNotice.status).toBe('skipped');
+    const begun = await withMessaging(
+      h.services.db,
+      (tx) =>
+        tx.$queryRaw<
+          unknown[]
+        >`SELECT * FROM messaging_begin_record_notice(${secondNotice.id}::uuid, ${'1234'})`,
+    );
+    expect(begun).toEqual([]);
   });
 });

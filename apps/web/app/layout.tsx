@@ -6,6 +6,9 @@ import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import './styles.css';
 
+// Read the deployment notice at runtime, including on login and invitation pages.
+export const dynamic = 'force-dynamic';
+
 export const metadata: Metadata = {
   title: { default: 'Digital Healthcare Platform', template: '%s · Digital Healthcare Platform' },
   description: 'Book appointments, consult your doctor and keep your health records in one place.',
@@ -21,7 +24,23 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <head>
         <style>{rootCss}</style>
       </head>
-      <body>{children}</body>
+      <body>
+        {process.env.DEPLOYMENT_MODE === 'demo' && (
+          <div
+            role="note"
+            style={{
+              background: '#fff3cd',
+              color: '#523e00',
+              padding: '8px 16px',
+              textAlign: 'center',
+              fontSize: '14px',
+            }}
+          >
+            Client preview · Synthetic records only · Not for patient care
+          </div>
+        )}
+        {children}
+      </body>
     </html>
   );
 }

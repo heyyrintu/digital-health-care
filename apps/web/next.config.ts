@@ -1,4 +1,5 @@
 import type { NextConfig } from 'next';
+import { fileURLToPath } from 'node:url';
 
 const securityHeaders = [
   { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
@@ -13,6 +14,8 @@ const securityHeaders = [
 const noStore = [{ key: 'Cache-Control', value: 'no-store' }];
 
 const nextConfig: NextConfig = {
+  output: 'standalone',
+  outputFileTracingRoot: fileURLToPath(new URL('../../', import.meta.url)),
   poweredByHeader: false,
   reactStrictMode: true,
   // Workspace packages ship TypeScript source.
@@ -28,7 +31,24 @@ const nextConfig: NextConfig = {
     return [
       { source: '/:path*', headers: securityHeaders },
       { source: '/app/:path*', headers: noStore },
+      {
+        source: '/app/records/:path*',
+        headers: [{ key: 'Referrer-Policy', value: 'no-referrer' }],
+      },
+      {
+        source: '/app/payments/notice/:path*',
+        headers: [{ key: 'Referrer-Policy', value: 'no-referrer' }],
+      },
+      { source: '/app/login', headers: [{ key: 'Referrer-Policy', value: 'no-referrer' }] },
       { source: '/clinic/:path*', headers: noStore },
+      {
+        source: '/pay/:path*',
+        headers: [
+          ...noStore,
+          { key: 'Referrer-Policy', value: 'no-referrer' },
+          { key: 'X-Robots-Tag', value: 'noindex, nofollow' },
+        ],
+      },
       { source: '/platform/:path*', headers: noStore },
       { source: '/display/:path*', headers: noStore },
       { source: '/invite', headers: noStore },

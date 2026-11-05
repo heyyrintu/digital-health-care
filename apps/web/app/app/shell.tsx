@@ -155,10 +155,13 @@ function PortalNav() {
   const pathname = usePathname() ?? '/app';
   const items = [
     { href: '/app', label: t('portal.nav.home'), icon: Home, exact: true },
+    { href: '/app/records', label: t('patientRecords.title'), icon: FolderOpen },
     { href: '/app/appointments', label: t('patient.nav.appointments'), icon: CalendarDays },
     { href: '/app/book', label: t('booking.book'), icon: CalendarPlus },
     { href: '/app/prescriptions', label: t('patient.nav.prescriptions'), icon: FileText },
+    { href: '/app/payments', label: t('finance.title'), icon: FileText },
     { href: '/app/tests', label: t('patient.nav.tests'), icon: FlaskConical },
+    { href: '/app/referrals', label: t('patient.nav.referrals'), icon: FileText },
     { href: '/app/documents', label: t('patient.nav.documents'), icon: FolderOpen },
     { href: '/app/family', label: t('patient.nav.family'), icon: Users },
   ];

@@ -1,6 +1,6 @@
 # Patient FAQ
 
-**Can I use a web browser instead of the app?** Yes. Open the patient portal at the web address your clinic gives you, which ends in `/app/login` (the clinic's link fills in its clinic ID for you; otherwise type the ID, for example `demo-clinic`). Enter your mobile number, tap **Send code** and type the 6-digit code from the SMS. The portal is made for up-to-date browsers on phones and computers. The first time, tick the privacy notice, the terms of use and the health-data consent, then **Accept and continue**. Use **हिंदी** or **English** at the top to change the language. The web portal has everything the app has: your appointments, booking, prescriptions, tests and results, family, and privacy and consents.
+**Can I use a web browser instead of the app?** Yes. Open the patient portal at the web address your clinic gives you, which ends in `/app/login` (the clinic's link fills in its clinic ID for you; otherwise type the ID, for example `demo-clinic`). Enter your mobile number, tap **Send code** and type the 6-digit code from WhatsApp. The portal is made for up-to-date browsers on phones and computers. The first time, tick the privacy notice, the terms of use and the health-data consent, then **Accept and continue**. Use **हिंदी** or **English** at the top to change the language. The web portal has everything the app has: your appointments, booking, prescriptions, tests and results, family, and privacy and consents.
 
 **How do I book?** Open the app or the web portal (or the link from the clinic) → Book → choose who the appointment is for, the doctor, the clinic, the date and time, and add a reason if you like. You see the fee (paid at the clinic) and how late you can still cancel online.
 
@@ -28,6 +28,60 @@
 
 **Is the doctor recording me?** Only if you agree. The doctor may ask to use an AI assistant to write notes; you can say no, and you can ask to stop at any time.
 
-**How do I stop messages?** Reply STOP on WhatsApp or change preferences in Profile. Important messages (login codes, prescriptions) cannot be turned off.
+**How do I stop messages?** For appointment confirmations/reminders, use **Privacy → WhatsApp appointment messages**, or reply STOP to the sending WhatsApp number. The preference covers your mobile number across the practice, including family records using it. It applies to new confirmed bookings after enabling; it is off by default. You can turn it off without accepting renewed health-data consent. Sign-in codes are separate; prescription/document message delivery is not built yet.
 
 **How do I delete my account?** Profile → Data and privacy → Delete account. Medical records the doctor created are kept for the period required by law.
+
+### Can WhatsApp tell me when a record is ready?
+
+When your clinic enables it, Privacy has a separate **WhatsApp record messages** choice. Messages say a record is ready and link to patient sign-in; they contain no prescription or document details. The link lasts one hour. Afterwards open your records directly in the portal. Appointment-message consent is separate. Reply STOP to the sending number to stop both optional categories.
+
+### How do I pay a clinic bill online?
+
+Open the payment link supplied by your clinic, check the clinic name and amount, and choose **Pay securely with Cashfree**. Enter payment details only on the hosted checkout. Returning to the page does not itself confirm a payment; choose **Check payment status** if confirmation is delayed. If money was deducted, check with the clinic before paying again. A payment link cannot open your health records.
+
+### How do refunds appear?
+
+Ask the clinic to request an eligible refund. A pending request is not confirmation that money has returned. The clinic can check provider status and print a refund voucher once it is confirmed. Your original receipt stays valid as the record of the payment; the refund is recorded separately. A refund does not create a new amount due automatically.
+
+### How do prepaid bookings work?
+
+When available, the booking screen shows the prepaid fee before you reserve. Your slot is reserved while you complete secure checkout; it is not confirmed merely because you opened or returned from payment. Use **Check payment and booking**, or reopen the reservation from **Appointments**. After verified payment, the clinic may confirm automatically or approve it separately. If the result is uncertain, keep the existing reservation and check again rather than paying again. Use **Close unpaid reservation** if you do not wish to continue; release waits for the provider to confirm closure. Contact the clinic about a late payment, cancellation or refund. A cancelled/released slot is not automatically restored by a later payment.
+
+### Where are my dues and receipts?
+
+Open **Payments and receipts**, then choose the family member. Bills show their original balance and confirmed refunds separately; refunds do not make the bill payable again. Prepare/recover an existing secure payment and continue to checkout. If the result is unknown, check/refresh that original payment instead of paying again. Booking reservations have their own controls in Appointments. Open a receipt and select **Print or save as PDF**. The original payment amount stays unchanged; later refunds are separate updates.
+
+Optional **WhatsApp payment updates** in Privacy covers secure payment links and receipt/refund availability. Appointment or record consent does not enable these notices. STOP turns off optional messages; your authenticated receipt history remains available. Notice links expire and require your own clinic sign-in and family access.
+
+### How do I change an appointment time on the web?
+
+Open **Appointments → Reschedule appointment**, choose a new date/time with the same doctor and clinic, then **Confirm new time**. The clinic's cutoff applies. Your original appointment stays booked if the change fails. A requested replacement may need clinic confirmation. If the result is unknown, use **Check this change again** before choosing another time. Contact the clinic for prepaid or billed visits, online consultations or changes after the cutoff.
+
+### How do I edit my profile or change my number?
+
+Open **Family → Edit profile** for the right person. Update contact/emergency details, upload/remove a private photo, or report medical basics. Your reports remain **Pending doctor verification**; they cannot replace doctor-confirmed facts. Reload the latest details if someone else changed the profile before you saved. Ask the clinic to correct existing medical entries.
+
+**Change verified mobile number** sends one code to each number. Verify both to move this adult and their dependants without their own number in this clinic. Other adults and other clinics stay unchanged. Sign in with the new number afterward and accept required consents. If the connection fails during completion, sign in on the new number to check. Lost access to the old number or existing records on the new number requires an in-person clinic check; do not create duplicate records to bypass it.
+
+### How do I manage my own reports?
+
+Open **My records**, select the family member and add up to ten files with a title/category. Select **Combine selected photos into one PDF** for two or more photos; existing PDFs upload separately. You can add a document date/note and link an owned visit/order. To submit a result your doctor requested, use **Tests** instead. Keep the page open during an interrupted batch and use **Retry the same batch**; already saved files are recovered. You can instead inspect saved records and finish an unfinished upload with its own file chooser.
+
+**Doctor sharing** creates a link for one named clinic doctor with an expiry. That doctor must sign in; a forwarded link does not authorize another account. Revoke it whenever needed. Withdrawing portal consent closes unused shares. Copies already downloaded cannot be recalled.
+
+**Reviewed by doctor** records review; **Used in care** means the document was retained for a treating visit. You can edit/delete an unused record. After care use, **Hide from my list** hides it and revokes links while the clinical copy stays with the treating doctor. **Show hidden and deleted** shows deletion progress and lets you restore visibility of retained records. Deleted unused files cannot be restored; storage failures stay pending and retry.
+
+## Download, correct or close your account
+
+Open **Privacy → Your data and account**. The same link appears on the consent screen if you have withdrawn health-data consent. Select the family member, download the private ZIP or submit a correction/deletion-review request. Track responses and your reference on the page. Keep downloaded files somewhere private. Private doctor notes/drafts and unusually large exports need clinic assistance.
+
+Phone changes still need verification from your profile. To erase an unused personal upload, delete it in My records; a deletion-review request can reference its completed erasure. Records used in care and payment history may need to be retained; the clinic provides its policy reference when reviewing this.
+
+Closing the account affects this clinic's patient login and family profiles on your number. It requires a fresh code and signs out patient devices. It does not cancel appointments, refund payments, erase clinical/financial history, close other-clinic accounts or disable staff access. Unused personal uploads/photos are queued for deletion. Save the displayed reference before entering the final code; if the connection fails, the account may already be closed. Contact the clinic with that reference for help, retention review or reopening.
+
+## A clinic session changes or runs late
+
+The clinic may cancel or move eligible appointments after reviewing its session. Your current appointments remain in the portal. Bookings with bills, prepayments or care records need individual clinic review; a session change does not automatically refund a payment. If you opted into appointment messages, the clinic may send a generic update asking you to sign in or contact it.
+
+A delay banner is an estimate. Your booked time stays unchanged; ask the clinic for current arrival guidance. It is not emergency monitoring or a guarantee of treatment time.

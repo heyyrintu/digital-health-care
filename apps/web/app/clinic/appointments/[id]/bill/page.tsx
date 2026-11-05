@@ -1,4 +1,6 @@
 'use client';
+import { RefundCard } from './refund-card';
+import { OnlinePaymentCard } from './online-payment-card';
 
 import { ApiError } from '@dhc/api-client';
 import {
@@ -440,6 +442,22 @@ function BillScreen({ id }: { id: string }) {
             )}
           </Surface>
 
+          {view.prepayment && (
+            <div className={NOTICE}>
+              <p>
+                {t('prepaid.title')}: {t(`prepaid.state.${view.prepayment.state}`)}
+              </p>
+              {view.prepayment.state === 'review' && <p>{t('prepaid.staffReview')}</p>}
+            </div>
+          )}
+          {view.bill && (
+            <OnlinePaymentCard
+              bill={view.bill}
+              onChange={load}
+              bookingPayment={!!view.prepayment}
+            />
+          )}
+          {view.bill && <RefundCard bill={view.bill} onChange={load} />}
           <Payments view={view} busy={busy} run={run} reload={load} setNotice={setNotice} />
         </>
       )}
@@ -500,6 +518,12 @@ function SavedBill({ bill }: { bill: Bill }) {
           [t('billing.discountLine'), -bill.discountPaise],
           [t('billing.total'), bill.totalPaise, true],
           [t('billing.paid'), bill.paidPaise],
+          ...(bill.refundedPaise > 0
+            ? ([
+                [t('refund.total'), -bill.refundedPaise],
+                [t('refund.net'), bill.netCollectedPaise ?? bill.paidPaise - bill.refundedPaise],
+              ] as [string, number][])
+            : []),
           [t('billing.balance'), bill.balancePaise, true],
         ]}
       />

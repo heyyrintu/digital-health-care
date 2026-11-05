@@ -178,6 +178,8 @@ export class PatientService {
     const tagIds = [...new Set(body.tagIds ?? [])];
 
     return withTenant(this.s.db, actor.organisationId, async (tx) => {
+      if (fields.phone)
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`auth-phone:${fields.phone}`}, 0))`;
       if (!fields.phone && !fields.guardianPatientId) {
         throw new AppError(
           400,
@@ -243,6 +245,9 @@ export class PatientService {
     if (body.name !== undefined) fields.name = cleanName(body.name);
 
     return withTenant(this.s.db, actor.organisationId, async (tx) => {
+      if (fields.phone)
+        await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`auth-phone:${fields.phone}`}, 0))`;
+      await tx.$queryRaw`SELECT id FROM patients WHERE id=${id}::uuid FOR UPDATE`;
       const current = await tx.patient.findUnique({ where: { id } });
       if (!current) throw NOT_FOUND();
       assertNotMerged(current);

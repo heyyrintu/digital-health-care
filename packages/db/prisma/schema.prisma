@@ -205,6 +205,7 @@ enum BillLineKind {
 
 /// Counter payments recorded by staff (PRD §5.6). Online modes arrive with Cashfree.
 enum PaymentMode {
+  cashfree
   cash
   upi
   card
@@ -283,12 +284,22 @@ enum MembershipStatus {
 }
 
 model Organisation {
-  id        String             @id @default(uuid()) @db.Uuid
-  slug      String             @unique
-  name      String
-  status    OrganisationStatus @default(active)
-  createdAt DateTime           @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt DateTime           @updatedAt @map("updated_at") @db.Timestamptz(3)
+  reconciliationRuns        CashfreeReconRun[]
+  reconciliationSettlements CashfreeReconSettlement[]
+  reconciliationEvents      CashfreeReconEvent[]
+  reconciliationIssues      CashfreeReconIssue[]
+  cashfreeRefunds           CashfreeRefund[]
+  refundEntries             RefundEntry[]
+  refundSettings            RefundSettings?
+  refundEvents              CashfreeRefundEvent[]
+  cashfreeOrders            CashfreeOrder[]
+  cashfreeEvents            CashfreeEvent[]
+  id                        String                    @id @default(uuid()) @db.Uuid
+  slug                      String                    @unique
+  name                      String
+  status                    OrganisationStatus        @default(active)
+  createdAt                 DateTime                  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt                 DateTime                  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   memberships            Membership[]
   patients               Patient[]
@@ -338,35 +349,43 @@ model Organisation {
   documentFiles          DocumentFile[]
   libraryDocuments       LibraryDocument[]
   patientDocuments       PatientDocument[]
+  whatsappDeliveries     WhatsAppDelivery[]
+
+  whatsappOptIns WhatsAppOptIn[]
 
   @@map("organisations")
 }
 
 /// Platform-level login identity. Phone for patients (OTP), email/phone + password + TOTP for staff.
 model User {
-  id               String     @id @default(uuid()) @db.Uuid
-  phone            String?    @unique
-  email            String?    @unique
-  displayName      String?    @map("display_name")
-  status           UserStatus @default(active)
-  passwordHash     String?    @map("password_hash")
+  reconciliationRequests CashfreeReconRun[]   @relation("ReconRequester")
+  reconciliationReviews  CashfreeReconIssue[] @relation("ReconReviewer")
+  refundsRequested       CashfreeRefund[]     @relation("RefundRequester")
+  cashfreeOrdersCreated  CashfreeOrder[]      @relation("CashfreeOrderCreator")
+  id                     String               @id @default(uuid()) @db.Uuid
+  phone                  String?              @unique
+  email                  String?              @unique
+  displayName            String?              @map("display_name")
+  status                 UserStatus           @default(active)
+  passwordHash           String?              @map("password_hash")
   /// AES-256-GCM encrypted TOTP secret (confirmed).
-  mfaSecret        String?    @map("mfa_secret")
+  mfaSecret              String?              @map("mfa_secret")
   /// AES-256-GCM encrypted TOTP secret awaiting first-code confirmation.
-  mfaPendingSecret String?    @map("mfa_pending_secret")
+  mfaPendingSecret       String?              @map("mfa_pending_secret")
   /// Last accepted TOTP time step; a code is never accepted twice.
-  mfaLastUsedStep  Int?       @map("mfa_last_used_step")
-  failedLoginCount Int        @default(0) @map("failed_login_count")
-  lockedUntil      DateTime?  @map("locked_until") @db.Timestamptz(3)
-  lastLoginAt      DateTime?  @map("last_login_at") @db.Timestamptz(3)
-  createdAt        DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt        DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
+  mfaLastUsedStep        Int?                 @map("mfa_last_used_step")
+  failedLoginCount       Int                  @default(0) @map("failed_login_count")
+  lockedUntil            DateTime?            @map("locked_until") @db.Timestamptz(3)
+  lastLoginAt            DateTime?            @map("last_login_at") @db.Timestamptz(3)
+  createdAt              DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt              DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  memberships Membership[]
-  sessions    Session[]
-  pushDevices PushDevice[]
-  invites     StaffInvite[]
-  consents    AccountConsent[]
+  memberships          Membership[]
+  sessions             Session[]
+  pushDevices          PushDevice[]
+  invites              StaffInvite[]
+  consents             AccountConsent[]
+  whatsappOptInChanges WhatsAppOptIn[]
 
   @@map("users")
 }
@@ -474,14 +493,16 @@ model StaffInvite {
 
 /// Patient sign-in code. Only a hash of the code is stored.
 model OtpChallenge {
-  id             String    @id @default(uuid()) @db.Uuid
-  phone          String
-  organisationId String    @map("organisation_id") @db.Uuid
-  codeHash       String    @map("code_hash")
-  attempts       Int       @default(0)
-  expiresAt      DateTime  @map("expires_at") @db.Timestamptz(3)
-  consumedAt     DateTime? @map("consumed_at") @db.Timestamptz(3)
-  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  purpose          String            @default("sign_in")
+  id               String            @id @default(uuid()) @db.Uuid
+  phone            String
+  organisationId   String            @map("organisation_id") @db.Uuid
+  codeHash         String            @map("code_hash")
+  attempts         Int               @default(0)
+  expiresAt        DateTime          @map("expires_at") @db.Timestamptz(3)
+  consumedAt       DateTime?         @map("consumed_at") @db.Timestamptz(3)
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  whatsappDelivery WhatsAppDelivery?
 
   @@index([phone, createdAt])
   @@map("otp_challenges")
@@ -520,6 +541,13 @@ model PatientMergeRequest {
 }
 
 model Patient {
+  portalClosedAt        DateTime? @map("portal_closed_at") @db.Timestamptz(3)
+  photoKey              String?   @map("photo_key")
+  photoMediaType        String?   @map("photo_media_type")
+  reportedBloodGroup    String?   @map("reported_blood_group")
+  bloodGroupReportedAt  DateTime? @map("blood_group_reported_at") @db.Timestamptz(3)
+  bloodGroupConfirmedAt DateTime? @map("blood_group_confirmed_at") @db.Timestamptz(3)
+
   id                    String    @id @default(uuid()) @db.Uuid
   organisationId        String    @map("organisation_id") @db.Uuid
   accountUserId         String?   @map("account_user_id") @db.Uuid
@@ -545,20 +573,21 @@ model Patient {
   createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt             DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  organisation Organisation          @relation(fields: [organisationId], references: [id])
-  guardian     Patient?              @relation("Guardian", fields: [guardianPatientId], references: [id])
-  dependants   Patient[]             @relation("Guardian")
-  mergedInto   Patient?              @relation("Merge", fields: [mergedIntoId], references: [id], onDelete: Restrict)
-  mergedFrom   Patient[]             @relation("Merge")
-  mergeSources PatientMergeRequest[] @relation("MergeSource")
-  mergeTargets PatientMergeRequest[] @relation("MergeTarget")
-  tags         PatientTag[]
-  appointments Appointment[]
-  allergies    Allergy[]
-  conditions   MedicalCondition[]
-  medications  CurrentMedication[]
-  referrals    Referral[]
-  documents    PatientDocument[]
+  organisation       Organisation          @relation(fields: [organisationId], references: [id])
+  guardian           Patient?              @relation("Guardian", fields: [guardianPatientId], references: [id])
+  dependants         Patient[]             @relation("Guardian")
+  mergedInto         Patient?              @relation("Merge", fields: [mergedIntoId], references: [id], onDelete: Restrict)
+  mergedFrom         Patient[]             @relation("Merge")
+  mergeSources       PatientMergeRequest[] @relation("MergeSource")
+  mergeTargets       PatientMergeRequest[] @relation("MergeTarget")
+  tags               PatientTag[]
+  appointments       Appointment[]
+  allergies          Allergy[]
+  conditions         MedicalCondition[]
+  medications        CurrentMedication[]
+  referrals          Referral[]
+  documents          PatientDocument[]
+  whatsappDeliveries WhatsAppDelivery[]
 
   @@unique([organisationId, uhid])
   @@index([organisationId, phone])
@@ -784,6 +813,9 @@ model AvailabilityException {
 /// A booking or walk-in (PRD §4.3, §5). Times are instants; `date` is the IST day the
 /// queue and token belong to.
 model Appointment {
+  delayMinutes          Int               @default(0) @map("delay_minutes")
+  delayUpdatedAt        DateTime?         @map("delay_updated_at") @db.Timestamptz(3)
+  prepaidBooking        CashfreeBooking?
   id                    String            @id @default(uuid()) @db.Uuid
   organisationId        String            @map("organisation_id") @db.Uuid
   patientId             String            @map("patient_id") @db.Uuid
@@ -809,20 +841,21 @@ model Appointment {
   createdAt             DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt             DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  organisation     Organisation               @relation(fields: [organisationId], references: [id])
-  patient          Patient                    @relation(fields: [patientId], references: [id])
-  clinic           Clinic                     @relation(fields: [clinicId], references: [id])
-  consultationType ConsultationType           @relation(fields: [consultationTypeId], references: [id])
-  rescheduledFrom  Appointment?               @relation("Reschedule", fields: [rescheduledFromId], references: [id], onDelete: Restrict)
-  rescheduledTo    Appointment?               @relation("Reschedule")
-  history          AppointmentStatusHistory[]
-  vitals           Vitals?
-  consultation     Consultation?
-  prescriptions    Prescription[]
-  bill             Bill?
-  testOrders       TestOrder[]
-  referrals        Referral[]
-  documents        PatientDocument[]
+  organisation       Organisation               @relation(fields: [organisationId], references: [id])
+  patient            Patient                    @relation(fields: [patientId], references: [id])
+  clinic             Clinic                     @relation(fields: [clinicId], references: [id])
+  consultationType   ConsultationType           @relation(fields: [consultationTypeId], references: [id])
+  rescheduledFrom    Appointment?               @relation("Reschedule", fields: [rescheduledFromId], references: [id], onDelete: Restrict)
+  rescheduledTo      Appointment?               @relation("Reschedule")
+  history            AppointmentStatusHistory[]
+  vitals             Vitals?
+  consultation       Consultation?
+  prescriptions      Prescription[]
+  bill               Bill?
+  testOrders         TestOrder[]
+  referrals          Referral[]
+  documents          PatientDocument[]
+  whatsappDeliveries WhatsAppDelivery[]
 
   @@unique([doctorUserId, clinicId, date, tokenNumber])
   @@index([organisationId, date])
@@ -1177,14 +1210,15 @@ model Prescription {
   /// A copy of the signed PDF marked VOID; the signed file itself is kept unchanged.
   voidPdfFileKey       String?    @map("void_pdf_file_key")
 
-  organisation Organisation              @relation(fields: [organisationId], references: [id])
-  appointment  Appointment               @relation(fields: [appointmentId], references: [id])
-  amends       Prescription?             @relation("Amendment", fields: [amendsPrescriptionId], references: [id], onDelete: Restrict)
-  amendedBy    Prescription?             @relation("Amendment")
-  items        PrescriptionItem[]
-  safetyAlerts SafetyAlert[]
-  verification PrescriptionVerification?
-  testOrders   TestOrder[]
+  organisation       Organisation              @relation(fields: [organisationId], references: [id])
+  appointment        Appointment               @relation(fields: [appointmentId], references: [id])
+  amends             Prescription?             @relation("Amendment", fields: [amendsPrescriptionId], references: [id], onDelete: Restrict)
+  amendedBy          Prescription?             @relation("Amendment")
+  items              PrescriptionItem[]
+  safetyAlerts       SafetyAlert[]
+  verification       PrescriptionVerification?
+  testOrders         TestOrder[]
+  whatsappDeliveries WhatsAppDelivery[]
 
   @@unique([appointmentId, version])
   @@unique([organisationId, number, version])
@@ -1318,26 +1352,29 @@ model PriceListItem {
 /// One bill per visit (PRD §5.6). Every amount is set by the server; the lines can change
 /// until the first payment, then the bill is fixed.
 model Bill {
-  id              String     @id @default(uuid()) @db.Uuid
-  organisationId  String     @map("organisation_id") @db.Uuid
-  appointmentId   String     @unique @map("appointment_id") @db.Uuid
-  patientId       String     @map("patient_id") @db.Uuid
-  doctorUserId    String     @map("doctor_user_id") @db.Uuid
-  subtotalPaise   Int        @map("subtotal_paise")
-  discountPaise   Int        @default(0) @map("discount_paise")
-  discountReason  String?    @map("discount_reason")
-  totalPaise      Int        @map("total_paise")
-  paidPaise       Int        @default(0) @map("paid_paise")
+  refunds         CashfreeRefund[]
+  refundEntries   RefundEntry[]
+  id              String           @id @default(uuid()) @db.Uuid
+  organisationId  String           @map("organisation_id") @db.Uuid
+  appointmentId   String           @unique @map("appointment_id") @db.Uuid
+  patientId       String           @map("patient_id") @db.Uuid
+  doctorUserId    String           @map("doctor_user_id") @db.Uuid
+  subtotalPaise   Int              @map("subtotal_paise")
+  discountPaise   Int              @default(0) @map("discount_paise")
+  discountReason  String?          @map("discount_reason")
+  totalPaise      Int              @map("total_paise")
+  paidPaise       Int              @default(0) @map("paid_paise")
   /// Set from the amounts with billStatus(); no default, since a ₹0 bill is already paid.
   status          BillStatus
   /// Guards against two people editing the same bill (0 is "no bill yet").
-  revision        Int        @default(1)
-  createdByUserId String     @map("created_by_user_id") @db.Uuid
-  createdAt       DateTime   @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt       DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
+  revision        Int              @default(1)
+  createdByUserId String           @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  organisation Organisation @relation(fields: [organisationId], references: [id])
-  appointment  Appointment  @relation(fields: [appointmentId], references: [id], onDelete: Restrict)
+  organisation Organisation    @relation(fields: [organisationId], references: [id])
+  appointment  Appointment     @relation(fields: [appointmentId], references: [id], onDelete: Restrict)
+  onlineOrders CashfreeOrder[]
   items        BillItem[]
   payments     Payment[]
 
@@ -1370,16 +1407,20 @@ model BillItem {
 /// A counter payment and its receipt. The ID comes from the client, so a retried
 /// request records the payment once.
 model Payment {
-  id               String      @id @db.Uuid
-  organisationId   String      @map("organisation_id") @db.Uuid
-  billId           String      @map("bill_id") @db.Uuid
+  refunds          CashfreeRefund[]
+  refundEntries    RefundEntry[]
+  cashfreeOrderId  String?          @unique @map("cashfree_order_id") @db.Uuid
+  cashfreeOrder    CashfreeOrder?   @relation(fields: [cashfreeOrderId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  id               String           @id @db.Uuid
+  organisationId   String           @map("organisation_id") @db.Uuid
+  billId           String           @map("bill_id") @db.Uuid
   mode             PaymentMode
-  amountPaise      Int         @map("amount_paise")
+  amountPaise      Int              @map("amount_paise")
   /// UPI transaction or card slip reference, as written on the slip.
   reference        String?
-  receiptNumber    String      @map("receipt_number")
-  receivedByUserId String      @map("received_by_user_id") @db.Uuid
-  receivedAt       DateTime    @default(now()) @map("received_at") @db.Timestamptz(3)
+  receiptNumber    String           @map("receipt_number")
+  receivedByUserId String           @map("received_by_user_id") @db.Uuid
+  receivedAt       DateTime         @default(now()) @map("received_at") @db.Timestamptz(3)
 
   organisation Organisation @relation(fields: [organisationId], references: [id])
   bill         Bill         @relation(fields: [billId], references: [id], onDelete: Restrict)
@@ -1592,9 +1633,10 @@ model ReferralLetter {
   signedAt          DateTime  @map("signed_at") @db.Timestamptz(3)
   createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  organisation Organisation                @relation(fields: [organisationId], references: [id])
-  referral     Referral                    @relation(fields: [referralId], references: [id], onDelete: Restrict)
-  verification ReferralLetterVerification?
+  organisation       Organisation                @relation(fields: [organisationId], references: [id])
+  referral           Referral                    @relation(fields: [referralId], references: [id], onDelete: Restrict)
+  verification       ReferralLetterVerification?
+  whatsappDeliveries WhatsAppDelivery[]
 
   @@map("referral_letters")
 }
@@ -1694,11 +1736,12 @@ model PatientDocument {
   createdAt         DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt         DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
 
-  organisation    Organisation     @relation(fields: [organisationId], references: [id])
-  patient         Patient          @relation(fields: [patientId], references: [id], onDelete: Restrict)
-  appointment     Appointment?     @relation(fields: [appointmentId], references: [id], onDelete: Restrict)
-  libraryDocument LibraryDocument? @relation(fields: [libraryDocumentId], references: [id], onDelete: Restrict)
-  file            DocumentFile     @relation(fields: [fileId], references: [id], onDelete: Restrict)
+  organisation       Organisation       @relation(fields: [organisationId], references: [id])
+  patient            Patient            @relation(fields: [patientId], references: [id], onDelete: Restrict)
+  appointment        Appointment?       @relation(fields: [appointmentId], references: [id], onDelete: Restrict)
+  libraryDocument    LibraryDocument?   @relation(fields: [libraryDocumentId], references: [id], onDelete: Restrict)
+  file               DocumentFile       @relation(fields: [fileId], references: [id], onDelete: Restrict)
+  whatsappDeliveries WhatsAppDelivery[]
 
   @@index([patientId])
   @@index([appointmentId])
@@ -1811,4 +1854,621 @@ model PlatformSession {
 
   @@index([operatorId])
   @@map("platform_sessions")
+}
+
+/// WhatsApp OTP delivery metadata; contains no OTP or recipient phone.
+model WhatsAppDelivery {
+  operationalUpdateId String?               @map("operational_update_id") @db.Uuid
+  financialOrderId    String?               @map("financial_order_id") @db.Uuid
+  receiptPaymentId    String?               @map("receipt_payment_id") @db.Uuid
+  refundEntryId       String?               @map("refund_entry_id") @db.Uuid
+  id                  String                @id @db.Uuid
+  organisationId      String                @map("organisation_id") @db.Uuid
+  otpChallengeId      String?               @unique @map("otp_challenge_id") @db.Uuid
+  senderPhoneNumberId String                @map("sender_phone_number_id")
+  providerMessageId   String?               @map("provider_message_id")
+  status              String                @default("pending")
+  lastStatusAt        DateTime              @map("last_status_at") @db.Timestamptz(3)
+  errorCode           Int?                  @map("error_code")
+  createdAt           DateTime              @map("created_at") @db.Timestamptz(3)
+  organisation        Organisation          @relation(fields: [organisationId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  otpChallenge        OtpChallenge?         @relation(fields: [otpChallengeId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  events              WhatsAppStatusEvent[]
+
+  kind               String    @default("otp")
+  appointmentId      String?   @map("appointment_id") @db.Uuid
+  recipientPatientId String?   @map("recipient_patient_id") @db.Uuid
+  optInId            String?   @map("opt_in_id") @db.Uuid
+  optInVersion       Int?      @map("opt_in_version")
+  appointmentStartAt DateTime? @map("appointment_start_at") @db.Timestamptz(3)
+  dueAt              DateTime? @map("due_at") @db.Timestamptz(3)
+  expiresAt          DateTime? @map("expires_at") @db.Timestamptz(3)
+  dispatchLeaseAt    DateTime? @map("dispatch_lease_at") @db.Timestamptz(3)
+  attemptedAt        DateTime? @map("attempted_at") @db.Timestamptz(3)
+  skipReason         String?   @map("skip_reason")
+
+  appointment      Appointment?   @relation(fields: [appointmentId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  recipientPatient Patient?       @relation(fields: [recipientPatientId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  optIn            WhatsAppOptIn? @relation(fields: [optInId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+
+  prescriptionId    String?          @map("prescription_id") @db.Uuid
+  referralLetterId  String?          @map("referral_letter_id") @db.Uuid
+  patientDocumentId String?          @map("patient_document_id") @db.Uuid
+  linkExpiresAt     DateTime?        @map("link_expires_at") @db.Timestamptz(3)
+  prescription      Prescription?    @relation(fields: [prescriptionId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  referralLetter    ReferralLetter?  @relation(fields: [referralLetterId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  patientDocument   PatientDocument? @relation(fields: [patientDocumentId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+
+  @@unique([financialOrderId, senderPhoneNumberId], map: "whatsapp_finance_order_key")
+  @@unique([receiptPaymentId, senderPhoneNumberId], map: "whatsapp_finance_receipt_key")
+  @@unique([refundEntryId, senderPhoneNumberId], map: "whatsapp_finance_refund_key")
+  @@unique([senderPhoneNumberId, providerMessageId])
+  @@unique([appointmentId, kind, appointmentStartAt, senderPhoneNumberId], map: "whatsapp_appointment_notice_key")
+  @@unique([prescriptionId, senderPhoneNumberId], map: "whatsapp_prescription_notice_key")
+  @@unique([referralLetterId, senderPhoneNumberId], map: "whatsapp_referral_notice_key")
+  @@unique([patientDocumentId, senderPhoneNumberId], map: "whatsapp_document_notice_key")
+  @@index([organisationId, createdAt, id])
+  @@index([senderPhoneNumberId, status, dueAt])
+  @@map("whatsapp_deliveries")
+}
+
+/// Sanitized verified status only. Raw webhook messages and recipient IDs are discarded.
+model WhatsAppStatusEvent {
+  id             String           @id @db.Uuid
+  deliveryId     String           @map("delivery_id") @db.Uuid
+  status         String
+  occurredAt     DateTime         @map("occurred_at") @db.Timestamptz(3)
+  errorCode      Int?             @map("error_code")
+  receivedAt     DateTime         @default(now()) @map("received_at") @db.Timestamptz(3)
+  lastEnqueuedAt DateTime?        @map("last_enqueued_at") @db.Timestamptz(3)
+  processedAt    DateTime?        @map("processed_at") @db.Timestamptz(3)
+  delivery       WhatsAppDelivery @relation(fields: [deliveryId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+
+  @@unique([deliveryId, status, occurredAt])
+  @@index([processedAt, lastEnqueuedAt])
+  @@map("whatsapp_status_events")
+}
+
+/// Explicit consent for appointment messages to one number from one sending business.
+model WhatsAppOptIn {
+  id                  String             @id @db.Uuid
+  organisationId      String             @map("organisation_id") @db.Uuid
+  phone               String
+  senderPhoneNumberId String             @map("sender_phone_number_id")
+  enabled             Boolean            @default(false)
+  version             Int                @default(1)
+  changedAt           DateTime           @map("changed_at") @db.Timestamptz(3)
+  changedByUserId     String?            @map("changed_by_user_id") @db.Uuid
+  organisation        Organisation       @relation(fields: [organisationId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  changedBy           User?              @relation(fields: [changedByUserId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  deliveries          WhatsAppDelivery[]
+
+  category String @default("appointments")
+
+  @@unique([organisationId, phone, senderPhoneNumberId, category], map: "whatsapp_opt_in_category_key")
+  @@index([phone, senderPhoneNumberId])
+  @@map("whatsapp_opt_ins")
+}
+
+/// Hash of a verified inbound STOP message ID; raw message/phone is never stored here.
+model WhatsAppOptOutEvent {
+  id         String   @id
+  receivedAt DateTime @default(now()) @map("received_at") @db.Timestamptz(3)
+
+  @@map("whatsapp_opt_out_events")
+}
+
+model CashfreeOrder {
+  prepaidBooking       CashfreeBooking?
+  refunds              CashfreeRefund[]
+  refundEvents         CashfreeRefundEvent[]
+  refundReviewRequired Boolean               @default(false) @map("refund_review_required")
+  organisation         Organisation          @relation(fields: [organisationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdBy            User                  @relation("CashfreeOrderCreator", fields: [createdByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  id                   String                @id @db.Uuid
+  organisationId       String                @map("organisation_id") @db.Uuid
+  billId               String                @map("bill_id") @db.Uuid
+  providerOrderId      String                @unique @map("provider_order_id")
+  merchantClientId     String                @map("merchant_client_id")
+  environment          String
+  amountPaise          Int                   @map("amount_paise")
+  currency             String                @default("INR")
+  status               String                @default("creating")
+  requestCipher        String                @map("request_cipher")
+  sessionCipher        String?               @map("session_cipher")
+  providerPaymentId    String?               @map("provider_payment_id")
+  createdByUserId      String                @map("created_by_user_id") @db.Uuid
+  expiresAt            DateTime              @map("expires_at") @db.Timestamptz(3)
+  checkedAt            DateTime?             @map("checked_at") @db.Timestamptz(3)
+  createdAt            DateTime              @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt            DateTime              @updatedAt @map("updated_at") @db.Timestamptz(3)
+  bill                 Bill                  @relation(fields: [billId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  payment              Payment?
+  events               CashfreeEvent[]
+
+  @@unique([merchantClientId, environment, providerPaymentId], map: "cashfree_provider_payment_key")
+  @@index([organisationId, billId])
+  @@map("cashfree_orders")
+}
+
+model CashfreeEvent {
+  organisation      Organisation  @relation(fields: [organisationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  id                String        @id @default(uuid()) @db.Uuid
+  organisationId    String        @map("organisation_id") @db.Uuid
+  orderId           String        @map("order_id") @db.Uuid
+  providerPaymentId String?       @map("provider_payment_id")
+  amountPaise       Int?          @map("amount_paise")
+  currency          String?
+  eventHash         String        @map("event_hash")
+  kind              String
+  outcome           String
+  receivedAt        DateTime      @default(now()) @map("received_at") @db.Timestamptz(3)
+  order             CashfreeOrder @relation(fields: [orderId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+
+  @@unique([organisationId, eventHash])
+  @@map("cashfree_events")
+}
+
+model CashfreeRefund {
+  id                String        @id @db.Uuid
+  organisationId    String        @map("organisation_id") @db.Uuid
+  orderId           String        @map("order_id") @db.Uuid
+  billId            String        @map("bill_id") @db.Uuid
+  paymentId         String        @map("payment_id") @db.Uuid
+  merchantRefundId  String        @map("merchant_refund_id")
+  providerRefundId  String?       @map("provider_refund_id")
+  amountPaise       Int           @map("amount_paise")
+  currency          String        @default("INR")
+  origin            String
+  reason            String
+  status            String        @default("creating")
+  requestedByUserId String?       @map("requested_by_user_id") @db.Uuid
+  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  checkedAt         DateTime?     @map("checked_at") @db.Timestamptz(3)
+  updatedAt         DateTime      @updatedAt @map("updated_at") @db.Timestamptz(3)
+  organisation      Organisation  @relation(fields: [organisationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  requestedBy       User?         @relation("RefundRequester", fields: [requestedByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  order             CashfreeOrder @relation(fields: [orderId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  bill              Bill          @relation(fields: [billId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  payment           Payment       @relation(fields: [paymentId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  entry             RefundEntry?
+
+  @@unique([orderId, merchantRefundId], map: "cashfree_refund_merchant_key")
+  @@unique([orderId, providerRefundId], map: "cashfree_refund_provider_key")
+  @@index([organisationId, billId])
+  @@map("cashfree_refunds")
+}
+
+model RefundEntry {
+  refundId       String         @id @map("refund_id") @db.Uuid
+  organisationId String         @map("organisation_id") @db.Uuid
+  billId         String         @map("bill_id") @db.Uuid
+  paymentId      String         @map("payment_id") @db.Uuid
+  amountPaise    Int            @map("amount_paise")
+  voucherNumber  String         @map("voucher_number")
+  postedAt       DateTime       @map("posted_at") @db.Timestamptz(3)
+  refund         CashfreeRefund @relation(fields: [refundId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  organisation   Organisation   @relation(fields: [organisationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  bill           Bill           @relation(fields: [billId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  payment        Payment        @relation(fields: [paymentId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+
+  @@unique([organisationId, voucherNumber])
+  @@index([organisationId, postedAt])
+  @@map("refund_entries")
+}
+
+model RefundSettings {
+  organisationId String       @id @map("organisation_id") @db.Uuid
+  nextNumber     Int          @default(1) @map("next_number")
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("refund_settings")
+}
+
+model CashfreeRefundEvent {
+  id               String        @id @default(uuid()) @db.Uuid
+  organisationId   String        @map("organisation_id") @db.Uuid
+  orderId          String        @map("order_id") @db.Uuid
+  eventHash        String        @map("event_hash")
+  merchantRefundId String        @map("merchant_refund_id")
+  providerRefundId String        @map("provider_refund_id")
+  outcome          String
+  receivedAt       DateTime      @default(now()) @map("received_at") @db.Timestamptz(3)
+  organisation     Organisation  @relation(fields: [organisationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  order            CashfreeOrder @relation(fields: [orderId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+
+  @@unique([organisationId, eventHash])
+  @@map("cashfree_refund_events")
+}
+
+model CashfreeReconRun {
+  id                String                    @id @db.Uuid
+  organisationId    String                    @map("organisation_id") @db.Uuid
+  merchantClientId  String                    @map("merchant_client_id")
+  environment       String
+  fromDate          DateTime                  @map("from_date") @db.Date
+  toDate            DateTime                  @map("to_date") @db.Date
+  nightlyKey        String?                   @map("nightly_key")
+  requestedByUserId String?                   @map("requested_by_user_id") @db.Uuid
+  status            String                    @default("queued")
+  attempts          Int                       @default(0)
+  leaseToken        String?                   @map("lease_token") @db.Uuid
+  leaseUntil        DateTime?                 @map("lease_until") @db.Timestamptz(3)
+  dispatchLeaseAt   DateTime?                 @map("dispatch_lease_at") @db.Timestamptz(3)
+  retryAt           DateTime?                 @map("retry_at") @db.Timestamptz(3)
+  errorCode         String?                   @map("error_code")
+  eventCount        Int                       @default(0) @map("event_count")
+  settlementCount   Int                       @default(0) @map("settlement_count")
+  mismatchCount     Int                       @default(0) @map("mismatch_count")
+  createdAt         DateTime                  @default(now()) @map("created_at") @db.Timestamptz(3)
+  startedAt         DateTime?                 @map("started_at") @db.Timestamptz(3)
+  completedAt       DateTime?                 @map("completed_at") @db.Timestamptz(3)
+  organisation      Organisation              @relation(fields: [organisationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  requestedBy       User?                     @relation("ReconRequester", fields: [requestedByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  settlements       CashfreeReconSettlement[]
+  events            CashfreeReconEvent[]
+  issues            CashfreeReconIssue[]
+
+  @@unique([organisationId, merchantClientId, environment, nightlyKey], map: "cashfree_recon_nightly_key")
+  @@index([organisationId, createdAt])
+  @@map("cashfree_recon_runs")
+}
+
+model CashfreeReconSettlement {
+  id              String           @id @default(uuid()) @db.Uuid
+  runId           String           @map("run_id") @db.Uuid
+  organisationId  String           @map("organisation_id") @db.Uuid
+  settlementId    String           @map("settlement_id")
+  status          String
+  utr             String?
+  grossPaise      BigInt           @map("gross_paise")
+  feesPaise       BigInt           @map("fees_paise")
+  taxPaise        BigInt           @map("tax_paise")
+  adjustmentPaise BigInt           @map("adjustment_paise")
+  chargingBasis   String           @map("charging_basis")
+  netPaise        BigInt           @map("net_paise")
+  run             CashfreeReconRun @relation(fields: [runId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  organisation    Organisation     @relation(fields: [organisationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([runId, settlementId])
+  @@map("cashfree_recon_settlements")
+}
+
+model CashfreeReconEvent {
+  id               String           @id @default(uuid()) @db.Uuid
+  runId            String           @map("run_id") @db.Uuid
+  organisationId   String           @map("organisation_id") @db.Uuid
+  direction        String?
+  stream           String
+  eventKey         String           @map("event_key")
+  kind             String
+  providerEventId  String           @map("provider_event_id")
+  status           String?
+  orderReference   String?          @map("order_reference")
+  paymentReference String?          @map("payment_reference")
+  refundReference  String?          @map("refund_reference")
+  settlementId     String?          @map("settlement_id")
+  currency         String?
+  amountPaise      BigInt?          @map("amount_paise")
+  feesPaise        BigInt?          @map("fees_paise")
+  taxPaise         BigInt?          @map("tax_paise")
+  netPaise         BigInt?          @map("net_paise")
+  run              CashfreeReconRun @relation(fields: [runId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  organisation     Organisation     @relation(fields: [organisationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([runId, stream, eventKey])
+  @@map("cashfree_recon_events")
+}
+
+model CashfreeReconIssue {
+  id                String           @id @default(uuid()) @db.Uuid
+  runId             String           @map("run_id") @db.Uuid
+  organisationId    String           @map("organisation_id") @db.Uuid
+  issueKey          String           @map("issue_key")
+  code              String
+  severity          String
+  providerReference String?          @map("provider_reference")
+  settlementId      String?          @map("settlement_id")
+  orderId           String?          @map("order_id") @db.Uuid
+  paymentId         String?          @map("payment_id") @db.Uuid
+  appointmentId     String?          @map("appointment_id") @db.Uuid
+  expectedPaise     BigInt?          @map("expected_paise")
+  reportedPaise     BigInt?          @map("reported_paise")
+  reviewedAt        DateTime?        @map("reviewed_at") @db.Timestamptz(3)
+  reviewedByUserId  String?          @map("reviewed_by_user_id") @db.Uuid
+  reviewReason      String?          @map("review_reason")
+  run               CashfreeReconRun @relation(fields: [runId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  organisation      Organisation     @relation(fields: [organisationId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  reviewedBy        User?            @relation("ReconReviewer", fields: [reviewedByUserId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([runId, issueKey])
+  @@map("cashfree_recon_issues")
+}
+
+model CashfreeBooking {
+  id              String        @id @db.Uuid
+  organisationId  String        @map("organisation_id") @db.Uuid
+  appointmentId   String        @unique @map("appointment_id") @db.Uuid
+  orderId         String        @unique @map("order_id") @db.Uuid
+  createdByUserId String        @map("created_by_user_id") @db.Uuid
+  autoConfirm     Boolean       @default(true) @map("auto_confirm")
+  requestHash     String        @map("request_hash")
+  expiresAt       DateTime      @map("expires_at") @db.Timestamptz(3)
+  state           String        @default("held")
+  nextCheckAt     DateTime      @map("next_check_at") @db.Timestamptz(3)
+  createdAt       DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  appointment     Appointment   @relation(fields: [appointmentId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  order           CashfreeOrder @relation(fields: [orderId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+
+  @@index([organisationId, state, nextCheckAt])
+  @@map("cashfree_bookings")
+}
+
+/// Purpose-bound old/new phone proof for one adult in one clinic. No clinical content.
+model PatientPhoneChange {
+  id             String    @id @db.Uuid
+  organisationId String    @map("organisation_id") @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  patientId      String    @map("patient_id") @db.Uuid
+  oldPhone       String    @map("old_phone")
+  newPhone       String    @map("new_phone")
+  oldChallengeId String?   @unique @map("old_challenge_id") @db.Uuid
+  newChallengeId String?   @unique @map("new_challenge_id") @db.Uuid
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  expiresAt      DateTime  @map("expires_at") @db.Timestamptz(3)
+  completedAt    DateTime? @map("completed_at") @db.Timestamptz(3)
+
+  @@index([userId, createdAt])
+  @@map("patient_phone_changes")
+}
+
+/// Private patient-origin records. Clinical use freezes the record; unused deletion is durable.
+model PatientRecord {
+  id               String               @id @db.Uuid
+  organisationId   String               @map("organisation_id") @db.Uuid
+  patientId        String               @map("patient_id") @db.Uuid
+  createdByUserId  String               @map("created_by_user_id") @db.Uuid
+  createHash       String               @map("create_hash")
+  detailsCipher    String?              @map("details_cipher")
+  category         String
+  recordDate       DateTime?            @map("record_date") @db.Date
+  appointmentId    String?              @map("appointment_id") @db.Uuid
+  testOrderId      String?              @map("test_order_id") @db.Uuid
+  revision         Int                  @default(1)
+  state            String               @default("awaiting_upload")
+  fileKey          String?              @unique @map("file_key")
+  mediaType        String?              @map("media_type")
+  sizeBytes        Int?                 @map("size_bytes")
+  sha256           String?
+  sourceSha256     String?              @map("source_sha256")
+  createdAt        DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
+  uploadExpiresAt  DateTime             @map("upload_expires_at") @db.Timestamptz(3)
+  reviewedAt       DateTime?            @map("reviewed_at") @db.Timestamptz(3)
+  reviewedByUserId String?              @map("reviewed_by_user_id") @db.Uuid
+  usedAt           DateTime?            @map("used_at") @db.Timestamptz(3)
+  hiddenAt         DateTime?            @map("hidden_at") @db.Timestamptz(3)
+  purgeClaim       String?              @map("purge_claim") @db.Uuid
+  purgeLeaseUntil  DateTime?            @map("purge_lease_until") @db.Timestamptz(3)
+  purgeNextAt      DateTime?            @map("purge_next_at") @db.Timestamptz(3)
+  purgedAt         DateTime?            @map("purged_at") @db.Timestamptz(3)
+  shares           PatientRecordShare[]
+  uses             PatientRecordUse[]
+
+  @@index([organisationId, patientId, createdAt])
+  @@index([state, purgeNextAt])
+  @@map("patient_records")
+}
+
+model PatientRecordShare {
+  createdByUserId String        @map("created_by_user_id") @db.Uuid
+  id              String        @id @db.Uuid
+  organisationId  String        @map("organisation_id") @db.Uuid
+  recordId        String        @map("record_id") @db.Uuid
+  doctorUserId    String        @map("doctor_user_id") @db.Uuid
+  tokenHash       String        @unique @map("token_hash")
+  tokenCipher     String?       @map("token_cipher")
+  ttlHours        Int           @map("ttl_hours")
+  createdAt       DateTime      @map("created_at") @db.Timestamptz(3)
+  expiresAt       DateTime      @map("expires_at") @db.Timestamptz(3)
+  revokedAt       DateTime?     @map("revoked_at") @db.Timestamptz(3)
+  record          PatientRecord @relation(fields: [recordId], references: [id], onDelete: Restrict)
+
+  @@index([doctorUserId, expiresAt])
+  @@map("patient_record_shares")
+}
+
+model PatientRecordUse {
+  id             String        @id @default(uuid()) @db.Uuid
+  organisationId String        @map("organisation_id") @db.Uuid
+  recordId       String        @map("record_id") @db.Uuid
+  appointmentId  String        @map("appointment_id") @db.Uuid
+  doctorUserId   String        @map("doctor_user_id") @db.Uuid
+  revision       Int
+  usedAt         DateTime      @map("used_at") @db.Timestamptz(3)
+  record         PatientRecord @relation(fields: [recordId], references: [id], onDelete: Restrict)
+
+  @@unique([recordId, appointmentId])
+  @@map("patient_record_uses")
+}
+
+model PatientAccountAccess {
+  organisationId String    @map("organisation_id") @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  closedAt       DateTime? @map("closed_at") @db.Timestamptz(3)
+
+  @@id([organisationId, userId])
+  @@map("patient_account_access")
+}
+
+model DataRightsRequest {
+  id               String            @id @db.Uuid
+  organisationId   String            @map("organisation_id") @db.Uuid
+  userId           String            @map("user_id") @db.Uuid
+  patientId        String?           @map("patient_id") @db.Uuid
+  kind             String
+  area             String
+  detailsCipher    String            @map("details_cipher")
+  state            String            @default("requested")
+  assignedDoctorId String?           @map("assigned_doctor_id") @db.Uuid
+  responseCipher   String?           @map("response_cipher")
+  policyReference  String?           @map("policy_reference")
+  reviewAfter      DateTime?         @map("review_after") @db.Date
+  evidenceId       String?           @map("evidence_id") @db.Uuid
+  revision         Int               @default(1)
+  createdAt        DateTime          @map("created_at") @db.Timestamptz(3)
+  updatedAt        DateTime          @updatedAt @map("updated_at") @db.Timestamptz(3)
+  events           DataRightsEvent[]
+
+  @@index([organisationId, state, createdAt])
+  @@map("data_rights_requests")
+}
+
+model DataRightsEvent {
+  id             String            @id @default(uuid()) @db.Uuid
+  organisationId String            @map("organisation_id") @db.Uuid
+  requestId      String            @map("request_id") @db.Uuid
+  actorUserId    String            @map("actor_user_id") @db.Uuid
+  action         String
+  at             DateTime          @map("at") @db.Timestamptz(3)
+  request        DataRightsRequest @relation(fields: [requestId], references: [id], onDelete: Restrict)
+
+  @@index([requestId, at])
+  @@map("data_rights_events")
+}
+
+model AccountClosureAttempt {
+  id             String    @id @db.Uuid
+  organisationId String    @map("organisation_id") @db.Uuid
+  userId         String    @map("user_id") @db.Uuid
+  challengeId    String?   @unique @map("challenge_id") @db.Uuid
+  createdAt      DateTime  @map("created_at") @db.Timestamptz(3)
+  expiresAt      DateTime  @map("expires_at") @db.Timestamptz(3)
+  confirmedAt    DateTime? @map("confirmed_at") @db.Timestamptz(3)
+
+  @@index([userId, createdAt])
+  @@map("account_closure_attempts")
+}
+
+model RightsFileDeletion {
+  id             String    @id @default(uuid()) @db.Uuid
+  organisationId String    @map("organisation_id") @db.Uuid
+  fileKey        String    @unique @map("file_key")
+  nextAt         DateTime  @map("next_at") @db.Timestamptz(3)
+  doneAt         DateTime? @map("done_at") @db.Timestamptz(3)
+
+  @@map("rights_file_deletions")
+}
+
+model InboxChannel {
+  senderId       String   @id @map("sender_id")
+  organisationId String   @map("organisation_id") @db.Uuid
+  businessId     String   @map("business_id")
+  createdAt      DateTime @map("created_at") @db.Timestamptz(3)
+
+  @@map("inbox_channels")
+}
+
+model InboxThread {
+  id               String         @id @db.Uuid
+  organisationId   String         @map("organisation_id") @db.Uuid
+  senderId         String         @map("sender_id")
+  contactKey       String         @map("contact_key")
+  phoneCipher      String         @map("phone_cipher")
+  last4            String
+  lastInboundAt    DateTime       @map("last_inbound_at") @db.Timestamptz(3)
+  stoppedAt        DateTime?      @map("stopped_at") @db.Timestamptz(3)
+  optedInAt        DateTime?      @map("opted_in_at") @db.Timestamptz(3)
+  optInSource      String?        @map("opt_in_source")
+  assignedDoctorId String?        @map("assigned_doctor_id") @db.Uuid
+  state            String         @default("open")
+  unread           Int            @default(0)
+  revision         Int            @default(1)
+  updatedAt        DateTime       @map("updated_at") @db.Timestamptz(3)
+  messages         InboxMessage[]
+
+  @@unique([senderId, contactKey])
+  @@index([organisationId, updatedAt])
+  @@map("inbox_threads")
+}
+
+model InboxMessage {
+  id               String      @id @db.Uuid
+  organisationId   String      @map("organisation_id") @db.Uuid
+  threadId         String      @map("thread_id") @db.Uuid
+  senderId         String      @map("sender_id")
+  providerId       String?     @map("provider_id")
+  direction        String
+  kind             String
+  bodyCipher       String      @map("body_cipher")
+  inputHash        String?     @map("input_hash")
+  state            String
+  occurredAt       DateTime    @map("occurred_at") @db.Timestamptz(3)
+  createdAt        DateTime    @map("created_at") @db.Timestamptz(3)
+  attemptAt        DateTime?   @map("attempt_at") @db.Timestamptz(3)
+  statusAt         DateTime    @map("status_at") @db.Timestamptz(3)
+  sentByUserId     String?     @map("sent_by_user_id") @db.Uuid
+  sentByRole       String?     @map("sent_by_role")
+  templateId       String?     @map("template_id") @db.Uuid
+  templateRevision Int?        @map("template_revision")
+  errorCode        Int?        @map("error_code")
+  thread           InboxThread @relation(fields: [threadId], references: [id])
+
+  @@unique([senderId, providerId])
+  @@index([threadId, createdAt])
+  @@index([organisationId, state, createdAt])
+  @@map("inbox_messages")
+}
+
+model InboxTemplate {
+  id             String   @id @db.Uuid
+  organisationId String   @map("organisation_id") @db.Uuid
+  senderId       String   @map("sender_id")
+  providerId     String   @map("provider_id")
+  name           String
+  language       String
+  category       String
+  providerStatus String   @map("provider_status")
+  bodyCipher     String   @map("body_cipher")
+  contentHash    String   @map("content_hash")
+  supported      Boolean
+  enabled        Boolean  @default(false)
+  revision       Int      @default(1)
+  verifiedAt     DateTime @map("verified_at") @db.Timestamptz(3)
+
+  @@unique([senderId, providerId])
+  @@map("inbox_templates")
+}
+
+model ClinicOperation {
+  id              String    @id @db.Uuid
+  organisationId  String    @map("organisation_id") @db.Uuid
+  createdByUserId String    @map("created_by_user_id") @db.Uuid
+  doctorId        String    @map("doctor_id") @db.Uuid
+  kind            String
+  state           String    @default("preview")
+  revision        Int       @default(1)
+  requestHash     String    @map("request_hash")
+  snapshotHash    String    @map("snapshot_hash")
+  planCipher      String    @map("plan_cipher")
+  resultCipher    String?   @map("result_cipher")
+  createdAt       DateTime  @map("created_at") @db.Timestamptz(3)
+  expiresAt       DateTime  @map("expires_at") @db.Timestamptz(3)
+  appliedAt       DateTime? @map("applied_at") @db.Timestamptz(3)
+
+  @@index([organisationId, createdAt])
+  @@map("clinic_operations")
+}
+
+model ClinicOperationalUpdate {
+  id             String   @id @db.Uuid
+  organisationId String   @map("organisation_id") @db.Uuid
+  operationId    String   @map("operation_id") @db.Uuid
+  appointmentId  String   @map("appointment_id") @db.Uuid
+  replacementId  String?  @map("replacement_id") @db.Uuid
+  kind           String
+  delayMinutes   Int      @default(0) @map("delay_minutes")
+  createdAt      DateTime @map("created_at") @db.Timestamptz(3)
+
+  @@unique([operationId, appointmentId])
+  @@map("clinic_operational_updates")
 }

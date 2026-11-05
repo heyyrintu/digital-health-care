@@ -90,3 +90,90 @@ Covered end to end only in Chromium (`documents.spec.ts`). Before launch: real s
 | High | Core journey broken without workaround | Blocks release |
 | Medium | Workaround exists | Fix within two sprints |
 | Low | Cosmetic | Backlog |
+
+
+## WhatsApp OTP delivery and receipts
+
+- `apps/api/src/messaging/otp-sender.test.ts`: approved-template payload, acceptance validation, safe provider errors, timeout, input/config validation, no automatic send retry.
+- `apps/api/src/messaging/webhooks.test.ts`: raw-byte HMAC, handshake/token logging, ordinary JSON parser isolation, sender/account allowlist, unsupported events, storage retry response and payload bounds.
+- `apps/api/test/whatsapp.int.test.ts`: real PostgreSQL migration/functions; accepted/send-failed states, early callback race, duplicate and out-of-order receipts, stale failure handling, audit idempotency, cross-organisation/role isolation, admin API privacy and durable lease recovery.
+- `apps/api/test/auth.int.test.ts`: failed delivery retires the challenge, emits a safe error/audit and still consumes the request quota.
+- `apps/workers/src/whatsapp-status.test.ts`: ID-only job validation and publish failure/retry boundary.
+- `apps/e2e/tests/whatsapp-delivery.spec.ts`: admin navigation, accepted status, delivered after Refresh, no recipient/provider IDs in the table, Hindi switch.
+
+Validation on 4 November 2026: full Node 22 project checks and format check passed; 40 WhatsApp/auth integration tests passed on an isolated PostgreSQL 16 instance; the browser test passed against built API/web apps. Live Meta sends/callbacks and an actual Redis-backed worker deployment still require environment configuration and a staging smoke test. No real patients or external messages are used by these tests.
+
+
+## Appointment notification regression coverage
+
+- `whatsapp-appointments.int.test.ts`: real trigger/outbox rollback, explicit agreement, confirmation transitions, 24-hour scheduling boundary, due claims, concurrent authorization, cancellation/rescheduling/time/phone changes, inactive clinic/doctor/practice, consent revision/regrant, STOP signature/dedup/old-event handling, private role/tenant boundaries, crash uncertainty and callbacks racing acceptance. UTC serialization is verified on a PostgreSQL server whose default timezone is IST.
+- `appointment-notices.test.ts` (workers): exact reviewed-template parameter order and IST rendering, public sign-in link, ID-only queue boundary, duplicate authorization, safe provider errors and uncertain results with no send retry.
+- `whatsapp-appointments.spec.ts` (browser, `E2E_WHATSAPP=1`): staff agreement checkbox, on/off preference, newly queued kinds, and patient revocation from the consent gate without health consent. The existing patient-portal spec verifies booking, family, documents and withdrawal with the updated WhatsApp sign-in helper.
+- Live Meta and Redis-backed sending still require configured templates/credentials and a staging smoke test. Browser tests run no outgoing worker and send no external messages.
+
+Final appointment validation: 46 full project tasks passed, followed by focused checks after the consent-gate control was added; 77 booking/authentication/WhatsApp integration tests passed on fresh migrations; four browser tests passed, including the existing patient portal booking/records flows. Provider settings remained synthetic and no outgoing worker or real Meta send was run.
+
+Record notices: verify separate appointment/record consent; transactional enqueue on sign/share only; unique source dedup; supersession/void/withdraw/revoke/expiry skips; one begin authorization; signed-token tamper/expiry checks; forwarded and cross-clinic access refusal; current health-consent gate; family referral list/PDF and closed-letter validity. Browser document flow follows a record link through login and opens the authorized file. Transport tests assert one generic URL parameter and no retries on ambiguous send. Live Meta/Redis deployment remains a later pilot.
+
+Cashfree collection: unit tests verify fixed sandbox/production hosts, explicit API version, stable idempotency key, minimal customer fields, safe failure handling, raw-byte/timestamp signatures, exact decimal conversion, signed links and configuration defaults. Real PostgreSQL integration covers merchant/tenant isolation, encrypted sessions, explicit server-priced balances, retries, callback dedup/monotonicity, mismatches, receipt numbering, counter-vs-online races, closing/expiry, app-role forgery refusal, pauses with callbacks still active, partial balances and extra successful-payment review. Browser tests use a synthetic SDK/API transport for the isolated public UI, and the real counter-billing flow remains a regression check. No real Cashfree transaction or merchant credentials are used by these tests; a genuine sandbox acceptance pilot is still outstanding.
+
+Refund coverage: exact provider payload, fixed account/host/version and idempotency headers; admin-only requests; concurrent amount reservations; partial and full limits; known/unknown timeout recovery; checks that never submit; duplicate and out-of-order callbacks; terminal cancellation/rejection; immutable identity and deferred success/ledger consistency; mismatched source/payment/amount/currency/refund ID; imported dashboard refunds; paused creation with active callbacks; original-receipt immutability and no reopened bill; refund voucher numbering; tenant isolation; daily gross/Cashfree/refund/net totals and refund-only negative days. Browser validation uses synthetic gateway/API responses for explicit confirmation, same-UUID recovery after an unknown response, voucher rendering/printing controls and negative reports, plus the real counter-billing regression flow. A real Cashfree sandbox refund remains pending until credentials are configured.
+
+### Settlement reconciliation increment (ADR 0023)
+
+- Provider transport: fixed sandbox/production endpoints and API version; exact signed paise; personal fields stripped; bounded response/page counts; cursor exhaustion/loop/incomplete scans.
+- Matcher: successful receipt/refund identity and amount checks; explicit refund references only; account/currency conflicts; ledger-only timing differences; settlement gross/fees/tax/net, pending status, adjustments and unsupported charging bases.
+- PostgreSQL: fresh migrations, tenant/admin restrictions, duplicate open requests, complete atomic publication, immutable results, reason-coded acknowledgement, provider failure/backoff, concurrent/stale workers, final-attempt crash expiry, nightly IST period and durable dispatch recovery. Verify unchanged receipt, bill and refund ledgers.
+- Browser: request queued report, refresh to completion, review discrepancy, read net/UTR and bank-confirmation hint, acknowledge with reason.
+- Before enabling: real Cashfree sandbox paginated reports, merchant-specific charging/adjustment semantics and delayed refund/settlement availability remain unverified without credentials.
+
+### Prepaid web booking increment (ADR 0024)
+
+- Gated supporting-client options; free endpoint bypass rejection; strict bodies exclude amounts; family and tenant ownership including dependants.
+- Concurrent same/different UUIDs book once; reserved slots are unavailable to competing bookings; server fees and approval policy remain snapshots across retries.
+- Unknown provider creation recovers the same order/UUID; browser success alone never confirms; signed duplicate callbacks produce one receipt/history transition.
+- Verified payment automatically confirms only under the captured clinic rule; manual approval remains pending and staff can approve only after payment.
+- Local expiry, unknown/missing provider orders and asynchronous termination retain holds. Verified closure releases; late or past-slot success posts a receipt and review without restoring the slot. Unpaid holds are not no-shows.
+- Frozen bill/line and appointment transitions resist application-role writes; replacement collection/moving prepaid appointments is blocked.
+- Browser: reserve, view correct prepaid fee/checkout link, check verified confirmation, and explicitly close an unpaid reservation.
+- Regress existing portal booking, staff appointments, billing, collection, refunds and reconciliation. Real sandbox checkout/termination/callback races and refunds remain pending before enablement.
+
+### Patient finance and financial notices (ADR 0025)
+
+- Exact current family/tenant/guardian/merged-history authorization for bills, receipts, cursors and checkout; consent withdrawal blocks financial record reads.
+- Server-priced remaining balance, stable request recovery, normalized UUID casing; unverified attempts never appear as paid receipts; prepaid quotes retain their own controls.
+- Original staff receipt byte response unchanged across refunds; portal refund supplements and paid-after-refund totals do not reopen collection.
+- Independent payment opt-in; transactionally deduplicated order/receipt/refund notices; HMAC purpose/expiry and signed-in ownership; STOP, source payment/closure, changed contact, expiry and uncertain send suppression.
+- Worker transport: one generic URL body parameter, fixed Meta endpoint, explicit version/template, no redirects, safe failures; disabled defaults and strict enabled configuration.
+- Browser: patient history/dues, unknown checkout recovery, receipt view and Print/Save as PDF; regress the complete web suite, including billing/refunds, record sharing and WhatsApp preferences.
+- Real approved-template sends/callbacks and Cashfree sandbox acceptance still require credentials and deployment. No synthetic test establishes bank credit or full PRD completion.
+
+### Patient web self-rescheduling
+
+Verify dependant and merged-history access; foreign/withdrawn-consent rejection; strict new-time-only input; original slot retained after cutoff/occupied/out-of-horizon failures; current clinic confirmation policy; move at the active-booking limit; billed/prepaid refusal; concurrent move versus move/cancel; original attempt replay after a lost response; exactly one linked replacement and audit/history. On phone and desktop browsers, verify disabled choices during unknown-result recovery and original-key retry. Rehearse clinic-assisted paid changes separately.
+
+### Patient profiles and old/new phone verification
+
+Run `portal-profile.int.test.ts` with tenant/auth/portal/patient/clinical/notification/finance regressions. Verify strict protected fields, stale profile versions, guardian age, paired emergency contacts, private valid photos and cleanup, unverified source in safety data, doctor/chart permissions, immutable original reports and stale blood confirmation. Verify dedicated OTP purpose, wrong-attempt commits, expiration, actor/clinic/request bindings, durable concurrent issuance, single completion, revoked access, clinic collisions, preserved UHIDs/dependants/other adults/other clinics and new-number sign-in/consents. Browser cases cover 390px and 1280px, and the consultation suite covers actual clinician confirmation. Live Meta authentication-template delivery remains a separate acceptance step.
+
+### Patient records, named sharing and erasure
+
+Run `patient-records.int.test.ts` with document/profile/portal/tenant regressions. Cover stable request/source hashes, malformed/oversized content, encrypted details, image buffer offsets, checked photo PDF pages, owned visit/order links, family/merge/tenant and role boundaries, private file hashes, cursor ownership, named-doctor/clinic/expiry/revocation and grantor consent. Confirm file-only grants do not open restricted charts. Exercise stale revisions, exact treating visits, immutable first use, use-versus-delete races, retained hide/restore, inactive doctors, failed/crashed deletion recovery and unfinished reservation expiry. Browser cases cover phone/desktop upload/share/review/use/hide/restore and lost-response upload recovery without duplicate records. Real scanning/storage/staging performance remains separate acceptance.
+
+## ADR 0029: patient data rights
+
+Verify rights access after health-consent withdrawal, foreign-subject/clinic refusal, admin clinical redaction, assigned doctor/chart restrictions, strict allowlisted corrections, stale/terminal decisions, append-only history, retention-policy evidence and completed-unused-erasure evidence. Independently open ZIP/validate CRC and inspect for excluded private notes, drafts, other patients, ciphertext/keys and OTP secrets. Missing or corrupted source files must fail the complete archive and allow recovery. Verify response-lifetime limits, abandoned-client construction and idempotent close/finish cleanup.
+
+Verify closure OTP purpose isolation, five guesses, durable preparation/no resend, fresh expiry, atomic shared/exclusive account locking, family/profile closure, unused upload/photo purge and immutable care-used record retention. Current clinic patient devices stop immediately; other clinic/staff sessions and care/finance history remain. Test request/correction/download/closure at 390px and 1280px, including displayed closure reference and sign-out receipt. Real Meta delivery, production storage/scanning/backup behavior and a clinic retention policy require separate staging acceptance.
+
+## ADR 0030: service inbox and template catalog
+
+Verify signed sender/WABA routing across clinics, immutable remapping refusal, encrypted phone/text, duplicate intake/unread counts and unsupported media without persisted media identifiers. Exercise admin content refusal, front-desk/doctor handoff, stale revisions and patient-role refusal. Check text window at creation and dispatch, future clock skew, STOP/closure/assignment cancellation of queued intents, explicit service consent, provider-only approval, variables/media/marketing rejection, missing/changed/stale template invalidation, same-host bounded pagination and sanitized errors. Unknown and abandoned sends must not retry automatically; callback-before-response and out-of-order/read status must not regress.
+
+Browser checks at 390px/1280px use synthetic rows and an explicitly fake send/provider availability response. They test real authenticated listing/actions/consent/template enablement/handoff plus composer UUID recovery, one stored reply and restricted doctor access. They do not test real Meta delivery, webhook subscription, template approval, token scopes, provider billing, transcript retention or a clinic pilot. Native tests/builds stay paused.
+
+## ADR 0031: reviewed session operations
+
+Verify preview-only behavior, role/clinic boundaries, immutable request IDs, expiry, creator confirmation, unchanged-exception acknowledgement and stable concurrent apply recovery. Race a new source booking/status/bill and a taken target slot: stale/failed moves must leave no replacements, closures or notices. Preserve bills, prepaid/care records, type/doctor/source/lineage and source spacing. Explicit source leave blocks normal bookings and walk-ins. Delay updates preserve booked times and appear in staff/patient views.
+
+Verify generic additional notices only for current live/guardian contact and appointment opt-in; STOP/withdrawal/closure, superseded delay/source changes and expiry suppress queued messages. Check one-time authorization, early read callback and finish-result preservation, generic two-parameter provider payload and uncertain timeout handling. Browser checks at 390px/1280px interrupt an actual applied response, recover one replacement, preserve a bill, report the queued notice count and show the patient delay banner. No real Meta worker/provider is started in browser checks.

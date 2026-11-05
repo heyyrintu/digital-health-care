@@ -33,12 +33,14 @@ jobs:
         run: pnpm format:check
 
       - name: Lint, typecheck, test, build
-        run: pnpm turbo run lint typecheck test build
+        run: pnpm turbo run lint typecheck test build --filter=@dhc/web --filter=@dhc/api --filter=@dhc/workers --filter=@dhc/e2e --filter='./packages/*'
         env:
           EXPO_NO_TELEMETRY: '1'
           NEXT_TELEMETRY_DISABLED: '1'
 
   mobile:
+    # Native development is paused; re-enable deliberately through a repository variable.
+    if: ${{ vars.ENABLE_NATIVE_BUILDS == 'true' }}
     name: Mobile bundles (${{ matrix.variant }})
     runs-on: ubuntu-latest
     timeout-minutes: 20

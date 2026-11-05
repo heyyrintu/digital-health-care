@@ -1,3 +1,6 @@
+import { RefundView, RefundVoucher, type CreateRefundBody } from '@dhc/contracts';
+import { OnlinePaymentView, PublicPayment, PaymentCheckout } from '@dhc/contracts';
+import { RecordLinkTarget, PortalReferralLetters } from '@dhc/contracts';
 import {
   AcceptInviteResponse,
   AdminTestCatalogueItem,
@@ -504,7 +507,11 @@ export function createApiClient(options: ApiClientOptions) {
     portalPatients: () => request('GET', '/portal/patients', { schema: PortalPatientList }),
     addPortalPatient: (body: CreatePortalPatientBody) =>
       request('POST', '/portal/patients', { schema: PortalPatient, body }),
-    bookingOptions: () => request('GET', '/portal/booking-options', { schema: BookingOptions }),
+    bookingOptions: (prepaid = false) =>
+      request('GET', '/portal/booking-options', {
+        schema: BookingOptions,
+        query: prepaid ? { prepaid: 'true' } : undefined,
+      }),
     portalSlots: (query: PortalSlotsQuery) =>
       request('GET', '/portal/slots', { schema: SlotsResponse, query: { ...query } }),
     portalAppointments: () =>
@@ -517,6 +524,57 @@ export function createApiClient(options: ApiClientOptions) {
         schema: PortalAppointment,
         body: reason ? { reason } : {},
       }),
+    refunds: (billId: string) =>
+      request('GET', `/bills/${encodeURIComponent(billId)}/refunds`, { schema: RefundView }),
+    createRefund: (paymentId: string, body: CreateRefundBody) =>
+      request('POST', `/payments/${encodeURIComponent(paymentId)}/refunds`, {
+        schema: RefundView,
+        body,
+      }),
+    checkRefund: (id: string) =>
+      request('POST', `/refunds/${encodeURIComponent(id)}/check`, { schema: RefundView }),
+    retryRefund: (id: string) =>
+      request('POST', `/refunds/${encodeURIComponent(id)}/retry`, { schema: RefundView }),
+    syncRefunds: (paymentId: string) =>
+      request('POST', `/payments/${encodeURIComponent(paymentId)}/refunds/check`, {
+        schema: RefundView,
+      }),
+    refundVoucher: (id: string) =>
+      request('GET', `/refunds/${encodeURIComponent(id)}/voucher`, { schema: RefundVoucher }),
+    onlinePayment: (billId: string) =>
+      request('GET', `/bills/${encodeURIComponent(billId)}/online-payment`, {
+        schema: OnlinePaymentView,
+      }),
+    createOnlinePayment: (billId: string, id: string) =>
+      request('POST', `/bills/${encodeURIComponent(billId)}/online-payment`, {
+        schema: OnlinePaymentView,
+        body: { id },
+      }),
+    checkOnlinePayment: (id: string, close = false) =>
+      request('POST', `/online-payments/${encodeURIComponent(id)}/${close ? 'close' : 'check'}`, {
+        schema: OnlinePaymentView,
+      }),
+    publicPayment: (token: string) =>
+      request('GET', `/public/payments/${encodeURIComponent(token)}`, { schema: PublicPayment }),
+    publicPaymentCheckout: (token: string) =>
+      request('POST', `/public/payments/${encodeURIComponent(token)}/checkout`, {
+        schema: PaymentCheckout,
+      }),
+    publicPaymentCheck: (token: string) =>
+      request('POST', `/public/payments/${encodeURIComponent(token)}/check`, {
+        schema: PublicPayment,
+      }),
+    portalRecordLink: (token: string) =>
+      request('GET', `/portal/record-links/${encodeURIComponent(token)}`, {
+        schema: RecordLinkTarget,
+      }),
+    portalReferralLetters: (cursor?: string) =>
+      request('GET', '/portal/referral-letters', {
+        schema: PortalReferralLetters,
+        query: { cursor },
+      }),
+    portalReferralLetterPdf: (id: string) =>
+      requestFile('GET', `/portal/referral-letters/${encodeURIComponent(id)}/pdf`),
     portalPrescriptions: () =>
       request('GET', '/portal/prescriptions', { schema: PortalPrescriptionList }),
     /** The signed PDF of one of the family's prescriptions. */

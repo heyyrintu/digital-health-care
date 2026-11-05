@@ -1,3 +1,10 @@
+import {
+  MetaInboxGateway,
+  parseInboxChannels,
+  type InboxChannelConfig,
+  type InboxGateway,
+} from './modules/whatsapp-inbox/gateway';
+import { parseMerchants, CashfreeHttpGateway, type CashfreeIntegration } from './payments/cashfree';
 import { createDb, type Db } from '@dhc/db';
 import { createHmac, hkdfSync } from 'node:crypto';
 import { FieldCipher } from './auth/field-cipher';
@@ -11,21 +18,40 @@ import {
   queuesNotConfigured,
   type QueueProbe,
 } from './modules/platform/queue-health';
+import { createOtpSender } from './messaging/otp-sender';
 import { TestKeySigner, type PrescriptionSigner } from './signing/signer';
 
 /** Delivers patient sign-in codes. The SMS/WhatsApp provider plugs in here (decision O5). */
 export interface OtpSender {
-  send(phone: string, code: string): Promise<void>;
+  readonly channel?: 'whatsapp';
+  readonly senderId?: string;
+  send(phone: string, code: string, deliveryId?: string): Promise<void | { messageId: string }>;
 }
 
 export interface Services {
   db: Db;
+  cashfree?: CashfreeIntegration;
   tokens: TokenService;
   /** Platform console tokens: their own audience and key (ADR 0016). */
   platformTokens: PlatformTokenService;
   cipher: FieldCipher;
   otpSender: OtpSender;
+  appointmentMessagingSender?: string;
+  operationMessagingSender?: string;
+  recordMessagingSender?: string;
+  paymentMessagingSender?: string;
+  paymentLinkSecret?: string;
+  recordLinkSecret?: string;
+  whatsappWebhook?: {
+    appSecret: string;
+    verifyToken: string;
+    senderId: string;
+    businessAccountId: string;
+  };
   /** HMAC for OTP codes at rest, keyed separately from JWT signing. */
+  whatsappInbox?: { channels: InboxChannelConfig[]; gateway: InboxGateway };
+  inboxContactKey(senderId: string, phone: string): string;
+  inboxPayloadHash(purpose: string, payload: string): string;
   hashOtp(challengeId: string, code: string): string;
   /**
    * Keyed digest of a signing PIN before it is hashed: a six-digit PIN cannot be guessed
@@ -64,18 +90,17 @@ export function createServices(
   const otpKey = Buffer.from(hkdfSync('sha256', JWT_SECRET, 'dhc-otp', 'otp-code-hash', 32));
   const pinKey = Buffer.from(hkdfSync('sha256', JWT_SECRET, 'dhc-pin', 'signing-pin', 32));
 
-  const otpSender: OtpSender =
-    overrides.otpSender ??
-    (config.OTP_DELIVERY === 'log'
-      ? {
-          send: async (phone, code) =>
-            console.warn(`[DEV ONLY] Sign-in code for ${phone}: ${code}`),
-        }
-      : {
-          send: async () => {
-            throw new Error('No OTP delivery configured');
-          },
-        });
+  const inboxHashKey = Buffer.from(
+    hkdfSync(
+      'sha256',
+      Buffer.from(FIELD_ENCRYPTION_KEY, 'base64'),
+      'dhc-inbox',
+      'payload-hash',
+      32,
+    ),
+  );
+
+  const otpSender = overrides.otpSender ?? createOtpSender(config);
 
   return {
     db: createDb(DATABASE_URL),
@@ -83,6 +108,80 @@ export function createServices(
     platformTokens: new PlatformTokenService(JWT_SECRET),
     cipher: new FieldCipher(FIELD_ENCRYPTION_KEY),
     otpSender,
+    ...(config.CASHFREE_ENABLED
+      ? {
+          cashfree: {
+            acceptNewPayments: config.CASHFREE_ACCEPT_NEW_PAYMENTS,
+            refundsEnabled: config.CASHFREE_REFUNDS_ENABLED,
+            reconciliationEnabled: config.CASHFREE_RECONCILIATION_ENABLED,
+            prepaidBookingEnabled: config.CASHFREE_PREPAID_BOOKING_ENABLED,
+            refundGateway: new CashfreeHttpGateway(),
+            merchants: parseMerchants(config.CASHFREE_MERCHANTS_JSON!),
+            gateway: new CashfreeHttpGateway(),
+            linkSecret: config.CASHFREE_LINK_SECRET!,
+            webBaseUrl: config.WEB_BASE_URL,
+            notifyUrl: config.CASHFREE_WEBHOOK_URL!,
+          },
+        }
+      : {}),
+    operationMessagingSender: config.WHATSAPP_OPERATIONS_ENABLED
+      ? config.WHATSAPP_PHONE_NUMBER_ID
+      : undefined,
+    paymentLinkSecret: config.WHATSAPP_PAYMENT_LINK_SECRET,
+    ...(config.WHATSAPP_PAYMENTS_ENABLED
+      ? {
+          paymentMessagingSender: config.WHATSAPP_PHONE_NUMBER_ID!,
+        }
+      : {}),
+    ...(config.WHATSAPP_RECORDS_ENABLED
+      ? {
+          recordMessagingSender: config.WHATSAPP_PHONE_NUMBER_ID!,
+          recordLinkSecret: config.WHATSAPP_RECORD_LINK_SECRET!,
+        }
+      : {}),
+    ...(config.WHATSAPP_APPOINTMENTS_ENABLED
+      ? { appointmentMessagingSender: config.WHATSAPP_PHONE_NUMBER_ID! }
+      : {}),
+    ...(config.WHATSAPP_WEBHOOK_ENABLED
+      ? {
+          whatsappWebhook: {
+            appSecret: config.WHATSAPP_APP_SECRET!,
+            verifyToken: config.WHATSAPP_WEBHOOK_VERIFY_TOKEN!,
+            senderId: config.WHATSAPP_PHONE_NUMBER_ID!,
+            businessAccountId: config.WHATSAPP_BUSINESS_ACCOUNT_ID!,
+          },
+        }
+      : {}),
+    ...(config.WHATSAPP_INBOX_ENABLED
+      ? {
+          whatsappInbox: {
+            channels: parseInboxChannels(config.WHATSAPP_INBOX_CHANNELS_JSON!),
+            gateway: new MetaInboxGateway(
+              config.WHATSAPP_ACCESS_TOKEN!,
+              config.WHATSAPP_GRAPH_API_VERSION!,
+            ),
+          },
+        }
+      : {}),
+    inboxPayloadHash: (purpose, payload) =>
+      createHmac('sha256', inboxHashKey)
+        .update(purpose + ':' + payload)
+        .digest('hex'),
+    inboxContactKey: (sender, phone) =>
+      createHmac(
+        'sha256',
+        Buffer.from(
+          hkdfSync(
+            'sha256',
+            Buffer.from(FIELD_ENCRYPTION_KEY, 'base64'),
+            'dhc-inbox',
+            'contact-key',
+            32,
+          ),
+        ),
+      )
+        .update(sender + ':' + phone)
+        .digest('hex'),
     hashOtp: (challengeId, code) =>
       createHmac('sha256', otpKey).update(`${challengeId}:${code}`).digest('base64url'),
     pepperPin: (userId, pin) =>

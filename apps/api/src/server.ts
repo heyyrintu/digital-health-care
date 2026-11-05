@@ -1,3 +1,6 @@
+import { scheduleInbox } from './modules/whatsapp-inbox/dispatch';
+import { schedulePatientRecordPurge } from './modules/patient-records/purge';
+import { schedulePrepaidSweep } from './payments/prepaid';
 import { buildApp } from './app';
 import { corsOrigins, loadConfig, platformAllowlist, proxyTrust } from './config';
 import { scheduleNoShowSweep } from './modules/appointments/no-shows';
@@ -23,11 +26,15 @@ if (trust && !trust.proxies) {
   );
 }
 
+const stopInbox = scheduleInbox(services);
+const stopRecordPurge = schedulePatientRecordPurge(services, app.log);
+const stopPrepaid = schedulePrepaidSweep(services);
 const stopSweep = scheduleNoShowSweep(services, config.NO_SHOW_SWEEP_SECONDS, app.log);
 
 // Rebuild a sample PDF once: a missing worker file or a pdf-lib that can no longer be capped
 // would otherwise show up only as refused uploads (threat model T27).
-void services.pdf.selfTest(samplePdf()).then(
+const pdfStartup = services.pdf.selfTest(samplePdf());
+void pdfStartup.then(
   (problem) => {
     if (problem)
       app.log.error({ problem }, 'PDF rebuild self-test failed: PDF uploads will be refused');
@@ -39,13 +46,20 @@ void services.pdf.selfTest(samplePdf()).then(
 const shutdown = async (signal: string) => {
   app.log.info({ signal }, 'Shutting down');
   stopSweep();
+  await stopInbox();
+  await stopPrepaid();
+  await stopRecordPurge();
   await app.close();
+  await services.db.$disconnect();
   process.exit(0);
 };
 process.on('SIGTERM', () => void shutdown('SIGTERM'));
 process.on('SIGINT', () => void shutdown('SIGINT'));
 
 try {
+  if (config.NODE_ENV === 'production' && (await pdfStartup)) {
+    throw new Error('PDF rebuild startup check failed; refusing production traffic.');
+  }
   await app.listen({ host: config.API_HOST, port: config.API_PORT });
 } catch (error) {
   app.log.error(error);

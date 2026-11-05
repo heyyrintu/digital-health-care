@@ -49,3 +49,61 @@ If a staff member loses their phone or authenticator app, open **Staff** on the 
 
 ## Security
 Remove staff accounts the same day someone leaves. For a lost staff phone, use **Staff → Reset sign-in**, which ends all their staff sessions; to end just one device, use **Staff → Devices**. Review the audit log (in the menu) monthly.
+
+
+## WhatsApp delivery
+
+Open **WhatsApp delivery** to see the status of patient sign-in codes. Accepted means Meta has accepted the request; Sent, Delivered and Read come from WhatsApp receipts and may arrive later. Send request failed means the request could not be confirmed; Delivery failed means WhatsApp reported a failure. **Refresh** updates the list and **Load more** shows older entries. Only your organisation's delivery metadata appears; patient names, numbers and codes are not shown. If statuses stay at Accepted, ask the operator to check the callback and background worker setup. This page does not send or resend codes.
+
+
+## Appointment messages
+
+On a patient's page, **WhatsApp appointment messages** starts off. Confirm the number holder agreed before enabling it. The preference covers that number across the practice, including family records using it. It applies to new confirmed bookings after enabling: one confirmation and, for bookings made far enough ahead, one reminder 24 hours before the visit. Pending bookings and walk-ins do not send messages. Turning it off cancels queued messages; patients can also revoke it in the portal or reply STOP. A record without its own number receives no automatic guardian-number fallback.
+
+The delivery log's Message column distinguishes sign-in codes, confirmations and reminders. Scheduled, Sending, Skipped and Send status unknown explain outbound progress. Unknown sends are not automatically repeated, to avoid duplicates; ask the operator to check Meta before following up. A request already being sent cannot be recalled on a later cancellation. Appointment messages require operator setup before the controls become available.
+
+### Online payment links
+
+When Cashfree is connected for the clinic, front desk and doctors can create a payment link from an existing bill. It collects the remaining balance; share the link manually. Keep the bill unchanged and do not collect at the counter while the online payment is open. **Check payment status** asks Cashfree for confirmation. **Close payment link** requests closure; wait until closure is confirmed before collecting another way. A confirmed payment appears in the usual receipt and collection report as Online (Cashfree). If review is requested, do not ask the patient to pay again; investigate with the payment provider. Closing a link does not refund money.
+
+### Requesting a refund
+
+When enabled, open the paid bill's **Refunds** card. A clinic admin selects the original online receipt, enters the amount and chooses a reason, then confirms the exact amount and receipt. New requests wait while another refund is unresolved. **Check refund status** only checks; **Recover original request** reuses an unknown request safely. Do not create a replacement after a lost response. Confirmed refunds have an RF voucher you can print. The original receipt remains unchanged, and the bill is not reopened for payment. **Check provider refunds** records verified refunds made in the merchant dashboard. Reports show money received, refunds posted and net collection; a refund-only day can be negative. A review warning requires investigation before another request.
+
+### Settlement reconciliation
+
+When enabled, open **Settlement reconciliation**, choose completed dates (at most 31 days), and request a report. Open a saved report to see progress, settlement gross/fees/tax/adjustments/net, UTR and review items. Automatic reports cover the configured recent period each night. Use linked bills to check missing payments/refunds, investigate unknown transactions with Cashfree, then request a fresh report. Acknowledge review with a reason only after investigation: acknowledgement changes no balance and leaves the original discrepancy visible. Match the UTR/net to your bank statement to confirm bank credit. After five unsuccessful processing attempts, request a new report; failed reports never represent a partial match.
+
+### Prepaid in-person bookings
+
+Once enabled after the sandbox pilot, mark an active scheduled in-person consultation type as requiring prepayment. The web portal reserves its standard server-priced fee before checkout. Your automatic-confirmation setting is captured at reservation time: payment either confirms directly or leaves a paid request for clinic approval. Unpaid holds cannot be checked in or manually confirmed, and do not count as no-shows. Close/check their original order rather than creating a replacement collection. Bill screens and the booking audit area show reservation states. Late payments require receipt/refund review and never restore a released appointment. Prepaid bookings cannot be moved in this increment; handle cancellation and any refund explicitly before rebooking.
+
+### Financial availability notices
+
+When the feature is configured and enabled, record the number holder's explicit **WhatsApp payment updates** consent before a new payment link/receipt/refund event. The three events appear in the delivery log. Existing appointment/record grants do not authorize them, and old financial events are not backfilled. Queued messages are skipped after STOP, contact changes or stale payment status. Investigate uncertain sends rather than automatically resending. Patients can read their own dues/receipts and refund updates in the portal; their original receipt amounts stay unchanged.
+
+### Patient profile updates and number changes
+
+Patients can edit their owned demographics/emergency contacts and private photo. Patient-reported medical facts are labelled pending and do not overwrite doctor facts; permitted doctors confirm them in the consultation chart. Doctors confirm a reported blood group from the patient page after checking it; a changed version must be reloaded. For lost-number or existing-number collisions, verify identity in person before using the clinic's existing demographic/merge process. Self-service transfer cannot bypass this check, change other clinics, or merge clinical records. Do not request or store patient OTPs or identity documents in notes.
+
+### Patient-uploaded records
+
+Only the named doctor (or a doctor who already used the file in care) can read a patient's uploaded record. Front desk/admin roles have no file access. A file grant does not open the rest of a restricted chart. Doctors open patient-uploaded records on the patient/consultation page, explicitly **Mark reviewed**, and choose **Use in this visit → Confirm** whenever relying on the document for care. Use requires the same patient's treating visit and freezes/retains the document. Patient hiding or link expiry never erases that care copy. Unused deletion is asynchronous and retryable; production monitoring/backup retention remain part of release acceptance.
+
+## Patient data-rights queue
+
+Open **Your data and account** to review profile/financial requests and assign clinical requests. Clinical text/replies stay hidden from admins; choose an active doctor who can access the chart. Responses are visible to the requester. Use current revisions; terminal decisions cannot be overwritten. Valid profile corrections apply with completion. Clinical corrections must first be recorded in the consultation/amendment/void workflow; financial completion references an actual posted refund. Other adjustments remain clinic-assisted. A retained response requires your clinic's policy reference; review dates do not schedule deletion. Erasure completion requires the referenced unused upload to have been purged. Closing a patient account leaves care, invoices and appointments intact. Identity disputes, reopening and broader manual access requests require clinic handling.
+
+## WhatsApp inbox and templates
+
+Open **WhatsApp inbox** for masked conversation metadata and handoff of an unassigned request to an active doctor. Message content belongs to the front-desk team until assigned, then to that doctor. Admin access does not reveal private conversation text or grant chart access. Only the assigned doctor may return a conversation to front desk or hand it on.
+
+Open **Message templates**, synchronize from Meta, review the body/language/status and enable the approved static utility templates appropriate to clinic service requests. New or changed templates need explicit enablement; only provider-approved entries can be used. Create/edit templates in the linked Meta WhatsApp Manager. Synchronize at least hourly before use. The inbox does not author or approve Meta templates, support marketing/dynamic/media templates, or replace automated notification settings. Credentials and unique clinic number mappings are configured by the operator later.
+
+Service-template agreement is separate from appointment/record/payment notices. STOP and patient account closure stop matching service contact. Unknown delivery requires status review, never an automatic duplicate send. See the inbox runbook for activation, offboarding and recovery boundaries.
+
+## Bulk clinic session changes
+
+Open **Clinic session changes**. Preview a source doctor/clinic/day/time interval, then explicitly confirm its eligible appointments and unchanged exceptions. A move preserves doctor/type and spacing; choose matching free target slots. Billed, prepaid, started and clinical-record visits need individual review. No bills/refunds are moved. Cancellation/move closes the source interval, including to new walk-ins. A failed allocation or stale snapshot changes nothing. Delays annotate today's waiting visits without changing booked times.
+
+Keep the page open after an interrupted apply and recover the same operation. Recent receipts remain available after reload. Additional WhatsApp updates need configured workers/templates and appointment-category consent; queued is not delivered. Contact anyone left unchanged or not reached. Replacement bookings may still queue normal confirmation/reminder notices independently. See the session-operations runbook for limits and configuration.

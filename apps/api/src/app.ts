@@ -1,3 +1,10 @@
+import { clinicOperationRoutes } from './modules/clinic-operations/routes';
+import { inboxRoutes } from './modules/whatsapp-inbox/routes';
+import { dataRightsRoutes } from './modules/data-rights/routes';
+import { patientRecordRoutes } from './modules/patient-records/routes';
+import { portalFinanceRoutes } from './payments/portal-finance';
+import { reconciliationRoutes } from './payments/reconciliation';
+import { onlinePaymentRoutes, cashfreeWebhookRoutes } from './payments/routes';
 import cors from '@fastify/cors';
 import rateLimit from '@fastify/rate-limit';
 import { randomUUID } from 'node:crypto';
@@ -30,6 +37,10 @@ import { schedulingRoutes } from './modules/scheduling/routes';
 import { staffRoutes } from './modules/staff/routes';
 import { syncRoutes } from './modules/sync/routes';
 import { IpAllowlist } from './plugins/ip-allowlist';
+import { whatsappWebhookRoutes } from './messaging/webhooks';
+import { recordLinkRoutes } from './messaging/record-links';
+import { whatsappPreferenceRoutes } from './messaging/preferences';
+import { deliveryLogRoutes } from './messaging/delivery-log';
 import { systemRoutes } from './routes/system';
 import type { Services } from './services';
 
@@ -106,8 +117,20 @@ export function buildApp({
     maxAge: 600,
   });
   app.register(rateLimit, { global: false });
-  app.register(systemRoutes, { prefix: '/v1', version: config.APP_VERSION });
+  app.register(systemRoutes, {
+    prefix: '/v1',
+    version: config.APP_VERSION,
+    readiness: services
+      ? async () => {
+          await services.db.$queryRaw`SELECT 1`;
+        }
+      : undefined,
+  });
   if (services) {
+    app.register(whatsappWebhookRoutes, { prefix: '/v1', services });
+    app.register(recordLinkRoutes, { prefix: '/v1', services });
+    app.register(whatsappPreferenceRoutes, { prefix: '/v1', services });
+    app.register(deliveryLogRoutes, { prefix: '/v1', services });
     app.register(authRoutes, { prefix: '/v1', services, signInRateLimit });
     app.register(inviteRoutes, { prefix: '/v1', services, signInRateLimit });
     app.register(patientRoutes, { prefix: '/v1', services });
@@ -120,6 +143,9 @@ export function buildApp({
     app.register(publicDoctorRoutes, { prefix: '/v1', services });
     app.register(medicineRoutes, { prefix: '/v1', services });
     app.register(billingRoutes, { prefix: '/v1', services });
+    app.register(onlinePaymentRoutes, { prefix: '/v1', services });
+    app.register(reconciliationRoutes, { prefix: '/v1', services });
+    app.register(cashfreeWebhookRoutes, { prefix: '/v1', services });
     app.register(orderRoutes, { prefix: '/v1', services, uploadRateLimit });
     app.register(referralRoutes, { prefix: '/v1', services, signInRateLimit });
     app.register(documentRoutes, { prefix: '/v1', services, uploadRateLimit });
@@ -128,6 +154,11 @@ export function buildApp({
     app.register(reportRoutes, { prefix: '/v1', services });
     app.register(settingsRoutes, { prefix: '/v1', services });
     app.register(brandingRoutes, { prefix: '/v1', services, uploadRateLimit });
+    app.register(portalFinanceRoutes, { prefix: '/v1', services });
+    app.register(clinicOperationRoutes, { prefix: '/v1', services });
+    app.register(inboxRoutes, { prefix: '/v1', services });
+    app.register(dataRightsRoutes, { prefix: '/v1', services });
+    app.register(patientRecordRoutes, { prefix: '/v1', services, uploadRateLimit });
     app.register(portalRoutes, { prefix: '/v1', services, uploadRateLimit });
     app.register(deviceRoutes, { prefix: '/v1', services });
     app.register(syncRoutes, { prefix: '/v1', services });

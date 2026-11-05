@@ -36,7 +36,10 @@
     "pdfkit": "0.17.2",
     "pg": "^8.23.1",
     "qrcode": "1.5.4",
-    "zod": "^4.6.5"
+    "zod": "^4.6.5",
+    "@dhc/secure-links": "workspace:*",
+    "@dhc/cashfree": "workspace:*",
+    "@dhc/reconciliation": "workspace:*"
   },
   "devDependencies": {
     "@dhc/config": "workspace:*",

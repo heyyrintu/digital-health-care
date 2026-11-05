@@ -1,6 +1,7 @@
 /**
  * Development seed: one demo clinic, three staff accounts and the synthetic personas
- * from docs/qa/test-plan.md. Never real patient data. Refuses to run in production.
+ * from docs/qa/test-plan.md. Never real patient data. Production requires the explicit
+ * --empty-demo-database flag and an empty, migrated database with providers disabled.
  *
  * Staff accounts are created as invites: open each printed link to set a password and
  * enrol an authenticator. Re-running issues fresh links for anyone not yet set up.
@@ -12,7 +13,8 @@ import { randomBytes } from 'node:crypto';
 import { hashToken } from '../auth/tokens';
 import { INVITE_TTL_MS } from '../modules/invites/service';
 
-if (process.env.NODE_ENV === 'production') {
+const emptyDemo = process.argv.includes('--empty-demo-database');
+if (process.env.NODE_ENV === 'production' && !emptyDemo) {
   console.error('Refusing to seed a production database.');
   process.exit(1);
 }
@@ -23,6 +25,34 @@ if (!url) {
 }
 
 const db = createDb(url);
+// A manual, one-time bootstrap for a separate synthetic client-demo deployment. Never
+// refresh a live installation, replace accounts, bypass MFA, or send provider traffic.
+if (emptyDemo) {
+  if (
+    process.env.OTP_DELIVERY !== 'disabled' ||
+    process.env.SIGNER !== 'disabled' ||
+    Object.entries(process.env).some(
+      ([key, value]) => /^(WHATSAPP_.*_ENABLED|CASHFREE_.*ENABLED)$/.test(key) && value === 'true',
+    )
+  ) {
+    console.error(
+      'Demo bootstrap requires OTP_DELIVERY=disabled, SIGNER=disabled and providers off.',
+    );
+    await db.$disconnect();
+    process.exit(1);
+  }
+  const counts = await Promise.all([
+    db.organisation.count(),
+    db.user.count(),
+    db.patient.count(),
+    db.platformOperator.count(),
+  ]);
+  if (counts.some((count) => count > 0)) {
+    console.error('Demo bootstrap requires an empty, migrated database. Nothing was changed.');
+    await db.$disconnect();
+    process.exit(1);
+  }
+}
 const webBaseUrl = (process.env.WEB_BASE_URL ?? 'http://localhost:3000').replace(/\/+$/, '');
 
 const org = await db.organisation.upsert({
@@ -180,5 +210,7 @@ console.warn('Staff invite links (valid 72 hours; the token is everything after 
 for (const line of links) console.warn(line);
 console.warn('Open a link in the browser (web app running) to set a password and authenticator.');
 console.warn(
-  'Patients sign in with a mobile code; set OTP_DELIVERY=log to see codes in the API console.',
+  emptyDemo
+    ? 'Synthetic demo only. Patient OTP, legal prescription signing and external providers are disabled.'
+    : 'Patients sign in with a mobile code; set OTP_DELIVERY=log to see codes in the API console.',
 );

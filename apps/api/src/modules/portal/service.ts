@@ -1,3 +1,4 @@
+import { requirePatientAccountOpen } from '../data-rights/access';
 import {
   ACCOUNT_CONSENT_KINDS,
   CURRENT_CONSENT_VERSIONS,
@@ -7,14 +8,14 @@ import {
   type CreatePortalPatientBody,
   type PortalPatient,
 } from '@dhc/contracts';
-import { withTenant, type Tx } from '@dhc/db';
+import { withTenant, Prisma, type Tx } from '@dhc/db';
 import { istDate } from '@dhc/domain';
 import type { FastifyRequest } from 'fastify';
 import { AppError } from '../../errors';
 import type { Services } from '../../services';
 import { writeAudit } from '../audit/write';
 import { allocateUhid } from '../patients/service';
-import { accountPatientsWhere, accountPhone, ownPatient } from './account';
+import { accountHistoryWhere, accountPatientsWhere, accountPhone, ownPatient } from './account';
 
 interface Actor {
   userId: string;
@@ -86,6 +87,7 @@ export class PortalService {
       }
     }
     return withTenant(this.s.db, actor.organisationId, async (tx) => {
+      await requirePatientAccountOpen(tx, actor);
       const pending = await pendingConsents(tx, actor);
       const fresh = body.accept.filter((a) => pending.includes(a.kind));
       const acceptedAt = this.s.now();
@@ -124,12 +126,35 @@ export class PortalService {
    */
   async withdrawHealthData(request: FastifyRequest, actor: Actor): Promise<ConsentStatus> {
     return withTenant(this.s.db, actor.organisationId, async (tx) => {
+      await requirePatientAccountOpen(tx, actor);
       const now = this.s.now();
       const { count } = await tx.accountConsent.updateMany({
         where: { userId: actor.userId, kind: 'health_data', withdrawnAt: null },
         data: { withdrawnAt: now },
       });
       if (count > 0) {
+        const phone = await accountPhone(this.s, actor.userId);
+        const family = await tx.patient.findMany({
+          where: accountHistoryWhere(phone),
+          select: { id: true },
+        });
+        const records = await tx.patientRecord.findMany({
+          where: {
+            OR: [{ patientId: { in: family.map((p) => p.id) } }, { createdByUserId: actor.userId }],
+          },
+          select: { id: true },
+        });
+        if (records.length)
+          await tx.$queryRaw(
+            Prisma.sql`SELECT id FROM patient_records WHERE id IN (${Prisma.join(records.map((r) => Prisma.sql`${r.id}::uuid`))}) ORDER BY id FOR UPDATE`,
+          );
+        await tx.patientRecordShare.updateMany({
+          where: {
+            revokedAt: null,
+            OR: [{ createdByUserId: actor.userId }, { recordId: { in: records.map((r) => r.id) } }],
+          },
+          data: { revokedAt: now, tokenCipher: null },
+        });
         await writeAudit(tx, request, {
           action: 'consent.withdrawn',
           organisationId: actor.organisationId,
@@ -170,6 +195,7 @@ export class PortalService {
     const name = cleanName(body.name);
     const dob = this.dob(body.dob);
     return withTenant(this.s.db, actor.organisationId, async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`auth-phone:${phone}`}, 0))`;
       await this.requireConsents(tx, actor);
       if (body.guardianPatientId) {
         // One level only: the guardian is an adult who shares the number, not a dependant.
@@ -251,6 +277,7 @@ export class PortalService {
 
   /** Health data needs every consent in force (PRD §4.1); the app sends people back to accept. */
   async requireConsents(tx: Tx, actor: Actor) {
+    await requirePatientAccountOpen(tx, actor);
     const pending = await pendingConsents(tx, actor);
     if (pending.length > 0) {
       throw new AppError(

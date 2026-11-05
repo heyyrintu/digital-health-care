@@ -62,6 +62,22 @@ test.describe('consultation', () => {
     // Set up first: the invite expects the membership still to be pending.
     await setUpFromInvite(page, clinic.inviteLink('doctor'), 'doctor synthetic passphrase');
     const { patient } = await walkIn(db, clinic, 0, 'in_consultation');
+    await db.patient.update({
+      where: { id: patient.id },
+      data: { reportedBloodGroup: 'O+', bloodGroupReportedAt: new Date() },
+    });
+    await page.goto(`/clinic/patients/${patient.id}`);
+    const blood = page
+      .getByRole('heading', { name: 'Patient-reported blood group', exact: true })
+      .locator('..');
+    await expect(blood).toContainText('Pending doctor verification');
+    await blood.getByRole('button', { name: 'Confirm after checking with patient' }).click();
+    await expect(
+      page.getByRole('heading', { name: 'Patient-reported blood group', exact: true }),
+    ).toHaveCount(0);
+    expect(await db.patient.findUnique({ where: { id: patient.id } })).toMatchObject({
+      bloodGroup: 'O+',
+    });
 
     await page.getByRole('link', { name: 'Queue' }).click();
     await page
@@ -80,6 +96,16 @@ test.describe('consultation', () => {
     await allergies.getByRole('button', { name: 'Add' }).click();
     await expect(allergies).toContainText('Penicillin · Rash');
     await expect(allergies).toContainText('Patient-reported, unverified');
+    await allergies.getByRole('button', { name: 'Confirm after checking with patient' }).click();
+    await expect(allergies.getByText('Patient-reported, unverified', { exact: true })).toHaveCount(
+      0,
+    );
+    expect(
+      await db.allergy.findFirst({ where: { patientId: patient.id, removedAt: null } }),
+    ).toMatchObject({ source: 'doctor' });
+    expect(
+      await db.allergy.findFirst({ where: { patientId: patient.id, source: 'patient' } }),
+    ).toMatchObject({ removedAt: expect.any(Date) });
 
     // Vitals with BMI.
     await page.getByLabel('Weight (kg)').fill('70');

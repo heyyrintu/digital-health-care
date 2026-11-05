@@ -1,4 +1,6 @@
 'use client';
+import Link from 'next/link';
+import { PrepaidCard } from '../prepaid-card';
 
 import type { PortalAppointment, PortalAppointmentList } from '@dhc/contracts';
 import { shortDate } from '@dhc/domain';
@@ -67,6 +69,13 @@ function Appointments() {
             items={list.data.upcoming}
             testId="upcoming"
             actions={(a) => {
+              if (a.prepayment && a.prepayment.state !== 'confirmed')
+                return (
+                  <PrepaidCard
+                    id={a.prepayment.id}
+                    onSettled={a.prepayment.state === 'held' ? () => void load(true) : undefined}
+                  />
+                );
               const option = cancelOption(a);
               if (option === 'call') {
                 return (
@@ -116,7 +125,15 @@ function Appointments() {
             }}
           />
           <h2 className="font-display text-lg font-bold">{t('patient.appts.past')}</h2>
-          <AppointmentList items={list.data.past} testId="past" />
+          <AppointmentList
+            items={list.data.past}
+            testId="past"
+            actions={(a) =>
+              a.prepayment && a.prepayment.state !== 'confirmed' ? (
+                <PrepaidCard id={a.prepayment.id} />
+              ) : null
+            }
+          />
         </>
       )}
     </PortalPage>
@@ -151,12 +168,24 @@ function AppointmentList({
           <p className="text-muted-foreground">
             {a.consultationTypeName} · {t('queue.token', { token: a.tokenNumber })}
           </p>
+          {a.delayUpdatedAt && ['pending', 'confirmed', 'checked_in'].includes(a.status) && (
+            <p className="rounded-lg bg-warning-soft p-2">
+              {t('clinicOps.delayBanner', { minutes: a.delayMinutes ?? 0 })}
+            </p>
+          )}
           {a.prescription && (
             <p className="text-muted-foreground">
               {t('patient.appts.prescription', { number: a.prescription.number })}
               {a.prescription.status === 'void' && (
                 <span className="ml-2 font-medium text-destructive">{t('patient.rx.void')}</span>
               )}
+            </p>
+          )}
+          {a.canReschedule && (
+            <p className="pt-2">
+              <Link className="font-medium underline" href={`/app/appointments/${a.id}/reschedule`}>
+                {t('patient.reschedule.title')}
+              </Link>
             </p>
           )}
           {actions && <div className="pt-2">{actions(a)}</div>}

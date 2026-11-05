@@ -23,7 +23,11 @@ export async function accountPhone(s: Services, userId: string): Promise<string>
  * carries their history.
  */
 export function accountPatientsWhere(phone: string): Prisma.PatientWhereInput {
-  return { mergedIntoId: null, OR: [{ phone }, { guardian: { phone } }] };
+  return {
+    portalClosedAt: null,
+    mergedIntoId: null,
+    OR: [{ phone }, { guardian: { phone, portalClosedAt: null } }],
+  };
 }
 
 /** One of the account's patients, or 404 so other people's records stay invisible. */

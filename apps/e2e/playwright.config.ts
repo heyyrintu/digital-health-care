@@ -48,6 +48,21 @@ export default defineConfig({
         // Patient sign-in codes go to the API's log, never by SMS; the fixtures set a known
         // code on the challenge instead of reading it (`signInAsPatient`).
         OTP_DELIVERY: 'log',
+        // No outgoing worker is started by browser tests. These synthetic callback settings
+        // enable preference/outbox UI only when the dedicated spec requests them.
+        WHATSAPP_OPERATIONS_ENABLED: process.env.E2E_WHATSAPP === '1' ? 'true' : 'false',
+        WHATSAPP_RECORDS_ENABLED: process.env.E2E_WHATSAPP === '1' ? 'true' : 'false',
+        WHATSAPP_RECORD_LINK_SECRET: 'synthetic-browser-record-link-secret-32-characters',
+        WHATSAPP_APPOINTMENTS_ENABLED: process.env.E2E_WHATSAPP === '1' ? 'true' : 'false',
+        WHATSAPP_WEBHOOK_ENABLED: process.env.E2E_WHATSAPP === '1' ? 'true' : 'false',
+        ...(process.env.E2E_WHATSAPP === '1'
+          ? {
+              WHATSAPP_APP_SECRET: 'synthetic-browser-app-secret',
+              WHATSAPP_WEBHOOK_VERIFY_TOKEN: 'synthetic-browser-verify-token-32-characters',
+              WHATSAPP_PHONE_NUMBER_ID: '1234',
+              WHATSAPP_BUSINESS_ACCOUNT_ID: '5678',
+            }
+          : {}),
         // Prescriptions are signed with the test key and stored in a throwaway folder.
         SIGNER: 'test_key',
         FILE_STORE_DIR: E2E_FILE_STORE_DIR,

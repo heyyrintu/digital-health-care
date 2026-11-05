@@ -44,7 +44,8 @@ function CollectionsScreen() {
     };
   }, [api, date, signOut, t]);
 
-  const money = (paise: number) => formatInr(paise, locale);
+  const money = (paise: number) =>
+    paise < 0 ? '−' + formatInr(-paise, locale) : formatInr(paise, locale);
   const payments = (count: number) =>
     count === 1 ? t('collections.countOne') : t('collections.count', { count });
   const time = (iso: string) =>
@@ -101,6 +102,16 @@ function CollectionsScreen() {
               </p>
               <p className="text-xs text-muted-foreground">{payments(report.payments.length)}</p>
             </Surface>
+            <Surface className="p-5">
+              <p className="text-xs font-semibold">{t('refund.total')}</p>
+              <p className="text-2xl font-bold">{money(report.refundedPaise)}</p>
+            </Surface>
+            <Surface className="p-5">
+              <p className="text-xs font-semibold">{t('refund.net')}</p>
+              <p className="text-2xl font-bold">
+                {money(report.netPaise ?? report.totalPaise - report.refundedPaise)}
+              </p>
+            </Surface>
             {report.byMode.map((m) => (
               <Surface key={m.mode} className="p-5" data-testid={`mode-${m.mode}`}>
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -114,6 +125,24 @@ function CollectionsScreen() {
             ))}
           </div>
 
+          {report.refunds.length > 0 && (
+            <Surface className="space-y-3 p-5" data-testid="collection-refunds">
+              <h2 className={H2}>{t('refund.title')}</h2>
+              <ul className="divide-y divide-border">
+                {report.refunds.map((r) => (
+                  <li key={r.id} className="flex flex-wrap justify-between gap-3 py-3">
+                    <span>
+                      {r.patientName} · {r.receiptNumber}
+                    </span>
+                    <span>{money(r.amountPaise)}</span>
+                    <Link className="text-primary underline" href={`/clinic/refunds/${r.id}`}>
+                      {r.voucherNumber}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </Surface>
+          )}
           <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
             <Surface className="min-w-0 p-5 sm:p-6">
               <h2 className={H2}>{t('collections.payments')}</h2>

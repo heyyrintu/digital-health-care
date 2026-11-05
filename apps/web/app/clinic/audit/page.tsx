@@ -10,7 +10,11 @@ import { ClinicShell, NotAllowed } from '../shell';
 
 /** Areas of the log, by the start of their action names. */
 const AREAS = [
+  { prefix: 'clinic_operation.', label: 'clinicOps.title' },
+  { prefix: 'inbox.', label: 'inbox.title' },
+  { prefix: 'data_rights.', label: 'dataRights.title' },
   { prefix: 'auth.', label: 'audit.area.auth' },
+  { prefix: 'messaging.', label: 'delivery.title' },
   { prefix: 'staff.', label: 'audit.area.staff' },
   { prefix: 'patient.', label: 'audit.area.patient' },
   { prefix: 'appointment.', label: 'audit.area.appointment' },
@@ -20,6 +24,9 @@ const AREAS = [
   { prefix: 'prescription.', label: 'audit.area.prescription' },
   { prefix: 'bill.', label: 'audit.area.bill' },
   { prefix: 'payment.', label: 'audit.area.payment' },
+  { prefix: 'booking.', label: 'prepaid.title' },
+  { prefix: 'reconciliation.', label: 'recon.title' },
+  { prefix: 'refund.', label: 'refund.title' },
   { prefix: 'receipt.', label: 'audit.area.receipt' },
   { prefix: 'settings.', label: 'audit.area.settings' },
   { prefix: 'patient_merge.', label: 'audit.area.merges' },

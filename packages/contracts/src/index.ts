@@ -27,3 +27,18 @@ export * from './portal';
 export * from './settings';
 export * from './sync';
 export * from './tags';
+
+export * from './messaging';
+export * from './reconciliation';
+
+export * from './finance';
+
+export * from './profile';
+
+export * from './patient-records';
+
+export * from './data-rights';
+
+export * from './inbox';
+
+export * from './clinic-operations';

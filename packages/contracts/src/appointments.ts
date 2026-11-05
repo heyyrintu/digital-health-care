@@ -41,6 +41,8 @@ export const AppointmentPatient = z.object({
 export type AppointmentPatient = z.infer<typeof AppointmentPatient>;
 
 export const Appointment = z.object({
+  delayMinutes: z.number().int().min(0).max(240).optional(),
+  delayUpdatedAt: z.iso.datetime().nullable().optional(),
   id: z.uuid(),
   patient: AppointmentPatient,
   doctorUserId: z.uuid(),

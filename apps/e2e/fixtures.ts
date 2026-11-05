@@ -219,7 +219,7 @@ function otpCodeHash(challengeId: string, code: string): string {
 }
 
 /**
- * Signs a patient in on the web portal with their mobile number and an SMS code. No SMS
+ * Signs a patient in on the web portal with their mobile number and a WhatsApp code. No message
  * goes out here, so once the page has asked for a code the test gives that challenge a
  * code it knows, then types it, ticking "Keep me signed in" when `keep`. Ends wherever the
  * portal sends the patient next.
@@ -237,7 +237,7 @@ export async function signInAsPatient(
 
 /**
  * The sign-in steps after the page is open with the clinic filled in (from a link): the
- * mobile number, then a code the test gives the challenge (no SMS goes out here).
+ * mobile number, then a code the test gives the challenge (no external message goes out here).
  */
 export async function enterPatientCode(
   page: Page,
@@ -259,7 +259,7 @@ export async function enterPatientCode(
     where: { id: challenge.id },
     data: { codeHash: otpCodeHash(challenge.id, code) },
   });
-  await page.getByLabel('6-digit code from the SMS').fill(code);
+  await page.getByLabel('6-digit code from WhatsApp').fill(code);
   if (keep) await page.getByRole('checkbox', { name: 'Keep me signed in on this device' }).check();
   await page.getByRole('button', { name: 'Verify' }).click();
 }

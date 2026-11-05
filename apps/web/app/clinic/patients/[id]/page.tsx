@@ -20,6 +20,9 @@ import { PatientForm } from '../../patient-form';
 import { TagList, TagPicker } from '../../patient-tags';
 import { MergePanel } from '../merge-panel';
 import { TestOrdersCard } from '../test-orders-card';
+import { BloodReportCard } from '../blood-report-card';
+import { PatientWhatsAppCard } from '../whatsapp-card';
+import { PatientRecordsCard } from '../../patient-records-card';
 import { DocumentsCard } from '../../documents-card';
 import { useSession } from '../../session-provider';
 import { ClinicShell, canRegister, canTag } from '../../shell';
@@ -293,6 +296,12 @@ function PatientView({ role }: { role: string }) {
           )}
         </section>
       </Surface>
+
+      {!merged && role === 'doctor' && (
+        <BloodReportCard patientId={id} onConfirmed={() => setReload((n) => n + 1)} />
+      )}
+      {!merged && role === 'doctor' && <PatientRecordsCard patientId={id} />}
+      {!merged && <PatientWhatsAppCard key={patient.id} patientId={patient.id} />}
 
       {canRegister(role) && !merged && !patient.pendingMerge && (
         <Surface className="p-4 sm:p-6">

@@ -2,6 +2,8 @@
 
 **Owner:** DevOps
 
+**Current hosting path:** the single-server Coolify client preview is documented in [coolify.md](coolify.md), using `docker-compose.coolify.yml`. The ECS/promotion steps below are the earlier target architecture, not an implemented deployment pipeline.
+
 1. Confirm release checklist pre-release items are ticked.
 2. Merge release PR to `main`; CI builds container images once and tags them with the commit SHA.
 3. Images auto-deploy to dev, then promote the same tag to staging.

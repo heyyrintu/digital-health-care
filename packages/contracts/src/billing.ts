@@ -10,7 +10,8 @@ export const BillStatus = z.enum(['due', 'partly_paid', 'paid']);
 export type BillStatus = z.infer<typeof BillStatus>;
 
 /** Counter payment modes (PRD §5.6); online payments arrive with Cashfree. */
-export const PaymentMode = z.enum(['cash', 'upi', 'card']);
+export const CounterPaymentMode = z.enum(['cash', 'upi', 'card']);
+export const PaymentMode = z.enum(['cash', 'upi', 'card', 'cashfree']);
 export type PaymentMode = z.infer<typeof PaymentMode>;
 
 /** `consultation` and `follow_up` take the visit's fee; `item` comes from the price list. */
@@ -72,6 +73,8 @@ export const Payment = z.object({
 export type Payment = z.infer<typeof Payment>;
 
 export const Bill = z.object({
+  refundedPaise: z.number().int().default(0),
+  netCollectedPaise: z.number().int().optional(),
   id: z.uuid(),
   appointmentId: z.uuid(),
   status: BillStatus,
@@ -98,6 +101,10 @@ export type BillSummary = z.infer<typeof BillSummary>;
 
 /** A visit's bill and what the bill screen needs to build or change it. */
 export const BillView = z.object({
+  prepayment: z
+    .object({ state: z.enum(['held', 'confirmed', 'released', 'review']) })
+    .nullable()
+    .optional(),
   bill: Bill.nullable(),
   consultationTypeName: z.string(),
   feePaise: z.number().int(),
@@ -141,7 +148,7 @@ export type SaveBillBody = z.infer<typeof SaveBillBody>;
 /** The ID is made by the client, so a retried request records the payment once. */
 export const RecordPaymentBody = z.object({
   id: z.uuid(),
-  mode: PaymentMode,
+  mode: CounterPaymentMode,
   amountPaise: Paise.min(1),
   reference: z.string().trim().min(1).max(60).nullable().default(null),
 });
@@ -183,6 +190,22 @@ export type CollectionPayment = z.infer<typeof CollectionPayment>;
 
 /** One day's counter collections (PRD §5.6 "collection reports by mode and doctor"). */
 export const CollectionsReport = z.object({
+  refundedPaise: z.number().int().default(0),
+  netPaise: z.number().int().optional(),
+  refunds: z
+    .array(
+      z.object({
+        id: z.uuid(),
+        voucherNumber: z.string(),
+        paymentId: z.uuid(),
+        receiptNumber: z.string(),
+        amountPaise: z.number().int(),
+        postedAt: z.iso.datetime(),
+        appointmentId: z.uuid(),
+        patientName: z.string(),
+      }),
+    )
+    .default([]),
   date: z.iso.date(),
   totalPaise: z.number().int(),
   byMode: z.array(
@@ -210,3 +233,97 @@ export const CollectionsReport = z.object({
   ),
 });
 export type CollectionsReport = z.infer<typeof CollectionsReport>;
+
+export const OnlinePaymentState = z.enum([
+  'creating',
+  'active',
+  'closing',
+  'paid',
+  'expired',
+  'terminated',
+  'review',
+]);
+export const OnlinePayment = z.object({
+  id: z.uuid(),
+  amountPaise: z.number().int(),
+  status: OnlinePaymentState,
+  expiresAt: z.iso.datetime(),
+  paymentUrl: z.url().nullable(),
+  reviewRequired: z.boolean().default(false),
+  paymentId: z.uuid().nullable(),
+});
+export type OnlinePayment = z.infer<typeof OnlinePayment>;
+export const OnlinePaymentView = z.object({
+  acceptingPayments: z.boolean().default(true),
+  available: z.boolean(),
+  order: OnlinePayment.nullable(),
+});
+export const CreateOnlinePayment = z.object({ id: z.uuid() }).strict();
+export const PublicPayment = z.object({
+  canPay: z.boolean().default(false),
+  clinicName: z.string(),
+  amountPaise: z.number().int(),
+  currency: z.literal('INR'),
+  status: OnlinePaymentState,
+  expiresAt: z.iso.datetime(),
+});
+export const PaymentCheckout = z.object({
+  paymentSessionId: z.string(),
+  environment: z.enum(['sandbox', 'production']),
+});
+
+export type OnlinePaymentView = z.infer<typeof OnlinePaymentView>;
+export type PublicPayment = z.infer<typeof PublicPayment>;
+export type PaymentCheckout = z.infer<typeof PaymentCheckout>;
+
+export const RefundReason = z.enum([
+  'service_cancelled',
+  'duplicate_payment',
+  'overcharge',
+  'other',
+]);
+export const CreateRefundBody = z
+  .object({ id: z.uuid(), amountPaise: Paise.min(1), reason: RefundReason })
+  .strict();
+export type CreateRefundBody = z.infer<typeof CreateRefundBody>;
+export const RefundState = z.enum([
+  'creating',
+  'pending',
+  'succeeded',
+  'cancelled',
+  'rejected',
+  'review',
+]);
+export const Refund = z.object({
+  providerReference: z.string().nullable(),
+  id: z.uuid(),
+  paymentId: z.uuid(),
+  amountPaise: z.number().int(),
+  status: RefundState,
+  origin: z.enum(['app', 'provider']),
+  reason: z.string(),
+  createdAt: z.iso.datetime(),
+  postedAt: z.iso.datetime().nullable(),
+  voucherNumber: z.string().nullable(),
+});
+export type Refund = z.infer<typeof Refund>;
+export const RefundView = z.object({
+  available: z.boolean().default(false),
+  enabled: z.boolean(),
+  reviewRequired: z.boolean(),
+  refundedPaise: z.number().int(),
+  pendingPaise: z.number().int(),
+  payments: z.array(
+    z.object({
+      id: z.uuid(),
+      receiptNumber: z.string(),
+      amountPaise: z.number().int(),
+      refundablePaise: z.number().int(),
+      hasPending: z.boolean(),
+    }),
+  ),
+  refunds: z.array(Refund),
+});
+export type RefundView = z.infer<typeof RefundView>;
+export const RefundVoucher = z.object({ refund: Refund, originalReceipt: Receipt });
+export type RefundVoucher = z.infer<typeof RefundVoucher>;

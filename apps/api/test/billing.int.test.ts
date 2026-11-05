@@ -396,6 +396,7 @@ describe('collections and the queue', () => {
       { mode: 'cash', count: 1, amountPaise: 50000 },
       { mode: 'upi', count: 1, amountPaise: 30000 },
       { mode: 'card', count: 1, amountPaise: 20000 },
+      { mode: 'cashfree', count: 0, amountPaise: 0 },
     ]);
     expect(report.byDoctor).toEqual([
       expect.objectContaining({

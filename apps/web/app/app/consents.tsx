@@ -1,8 +1,10 @@
 'use client';
+import Link from 'next/link';
 
 import type { AccountConsentKind, ConsentStatus } from '@dhc/contracts';
 import { Button, Checkbox, Surface } from '@dhc/ui-web';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
+import { WhatsAppPreferenceCard } from '../../components/whatsapp-preference-card';
 import {
   acceptBody,
   consentsToAccept,
@@ -17,7 +19,32 @@ import { usePatientSession } from './session-provider';
  * before anything else; again whenever a new version is in force.
  */
 export function ConsentsStep({ status }: { status: ConsentStatus }) {
-  const { api, account, documentUrls, documentsMissing, t } = usePatientSession();
+  const { api, account, documentUrls, documentsMissing, t, signOut } = usePatientSession();
+  const expired = useCallback(() => {
+    void signOut('expired');
+  }, [signOut]);
+  const revoke = (
+    <>
+      <Link className="block underline" href="/app/data-rights">
+        {t('dataRights.title')}
+      </Link>
+      <WhatsAppPreferenceCard
+        api={api}
+        path="/portal/whatsapp-preference"
+        t={t}
+        onExpired={expired}
+        revokeOnly
+      />
+      <WhatsAppPreferenceCard
+        category="records"
+        api={api}
+        path="/portal/whatsapp-record-preference"
+        t={t}
+        onExpired={expired}
+        revokeOnly
+      />
+    </>
+  );
   const [ticked, setTicked] = useState<Set<AccountConsentKind>>(new Set());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -50,6 +77,7 @@ export function ConsentsStep({ status }: { status: ConsentStatus }) {
     return (
       <PortalPage title={t('patient.consents.title')}>
         <Notice tone="error">{t('portal.consents.unavailable')}</Notice>
+        {revoke}
       </PortalPage>
     );
   }
@@ -60,6 +88,7 @@ export function ConsentsStep({ status }: { status: ConsentStatus }) {
       intro={isConsentUpdate(status) ? t('patient.consents.updated') : t('patient.consents.intro')}
     >
       {error && <Notice tone="error">{error}</Notice>}
+      {revoke}
       <Surface className="space-y-5 p-5 sm:p-6">
         <ul className="space-y-5">
           {pending.map((kind) => {

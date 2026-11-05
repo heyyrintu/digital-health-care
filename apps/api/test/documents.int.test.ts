@@ -17,6 +17,8 @@ import {
   PortalDocumentList,
   type TokenResponse,
 } from '@dhc/contracts';
+import { withMessaging } from '@dhc/db';
+import { createRecordLinkToken } from '@dhc/secure-links';
 import { withTenant } from '@dhc/db';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { SAMPLE_SVG, samplePng, sampleWebp } from '../src/modules/branding/logo-samples';
@@ -35,6 +37,9 @@ import {
 } from './harness';
 
 const h = createHarness();
+h.services.recordMessagingSender = '1234';
+h.services.appointmentMessagingSender = '1234';
+h.services.recordLinkSecret = 'synthetic-record-link-secret-at-least-32';
 let clinics: Awaited<ReturnType<typeof seedTwoClinics>>;
 let doctor: TokenResponse;
 let second: StaffFixture;
@@ -965,5 +970,134 @@ describe('the database', () => {
         data: { organisationId: clinics.b.org.id },
       }),
     ).rejects.toThrow();
+  });
+});
+
+describe('WhatsApp document notices and secure navigation', () => {
+  const preference = (category: 'record' | 'appointment', enabled: boolean) =>
+    call(
+      'PUT',
+      `/patients/${patientId()}/${category === 'record' ? 'whatsapp-record-preference' : 'whatsapp-preference'}`,
+      admin,
+      { enabled, recipientAgreed: true },
+    );
+  const begin = (id: string) =>
+    withMessaging(
+      h.services.db,
+      (tx) =>
+        tx.$queryRaw<
+          { link_expires_at: Date }[]
+        >`SELECT * FROM messaging_begin_record_notice(${id}::uuid, ${'1234'})`,
+    );
+  async function prepare() {
+    await h.owner.patient.update({ where: { id: patientId() }, data: { phone: '+919000000001' } });
+    const made = await sheet();
+    return made;
+  }
+  it('keeps appointment consent separate, queues once, and rechecks consent before sending', async () => {
+    const made = await prepare();
+    expect((await preference('appointment', true)).statusCode).toBe(200);
+    const first = await share({ source: 'library', libraryDocumentId: made.id });
+    expect(await h.owner.whatsAppDelivery.count({ where: { patientDocumentId: first.id } })).toBe(
+      0,
+    );
+    expect((await preference('record', true)).statusCode).toBe(200);
+    const second = await share({ source: 'library', libraryDocumentId: made.id });
+    const d = await h.owner.whatsAppDelivery.findFirstOrThrow({
+      where: { patientDocumentId: second.id },
+    });
+    expect(d.kind).toBe('document_ready');
+    expect(d.status).toBe('queued');
+    const claimed = await withMessaging(
+      h.services.db,
+      (tx) =>
+        tx.$queryRaw<
+          { id: string }[]
+        >`SELECT id FROM messaging_claim_appointment_notices(${'1234'})`,
+    );
+    expect(claimed).toEqual([]);
+    const records = await withMessaging(
+      h.services.db,
+      (tx) =>
+        tx.$queryRaw<{ id: string }[]>`SELECT id FROM messaging_claim_record_notices(${'1234'})`,
+    );
+    expect(records).toEqual([{ id: d.id }]);
+    expect((await preference('record', false)).statusCode).toBe(200);
+    expect(await begin(d.id)).toEqual([]);
+    expect(
+      (await call('GET', `/patients/${patientId()}/whatsapp-preference`, admin)).json().enabled,
+    ).toBe(true);
+  });
+  it('authorizes once and rejects forwarded, tampered, expired, withdrawn and cross-clinic links', async () => {
+    const made = await prepare();
+    expect((await preference('record', true)).statusCode).toBe(200);
+    const shared = await share({ source: 'library', libraryDocumentId: made.id });
+    const d = await h.owner.whatsAppDelivery.findFirstOrThrow({
+      where: { patientDocumentId: shared.id },
+    });
+    const [authorized] = await begin(d.id);
+    expect(authorized).toBeDefined();
+    await withMessaging(
+      h.services.db,
+      (tx) =>
+        tx.$executeRaw`SELECT messaging_finish_record_notice(${d.id}::uuid, ${'1234'}, ${'accepted'}, ${'wamid.synthetic-record'})`,
+    );
+    expect((await h.owner.whatsAppDelivery.findUniqueOrThrow({ where: { id: d.id } })).status).toBe(
+      'accepted',
+    );
+    expect(await begin(d.id)).toEqual([]);
+    const token = createRecordLinkToken(
+      d.id,
+      authorized!.link_expires_at,
+      h.services.recordLinkSecret!,
+    );
+    const path = `/portal/record-links/${token}`;
+    const mine = await signedUp('9000000001'),
+      other = await signedUp('9000000002');
+    const own = await call('GET', path, mine);
+    expect(own.statusCode, own.body).toBe(200);
+    expect(own.json()).toEqual({
+      kind: 'document_ready',
+      sourceId: shared.id,
+      mediaType: 'application/pdf',
+    });
+    expect((await call('GET', path, other)).statusCode).toBe(404);
+    expect((await call('GET', path, null)).statusCode).toBe(401);
+    expect((await call('GET', path, admin)).statusCode).toBe(403);
+    const cross = await patientLogin(h, 'clinic-b', '9000000001');
+    expect((await call('GET', path, cross)).statusCode).not.toBe(200);
+    expect((await call('GET', path + 'x', mine)).statusCode).toBe(404);
+    const expired = createRecordLinkToken(
+      d.id,
+      new Date(h.clock.ms - 1000),
+      h.services.recordLinkSecret!,
+    );
+    expect((await call('GET', `/portal/record-links/${expired}`, mine)).statusCode).toBe(404);
+    expect(
+      (await call('POST', `/patient-documents/${shared.id}/withdraw`, doctor)).statusCode,
+    ).toBe(200);
+    expect((await call('GET', path, mine)).statusCode).toBe(404);
+  });
+  it('skips withdrawn documents and expired messages before authorization', async () => {
+    const made = await prepare();
+    await preference('record', true);
+    const shared = await share({ source: 'library', libraryDocumentId: made.id });
+    const d = await h.owner.whatsAppDelivery.findFirstOrThrow({
+      where: { patientDocumentId: shared.id },
+    });
+    await call('POST', `/patient-documents/${shared.id}/withdraw`, doctor);
+    expect(await begin(d.id)).toEqual([]);
+    const live = await share({ source: 'library', libraryDocumentId: made.id });
+    const expired = await h.owner.whatsAppDelivery.findFirstOrThrow({
+      where: { patientDocumentId: live.id },
+    });
+    await h.owner.whatsAppDelivery.update({
+      where: { id: expired.id },
+      data: { expiresAt: new Date(Date.now() - 1000) },
+    });
+    expect(await begin(expired.id)).toEqual([]);
+    expect(
+      (await h.owner.whatsAppDelivery.findUniqueOrThrow({ where: { id: expired.id } })).status,
+    ).toBe('skipped');
   });
 });

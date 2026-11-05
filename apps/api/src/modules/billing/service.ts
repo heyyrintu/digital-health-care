@@ -47,6 +47,7 @@ const invalid = (field: string, message: string) =>
 const fromDbDate = (date: Date) => date.toISOString().slice(0, 10);
 
 const billInclude = {
+  refundEntries: true,
   items: { orderBy: { sortOrder: 'asc' } },
   payments: { orderBy: [{ receivedAt: 'asc' }, { receiptNumber: 'asc' }] },
 } satisfies Prisma.BillInclude;
@@ -117,24 +118,40 @@ export class BillingService {
   // ---- Bills -------------------------------------------------------------------------
 
   async view(actor: Actor, appointmentId: string): Promise<BillView> {
-    const { appointment, bill } = await withTenant(this.s.db, actor.organisationId, async (tx) => {
-      const appointment = await tx.appointment.findUnique({
-        where: { id: appointmentId },
-        include: { consultationType: true },
-      });
-      if (!appointment) throw NOT_FOUND();
-      const bill = await tx.bill.findUnique({ where: { appointmentId }, include: billInclude });
-      return { appointment, bill };
-    });
+    const { appointment, bill, onlineOpen, prepaid } = await withTenant(
+      this.s.db,
+      actor.organisationId,
+      async (tx) => {
+        const appointment = await tx.appointment.findUnique({
+          where: { id: appointmentId },
+          include: { consultationType: true },
+        });
+        if (!appointment) throw NOT_FOUND();
+        const bill = await tx.bill.findUnique({ where: { appointmentId }, include: billInclude });
+        const onlineOpen = bill
+          ? !!(await tx.cashfreeOrder.findFirst({
+              where: {
+                billId: bill.id,
+                status: { in: ['creating', 'active', 'closing', 'review'] },
+              },
+            }))
+          : false;
+        const prepaid = await tx.cashfreeBooking.findUnique({ where: { appointmentId } });
+        return { appointment, bill, onlineOpen, prepaid };
+      },
+    );
     const biller = BILLERS.includes(actor.role);
     const billable = BILLABLE_STATUSES.includes(appointment.status);
     return {
+      prepayment: prepaid
+        ? { state: prepaid.state as 'held' | 'confirmed' | 'released' | 'review' }
+        : null,
       bill: bill ? await this.billOut(bill) : null,
       consultationTypeName: appointment.consultationType.name,
       feePaise: appointment.consultationType.feePaise,
       followUpFeePaise: appointment.consultationType.followUpFeePaise,
-      canEdit: biller && billable && (bill?.paidPaise ?? 0) === 0,
-      canPay: biller && !!bill && bill.paidPaise < bill.totalPaise,
+      canEdit: !prepaid && !onlineOpen && biller && billable && (bill?.paidPaise ?? 0) === 0,
+      canPay: !prepaid && !onlineOpen && biller && !!bill && bill.paidPaise < bill.totalPaise,
     };
   }
 
@@ -161,6 +178,7 @@ export class BillingService {
       // Takes turns with payments on this bill, so a payment recorded meanwhile is seen.
       await tx.$queryRaw`SELECT id FROM bills WHERE appointment_id = ${appointmentId}::uuid FOR UPDATE`;
       const existing = await tx.bill.findUnique({ where: { appointmentId } });
+      if (existing) await this.assertNoOnlinePayment(tx, existing.id);
       if (existing && existing.paidPaise > 0) {
         throw new AppError(409, 'CONFLICT', 'This bill has a payment and can no longer change.');
       }
@@ -257,6 +275,7 @@ export class BillingService {
         return { row: earlier, created: false };
       }
 
+      await this.assertNoOnlinePayment(tx, billId);
       const balance = bill.totalPaise - bill.paidPaise;
       if (balance <= 0) throw new AppError(409, 'CONFLICT', 'This bill is already paid.');
       if (body.amountPaise > balance) {
@@ -311,7 +330,12 @@ export class BillingService {
     return { payment: this.paymentOut(row, names), created };
   }
 
-  async receipt(request: FastifyRequest, actor: Actor, paymentId: string): Promise<Receipt> {
+  async receipt(
+    request: FastifyRequest,
+    actor: Actor,
+    paymentId: string,
+    authorize?: (tx: Tx, patientId: string) => Promise<unknown>,
+  ): Promise<Receipt> {
     const { payment, bill, organisation } = await withTenant(
       this.s.db,
       actor.organisationId,
@@ -325,6 +349,7 @@ export class BillingService {
             appointment: { include: { patient: { select: { name: true, uhid: true } } } },
           },
         });
+        await authorize?.(tx, bill.patientId);
         const organisation = await tx.organisation.findUniqueOrThrow({
           where: { id: actor.organisationId },
           select: { name: true },
@@ -363,29 +388,41 @@ export class BillingService {
     // IST is UTC+05:30 all year.
     const from = new Date(`${day}T00:00:00.000+05:30`);
     const to = new Date(from.getTime() + 24 * 60 * 60 * 1000);
-    const { payments, dues } = await withTenant(this.s.db, actor.organisationId, async (tx) => ({
-      payments: await tx.payment.findMany({
-        where: { receivedAt: { gte: from, lt: to } },
-        include: {
-          bill: {
-            select: {
-              appointmentId: true,
-              doctorUserId: true,
-              appointment: { select: { patient: { select: { name: true, uhid: true } } } },
+    const { payments, dues, refunds } = await withTenant(
+      this.s.db,
+      actor.organisationId,
+      async (tx) => ({
+        refunds: await tx.refundEntry.findMany({
+          where: { postedAt: { gte: from, lt: to } },
+          include: {
+            payment: { select: { receiptNumber: true } },
+            bill: { include: { appointment: { select: { patient: { select: { name: true } } } } } },
+          },
+          orderBy: { postedAt: 'asc' },
+        }),
+        payments: await tx.payment.findMany({
+          where: { receivedAt: { gte: from, lt: to } },
+          include: {
+            bill: {
+              select: {
+                appointmentId: true,
+                doctorUserId: true,
+                appointment: { select: { patient: { select: { name: true, uhid: true } } } },
+              },
             },
           },
-        },
-        orderBy: { receivedAt: 'asc' },
+          orderBy: { receivedAt: 'asc' },
+        }),
+        dues: await tx.bill.findMany({
+          where: {
+            status: { not: 'paid' },
+            appointment: { date: new Date(`${day}T00:00:00.000Z`) },
+          },
+          include: { appointment: { select: { patient: { select: { name: true, uhid: true } } } } },
+          orderBy: { createdAt: 'asc' },
+        }),
       }),
-      dues: await tx.bill.findMany({
-        where: {
-          status: { not: 'paid' },
-          appointment: { date: new Date(`${day}T00:00:00.000Z`) },
-        },
-        include: { appointment: { select: { patient: { select: { name: true, uhid: true } } } } },
-        orderBy: { createdAt: 'asc' },
-      }),
-    }));
+    );
     const names = await this.names([
       ...payments.flatMap((p) => [p.receivedByUserId, p.bill.doctorUserId]),
       ...dues.map((d) => d.doctorUserId),
@@ -405,7 +442,21 @@ export class BillingService {
     return {
       date: day,
       totalPaise: payments.reduce((sum, p) => sum + p.amountPaise, 0),
-      byMode: (['cash', 'upi', 'card'] as const).map((mode) => ({
+      refundedPaise: refunds.reduce((sum, r) => sum + r.amountPaise, 0),
+      netPaise:
+        payments.reduce((sum, p) => sum + p.amountPaise, 0) -
+        refunds.reduce((sum, r) => sum + r.amountPaise, 0),
+      refunds: refunds.map((r) => ({
+        id: r.refundId,
+        voucherNumber: r.voucherNumber,
+        paymentId: r.paymentId,
+        receiptNumber: r.payment.receiptNumber,
+        amountPaise: r.amountPaise,
+        postedAt: r.postedAt.toISOString(),
+        appointmentId: r.bill.appointmentId,
+        patientName: r.bill.appointment.patient.name,
+      })),
+      byMode: (['cash', 'upi', 'card', 'cashfree'] as const).map((mode) => ({
         mode,
         ...(byMode.get(mode) ?? { count: 0, amountPaise: 0 }),
       })),
@@ -501,6 +552,19 @@ export class BillingService {
   }
 
   /** The organisation's next receipt number, taken under the counter row's lock. */
+  private async assertNoOnlinePayment(tx: Tx, billId: string) {
+    if (
+      await tx.cashfreeOrder.findFirst({
+        where: { billId, status: { in: ['creating', 'active', 'closing', 'review'] } },
+      })
+    )
+      throw new AppError(
+        409,
+        'CONFLICT',
+        'Check or close the online payment before changing or collecting this bill.',
+      );
+  }
+
   private async nextReceiptNumber(tx: Tx, organisationId: string): Promise<string> {
     const [row] = await tx.$queryRaw<{ prefix: string; n: number }[]>`
       INSERT INTO receipt_settings (organisation_id, next_number, updated_at)
@@ -543,7 +607,7 @@ export class BillingService {
       reference: row.reference,
       receiptNumber: row.receiptNumber,
       receivedAt: row.receivedAt.toISOString(),
-      receivedByName: names.get(row.receivedByUserId) ?? null,
+      receivedByName: row.mode === 'cashfree' ? null : (names.get(row.receivedByUserId) ?? null),
     };
   }
 
@@ -562,6 +626,8 @@ export class BillingService {
       balancePaise: row.totalPaise - row.paidPaise,
       revision: row.revision,
       payments: row.payments.map((p) => this.paymentOut(p, names)),
+      refundedPaise: row.refundEntries.reduce((n, r) => n + r.amountPaise, 0),
+      netCollectedPaise: row.paidPaise - row.refundEntries.reduce((n, r) => n + r.amountPaise, 0),
     };
   }
 

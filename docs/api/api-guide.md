@@ -54,7 +54,7 @@ Implemented in Phase 0 (`apps/api/src/modules/auth`). Sign-in requests name the 
 Rules:
 - **Access tokens** are JWTs valid for 15 minutes, carrying user, organisation, role and session. Every request also checks the session is live, so logout or revocation takes effect immediately.
 - **Refresh tokens** are opaque, stored only as SHA-256 hashes, and single-use: each refresh returns a new one. Replaying an old one ends the whole session (`auth.refresh.reuse_detected` in the audit log). Sessions last 30 days for patients and 12 hours for staff.
-- **Patient codes:** 6 digits, valid 5 minutes, stored as an HMAC, 5 attempts per code, at most 3 codes per number per 10 minutes. Delivery goes through an `OtpSender`; in development `OTP_DELIVERY=log` prints the code (forbidden in production) until the SMS provider is chosen (decision O5).
+- **Patient codes:** 6 digits, valid 5 minutes, stored as an HMAC, 5 attempts per code, at most 3 codes per number per 10 minutes. Delivery goes through an `OtpSender`. `OTP_DELIVERY=whatsapp` uses Meta WhatsApp Cloud API directly with an approved copy-code authentication template (setup: `docs/runbooks/whatsapp-otp.md`); SMS fallback is deferred. In development `OTP_DELIVERY=log` prints the code (forbidden in production). Disabled delivery, provider rejection, timeout or an invalid acceptance response returns 503 `UNAVAILABLE`; the challenge is retired and `auth.otp.delivery_failed` is audited by ID only. Failed delivery attempts still count toward the request limit. Meta acceptance is not proof of delivery. Optional verified status webhooks and the admin-only delivery log track receipts through a durable background queue; see the WhatsApp setup runbook.
 - **Staff:** passwords hashed with scrypt (at least 12 characters); 5 wrong passwords or codes lock the account for 15 minutes. Only a correct authenticator code resets the failure count (a correct password does not), so wrong codes count across sign-ins. An authenticator (TOTP) is mandatory and each code works once, even when two requests send it at the same time; a code checked while the account is disabled, locked or has its authenticator reset is refused (`401`, audited as `auth.mfa.failed` with reason `wrong_code`, `code_reused` or `changed_meanwhile`).
 - **Staff accounts are set up only through invites.** Login never offers authenticator enrolment, so knowing someone's password is never enough to attach a new authenticator. A clinic admin's invite link is single-use, expires after 72 hours, is stored only as a hash, and carries its token in the URL fragment (`/invite#<token>`), which browsers do not send to servers or logs. A new invite for the same person and role replaces the previous one; admins can revoke. The invite is used up only when the first authenticator code is confirmed. A person who already has a staff account (another clinic) confirms with their existing password and authenticator instead. The web app's `/invite` page walks the person through these steps; it reads the token from the fragment and removes it from the address bar.
 - Unknown user, wrong password and no access in that organisation all return the same `401` message.
@@ -633,3 +633,120 @@ Implemented in Phase 3, part 1, web first (`apps/api/src/modules/documents`, PRD
 2. CI regenerates OpenAPI and client; web and mobile must compile.
 3. Breaking change → new endpoint or `/v2`, never a silent change.
 4. Update this guide if conventions or the catalogue change.
+
+
+## WhatsApp OTP delivery receipts
+
+- `GET /delivery-log`: clinic-admin only, organisation RLS; `limit` (1-100, default 50), opaque cursor and optional status (`pending`, `accepted`, `submission_failed`, `sent`, `delivered`, `read`, `failed`). Returns `{ data, nextCursor }`; rows expose only ID, status, created/last-status timestamps and numeric error code, never phone, OTP, challenge ID or provider ID.
+- `GET /webhooks/whatsapp`: enabled explicitly; validates Meta's verification token and echoes the numeric challenge as plain text. Verification requests are not logged.
+- `POST /webhooks/whatsapp`: HMAC over exact raw bytes, 256 KB body limit, at most 100 recognized statuses per callback, account/sender checks. Persists only known-message status metadata; 200 after commit, 503 on storage failure so Meta retries. Unknown/unrelated events are acknowledged without storage. The raw parser is scoped to this route plugin.
+- PostgreSQL owns deduplication and monotonic status transitions; the restricted worker role has no direct identity or clinical-table grants. A 60-second database lease feeds event IDs to BullMQ; failed jobs retry five times and remain visible after exhaustion. The admin log may lag while workers are offline.
+
+
+## WhatsApp appointment messages (web first)
+
+- `GET`/`PUT /patients/{id}/whatsapp-preference`: staff only, tenant-scoped live patient, direct phone only. `GET` returns availability, enabled, last four digits and changed timestamp. `PUT` accepts `{ enabled, recipientAgreed }`; enabling requires explicit agreement and an available sender. Disabling is idempotent and available even while sending is disabled. A shared-number preference covers that organisation's clinics/family records on the same number.
+- `GET`/`PUT /portal/whatsapp-preference`: patient only, phone comes from the OTP-verified account, never the body. Current account consents are required to opt in; revocation is always permitted. The web privacy page and consent gate expose the controls.
+- `/delivery-log` now includes `kind` (`otp`, `appointment_confirmation`, `appointment_reminder`) and supports filtering by kind. New states: queued, sending, skipped, uncertain. Patient/appointment/contact IDs remain private.
+- Database outbox intent is atomic with eligible confirmations. One 24-hour reminder is scheduled when there is enough lead time. Cancelled/changed visits and revised consent invalidate pending intent. The worker rechecks current eligibility before a single external attempt; an unknown result is not resent automatically. See [setup and exact timing](../runbooks/whatsapp-appointments.md).
+- Signed STOP callbacks are processed transactionally and hashed by inbound message ID. Raw chat text is discarded. Only matching recipient/sender appointment grants are revoked; OTP authentication remains user-requested and separate.
+
+### Record notifications and patient referral letters
+
+`GET/PUT /patients/:id/whatsapp-record-preference` (staff) and `GET/PUT /portal/whatsapp-record-preference` (patient) use the appointment preference response and explicit-agreement request, but a separate consent category. `GET /portal/record-links/:token` authenticates a patient, checks current health consent and family/source access, and returns `{kind, sourceId, mediaType}`. It grants no file access itself. Invalid/expired/unavailable links return 404. `GET /portal/referral-letters?limit=&cursor=` lists family letters; `GET /portal/referral-letters/:id/pdf` opens a hash-checked PDF. The list cursor is a validated letter UUID; ordering is UUID descending for stable traversal, not signing date.
+
+### Online collection for an existing bill
+
+`GET /bills/:id/online-payment` (staff) returns availability and the latest/open order. `POST` (front desk/doctor) accepts only `{id: UUID}`; the server reserves the remaining balance and reuses any existing open order. `POST /online-payments/:id/check` and `/close` (staff) query the original merchant; closure is requested, then verified before releasing a bill. The signed public `/public/payments/:token` GET shows clinic label, amount, expiry and state; POST `/checkout` returns the active Cashfree session, and `/check` performs throttled server verification. These links grant payment access only; no bill lines, patient identity, health data, receipts or account session are exposed. Counter-payment request modes remain cash/UPI/card; response/report modes additionally include `cashfree`. Live routes remain unavailable until configuration is enabled.
+
+### Refunds for verified online receipts
+
+`GET /bills/:id/refunds` (staff) returns eligible payments, refundable/reserved/confirmed totals and history. `POST /payments/:id/refunds` (clinic admin) accepts strict `{id: UUID, amountPaise: integer, reason: service_cancelled|duplicate_payment|overcharge|other}`. No clinical text is sent to Cashfree. `POST /refunds/:id/check` and `/payments/:id/refunds/check` (staff) read provider state only; they never submit money. `POST /refunds/:id/retry` (clinic admin) explicitly recovers a creating request using the original immutable payload/UUID. `GET /refunds/:id/voucher` (staff) is available only after confirmation/ledger posting. Cashfree's existing raw-body HMAC route also accepts `REFUND_STATUS_WEBHOOK`. Bill responses add refunded/net-collected fields; collections add posted refunds and net totals. No new public refund API or patient health access is introduced.
+
+### Settlement reconciliation (clinic admin only)
+
+`GET /reconciliation/runs` returns `{enabled,runs:{data,nextCursor}}`. `POST /reconciliation/runs` accepts a strict `{id,fromDate,toDate}` with inclusive completed IST dates spanning at most 31 days. It queues durable work, returns `{run,unreviewedCount}`, and reuses an existing open/retrying period; it does not fetch provider reports inside the request. `GET /reconciliation/runs/:id` reads progress. `/issues` and `/settlements` under that run use `limit`/UUID `cursor` pagination. `POST /reconciliation/issues/:id/review` accepts only a reason code (`timing_difference`, `fees_explained`, `external_transaction`, `contacted_provider`, `other`) and returns `{reviewed:true}`. Review is an acknowledgement, never a ledger correction or bank-credit confirmation. Saved reports remain readable while creation/processing are disabled. No patient, doctor or front-desk access.
+
+### Prepaid in-person booking (patient portal)
+
+Supporting clients request `GET /portal/booking-options?prepaid=true`; default options retain pay-at-clinic consultations for older clients. Prepaid types carry `requiresPrepayment:true`. `POST /portal/prepaid-bookings` accepts strict `{id,patientId,doctorUserId,clinicId,consultationTypeId,startAt,reason?}` with a stable UUID and no amount. It returns `PrepaidBookingView`, including reservation/appointment IDs, payment state, appointment status, immutable amount/expiry, optional checkout link and provider availability. Unknown provider answers retain that ID. `GET /portal/prepaid-bookings/:id` reads saved state; POST `/check` recovers/verifies the original request, and POST `/close` requests safe closure. All require patient authentication, current consents and family ownership. Reads are no-store; checks use a durable lease and short interactive throttle.
+
+`PortalAppointment.prepayment` optionally describes the reservation so the patient can resume from Appointments. Reservation state `confirmed` means payment verified; use `appointmentStatus` to distinguish automatic confirmation from pending clinic approval. `review` never means a restored appointment. A successful browser checkout is not proof; only the server-verified state is authoritative. The ordinary free-booking endpoint cannot bypass prepaid requirements. See ADR 0024 for expiry and late-payment behavior.
+
+### Patient finance (ADR 0025)
+
+Patient-only, no-store endpoints: `GET /portal/bills` and `GET /portal/receipts` accept optional owned `patientId`, `limit` (default 20, max 50) and UUID cursor. `GET /portal/bills/:id` returns an owned bill, remaining original balance, separate refund/net figures and current order. POST `/portal/bills/:id/checkout` accepts strict `{id}` and recovers/creates the server-priced remaining-balance order; it never accepts an amount. POST `/portal/bills/:id/check` verifies the original order and safely closes expired attempts. Prepaid bills retain their original reservation flow.
+
+`GET /portal/receipts/:id` returns the original receipt plus a separate `refunds` supplement; the staff receipt endpoint's original output does not change. Access re-checks current family/guardian/merged history and consents. Refunded amounts do not become new dues. `GET /portal/finance-links/:token` additionally checks a financial-purpose HMAC/expiry, attempted delivery, source identity and current ownership before resolving a payable link or receipt ID. The token itself grants no record access.
+
+Financial WhatsApp consent uses GET/PUT `/portal/whatsapp-payment-preference` and `/patients/:id/whatsapp-payment-preference`, with the existing explicit number-holder agreement. It is independent of appointment/record categories. New delivery-log kinds are `payment_link`, `receipt_ready` and `refund_ready`. Notices are emitted once for new source events after opt-in, not backfilled.
+
+### Patient web rescheduling
+
+`GET /v1/portal/appointments/:id` returns an owned family appointment, including `canReschedule` and fixed booking identifiers. `POST /v1/portal/appointments/:id/reschedule` accepts only `{ "startAt": "<UTC ISO instant>" }`, returns the linked replacement (201), and supports `Idempotency-Key`. Preserve the same key and body after an unknown response. Eligibility, current consents/family access, cutoff, scheduling and bill/prepaid protections are enforced again in the transaction. Failed moves retain the original appointment. See ADR 0026.
+
+### Patient profiles and number verification
+
+`GET/PUT /v1/portal/patients/:id/profile` read/edit a live owned family profile; PUT uses strict `UpdatePortalProfile` including the displayed `updatedAt`. Protected identity/clinical fields are rejected. `POST /medical-basics` on that patient prefix accepts a strict discriminated report (`allergies`, `conditions`, `medications`), always patient-sourced, and supports `Idempotency-Key`. `GET/POST/DELETE /photo` on that prefix read/upload/remove the private no-store photo; uploads are raw validated JPEG/PNG/WebP up to 512 KB.
+
+`POST /v1/portal/patients/:id/phone-change` takes `{id,newPhone}`. Reuse the request UUID/body after uncertain delivery; `ready=false` means codes are still unavailable, not permission to resend automatically. `POST /v1/portal/phone-changes/:id/verify` takes `{oldCode,newCode}`. A successful transfer revokes current-clinic patient sessions; sign in on the new number and accept required consents. Phone-change codes cannot sign in. Existing clinic records on the new number need clinic review. See ADR 0027 for scope, rate limits, failure/recovery and in-person exceptions.
+
+Doctor-only `GET /v1/patients/:id/reported-blood-group` and POST to its `/confirm` use `DoctorBloodReport`/`ConfirmBloodReport`. `POST /v1/patients/:id/chart/:kind/:entryId/confirm` confirms an active patient report by preserving it and creating a doctor entry. All confirmation endpoints enforce the clinic chart model.
+
+### Patient-origin records (ADR 0028)
+
+`GET /v1/portal/patients/:id/record-options` returns upload limits, active clinic doctors and recent owned reference choices. `POST /v1/portal/patients/:id/records` reserves strict metadata with a stable UUID; `POST /v1/portal/records/:id/file` sends the raw file. Retry the same UUID/body/file after an uncertain result. Ready bytes cannot be replaced. `POST /photo-pages` on that record accepts two-to-ten bounded flattened JPEG base64 pages and assembles/rechecks a PDF. The web converts PNG/WebP selections locally; the assembly API does not decode PNGs.
+
+`GET /v1/portal/records` supports owned patient/category/hidden filters and a UUID cursor (limit 20, maximum 50). GET/PATCH on `/:id` read/edit metadata; PATCH requires the current revision. DELETE revokes links and either queues unused erasure or hides a retained clinical record. POST `/:id/restore` is only for a hidden used record. GET `/:id/file` is private, no-store and checksum-verified.
+
+GET/POST `/:id/shares` list/create named-doctor grants; POST uses `{id,doctorUserId,ttlHours}` (1–168 hours), recovering the same grant after retries. DELETE `/:id/shares/:shareId` revokes it. The random link token is in a fragment, not a query/path. Doctor-only POST `/v1/record-shares/resolve` accepts `{token}`; it requires the named doctor/current clinic and valid grantor consent. GET `/v1/patients/:id/records` lists this doctor's authorized files. GET `/v1/patient-records/:id[/file]` reads them. POST `/:id/review` uses `{revision}`; POST `/:id/use` additionally requires a treating `appointmentId`. Use records are append-only; patient metadata/bytes freeze on first use. Neither an expired link nor a known object ID grants access.
+
+## Patient data rights (ADR 0029)
+
+These endpoints require a live clinic session, but patient actions do not require health-data consent. All responses use `Cache-Control: no-store`.
+
+| Method and path (under /v1) | Access and behavior |
+| --- | --- |
+| GET /data-rights/patients | Patient: currently owned live family profiles |
+| GET /data-rights | Patient: own requests; admin: clinic queue with clinical text redacted; doctor: assigned requests within chart access. Cursor, limit (1–50), optional state |
+| POST /data-rights | Patient: strict RightsCreate, stable UUID; correction or erasure review. Initial details encrypted/immutable |
+| POST /data-rights/:id/withdraw | Requester: expected revision, open correction/erasure request only |
+| GET /data-rights/reviewers | Clinic admin: active named clinic doctors |
+| POST /data-rights/:id/assign | Admin: revision and doctorId; clinical requests only, chart-authorised active doctor |
+| POST /data-rights/:id/decision | Admin for profile/financial, assigned doctor for clinical. Revision/state/response/policyReference/reviewAfter/evidenceId; retention needs policy; completion needs actual correction or completed unused-upload erasure |
+| POST /data-rights/export | Patient: `{id, patientId}`; private ZIP, stable UUID retry rebuilds a current snapshot. 2/process and 1/account in flight; 50 MiB/300 entries/2,000 rows per collection. Oversize/missing-file failures are tracked and require retry/clinic assistance |
+| POST /data-rights/closure | Patient: `{id}`; durable preparation and purpose-bound OTP; retry does not resend |
+| POST /data-rights/closure/:id/verify | Patient: `{code, confirmed:true}`; atomic current-clinic closure and session revocation. Save displayed reference before verifying |
+
+ZIP contents and deliberate exclusions are documented in ADR 0029; neither drafts nor private clinician notes are automatically released. Account closure retains care/financial history and does not cancel/refund appointments. A lost final response may leave the account closed; the clinic can inspect the durable receipt.
+
+## Clinic WhatsApp inbox (ADR 0030)
+
+All `/v1/inbox` endpoints require an active staff role and return uncached data. Patient sessions are refused.
+
+| Method/path | Behavior |
+| --- | --- |
+| GET /inbox | Clinic thread metadata, state filter, UUID cursor, limit 1–50. Phone/body visibility follows assignment |
+| GET /inbox/doctors | Active clinic doctor handoff choices |
+| GET /inbox/threads/:id/messages | Bounded newest-first history for front desk or assigned doctor; admins get no content |
+| POST /inbox/threads/:id/messages | Strict `{id, text}` or `{id, templateId}`. Stable UUID, no implicit resend/fallback; returns queued/accepted/etc. |
+| POST /inbox/threads/:id/action | Expected revision, optional markRead/state open/resolved |
+| POST /inbox/threads/:id/assign | Revision, nullable doctorId; only assigned doctor may release a doctor-owned thread |
+| POST /inbox/threads/:id/consent | Revision, enabled, explicit recipientAgreed and written/phone/in_person source; service category only |
+| GET /inbox/templates | Admin catalog; other staff get enabled supported approved service templates |
+| POST /inbox/templates/sync | Admin-only authoritative Meta read; bounded list and atomic local replacement/update |
+| POST /inbox/templates/:id | Admin-only expected revision and enabled flag; cannot change body/status/approval |
+
+The existing signed WhatsApp webhook accepts configured-channel incoming messages and correlated chat receipts alongside legacy delivery/STOP events. Routing is pinned to sender/WABA/clinic, never recipient matching. Provider HTTP calls happen after durable send authorization. Unknown results are not automatically retried. See OpenAPI and ADR 0030 for precise contracts and limitations.
+
+## Reviewed clinic session operations (ADR 0031)
+
+| Method/path under /v1 | Behavior |
+| --- | --- |
+| GET /clinic-operations/options | Active clinic/doctor choices and additional-notice availability; doctors see only themselves |
+| POST /clinic-operations/preview | Strict UUID/kind/doctorId/clinicId/date/from/to/reason, optional delay/destination/notify. Immutable encrypted snapshot; no appointment changes. Up to 200 source rows/50 eligible changes |
+| GET /clinic-operations | Recent receipts, 20 per page, optional UUID cursor |
+| GET /clinic-operations/:id | Authorised snapshot/result; doctor limited to own sessions |
+| POST /clinic-operations/:id/apply | Creator only: revision, confirmed:true, acknowledgeManual. Rechecks snapshot under booking locks; atomic effects and stable-ID recovery. Applied replay returns original receipt |
+
+Additional operational notifications are queued only when explicitly requested, configured and consented. Source event checks and delivery authorization use restricted messaging functions. Delay fields are additive on staff/patient appointment contracts; they do not alter start/end times. Normal booking notices remain separate. All responses are uncached. See OpenAPI and ADR 0031 for exclusions, expiration and recovery behavior.

@@ -1,6 +1,9 @@
+import { createHmac } from 'node:crypto';
+import { withMessaging } from '@dhc/db';
 import type { Db } from '@dhc/db';
 import type { Browser } from '@playwright/test';
 import {
+  enterPatientCode,
   expect,
   setUpFromInvite,
   signInAsPatient,
@@ -143,6 +146,14 @@ test.describe('documents', () => {
       // The doctor shares the sheet from the consultation screen, with a note.
       await setUpFromInvite(doctor, clinic.inviteLink('doctor'), 'doctor synthetic passphrase', 1);
       const { asha, phone, visitId } = await ashaWithTheDoctor(db, clinic);
+      if (process.env.E2E_WHATSAPP === '1') {
+        await doctor.goto(`/clinic/patients/${asha.id}`);
+        const consent = doctor.getByTestId('whatsapp-record-preference');
+        await expect(consent.getByRole('status')).toHaveText('Record messages are off.');
+        await consent.getByRole('checkbox').check();
+        await consent.getByRole('button', { name: 'Enable record messages' }).click();
+        await expect(consent.getByRole('status')).toHaveText('Record messages are on.');
+      }
       await doctor.goto(`/clinic/consultations/${visitId}`);
       const visitCard = doctor.getByTestId('patient-documents');
       await expect(visitCard).toContainText('No documents shared at this visit.');
@@ -207,6 +218,44 @@ test.describe('documents', () => {
       await (await tab).close();
       await expect(report.getByTestId('document-new')).toHaveCount(0);
       await expect(sheet.getByTestId('document-new')).toHaveText('New');
+
+      if (process.env.E2E_WHATSAPP === '1') {
+        const shared = await db.patientDocument.findFirstOrThrow({
+          where: { patientId: asha.id, title: REPORT },
+        });
+        const delivery = await db.whatsAppDelivery.findFirstOrThrow({
+          where: { patientDocumentId: shared.id },
+        });
+        const [started] = await withMessaging(
+          db,
+          (tx) =>
+            tx.$queryRaw<
+              { link_expires_at: Date }[]
+            >`SELECT * FROM messaging_begin_record_notice(${delivery.id}::uuid, ${'1234'})`,
+        );
+        expect(started).toBeDefined();
+        const payload = `v1.${delivery.id}.${Math.floor(started!.link_expires_at.getTime() / 1000)}`;
+        const signature = createHmac('sha256', 'synthetic-browser-record-link-secret-32-characters')
+          .update('dhc-record-navigation:' + payload)
+          .digest('base64url');
+        const path = `/app/records/${payload}.${signature}?clinic=${clinic.slug}`;
+        await patient.getByRole('button', { name: 'Sign out', exact: true }).click();
+        await patient.goto(path);
+        await expect(patient).toHaveURL(/app\/login\?.*next=/);
+        await enterPatientCode(patient, db, clinic, phone);
+        await expect(
+          patient.getByRole('heading', { name: 'Your record', exact: true }),
+        ).toBeVisible();
+        const response = patient.waitForResponse((r) =>
+          r.url().includes(`/portal/documents/${shared.id}/file`),
+        );
+        const popup = patient.waitForEvent('popup');
+        await patient.getByRole('button', { name: 'Open record', exact: true }).click();
+        expect((await response).status()).toBe(200);
+        await (await popup).close();
+        await patient.goto('/app/documents');
+        await expect(patient.getByTestId('portal-document')).toHaveCount(2);
+      }
 
       // The doctor sees it was opened, and withdraws it.
       await doctor.reload();

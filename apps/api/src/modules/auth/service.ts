@@ -39,6 +39,7 @@ export class AuthService {
     request: FastifyRequest,
     organisationSlug: string,
     rawPhone: string,
+    purpose: 'sign_in' | 'phone_change' | 'account_close' = 'sign_in',
   ): Promise<OtpRequestResponse> {
     const phone = normaliseIndianMobile(rawPhone);
     if (!phone) {
@@ -49,10 +50,12 @@ export class AuthService {
     const now = this.s.now();
     const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
 
+    const deliveryId = this.s.otpSender.channel === 'whatsapp' ? randomUUID() : undefined;
     const challenge = await withAuth(this.s.db, async (tx) => {
       const org = await activeOrganisation(tx, organisationSlug);
       if (!org) throw new AppError(404, 'NOT_FOUND', 'Clinic not found.');
 
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`auth-phone:${phone}`}, 0))`;
       const recent = await tx.otpChallenge.count({
         where: { phone, createdAt: { gt: new Date(now.getTime() - OTP_WINDOW_MS) } },
       });
@@ -71,6 +74,7 @@ export class AuthService {
           phone,
           organisationId: org.id,
           codeHash: this.s.hashOtp(id, code),
+          purpose,
           createdAt: now,
           expiresAt: new Date(now.getTime() + OTP_TTL_MS),
         },
@@ -81,10 +85,46 @@ export class AuthService {
         entityType: 'otp_challenge',
         entityId: id,
       });
+      if (deliveryId) {
+        await tx.$executeRaw`SELECT auth_create_whatsapp_delivery(${id}::uuid, ${deliveryId}::uuid,
+          ${this.s.otpSender.senderId!}, ${now})`;
+      }
       return created;
     });
 
-    await this.s.otpSender.send(phone, code);
+    try {
+      const receipt = await this.s.otpSender.send(phone, code, deliveryId);
+      if (deliveryId) {
+        if (!receipt) throw new Error('WhatsApp acceptance missing');
+        await withAuth(
+          this.s.db,
+          (tx) => tx.$executeRaw`
+          SELECT auth_accept_whatsapp_delivery(${deliveryId}::uuid, ${receipt.messageId}, ${this.s.now()})`,
+        );
+      }
+    } catch {
+      // A timeout can happen after Meta accepted the message. Retire this challenge so a
+      // late code cannot sign in; retain it for rate limiting and never store the code.
+      await withAuth(this.s.db, async (tx) => {
+        await tx.otpChallenge.update({
+          where: { id: challenge.id },
+          data: { consumedAt: this.s.now() },
+        });
+        if (deliveryId)
+          await tx.$executeRaw`SELECT auth_fail_whatsapp_delivery(${deliveryId}::uuid, ${this.s.now()})`;
+        await writeAudit(tx, request, {
+          action: 'auth.otp.delivery_failed',
+          organisationId: challenge.organisationId,
+          entityType: 'otp_challenge',
+          entityId: challenge.id,
+        });
+      });
+      throw new AppError(
+        503,
+        'UNAVAILABLE',
+        'We could not send your sign-in code. Please try again later.',
+      );
+    }
     return { challengeId: challenge.id, expiresAt: challenge.expiresAt.toISOString() };
   }
 
@@ -98,6 +138,7 @@ export class AuthService {
       const challenge = await tx.otpChallenge.findUnique({ where: { id: challengeId } });
       if (
         !challenge ||
+        challenge.purpose !== 'sign_in' ||
         challenge.consumedAt ||
         challenge.expiresAt <= now ||
         challenge.attempts >= OTP_MAX_ATTEMPTS
@@ -127,6 +168,7 @@ export class AuthService {
       const org = await tx.organisation.findUnique({ where: { id: challenge.organisationId } });
       if (!org || org.status !== 'active') return { ok: false as const };
 
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`auth-phone:${challenge.phone}`}, 0))`;
       const user =
         (await tx.user.findUnique({ where: { phone: challenge.phone } })) ??
         (await tx.user.create({ data: { phone: challenge.phone } }));
@@ -144,6 +186,12 @@ export class AuthService {
         });
       }
 
+      const access = await tx.patientAccountAccess.findUnique({
+        where: { organisationId_userId: { organisationId: org.id, userId: user.id } },
+      });
+      if (access?.closedAt) return { ok: false as const };
+      if (!access)
+        await tx.patientAccountAccess.create({ data: { organisationId: org.id, userId: user.id } });
       await tx.user.update({ where: { id: user.id }, data: { lastLoginAt: now } });
       const tokens = await this.startSession(
         tx,

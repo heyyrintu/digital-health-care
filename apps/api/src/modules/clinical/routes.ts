@@ -1,3 +1,5 @@
+import { ProfileConfirmed, DoctorBloodReport, ConfirmBloodReport } from '@dhc/contracts';
+import { PortalProfileService } from '../portal/profile';
 import {
   Allergy,
   ConsultationRecord,
@@ -35,6 +37,37 @@ export const clinicalRoutes: FastifyPluginAsync<{ services: Services }> = async 
   const auth = authenticate(services);
   const doctor = { preHandler: [auth, requireRole('doctor')] };
   const vitalsTeam = { preHandler: [auth, requireRole('doctor', 'front_desk')] };
+
+  const profiles = new PortalProfileService(services);
+  app.get('/patients/:id/reported-blood-group', doctor, async (request) =>
+    DoctorBloodReport.parse(
+      await profiles.doctorBlood(request, authOf(request), IdParams.parse(request.params).id),
+    ),
+  );
+  app.post('/patients/:id/reported-blood-group/confirm', doctor, async (request) =>
+    ProfileConfirmed.parse(
+      await profiles.confirm(
+        request,
+        authOf(request),
+        IdParams.parse(request.params).id,
+        'bloodGroup',
+        undefined,
+        ConfirmBloodReport.parse(request.body).updatedAt,
+      ),
+    ),
+  );
+  app.post('/patients/:id/chart/:kind/:entryId/confirm', doctor, async (request) => {
+    const { id, kind, entryId } = z
+      .object({
+        id: z.uuid(),
+        kind: z.enum(['allergies', 'conditions', 'medications']),
+        entryId: z.uuid(),
+      })
+      .parse(request.params);
+    return ProfileConfirmed.parse(
+      await profiles.confirm(request, authOf(request), id, kind, entryId),
+    );
+  });
 
   app.get('/patients/:id/chart', doctor, async (request) => {
     const { id } = IdParams.parse(request.params);
