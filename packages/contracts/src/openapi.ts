@@ -1,3 +1,14 @@
+import {
+  PeopleList,
+  PeopleQuery,
+  PeopleDetail,
+  UpdatePeopleBody,
+  RequestStaffContactBody,
+  StaffContactChange,
+  StaffContactChanges,
+  ConfirmStaffContactBody,
+  StaffContactConfirmed,
+} from './people';
 import { PracticeIdentity } from './settings';
 import {
   PreviewClinicOperation,
@@ -2632,6 +2643,68 @@ const operations: Operation[] = [
     summary: 'Revoke a pending invite (clinic admin)',
     pathParams: ['id'],
     status: 204,
+  },
+  {
+    method: 'get',
+    path: '/staff/people',
+    operationId: 'listClinicPeople',
+    summary: 'Search clinic staff including disabled access (clinic admin)',
+    query: PeopleQuery,
+    response: PeopleList,
+  },
+  {
+    method: 'get',
+    path: '/staff/people/{id}',
+    operationId: 'getClinicPerson',
+    summary: 'Staff profile, roles, security and activity (clinic admin)',
+    response: PeopleDetail,
+  },
+  {
+    method: 'patch',
+    path: '/staff/people/{id}',
+    operationId: 'updateClinicPerson',
+    summary:
+      'Update an exclusive staff name and clinic-scoped roles/access with version checks (clinic admin)',
+    body: UpdatePeopleBody,
+    response: PeopleDetail,
+  },
+  {
+    method: 'get',
+    path: '/staff/people/{id}/contact-changes',
+    operationId: 'listStaffContactChanges',
+    summary: 'Recent verified contact-change requests (clinic admin)',
+    response: StaffContactChanges,
+  },
+  {
+    method: 'post',
+    path: '/staff/people/{id}/contact-changes',
+    operationId: 'requestStaffContactChange',
+    summary: 'Request new-contact verification after admin password check',
+    body: RequestStaffContactBody,
+    response: StaffContactChange,
+    status: 201,
+  },
+  {
+    method: 'post',
+    path: '/staff/people/{id}/contact-changes/{changeId}/cancel',
+    operationId: 'cancelStaffContactChange',
+    summary: 'Cancel a pending sign-in detail request (clinic admin)',
+    status: 204,
+  },
+  {
+    method: 'get',
+    path: '/staff/profile/contact-changes',
+    operationId: 'listOwnStaffContactChanges',
+    summary: 'Your own recent sign-in detail requests (staff)',
+    response: StaffContactChanges,
+  },
+  {
+    method: 'post',
+    path: '/staff/profile/contact-changes/{id}/confirm',
+    operationId: 'confirmStaffContactChange',
+    summary: 'Verify a new contact with its code and your current password; ends staff sessions',
+    body: ConfirmStaffContactBody,
+    response: StaffContactConfirmed,
   },
   {
     method: 'get',

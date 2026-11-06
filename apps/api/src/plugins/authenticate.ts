@@ -24,12 +24,37 @@ export function authenticate(services: Services) {
     const session = await withAuth(services.db, (tx) =>
       tx.session.findUnique({
         where: { id: claims.sessionId },
-        select: { userId: true, revokedAt: true, expiresAt: true },
+        select: {
+          userId: true,
+          organisationId: true,
+          role: true,
+          revokedAt: true,
+          expiresAt: true,
+          user: {
+            select: {
+              status: true,
+              memberships: {
+                where: {
+                  organisationId: claims.organisationId,
+                  role: claims.role,
+                  status: 'active',
+                },
+                select: { id: true },
+              },
+            },
+          },
+          organisation: { select: { status: true } },
+        },
       }),
     );
     if (
       !session ||
       session.userId !== claims.userId ||
+      session.organisationId !== claims.organisationId ||
+      session.role !== claims.role ||
+      session.user.status !== 'active' ||
+      session.organisation.status !== 'active' ||
+      !session.user.memberships.length ||
       session.revokedAt ||
       session.expiresAt <= services.now()
     ) {

@@ -42,3 +42,4 @@ export * from './data-rights';
 export * from './inbox';
 
 export * from './clinic-operations';
+export * from './people';

@@ -1,3 +1,4 @@
+import { createEmailSender, type EmailSender } from './messaging/email-sender';
 import { parseMfaPhones, type MfaMode } from './auth/mfa-otp';
 import {
   MetaInboxGateway,
@@ -41,6 +42,7 @@ export interface Services {
   platformTokens: PlatformTokenService;
   cipher: FieldCipher;
   otpSender: OtpSender;
+  emailSender?: EmailSender;
   appointmentMessagingSender?: string;
   operationMessagingSender?: string;
   recordMessagingSender?: string;
@@ -81,6 +83,7 @@ export function createServices(
   config: Config,
   overrides: {
     otpSender?: OtpSender;
+    emailSender?: EmailSender;
     now?: () => Date;
     signer?: PrescriptionSigner | null;
     files?: FileStore;
@@ -117,6 +120,7 @@ export function createServices(
     platformTokens: new PlatformTokenService(JWT_SECRET),
     cipher: new FieldCipher(FIELD_ENCRYPTION_KEY),
     otpSender,
+    emailSender: overrides.emailSender ?? createEmailSender(config),
     ...(config.CASHFREE_ENABLED
       ? {
           cashfree: {

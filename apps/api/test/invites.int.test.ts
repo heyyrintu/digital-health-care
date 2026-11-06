@@ -158,17 +158,18 @@ describe('clinic admin', () => {
       return result;
     });
     await membershipCreated;
-    // ...so the second, which found no membership, waits on the unique index, then fails.
+    // ...so the second returns a conflict while the identity lock is held, keeping the first link.
     const second = withTenant(h.services.db, clinics.a.org.id, (tx) =>
       issueJoinInvite(tx, source, h.services, params),
     );
-    await new Promise((resolve) => setTimeout(resolve, 300));
-    release();
-    await expect(first).resolves.toMatchObject({ inviteUrl: expect.any(String) });
-    await expect(second).rejects.toMatchObject({
+    const secondConflict = expect(second).rejects.toMatchObject({
       statusCode: 409,
       fields: { identifier: 'invited' },
     });
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    release();
+    await expect(first).resolves.toMatchObject({ inviteUrl: expect.any(String) });
+    await secondConflict;
     expect(
       await h.owner.staffInvite.count({
         where: { userId: user.id, acceptedAt: null, revokedAt: null },
