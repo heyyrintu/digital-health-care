@@ -65,7 +65,8 @@ let warned = false;
 /**
  * The published privacy notice and terms of use, linked from the patient portal's consents
  * screen before the patient accepts them (PRD §4.1), read when pages render. In production
- * both must be set: without them a patient would accept documents they cannot read, so
+ * both must be set outside the synthetic preview (which includes its own documents). Without
+ * them a patient would accept documents they cannot read, so
  * `missing` is true, the consents screen offers no way to accept, and the server warns
  * (once per process).
  */
@@ -74,7 +75,12 @@ export function consentDocuments(
   warn: (message: string) => void = console.warn,
 ): { urls: ConsentDocumentUrls; missing: boolean } {
   const url = (value: string | undefined) => value?.trim() || undefined;
-  const urls = { privacy_notice: url(env.PRIVACY_NOTICE_URL), terms: url(env.TERMS_URL) };
+  // Built-in documents describe the synthetic preview. Live clinics configure reviewed documents.
+  const preview = env.DEPLOYMENT_MODE === 'demo';
+  const urls = {
+    privacy_notice: url(env.PRIVACY_NOTICE_URL) ?? (preview ? '/privacy' : undefined),
+    terms: url(env.TERMS_URL) ?? (preview ? '/terms' : undefined),
+  };
   const missing = env.NODE_ENV === 'production' && (!urls.privacy_notice || !urls.terms);
   if (missing && !warned) {
     warned = true;

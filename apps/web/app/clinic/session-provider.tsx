@@ -37,6 +37,7 @@ interface SessionContext {
   t(key: MessageKey, params?: Record<string, string | number>): string;
   /** Called with the tokens returned by the sign-in or invite route. */
   startSession(tokens: SessionTokens): Promise<void>;
+  reloadMe(): Promise<void>;
   signOut(reason?: SignOutReason): Promise<void>;
 }
 
@@ -147,6 +148,10 @@ export function SessionProvider({
     };
   }, [status, signOut]);
 
+  const reloadMe = useCallback(async () => {
+    setMe(await api.request('GET', '/me', { schema: MeResponse }));
+  }, [api]);
+
   const value = useMemo<SessionContext>(
     () => ({
       status,
@@ -158,9 +163,10 @@ export function SessionProvider({
       setLocale,
       t: (key, params) => translate(locale, key, params),
       startSession,
+      reloadMe,
       signOut,
     }),
-    [status, me, endedReason, api, apiBaseUrl, locale, startSession, signOut],
+    [reloadMe, status, me, endedReason, api, apiBaseUrl, locale, startSession, signOut],
   );
 
   return (

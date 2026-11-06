@@ -107,3 +107,14 @@ Service-template agreement is separate from appointment/record/payment notices. 
 Open **Clinic session changes**. Preview a source doctor/clinic/day/time interval, then explicitly confirm its eligible appointments and unchanged exceptions. A move preserves doctor/type and spacing; choose matching free target slots. Billed, prepaid, started and clinical-record visits need individual review. No bills/refunds are moved. Cancellation/move closes the source interval, including to new walk-ins. A failed allocation or stale snapshot changes nothing. Delays annotate today's waiting visits without changing booked times.
 
 Keep the page open after an interrupted apply and recover the same operation. Recent receipts remain available after reload. Additional WhatsApp updates need configured workers/templates and appointment-category consent; queued is not delivered. Contact anyone left unchanged or not reached. Replacement bookings may still queue normal confirmation/reminder notices independently. See the session-operations runbook for limits and configuration.
+
+
+## Find settings and add doctors
+
+Use **Clinic settings** (`/clinic/settings`) to edit the organisation name, location
+names and addresses, branding and clinic policies. Use **Doctors and staff**
+(`/clinic/staff`) to add doctors: choose **Invite staff**, select **Doctor**, enter
+their name and email or mobile number, and create the private invitation link.
+The doctor opens it to set their password and authenticator. Doctors edit their own
+name and professional profile at `/clinic/profile`. These pages require the latest
+web/API deployment and the practice identity migration.

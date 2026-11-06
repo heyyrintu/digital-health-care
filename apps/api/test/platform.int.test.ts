@@ -1476,7 +1476,7 @@ describe('in the database (dhc_platform)', () => {
     ).rejects.toThrow(/row-level security/);
   });
 
-  it('has no privilege on any table but its own, besides inserting audit entries', async () => {
+  it('has no privilege beyond platform tables, audience-isolated MFA codes and inserting audit entries', async () => {
     const tables = await h.owner.$queryRaw<
       { table: string; any: boolean; read: boolean; insert: boolean }[]
     >`
@@ -1488,7 +1488,10 @@ describe('in the database (dhc_platform)', () => {
       WHERE c.relkind IN ('r', 'p', 'v', 'm', 'f') AND c.relname NOT LIKE 'platform\\_%'
       ORDER BY 1`;
     expect(tables.length).toBeGreaterThan(40);
-    const granted = tables.filter((t) => (t.table === 'audit_logs' ? t.read : t.any));
+    const granted = tables.filter(
+      (t) => t.table !== 'mfa_otp_challenges' && (t.table === 'audit_logs' ? t.read : t.any),
+    );
+    expect(tables.find((t) => t.table === 'mfa_otp_challenges')?.any).toBe(true);
     expect(granted.map((t) => t.table)).toEqual([]);
     expect(tables.find((t) => t.table === 'audit_logs')?.insert).toBe(true);
   });

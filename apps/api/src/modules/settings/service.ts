@@ -32,6 +32,19 @@ export async function readSettings(tx: Tx, organisationId: string): Promise<Orga
 export class SettingsService {
   constructor(private readonly s: Services) {}
 
+  async rename(request: FastifyRequest, actor: Actor, name: string): Promise<void> {
+    await withTenant(this.s.db, actor.organisationId, async (tx) => {
+      await tx.organisation.update({ where: { id: actor.organisationId }, data: { name } });
+      await writeAudit(tx, request, {
+        action: 'organisation.name_updated',
+        organisationId: actor.organisationId,
+        actorUserId: actor.userId,
+        entityType: 'organisation',
+        entityId: actor.organisationId,
+      });
+    });
+  }
+
   get(actor: Actor): Promise<OrganisationSettings> {
     return withTenant(this.s.db, actor.organisationId, (tx) =>
       readSettings(tx, actor.organisationId),

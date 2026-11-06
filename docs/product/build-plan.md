@@ -831,3 +831,38 @@ Validation: all 48 migrations applied to fresh disposable databases; 72 affected
 At the owner's request, remaining feature development is paused in favour of hosting the existing web progress for a client demonstration. The local implementation now includes production Node container targets, a single-origin Coolify Compose stack, private persistent PostgreSQL/Redis/file storage, ordered migrations, service health checks, synthetic-only manual bootstrap with normal MFA, runtime preview notice, log limits, a paired backup script and hosting/demo instructions. Native CI builds are opt-in while native development is paused. See ADR 0032 and `docs/runbooks/coolify.md`.
 
 This is preparation and local container verification, not an actual Coolify deployment or completion of the remaining real-patient launch gates. The hosting branch must contain the local web work; an older remote commit will not include it. Actual-host HTTPS, proxy CIDR, secrets, monitoring/backups and the client rehearsal still need to be configured on Coolify.
+## Pending owner request — clinic people administration (6 November 2026)
+
+- [ ] Build a clinic user-management portal similar to Microsoft 365 admin: searchable
+  doctor/staff directory and a detail page with Profile, Roles, Access and Security.
+- [ ] Let authorised clinic admins manage staff names, verified email/mobile changes,
+  clinic-scoped roles and account access. Define how edits to shared user identities
+  affect memberships in other clinics before implementation.
+- [ ] Add permission checks, audit history, session revocation when access changes,
+  self-lockout/last-admin safeguards and tests for clinic isolation. Integrate existing
+  invitations, authenticator recovery and session controls into this portal.
+
+**Status: pending; requested by the owner, not implemented.** Local settings/team navigation
+and staff self-name editing are a smaller separate increment and do not complete this
+request. Existing deferred work and web release requirements remain open.
+
+The owner also asked whether two-factor authentication can be disabled. Staff and platform
+sign-in currently require an authenticator; there is no disable setting. No authentication
+policy change has been requested or implemented by this backlog entry. Any future change
+must explicitly define its scope (preview/live, staff/platform) and recovery behaviour.
+
+
+### Owner update - configurable login second factors (6 November 2026)
+
+The owner subsequently requested implementation of a disable option and OTP as a second
+factor. Local implementation now exposes independent server-owner deployment settings
+`STAFF_MFA_MODE` and `PLATFORM_MFA_MODE`: `totp` (unchanged default), `whatsapp`, or
+`disabled` (password only). WhatsApp codes follow a validated password and use controlled
+recipient mappings, hashed single-use challenges, expiry, send limits and account lockout.
+Patient authentication and platform IP controls are unchanged. Browser login handles both
+session completion and a second-factor challenge without exposing refresh tokens.
+
+See [second-factor configuration](../runbooks/second-factor-auth.md) for deployment and
+recipient requirements. This is not a per-user/clinic management UI; the People portal
+above remains pending. Initial invitation/operator enrollment still uses the existing
+trusted authenticator setup. No hosted policy or credentials were changed.

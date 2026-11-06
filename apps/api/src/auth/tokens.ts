@@ -1,4 +1,4 @@
-import { createHash, hkdfSync, randomBytes } from 'node:crypto';
+import { createHash, hkdfSync, randomBytes, randomUUID } from 'node:crypto';
 import { SignJWT, jwtVerify } from 'jose';
 
 export type Role = 'patient' | 'doctor' | 'front_desk' | 'clinic_admin';
@@ -64,6 +64,7 @@ export class TokenService {
       .setSubject(userId)
       .setIssuer(ISSUER)
       .setAudience(MFA_AUDIENCE)
+      .setJti(randomUUID())
       .setIssuedAt()
       .setExpirationTime(`${MFA_TOKEN_TTL_SECONDS}s`)
       .sign(this.key);
@@ -159,6 +160,7 @@ export class PlatformTokenService {
       .setSubject(operatorId)
       .setIssuer(ISSUER)
       .setAudience(PLATFORM_MFA_AUDIENCE)
+      .setJti(randomUUID())
       .setIssuedAt()
       .setExpirationTime(`${MFA_TOKEN_TTL_SECONDS}s`)
       .sign(this.key);

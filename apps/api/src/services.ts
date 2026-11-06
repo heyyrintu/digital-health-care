@@ -1,3 +1,4 @@
+import { parseMfaPhones, type MfaMode } from './auth/mfa-otp';
 import {
   MetaInboxGateway,
   parseInboxChannels,
@@ -30,6 +31,10 @@ export interface OtpSender {
 
 export interface Services {
   db: Db;
+  staffMfaMode: MfaMode;
+  platformMfaMode: MfaMode;
+  staffMfaPhones: Record<string, string>;
+  platformMfaPhones: Record<string, string>;
   cashfree?: CashfreeIntegration;
   tokens: TokenService;
   /** Platform console tokens: their own audience and key (ADR 0016). */
@@ -104,6 +109,10 @@ export function createServices(
 
   return {
     db: createDb(DATABASE_URL),
+    staffMfaMode: config.STAFF_MFA_MODE ?? 'totp',
+    platformMfaMode: config.PLATFORM_MFA_MODE ?? 'totp',
+    staffMfaPhones: parseMfaPhones(config.STAFF_MFA_PHONES_JSON),
+    platformMfaPhones: parseMfaPhones(config.PLATFORM_MFA_PHONES_JSON),
     tokens: new TokenService(JWT_SECRET),
     platformTokens: new PlatformTokenService(JWT_SECRET),
     cipher: new FieldCipher(FIELD_ENCRYPTION_KEY),

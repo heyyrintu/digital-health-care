@@ -27,6 +27,7 @@ const ALERT = 'mt-3 rounded-xl bg-danger-soft px-4 py-3 text-sm font-medium text
 /** Clinic admin: clinics, consultation types with fees, and booking rules (PRD §4.3). */
 export function PracticeCard() {
   const { api, locale, signOut, t } = useSession();
+  const [editingClinic, setEditingClinic] = useState<string | null>(null);
   const [clinics, setClinics] = useState<Clinic[] | null>(null);
   const [types, setTypes] = useState<ConsultationType[] | null>(null);
   const [rules, setRules] = useState<BookingRules | null>(null);
@@ -82,6 +83,23 @@ export function PracticeCard() {
       });
       form.reset();
       await load();
+    });
+  }
+
+  function editClinic(event: FormEvent<HTMLFormElement>, clinic: Clinic) {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    void run('clinics', async () => {
+      await api.request('PATCH', `/clinics/${clinic.id}`, {
+        schema: Clinic,
+        body: {
+          name: String(data.get('name') ?? '').trim(),
+          address: String(data.get('address') ?? '').trim() || null,
+        },
+      });
+      await load();
+      setEditingClinic(null);
+      setNotice(t('profile.saved'));
     });
   }
 
@@ -166,18 +184,52 @@ export function PracticeCard() {
         <ul className="divide-y divide-border/70">
           {clinics.map((c) => (
             <li key={c.id} data-testid={`clinic-${c.name}`} className={ROW}>
-              <strong>{c.name}</strong>
-              {c.address && <span className="text-sm text-muted-foreground">{c.address}</span>}
-              {!c.active && <span className={PILL}>{t('practice.inactive')}</span>}
-              <Button
-                type="button"
-                variant="outline"
-                className="ml-auto"
-                disabled={busy}
-                onClick={() => void setClinicActive(c, !c.active)}
-              >
-                {c.active ? t('practice.deactivate') : t('practice.activate')}
-              </Button>
+              {editingClinic === c.id ? (
+                <form className="w-full space-y-3" onSubmit={(e) => editClinic(e, c)}>
+                  <label className={LABEL}>
+                    {t('practice.clinicName')}
+                    <Input name="name" required maxLength={80} defaultValue={c.name} />
+                  </label>
+                  <label className={LABEL}>
+                    {t('practice.clinicAddress')}
+                    <Input name="address" maxLength={300} defaultValue={c.address ?? ''} />
+                  </label>
+                  <Button type="submit" disabled={busy}>
+                    {t('common.save')}
+                  </Button>{' '}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={busy}
+                    onClick={() => setEditingClinic(null)}
+                  >
+                    {t('common.cancel')}
+                  </Button>
+                </form>
+              ) : (
+                <>
+                  <strong>{c.name}</strong>
+                  {c.address && <span className="text-sm text-muted-foreground">{c.address}</span>}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={busy}
+                    onClick={() => setEditingClinic(c.id)}
+                  >
+                    {t('identity.edit')}
+                  </Button>
+                  {!c.active && <span className={PILL}>{t('practice.inactive')}</span>}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="ml-auto"
+                    disabled={busy}
+                    onClick={() => void setClinicActive(c, !c.active)}
+                  >
+                    {c.active ? t('practice.deactivate') : t('practice.activate')}
+                  </Button>
+                </>
+              )}
             </li>
           ))}
         </ul>

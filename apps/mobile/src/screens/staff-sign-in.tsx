@@ -42,6 +42,11 @@ export function StaffSignIn({ initialOrganisation, notice }: Props) {
         password,
         role,
       });
+      if (result.status === 'signed_in') {
+        setPassword('');
+        await session.signIn(organisation.trim().toLowerCase(), result);
+        return;
+      }
       setMfaToken(result.mfaToken);
       setRoles([]);
       setCode('');

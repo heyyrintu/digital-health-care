@@ -1,4 +1,9 @@
-import { OrganisationSettings, STAFF_ROLES, UpdateOrganisationSettingsBody } from '@dhc/contracts';
+import {
+  PracticeIdentity,
+  OrganisationSettings,
+  STAFF_ROLES,
+  UpdateOrganisationSettingsBody,
+} from '@dhc/contracts';
 import type { FastifyPluginAsync } from 'fastify';
 import { authOf, authenticate, requireRole } from '../../plugins/authenticate';
 import type { Services } from '../../services';
@@ -11,6 +16,16 @@ export const settingsRoutes: FastifyPluginAsync<{ services: Services }> = async 
 ) => {
   const settings = new SettingsService(services);
   const auth = authenticate(services);
+
+  app.put(
+    '/organisation-identity',
+    { preHandler: [auth, requireRole('clinic_admin')] },
+    async (request) => {
+      const body = PracticeIdentity.parse(request.body);
+      await settings.rename(request, authOf(request), body.name);
+      return body;
+    },
+  );
 
   app.get(
     '/organisation-settings',

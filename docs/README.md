@@ -49,3 +49,9 @@ Never paste real patient data (names, phone numbers, prescriptions, screenshots)
 - [ADR 0030: WhatsApp inbox and template catalog](adr/0030-clinic-whatsapp-inbox-and-template-catalog.md) — encrypted clinic conversations, private handoffs, service-window authorization and provider template controls. [Activation and recovery](runbooks/whatsapp-inbox.md).
 
 - [ADR 0031: reviewed bulk session changes](adr/0031-reviewed-bulk-clinic-session-operations.md) — atomic preview/apply, financial/care exceptions, source closures, delay estimates and consented generic notices. [Operator guide](runbooks/clinic-session-operations.md).
+
+- [AWS ECS/Fargate hosting guide](runbooks/ecs.md) — client-preview architecture, AWS setup, image builds, persistent state, migrations, login and recovery without Coolify.
+
+- [Hosted Meta WhatsApp OTP setup](runbooks/whatsapp-cloud-api-setup.md) — approved template, credentials, Coolify activation, callback configuration and patient-login acceptance.
+
+- [Staff and platform second-factor options](runbooks/second-factor-auth.md) - deployment-owner choice of authenticator, WhatsApp OTP or password-only login.

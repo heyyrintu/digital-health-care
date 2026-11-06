@@ -1,0 +1,4 @@
+FROM nginx:stable-alpine
+# All four containers share one Fargate task's network namespace.
+COPY deploy/ecs/nginx.conf.template /etc/nginx/templates/default.conf.template
+EXPOSE 8080

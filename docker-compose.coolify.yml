@@ -97,6 +97,16 @@ services:
     environment:
       <<: *app-env
       API_PORT: '4000'
+      STAFF_MFA_MODE: ${STAFF_MFA_MODE:-totp}
+      PLATFORM_MFA_MODE: ${PLATFORM_MFA_MODE:-totp}
+      STAFF_MFA_PHONES_JSON: ${STAFF_MFA_PHONES_JSON:-}
+      PLATFORM_MFA_PHONES_JSON: ${PLATFORM_MFA_PHONES_JSON:-}
+      OTP_DELIVERY: ${OTP_DELIVERY:-disabled}
+      WHATSAPP_ACCESS_TOKEN: ${WHATSAPP_ACCESS_TOKEN:-}
+      WHATSAPP_PHONE_NUMBER_ID: ${WHATSAPP_PHONE_NUMBER_ID:-}
+      WHATSAPP_GRAPH_API_VERSION: ${WHATSAPP_GRAPH_API_VERSION:-}
+      WHATSAPP_OTP_TEMPLATE_NAME: ${WHATSAPP_OTP_TEMPLATE_NAME:-}
+      WHATSAPP_OTP_TEMPLATE_LANGUAGE: ${WHATSAPP_OTP_TEMPLATE_LANGUAGE:-}
       API_HOST: 0.0.0.0
       CORS_ORIGINS: ${APP_URL:?Set the public HTTPS URL without a trailing slash}
       LOG_LEVEL: info
@@ -123,7 +133,7 @@ services:
       test: ['CMD', 'node', '/app/deploy/coolify/healthcheck.mjs', 'api']
       interval: 30s
       timeout: 10s
-      start_period: 40s
+      start_period: 120s
       retries: 3
     mem_limit: 1536m
 

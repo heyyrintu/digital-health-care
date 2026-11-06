@@ -3,12 +3,15 @@ import {
   callApi,
   forbiddenOrigin,
   isSameOrigin,
-  passThrough,
+  sessionResponse,
   readJson,
 } from '../../../../lib/session-server';
 
-/** Password step. Returns the short-lived MFA token; no session yet. */
+/** Password step. Sets a browser session only when the configured policy completes sign-in. */
 export async function POST(request: NextRequest) {
   if (!isSameOrigin(request)) return forbiddenOrigin();
-  return passThrough(await callApi(request, '/auth/login', { body: await readJson(request) }));
+  return sessionResponse(
+    request,
+    await callApi(request, '/auth/login', { body: await readJson(request) }),
+  );
 }

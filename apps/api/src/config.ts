@@ -1,3 +1,4 @@
+import { parseMfaPhones } from './auth/mfa-otp';
 import { parseInboxChannels } from './modules/whatsapp-inbox/gateway';
 import { parseMerchants } from './payments/cashfree';
 import { z } from 'zod';
@@ -57,6 +58,11 @@ const Env = z
       .default('false')
       .transform((v) => v === 'true'),
     WHATSAPP_INBOX_CHANNELS_JSON: z.string().optional(),
+    STAFF_MFA_MODE: z.enum(['totp', 'whatsapp', 'disabled']).default('totp'),
+    PLATFORM_MFA_MODE: z.enum(['totp', 'whatsapp', 'disabled']).default('totp'),
+    /** Operator-controlled recipient maps, keyed by account email, never browser input. */
+    STAFF_MFA_PHONES_JSON: z.string().optional(),
+    PLATFORM_MFA_PHONES_JSON: z.string().optional(),
     OTP_DELIVERY: z.enum(['log', 'disabled', 'whatsapp']).default('disabled'),
     WHATSAPP_ACCESS_TOKEN: z
       .string()
@@ -162,6 +168,47 @@ const Env = z
     },
   )
   .superRefine((env, ctx) => {
+    for (const key of ['STAFF_MFA_PHONES_JSON', 'PLATFORM_MFA_PHONES_JSON'] as const) {
+      try {
+        const recipients = parseMfaPhones(env[key]);
+        if (
+          key === 'PLATFORM_MFA_PHONES_JSON' &&
+          env.PLATFORM_MFA_MODE === 'whatsapp' &&
+          Object.keys(recipients).length === 0
+        ) {
+          ctx.addIssue({
+            code: 'custom',
+            path: [key],
+            message: 'Configure at least one platform operator recipient.',
+          });
+        }
+      } catch {
+        ctx.addIssue({
+          code: 'custom',
+          path: [key],
+          message: 'Map account emails to valid Indian mobile numbers.',
+        });
+      }
+    }
+    if (
+      (env.STAFF_MFA_MODE === 'whatsapp' || env.PLATFORM_MFA_MODE === 'whatsapp') &&
+      env.OTP_DELIVERY !== 'whatsapp'
+    ) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['OTP_DELIVERY'],
+        message: 'WhatsApp second factors require OTP_DELIVERY=whatsapp.',
+      });
+    }
+    if (env.PLATFORM_MFA_MODE === 'whatsapp' && !env.PLATFORM_MFA_PHONES_JSON?.trim()) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['PLATFORM_MFA_PHONES_JSON'],
+        message:
+          'Configure each platform operator recipient before enabling WhatsApp second factors.',
+      });
+    }
+
     if (env.WHATSAPP_INBOX_ENABLED) {
       for (const key of [
         'WHATSAPP_WEBHOOK_ENABLED',
@@ -360,7 +407,17 @@ export function proxyTrust(
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
-  const parsed = Env.safeParse(env);
+  const input = { ...env };
+  for (const key of [
+    'WHATSAPP_ACCESS_TOKEN',
+    'WHATSAPP_PHONE_NUMBER_ID',
+    'WHATSAPP_GRAPH_API_VERSION',
+    'WHATSAPP_OTP_TEMPLATE_NAME',
+    'WHATSAPP_OTP_TEMPLATE_LANGUAGE',
+  ]) {
+    if (input[key] === '') delete input[key];
+  }
+  const parsed = Env.safeParse(input);
   if (!parsed.success) {
     throw new Error(`Invalid environment: ${z.prettifyError(parsed.error)}`);
   }

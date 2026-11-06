@@ -6,6 +6,7 @@ import { Button, Input, NativeSelect, PageHeader } from '@dhc/ui-web';
 import { Search } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { NameCard } from './name-card';
 import { BrandingCard } from './branding-card';
 import { ClinicFigures } from './clinic-figures';
 import { AgeGender, TagChip } from './patient-bits';
@@ -26,11 +27,37 @@ import { StaffCard } from './staff-card';
  * settings.
  */
 export default function ClinicDashboard() {
+  const { t } = useSession();
   return (
     <ClinicShell>
       {(me) =>
         me.role === 'patient' ? null : (
           <div className="space-y-6">
+            {me.role === 'clinic_admin' && (
+              <nav aria-label={t('identity.settings')} className="flex flex-wrap gap-3">
+                <Link
+                  className="rounded-xl border border-border bg-card px-5 py-3 font-semibold text-primary underline"
+                  href="/clinic/settings"
+                >
+                  {t('identity.settings')}
+                </Link>
+                <Link
+                  className="rounded-xl border border-border bg-card px-5 py-3 font-semibold text-primary underline"
+                  href="/clinic/staff"
+                >
+                  {t('identity.team')}
+                </Link>
+              </nav>
+            )}
+            {me.role === 'doctor' && (
+              <Link
+                className="inline-block font-semibold text-primary underline"
+                href="/clinic/profile"
+              >
+                {t('identity.doctor')}
+              </Link>
+            )}
+
             {me.role === 'clinic_admin' && <ClinicFigures />}
             {me.role === 'doctor' && (
               <div className="grid items-start gap-6 xl:grid-cols-2">
@@ -38,9 +65,11 @@ export default function ClinicDashboard() {
                 <ReferralsCard />
               </div>
             )}
+            <NameCard />
             <PatientSearch />
             {me.role === 'clinic_admin' && (
               <div className="grid items-start gap-6 xl:grid-cols-2">
+                <NameCard organisation />
                 <StaffCard currentUserId={me.user.id} />
                 <PracticeCard />
                 <PriceListCard />

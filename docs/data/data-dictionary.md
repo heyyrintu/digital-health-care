@@ -230,3 +230,18 @@ All tables have tenant RLS. No patient/chart association is inferred from an unv
 `clinic_operations` retains immutable encrypted request/preview/snapshot fingerprints and the applied receipt, creator/doctor/kind/revision/expiry. `clinic_operational_updates` is append-only per operation/source appointment, with optional replacement and delay estimate. Both have tenant RLS and cross-tenant source guards. `appointments.delay_minutes` (0–240) and `delay_updated_at` annotate waiting visits without moving them. Source closure is an ordinary scoped availability exception.
 
 `whatsapp_deliveries.operational_update_id` links generic appointment-update intents to the immutable event, deduplicated per event/sender. Its legacy appointment FK stays null; source and replacement are read through the event. Existing callback, consent-version and unknown-outcome rules remain applicable. Jobs carry delivery IDs only.
+
+
+## Staff/platform second-factor OTPs (6 November 2026)
+
+`mfa_otp_challenges` stores a UUID, unique MFA-token hash, account UUID, `staff`/`platform`
+audience, keyed credential/recipient/clinic/role binding hash, keyed code hash, attempt
+count (0-5), created/expiry times and delivered/consumed times. It stores no plaintext
+code, phone number, password hash or MFA token. The auth role can access only staff rows;
+the platform role can access only platform rows; the tenant role has no table privilege.
+The table is separate from patient OTPs. Only delivered, unexpired, unconsumed challenges
+with matching account/credentials can complete a password-verified MFA step.
+
+Deployment variables `STAFF_MFA_MODE`/`PLATFORM_MFA_MODE` choose `totp`, `whatsapp` or
+`disabled` independently; no account schema or per-clinic policy switch is introduced.
+See [operator configuration](../runbooks/second-factor-auth.md).

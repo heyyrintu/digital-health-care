@@ -7,6 +7,7 @@ import { Button, Chip, Field, Input, NativeSelect, PageHeader, Surface } from '@
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useSession } from '../session-provider';
 import { ClinicShell } from '../shell';
+import { NameCard } from '../name-card';
 import { PublicPageCard } from './public-page-card';
 
 /** The doctor's prescription pad, signing PIN (PRD §9.1) and public page. Doctors only. */
@@ -120,6 +121,7 @@ function Pad() {
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <PageHeader title={t('profile.title')} sub={t('profile.sub')} />
+      <NameCard />
       {error && (
         <p role="alert" className="rounded-xl bg-danger-soft px-4 py-3 text-sm text-destructive">
           {error}

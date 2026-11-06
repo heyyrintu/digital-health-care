@@ -78,3 +78,7 @@ export function checkUpload(
   if (file.sizeBytes > settings.maxUploadMb * 1024 * 1024) return 'too_large';
   return 'ok';
 }
+
+/** Names only; account identifiers and clinic addresses use separate workflows. */
+export const PracticeIdentity = z.object({ name: z.string().trim().min(1).max(120) }).strict();
+export type PracticeIdentity = z.infer<typeof PracticeIdentity>;

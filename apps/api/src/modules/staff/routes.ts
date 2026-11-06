@@ -1,5 +1,7 @@
 import {
   CreatedStaffInvite,
+  PracticeIdentity,
+  STAFF_ROLES,
   ResetAuthenticatorBody,
   SignOutAllResponse,
   StaffMemberList,
@@ -19,6 +21,16 @@ export const staffRoutes: FastifyPluginAsync<{ services: Services }> = async (
 ) => {
   const staff = new StaffService(services);
   const admin = { preHandler: [authenticate(services), requireRole('clinic_admin')] };
+
+  app.put(
+    '/staff/profile',
+    { preHandler: [authenticate(services), requireRole(...STAFF_ROLES)] },
+    async (request) => {
+      const body = PracticeIdentity.parse(request.body);
+      await staff.renameSelf(request, authOf(request), body.name);
+      return body;
+    },
+  );
 
   app.get('/staff/members', admin, async (request) =>
     StaffMemberList.parse({ data: await staff.list(authOf(request)) }),
