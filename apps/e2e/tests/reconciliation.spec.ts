@@ -27,6 +27,13 @@ test('admin requests a report, reviews discrepancies and reads gross/fees/tax/ne
   await page.route('**/v1/reconciliation/**', async (route) => {
     const path = new URL(route.request().url()).pathname,
       method = route.request().method();
+    if (path.includes('/export/')) {
+      await route.fulfill({
+        contentType: 'text/csv; charset=utf-8',
+        body: 'run_id,gross_paise\r\n' + runId + ',80000\r\n',
+      });
+      return;
+    }
     let body: unknown;
     if (path.endsWith('/review')) {
       reviewed = true;
@@ -94,6 +101,10 @@ test('admin requests a report, reviews discrepancies and reads gross/fees/tax/ne
   await expect(page.getByText('UTR: UTR-SYNTHETIC')).toBeVisible();
   await expect(page.getByText('₹781.12', { exact: true })).toBeVisible();
   await expect(page.getByText(/Match the UTR with your bank statement/)).toBeVisible();
+  const downloadPromise = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download settlements CSV', exact: true }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe(`reconciliation-${runId}-settlements.csv`);
   await page.getByLabel('Review reason').selectOption('external_transaction');
   await page.getByRole('button', { name: 'Acknowledge review' }).click();
   await expect(page.getByText(/Review acknowledged/)).toBeVisible();

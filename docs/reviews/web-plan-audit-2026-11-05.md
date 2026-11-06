@@ -226,3 +226,15 @@ Validation: all 48 migrations applied to fresh disposable databases; 72 affected
 ## Coolify client-preview hosting follow-up
 
 The owner prioritised hosting the current web progress for a client demonstration over further features. `docker-compose.coolify.yml`, the multi-target Dockerfile, private storage volumes, migration ordering, readiness probes, explicit synthetic bootstrap, preview banner, log limits, backup script, container verification workflow and deployment/demo runbooks are now implemented locally (ADR 0032). A worker runtime dependency issue and standalone web origin handling were corrected during container verification. The earlier "no deployment packaging" finding is superseded for the single-server synthetic preview. Real-patient launch, deferred providers and actual Coolify host acceptance remain open.
+
+## Development follow-up — 7 November 2026
+
+The audit's original assessment and accountant-export rows are superseded for these
+bounded local implementations: fixed numeric questionnaires with doctor assignment,
+consented family response, encrypted immutable answers, raw totals and same-form score
+history/trends (ADR 0033); and private clinic-admin settlement/issue CSV exports from
+complete reconciliation snapshots, with exact paise, formula protection and export audit.
+These changes do not implement validated clinical scoring instruments, branching/text
+questionnaires, review requests, bank-statement matching, import, online consultations,
+ABDM or the other remaining development/acceptance requirements. They are development
+branch work and have not been claimed deployed to the client-preview host.

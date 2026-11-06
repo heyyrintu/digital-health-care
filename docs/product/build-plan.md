@@ -885,3 +885,32 @@ are unchanged. Provider credentials, live delivery acceptance and release verifi
 remain required. This supersedes the pending implementation status above for this scope;
 it does not implement Microsoft 365 mailboxes, general platform-user editing, shared-account
 identity migrations or per-user MFA preferences. See [People administration](../runbooks/clinic-people.md).
+
+### Web development resumed — 7 November 2026
+
+The owner resumed remaining web development after the client-preview deployment.
+Numeric patient assessments and accountant reconciliation exports are now implemented
+on the development branch; this entry does not claim a new hosted deployment.
+
+- [x] Assessment form publishing/archiving with fixed definitions and EN/HI author text.
+- [x] Doctor assignment and chart-authorised history; patient/guardian answering with
+  current consents, encrypted responses, raw server scores and same-form score trends.
+- [x] Retry/concurrency controls, immutable clinical response history, clinic RLS, audit
+  events and inclusion in owned patient data exports.
+- [x] Complete successful reconciliation snapshot exports for settlements and issues:
+  clinic-admin access, exact INR paise, private downloads, export auditing, CSV escaping
+  and formula protection, with a 5,000-row bound per file.
+
+See ADR 0033 and the reconciliation-export runbook. This closes the core numeric-scale
+assessment journey and CSV accountant-export gaps. Named/licensed clinical scoring packs,
+branching/free-text assessments, notifications and automated assessment corrections are
+not part of this increment. Bank-statement matching and automated financial discrepancy
+resolution remain separate open work.
+
+Remaining development includes review-request rules and consent, EMR import/mapping/dry
+runs, online-consultation identity/consent/join workflows, ABHA/ABDM M1/Scan & Share/M2,
+remaining messaging administration and usage, confirmed specialty packs, production
+storage/scanning, monitoring/hardening and broader public-site/platform features from
+the maintained audit. Existing provider activation, clinical/pilot acceptance and actual
+host backup/restore gaps remain open. Native apps and SMS stay paused; cloud DSC and AI
+stay deferred until the owner resumes them. The complete web product is not finished.

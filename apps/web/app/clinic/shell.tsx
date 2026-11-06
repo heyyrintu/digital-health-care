@@ -98,6 +98,7 @@ export function ClinicShell({ children }: { children: (me: MeResponse) => ReactN
           ...(me.role === 'clinic_admin' || me.role === 'doctor'
             ? [
                 { href: '/clinic/library', label: t('dashboard.library'), icon: Library },
+                { href: '/clinic/assessments', label: t('assess.forms'), icon: ScrollText },
                 { href: '/clinic/data-rights', label: t('dataRights.title'), icon: Library },
               ]
             : []),

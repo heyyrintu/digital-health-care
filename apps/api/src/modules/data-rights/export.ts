@@ -1,5 +1,5 @@
 import { withTenant } from '@dhc/db';
-import { ConsultationNotes } from '@dhc/contracts';
+import { AssessmentDefinition, AssessmentResult, ConsultationNotes } from '@dhc/contracts';
 import { createHash } from 'node:crypto';
 import type { FastifyRequest } from 'fastify';
 import type { Services } from '../../services';
@@ -239,8 +239,34 @@ export class DataExportService {
             include: { file: true },
           }),
         );
+        const assessments = [];
+        const assessmentRows = cap(await tx.patientAssessment.findMany({ where, take }));
+        const assessmentForms = new Map(
+          (
+            await tx.assessmentForm.findMany({
+              where: { id: { in: [...new Set(assessmentRows.map((r) => r.formId))] } },
+            })
+          ).map((f) => [f.id, f]),
+        );
+        for (const row of assessmentRows) {
+          const form = assessmentForms.get(row.formId);
+          if (!form) throw new Error('EXPORT_ASSESSMENT_INTEGRITY');
+          assessments.push({
+            id: row.id,
+            patientId: row.patientId,
+            formId: row.formId,
+            definition: AssessmentDefinition.parse(form.definition),
+            state: row.state,
+            createdAt: row.createdAt,
+            submittedAt: row.submittedAt,
+            result: row.resultCipher
+              ? AssessmentResult.parse(JSON.parse(this.s.cipher.decrypt(row.resultCipher)))
+              : null,
+          });
+        }
         return {
           profiles,
+          assessments,
           photos,
           consents,
           requests,

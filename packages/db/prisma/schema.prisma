@@ -2516,3 +2516,29 @@ model StaffContactChange {
   @@index([organisationId,userId,createdAt],map:"staff_contact_changes_subject_idx")
   @@map("staff_contact_changes")
 }
+
+model AssessmentForm {
+  id String @id @db.Uuid
+  organisationId String @map("organisation_id") @db.Uuid
+  createdByUserId String @map("created_by_user_id") @db.Uuid
+  definition Json
+  active Boolean @default(true)
+  createdAt DateTime @map("created_at") @db.Timestamptz(3)
+  @@index([organisationId, id])
+  @@map("assessment_forms")
+}
+
+model PatientAssessment {
+  id String @id @db.Uuid
+  organisationId String @map("organisation_id") @db.Uuid
+  patientId String @map("patient_id") @db.Uuid
+  formId String @map("form_id") @db.Uuid
+  assignedByUserId String @map("assigned_by_user_id") @db.Uuid
+  state String @default("pending")
+  resultCipher String? @map("result_cipher")
+  submittedByUserId String? @map("submitted_by_user_id") @db.Uuid
+  submittedAt DateTime? @map("submitted_at") @db.Timestamptz(3)
+  createdAt DateTime @map("created_at") @db.Timestamptz(3)
+  @@index([organisationId, patientId, id])
+  @@map("patient_assessments")
+}

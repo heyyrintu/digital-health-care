@@ -43,3 +43,4 @@ export * from './inbox';
 
 export * from './clinic-operations';
 export * from './people';
+export * from './assessments';

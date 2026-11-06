@@ -57,3 +57,8 @@ Never paste real patient data (names, phone numbers, prescriptions, screenshots)
 - [Staff and platform second-factor options](runbooks/second-factor-auth.md) - deployment-owner choice of authenticator, WhatsApp OTP or password-only login.
 
 - [Clinic People administration](runbooks/clinic-people.md) — searchable staff profiles, clinic roles/access, security and verified sign-in detail changes.
+
+- [ADR 0033: patient assessments](adr/0033-patient-assessments.md) — fixed numeric forms,
+  consented responses, chart permissions, encrypted scores and history/trends.
+- [Accountant reconciliation CSV exports](runbooks/reconciliation-export.md) — private
+  snapshot downloads, exact paise and spreadsheet import guidance.

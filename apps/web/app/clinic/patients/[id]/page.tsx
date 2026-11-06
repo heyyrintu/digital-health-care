@@ -314,6 +314,14 @@ function PatientView({ role }: { role: string }) {
         </Surface>
       )}
 
+      {role === 'doctor' && !merged && (
+        <Surface className="p-5">
+          <Link className="underline" href={`/clinic/patients/${patient.id}/assessments`}>
+            {t('assess.title')}
+          </Link>
+        </Surface>
+      )}
+
       {/* A merged duplicate's tests show on the kept record, which the banner links to. */}
       {(role === 'doctor' || role === 'front_desk') && !merged && (
         <TestOrdersCard key={patient.id} patientId={patient.id} role={role} />

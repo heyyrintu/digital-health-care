@@ -378,3 +378,32 @@ describe('durable settlement reports', () => {
     expect(await claimDispatch(h.services.db, org(), h.services.now())).toHaveLength(1);
   });
 });
+
+it('exports complete successful snapshots as private CSV without exposing another clinic', async () => {
+  const id = await queue();
+  expect((await request('GET', `/runs/${id}/export/settlements`)).statusCode).toBe(409);
+  events = [event()];
+  settlements = [settlement()];
+  await process(id);
+  const exported = await request('GET', `/runs/${id}/export/settlements`);
+  expect(exported.statusCode, exported.body).toBe(200);
+  expect(exported.headers['content-type']).toContain('text/csv');
+  expect(exported.headers['cache-control']).toBe('no-store');
+  expect(exported.headers['content-disposition']).toContain('attachment;');
+  expect(exported.body).toContain('"gross_paise"');
+  expect(exported.body).toContain('"80000"');
+  expect(exported.body).toContain('"78112"');
+  expect(exported.body).toContain('"UTR-1"');
+  const issues = await request('GET', `/runs/${id}/export/issues`);
+  expect(issues.statusCode, issues.body).toBe(200);
+  expect(issues.body).toContain('"review_reason"');
+  expect((await request('GET', `/runs/${id}/export/issues`, undefined, other)).statusCode).toBe(
+    404,
+  );
+  expect((await request('GET', `/runs/${id}/export/issues`, undefined, doctor)).statusCode).toBe(
+    403,
+  );
+  expect(
+    await h.owner.auditLog.count({ where: { action: 'reconciliation.exported', entityId: id } }),
+  ).toBe(2);
+});

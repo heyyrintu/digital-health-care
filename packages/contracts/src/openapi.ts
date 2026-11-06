@@ -1,4 +1,14 @@
 import {
+  AssessmentForms,
+  AssessmentForm,
+  AssessmentPageQuery,
+  CreateAssessmentForm,
+  AssignAssessment,
+  PatientAssessments,
+  PatientAssessment,
+  SubmitAssessment,
+} from './assessments';
+import {
   PeopleList,
   PeopleQuery,
   PeopleDetail,
@@ -377,6 +387,7 @@ interface Operation {
   /** The response is a PDF file instead of JSON. */
   pdf?: boolean;
   zip?: boolean;
+  csv?: boolean;
   /**
    * The request body is a file (an uploaded result, `logo`: a PNG, JPEG or WebP logo, or
    * `document`: a PDF, JPEG, PNG or WebP document).
@@ -390,6 +401,89 @@ interface Operation {
 
 /** Every endpoint, in one list. Field detail always comes from the Zod schemas. */
 const operations: Operation[] = [
+  {
+    method: 'get',
+    path: '/reconciliation/runs/{id}/export/{kind}',
+    pathParams: [
+      'id',
+      { name: 'kind', schema: { type: 'string', enum: ['settlements', 'issues'] } },
+    ],
+    csv: true,
+    operationId: 'exportReconciliationCsv',
+    summary:
+      'Complete successful snapshot CSV, settlements or issues, 5000-row bound (clinic admin)',
+  },
+  {
+    method: 'get',
+    path: '/assessment-forms',
+    operationId: 'listAssessmentForms',
+    summary: 'Clinic assessment form catalog (doctor/admin)',
+    query: AssessmentPageQuery,
+    response: AssessmentForms,
+  },
+  {
+    method: 'post',
+    path: '/assessment-forms',
+    operationId: 'createAssessmentForm',
+    summary: 'Publish an immutable numeric questionnaire (doctor/admin)',
+    body: CreateAssessmentForm,
+    response: AssessmentForm,
+    status: 201,
+  },
+  {
+    method: 'post',
+    path: '/assessment-forms/{id}/archive',
+    pathParams: ['id'],
+    operationId: 'archiveAssessmentForm',
+    summary: 'Archive a form; existing assignments remain available',
+    response: AssessmentForm,
+  },
+  {
+    method: 'get',
+    path: '/patients/{id}/assessments',
+    pathParams: ['id'],
+    operationId: 'listPatientAssessments',
+    summary: 'Assessment history and raw scores (doctor with chart access)',
+    query: AssessmentPageQuery,
+    response: PatientAssessments,
+  },
+  {
+    method: 'post',
+    path: '/patients/{id}/assessments',
+    pathParams: ['id'],
+    operationId: 'assignAssessment',
+    summary: 'Assign a published questionnaire (doctor with chart access)',
+    body: AssignAssessment,
+    response: PatientAssessment,
+    status: 201,
+  },
+  {
+    method: 'post',
+    path: '/assessments/{id}/cancel',
+    pathParams: ['id'],
+    operationId: 'cancelAssessment',
+    summary: 'Cancel an unanswered assessment (doctor with chart access)',
+    response: PatientAssessment,
+  },
+  {
+    method: 'get',
+    path: '/portal/patients/{id}/assessments',
+    pathParams: ['id'],
+    operationId: 'listOwnAssessments',
+    summary: 'Family-owned assessment history, requires current consents',
+    query: AssessmentPageQuery,
+    response: PatientAssessments,
+  },
+  {
+    method: 'post',
+    path: '/portal/assessments/{id}/submit',
+    pathParams: ['id'],
+    operationId: 'submitAssessment',
+    summary: 'Submit once or recover the same response (patient/guardian)',
+    body: SubmitAssessment,
+    response: PatientAssessment,
+  },
+
   {
     method: 'get',
     path: '/clinic-operations/options',
@@ -2981,32 +3075,37 @@ export function buildOpenApiDocument(options: { version: string; serverUrl?: str
           }
         : {}),
       responses: {
-        [String(status)]: op.zip
+        [String(status)]: op.csv
           ? {
-              description: 'Private patient-facing data ZIP',
-              content: { 'application/zip': { schema: { type: 'string', format: 'binary' } } },
+              description: 'Private reconciliation CSV (integer INR paise)',
+              content: { 'text/csv': { schema: { type: 'string', format: 'binary' } } },
             }
-          : op.pdf
+          : op.zip
             ? {
-                description: 'PDF',
-                content: { 'application/pdf': { schema: { type: 'string', format: 'binary' } } },
+                description: 'Private patient-facing data ZIP',
+                content: { 'application/zip': { schema: { type: 'string', format: 'binary' } } },
               }
-            : op.file
+            : op.pdf
               ? {
-                  description: 'The file, as uploaded',
-                  content:
-                    op.file === 'logo'
-                      ? logoBinary
-                      : op.file === 'document'
-                        ? documentBinary
-                        : binary,
+                  description: 'PDF',
+                  content: { 'application/pdf': { schema: { type: 'string', format: 'binary' } } },
                 }
-              : status === 204 || !op.response
-                ? { description: 'No content' }
-                : {
-                    description: status === 201 ? 'Created' : 'OK',
-                    content: { 'application/json': { schema: toSchema(op.response) } },
-                  },
+              : op.file
+                ? {
+                    description: 'The file, as uploaded',
+                    content:
+                      op.file === 'logo'
+                        ? logoBinary
+                        : op.file === 'document'
+                          ? documentBinary
+                          : binary,
+                  }
+                : status === 204 || !op.response
+                  ? { description: 'No content' }
+                  : {
+                      description: status === 201 ? 'Created' : 'OK',
+                      content: { 'application/json': { schema: toSchema(op.response) } },
+                    },
         ...(op.replay && op.response
           ? {
               '200': {
