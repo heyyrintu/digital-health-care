@@ -263,6 +263,18 @@ export class PeopleService {
         Boolean(active.length) !== body.enabled ||
         JSON.stringify(person(this.s, user, memberships, false).roles.sort()) !==
           JSON.stringify([...body.roles].sort());
+      if (
+        body.enabled &&
+        memberships.some(
+          (m) =>
+            m.status === 'invited' && body.roles.includes(m.role as (typeof body.roles)[number]),
+        )
+      )
+        throw new AppError(
+          409,
+          'CONFLICT',
+          'This person must confirm their invitation before access can be enabled.',
+        );
       if (actor.userId === id && roleChanged)
         throw new AppError(409, 'CONFLICT', 'Ask another clinic admin to change your own roles.');
       if (body.enabled && user.status !== 'active')

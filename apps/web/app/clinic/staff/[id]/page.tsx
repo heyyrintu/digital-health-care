@@ -73,7 +73,7 @@ function Person({ currentUserId }: { currentUserId: string }) {
   useEffect(() => {
     void load();
   }, [load]);
-  async function save(enabled: boolean) {
+  async function save(enabled: boolean, accessOnly = false) {
     if (!detail) return;
     setBusy(true);
     setError('');
@@ -82,7 +82,12 @@ function Person({ currentUserId }: { currentUserId: string }) {
       adopt(
         await api.request('PATCH', `/staff/people/${id}`, {
           schema: PeopleDetail,
-          body: { version: detail.version, displayName: name.trim() || null, roles, enabled },
+          body: {
+            version: detail.version,
+            displayName: accessOnly ? detail.displayName : name.trim() || null,
+            roles: accessOnly ? detail.roles : roles,
+            enabled,
+          },
         }),
       );
       setConfirmDisable(false);
@@ -216,7 +221,7 @@ function Person({ currentUserId }: { currentUserId: string }) {
                   type="checkbox"
                   className="size-4 accent-primary"
                   checked={roles.includes(role)}
-                  disabled={own || busy}
+                  disabled={own || busy || detail.status !== 'active'}
                   onChange={(e) =>
                     setRoles((current) =>
                       e.target.checked ? [...current, role] : current.filter((r) => r !== role),
@@ -241,7 +246,10 @@ function Person({ currentUserId }: { currentUserId: string }) {
             {detail.status === 'invited' ? (
               <p>{t('people.finishInvite')}</p>
             ) : detail.status === 'disabled' ? (
-              <Button disabled={own || busy || !detail.signInReady} onClick={() => void save(true)}>
+              <Button
+                disabled={own || busy || !detail.signInReady}
+                onClick={() => void save(true, true)}
+              >
                 {t('people.enable')}
               </Button>
             ) : (
@@ -257,7 +265,7 @@ function Person({ currentUserId }: { currentUserId: string }) {
                 ) : (
                   <div className="space-y-3 rounded-xl border border-border p-4">
                     <p>{t('people.disableConfirm')}</p>
-                    <Button disabled={busy} onClick={() => void save(false)}>
+                    <Button disabled={busy} onClick={() => void save(false, true)}>
                       {t('people.confirmDisable')}
                     </Button>{' '}
                     <Button

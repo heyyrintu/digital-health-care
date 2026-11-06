@@ -404,3 +404,17 @@ it('rejects unavailable phone delivery without cancelling an existing request', 
       .cancelledAt,
   ).toBeNull();
 });
+
+it('requires invitation acceptance even when an existing account already has credentials', async () => {
+  const id = clinics.a.doctor.userId;
+  await h.owner.membership.updateMany({
+    where: { organisationId: clinics.a.org.id, userId: id },
+    data: { status: 'invited' },
+  });
+  expect((await update(id)).statusCode).toBe(409);
+  expect(
+    await h.owner.membership.count({
+      where: { organisationId: clinics.a.org.id, userId: id, status: 'active' },
+    }),
+  ).toBe(0);
+});

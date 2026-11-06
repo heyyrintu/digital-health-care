@@ -30,6 +30,9 @@ for (const width of [390, 1280]) {
     await expect(
       page.getByRole('button', { name: 'Enable clinic access', exact: true }),
     ).toBeVisible();
+    await page.getByRole('tab', { name: 'Roles', exact: true }).click();
+    await expect(page.getByRole('checkbox', { name: 'Clinic admin', exact: true })).toBeDisabled();
+    await page.getByRole('tab', { name: 'Access', exact: true }).click();
     await page.getByRole('button', { name: 'Enable clinic access', exact: true }).click();
     await expect(
       page.getByRole('button', { name: 'Disable clinic access', exact: true }),
