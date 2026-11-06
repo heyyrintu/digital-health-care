@@ -412,6 +412,7 @@ it('requires invitation acceptance even when an existing account already has cre
     data: { status: 'invited' },
   });
   expect((await update(id)).statusCode).toBe(409);
+  expect((await update(id, { enabled: false, roles: ['front_desk'] })).statusCode).toBe(409);
   expect(
     await h.owner.membership.count({
       where: { organisationId: clinics.a.org.id, userId: id, status: 'active' },
