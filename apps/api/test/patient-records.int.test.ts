@@ -310,7 +310,7 @@ it('an explicit file grant does not grant access to the rest of a restricted cha
     where: { organisationId: clinics.a.org.id, userId: clinics.a.doctor.userId },
     data: { status: 'revoked' },
   });
-  expect((await docFile(r.id)).statusCode).toBe(404);
+  expect((await docFile(r.id)).statusCode).toBe(401);
 });
 it('pages within owned records only and expires unfinished uploads', async () => {
   const a = await create(),

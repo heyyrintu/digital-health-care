@@ -94,7 +94,8 @@ export function person(
 ): PeoplePerson {
   const active = memberships.filter((m) => m.status === 'active');
   const invited = memberships.filter((m) => m.status === 'invited');
-  const shown = active.length ? active : invited.length ? invited : memberships;
+  const suspended = memberships.filter((m) => m.status === 'suspended');
+  const shown = active.length ? active : invited.length ? invited : suspended;
   return {
     userId: user.id,
     displayName: user.displayName,
@@ -259,13 +260,17 @@ export class PeopleService {
         );
       const active = memberships.filter((m) => m.status === 'active').map((m) => m.role);
       const roleChanged =
-        JSON.stringify([...active].sort()) !==
-        JSON.stringify(body.enabled ? [...body.roles].sort() : []);
+        Boolean(active.length) !== body.enabled ||
+        JSON.stringify(person(this.s, user, memberships, false).roles.sort()) !==
+          JSON.stringify([...body.roles].sort());
       if (actor.userId === id && roleChanged)
         throw new AppError(409, 'CONFLICT', 'Ask another clinic admin to change your own roles.');
       if (body.enabled && user.status !== 'active')
         throw new AppError(409, 'CONFLICT', 'This account is disabled. Contact platform support.');
-      if (body.enabled && (!user.passwordHash || !user.mfaSecret))
+      if (
+        body.enabled &&
+        (!user.passwordHash || (this.s.staffMfaMode === 'totp' && !user.mfaSecret))
+      )
         throw new AppError(
           409,
           'CONFLICT',
@@ -281,7 +286,11 @@ export class PeopleService {
             role: 'clinic_admin',
             status: 'active',
             userId: { not: id },
-            user: { status: 'active', passwordHash: { not: null }, mfaSecret: { not: null } },
+            user: {
+              status: 'active',
+              passwordHash: { not: null },
+              ...(this.s.staffMfaMode === 'totp' ? { mfaSecret: { not: null } } : {}),
+            },
           },
         });
         if (!others) throw new AppError(409, 'CONFLICT', 'Keep at least one active clinic admin.');
@@ -313,9 +322,9 @@ export class PeopleService {
               organisationId: actor.organisationId,
               userId: id,
               role,
-              status: body.enabled ? 'active' : 'revoked',
+              status: body.enabled ? 'active' : 'suspended',
             },
-            update: { status: body.enabled ? 'active' : 'revoked' },
+            update: { status: body.enabled ? 'active' : 'suspended' },
           });
         await tx.staffInvite.updateMany({
           where: { userId: id, acceptedAt: null, revokedAt: null },

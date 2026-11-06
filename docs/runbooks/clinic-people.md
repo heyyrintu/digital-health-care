@@ -84,10 +84,12 @@ acceptance requires the clinic's configured senders. It does not create Microsof
 mailboxes, email hosting, platform operator accounts or per-person second-factor preferences.
 
 
-Local validation: 51 migrations applied on a fresh disposable database; 59 focused
+Local validation: 52 migrations applied on a fresh disposable database; 59 focused
 People/invitation/device/tenant-isolation tests passed, along with SMTP transport tests
 and contract tests. Eight browser journeys passed, including People roles/access and
 staff-owned email confirmation/re-login at 390px and 1280px, plus invitations, device
 sign-out and authenticator reset. API/web builds, lint and type checks passed. Live
 SMTP/WhatsApp delivery remains configuration-dependent and was not exercised with real
 recipients during these checks.
+
+Disabling clinic access retains the selected roles as suspended memberships. Re-enabling restores those roles only; previously removed roles stay revoked.

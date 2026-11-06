@@ -972,20 +972,19 @@ describe('results and review', () => {
     ).rejects.toThrow(/test_results_media_type_check/);
   });
 
-  it('removes the stored file when the result cannot be recorded', async () => {
+  it('rejects departed staff before storing a result file', async () => {
     const { mri } = await ordered();
     const leaver = await addStaff(h, clinics.a.org.id, 'front_desk', 'leaver@clinic-a.test');
     const tokens = await staffLogin(h, 'clinic-a', leaver);
-    // Still signed in, but no longer on the staff list: the database refuses the result row.
+    // A still-signed-in staff member loses access immediately after leaving.
     await h.owner.membership.deleteMany({ where: { userId: leaver.userId } });
     const put = vi.spyOn(h.services.files, 'put');
     const remove = vi.spyOn(h.services.files, 'delete');
     try {
       const res = await upload(`/test-orders/${mri.id}/results`, tokens, PDF);
-      expect(res.statusCode).toBe(500);
-      const key = put.mock.calls[0]![0];
-      expect(remove).toHaveBeenCalledWith(key);
-      await expect(h.services.files.get(key)).rejects.toThrow();
+      expect(res.statusCode).toBe(401);
+      expect(put).not.toHaveBeenCalled();
+      expect(remove).not.toHaveBeenCalled();
     } finally {
       put.mockRestore();
       remove.mockRestore();

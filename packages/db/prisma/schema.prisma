@@ -280,6 +280,8 @@ enum MembershipStatus {
   /// Created by a staff invite; becomes active when the invite is completed.
   invited
   active
+  /// Clinic access disabled; retained roles may be restored.
+  suspended
   revoked
 }
 

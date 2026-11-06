@@ -23,6 +23,10 @@ beforeEach(async () => {
   h.clock.ms = Date.UTC(2026, 9, 6, 4, 30);
   h.sentCodes.length = 0;
   delivered.length = 0;
+  h.services.otpSender = {
+    channel: 'whatsapp',
+    send: async (phone, code) => void h.sentCodes.push({ phone, code }),
+  };
   clinics = await seedTwoClinics(h);
   admin = await staffLogin(h, 'clinic-a', clinics.a.admin);
   doctor = await staffLogin(h, 'clinic-a', clinics.a.doctor);
@@ -374,4 +378,29 @@ it('serialises authenticator reset against a competing admin access removal', as
       },
     }),
   ).toBe(1);
+});
+
+it('restores only the roles retained when access was disabled', async () => {
+  const id = clinics.a.doctor.userId;
+  expect((await update(id, { roles: ['doctor', 'front_desk', 'clinic_admin'] })).statusCode).toBe(
+    200,
+  );
+  expect((await update(id, { roles: ['doctor'] })).statusCode).toBe(200);
+  expect((await update(id, { enabled: false })).statusCode).toBe(200);
+  const disabled = await detail(id);
+  expect(disabled.roles).toEqual(['doctor']);
+  expect((await update(id, { roles: disabled.roles })).statusCode).toBe(200);
+  expect((await detail(id)).roles).toEqual(['doctor']);
+});
+it('rejects unavailable phone delivery without cancelling an existing request', async () => {
+  const first = await requestContact('phone', '+919876543210');
+  expect(first.statusCode, first.body).toBe(201);
+  const count = await h.owner.staffContactChange.count();
+  h.services.otpSender = { send: async () => {} };
+  expect((await requestContact('phone', '+919876543211')).statusCode).toBe(503);
+  expect(await h.owner.staffContactChange.count()).toBe(count);
+  expect(
+    (await h.owner.staffContactChange.findUniqueOrThrow({ where: { id: first.json().id } }))
+      .cancelledAt,
+  ).toBeNull();
 });

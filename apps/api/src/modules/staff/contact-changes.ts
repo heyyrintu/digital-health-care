@@ -100,6 +100,7 @@ export class StaffContactService extends PeopleService {
         'Enter a valid email address or Indian mobile number.',
       );
     if (body.field === 'email' && !this.s.emailSender) throw unavailable();
+    if (body.field === 'phone' && this.s.otpSender.channel !== 'whatsapp') throw unavailable();
     const code = String(randomInt(0, 1000000)).padStart(6, '0');
     const outcome = await this.admin(actor, id, async (tx) => {
       const caller = await tx.user.findUniqueOrThrow({ where: { id: actor.userId } });
