@@ -28,6 +28,20 @@ const STAFF = [...STAFF_ROLES];
 export class StaffService {
   constructor(private readonly s: Services) {}
 
+  /** A person's name is shared across their clinic memberships; only they can change it. */
+  async renameSelf(request: FastifyRequest, actor: Actor, displayName: string): Promise<void> {
+    await withAuth(this.s.db, async (tx) => {
+      await tx.user.update({ where: { id: actor.userId }, data: { displayName } });
+      await writeAudit(tx, request, {
+        action: 'staff.profile_updated',
+        organisationId: actor.organisationId,
+        actorUserId: actor.userId,
+        entityType: 'user',
+        entityId: actor.userId,
+      });
+    });
+  }
+
   async list(actor: Actor): Promise<StaffMember[]> {
     const memberships = await withTenant(this.s.db, actor.organisationId, (tx) =>
       tx.membership.findMany({

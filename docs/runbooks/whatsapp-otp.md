@@ -2,6 +2,8 @@
 
 Provider decision: Meta WhatsApp Cloud API directly; WhatsApp only for now (4 November 2026). This increment sends patient authentication codes, not clinical documents or general notifications.
 
+For the currently hosted domain and Coolify activation steps, follow [the hosted WhatsApp setup guide](whatsapp-cloud-api-setup.md). It includes the Compose references required to override the preview's disabled OTP setting.
+
 ## Account setup
 
 1. Set up a Meta business app with WhatsApp, a WhatsApp Business Account and a registered sending phone number. For staging, use Meta's test number and verified test recipients.
@@ -37,7 +39,7 @@ One server-level sending number/template is shared by the organisations on that 
 - Sends are synchronous and attempted once. OTPs are not persisted in queue payloads. There is no automatic retry because a timeout can happen after Meta accepts a message; blindly retrying could duplicate it.
 - On rejection, timeout, network failure or malformed acceptance, the challenge is retired, the API returns 503 `UNAVAILABLE`, and the audit log records `auth.otp.delivery_failed` with organisation/challenge IDs only. Failed requests still count against three codes per number per ten minutes. A delayed code from that failed request cannot sign in.
 - Provider response bodies, tokens, phone numbers and codes are not included in public errors or failure logs. Check configuration and Meta's account/template health using its dashboard, without copying patient data into tickets.
-- Signed status callbacks, durable background receipt processing and the clinic-admin delivery log are implemented (see below). Inbox, opt-outs for general messaging, notifications and document/referral sends remain follow-up work.
+- Signed status callbacks, durable background receipt processing and the clinic-admin delivery log are implemented (see below). Separate opted-in notifications and the clinic inbox are documented in their own runbooks; enabling OTP does not activate them.
 
 ## Staging acceptance
 
@@ -61,7 +63,7 @@ WHATSAPP_BUSINESS_ACCOUNT_ID=<numeric-whatsapp-business-account-id>
 
 The app secret is not the bearer access token. Set the callback URL in Meta to `https://<api-host>/v1/webhooks/whatsapp`, use the same verification token and subscribe the WhatsApp account to the `messages` field. Verification returns the numeric challenge only on a token match. The verification route suppresses request logging because Meta includes the token in its URL. Keep callbacks disabled until these values are available; development and builds work without them.
 
-Every POST is limited to 256 KB, verified using HMAC-SHA256 over the exact raw bytes, and checked against the configured business account and sending phone-number ID. Only sent/delivered/read/failed receipts for a known outgoing message are accepted for storage. Unknown messages, other accounts/senders, inbound chat text and unrelated status kinds are acknowledged without being stored. No inbox is implemented yet. The server adds a random internal delivery ID as `biz_opaque_callback_data` when sending; this permits a callback that races the send response to be correlated safely. No recipient number or organisation supplied by the callback determines tenancy.
+Every POST is limited to 256 KB, verified using HMAC-SHA256 over the exact raw bytes, and checked against the configured business account and sending phone-number ID. Only sent/delivered/read/failed receipts for a known outgoing message are accepted for storage. Unknown messages, other accounts/senders, inbound chat text and unrelated status kinds are acknowledged without being stored. The optional conversational clinic inbox uses separate configured channels and is not activated by this OTP setup. The server adds a random internal delivery ID as `biz_opaque_callback_data` when sending; this permits a callback that races the send response to be correlated safely. No recipient number or organisation supplied by the callback determines tenancy.
 
 On a storage failure the API returns 503 so Meta can retry. On success it returns 200 after the sanitized receipts commit to PostgreSQL, without waiting for Redis or processing. Raw bodies, OTPs, recipient IDs and provider error descriptions are discarded. The saved failure code is numeric only.
 

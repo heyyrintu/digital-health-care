@@ -1,3 +1,4 @@
+import { PracticeIdentity } from './settings';
 import {
   PreviewClinicOperation,
   ApplyClinicOperation,
@@ -1012,7 +1013,8 @@ const operations: Operation[] = [
     method: 'post',
     path: '/auth/login',
     operationId: 'login',
-    summary: 'Staff password step',
+    summary:
+      'Staff password step; completes sign-in when the deployment disables the second factor',
     public: true,
     body: LoginBody,
     response: LoginResponse,
@@ -1021,7 +1023,7 @@ const operations: Operation[] = [
     method: 'post',
     path: '/auth/mfa/verify',
     operationId: 'verifyMfa',
-    summary: 'Staff authenticator-code step',
+    summary: 'Staff configured second-factor code step (authenticator or WhatsApp)',
     public: true,
     body: MfaVerifyBody,
     response: TokenResponse,
@@ -1174,6 +1176,22 @@ const operations: Operation[] = [
     summary: 'Set the UHID prefix and next number (clinic admin)',
     body: UpdateUhidSettingsBody,
     response: UhidSettings,
+  },
+  {
+    method: 'put',
+    path: '/staff/profile',
+    operationId: 'updateStaffProfile',
+    summary: 'Update your own staff name (staff)',
+    body: PracticeIdentity,
+    response: PracticeIdentity,
+  },
+  {
+    method: 'put',
+    path: '/organisation-identity',
+    operationId: 'updateOrganisationIdentity',
+    summary: 'Update the organisation name (clinic admin)',
+    body: PracticeIdentity,
+    response: PracticeIdentity,
   },
   {
     method: 'get',
@@ -2730,7 +2748,7 @@ const operations: Operation[] = [
     method: 'post',
     path: '/platform/auth/mfa/verify',
     operationId: 'platformVerifyMfa',
-    summary: 'Platform operator authenticator-code step',
+    summary: 'Platform operator configured second-factor code step (authenticator or WhatsApp)',
     public: true,
     body: MfaVerifyBody,
     response: TokenResponse,

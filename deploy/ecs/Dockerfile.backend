@@ -1,0 +1,8 @@
+# Build the root Dockerfile's backend target locally as dhc-backend-base:build first.
+ARG BACKEND_IMAGE=dhc-backend-base:build
+FROM ${BACKEND_IMAGE}
+# Public trust material only. Credentials remain ECS runtime secrets.
+USER root
+ADD https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem /etc/ssl/certs/rds-global-bundle.pem
+RUN chmod 644 /etc/ssl/certs/rds-global-bundle.pem
+USER node

@@ -1,3 +1,4 @@
+import { createMfaOtp, deliverMfaOtp, consumeMfaOtp } from '../../auth/mfa-otp';
 import type { LoginBody, LoginResponse, OtpRequestResponse, TokenResponse } from '@dhc/contracts';
 import { STAFF_ROLES } from '@dhc/contracts';
 import { withAuth, type Tx } from '@dhc/db';
@@ -300,6 +301,55 @@ export class AuthService {
         };
       }
 
+      if (this.s.staffMfaMode === 'disabled') {
+        const accepted = await tx.user.updateMany({
+          where: {
+            id: user.id,
+            status: 'active',
+            passwordHash: user.passwordHash,
+            failedLoginCount: user.failedLoginCount,
+            OR: [{ lockedUntil: null }, { lockedUntil: { lte: now } }],
+          },
+          data: { failedLoginCount: 0, lockedUntil: null, lastLoginAt: now },
+        });
+        if (accepted.count !== 1) return { error: INVALID_LOGIN() };
+        const tokens = await this.startSession(
+          tx,
+          request,
+          user.id,
+          org.id,
+          role,
+          STAFF_SESSION_MS,
+        );
+        await writeAudit(tx, request, {
+          action: 'auth.login.succeeded',
+          organisationId: org.id,
+          actorUserId: user.id,
+          metadata: { secondFactor: 'disabled' },
+        });
+        return { response: { status: 'signed_in' as const, ...tokens } };
+      }
+      if (this.s.staffMfaMode === 'whatsapp') {
+        const phone =
+          (user.email ? this.s.staffMfaPhones[user.email.toLowerCase()] : undefined) ??
+          user.phone ??
+          '';
+        const mfaToken = await this.s.tokens.createMfaToken(user.id, org.id, role);
+        const pending = await createMfaOtp(this.s, tx, mfaToken, {
+          audience: 'staff',
+          subjectId: user.id,
+          phone,
+          passwordHash: user.passwordHash,
+          secret: user.mfaSecret,
+          organisationId: org.id,
+          role,
+        });
+        return {
+          response: { status: 'mfa_required' as const, mfaToken, method: 'whatsapp' as const },
+          pending,
+        };
+      }
+
       // Authenticators are only ever enrolled through an admin-issued invite, so a password
       // alone can never attach a new authenticator to an account.
       if (!user.mfaSecret) {
@@ -312,9 +362,10 @@ export class AuthService {
         return { error: SETUP_INCOMPLETE() };
       }
       const mfaToken = await this.s.tokens.createMfaToken(user.id, org.id, role);
-      return { response: { status: 'mfa_required' as const, mfaToken } };
+      return { response: { status: 'mfa_required' as const, mfaToken, method: 'totp' as const } };
     });
     if ('error' in outcome) throw outcome.error;
+    if ('pending' in outcome && outcome.pending) await deliverMfaOtp(this.s, outcome.pending);
     return outcome.response;
   }
 
@@ -329,16 +380,33 @@ export class AuthService {
       if (!user || user.status !== 'active') return { error: INVALID_LOGIN() };
       if (user.lockedUntil && user.lockedUntil > now) return { error: LOCKED() };
 
-      if (!user.mfaSecret) return { error: SETUP_INCOMPLETE() };
-
-      const step = matchTotpStep(this.s.cipher.decrypt(user.mfaSecret), code, now.getTime());
-      if (step === null || (user.mfaLastUsedStep !== null && step <= user.mfaLastUsedStep)) {
+      if (this.s.staffMfaMode === 'disabled') return { error: INVALID_CODE() };
+      const whatsapp = this.s.staffMfaMode === 'whatsapp';
+      if (!whatsapp && !user.mfaSecret) return { error: SETUP_INCOMPLETE() };
+      const step = whatsapp
+        ? null
+        : matchTotpStep(this.s.cipher.decrypt(user.mfaSecret!), code, now.getTime());
+      const valid = whatsapp
+        ? await consumeMfaOtp(this.s, tx, mfaToken, code, {
+            audience: 'staff',
+            subjectId: user.id,
+            phone:
+              (user.email ? this.s.staffMfaPhones[user.email.toLowerCase()] : undefined) ??
+              user.phone ??
+              '',
+            passwordHash: user.passwordHash ?? '',
+            secret: user.mfaSecret,
+            organisationId: claims.organisationId,
+            role: claims.role,
+          })
+        : step !== null && (user.mfaLastUsedStep === null || step > user.mfaLastUsedStep);
+      if (!valid) {
         await recordFailure(tx, user.id, now);
         await writeAudit(tx, request, {
           action: 'auth.mfa.failed',
           organisationId: claims.organisationId,
           actorUserId: user.id,
-          metadata: { reason: step === null ? 'wrong_code' : 'code_reused' },
+          metadata: { reason: whatsapp || step === null ? 'wrong_code' : 'code_reused' },
         });
         return { error: INVALID_CODE() };
       }
@@ -363,13 +431,21 @@ export class AuthService {
           status: 'active',
           // The code was checked against this secret: a reset meanwhile makes it void.
           mfaSecret: user.mfaSecret,
+          passwordHash: user.passwordHash,
           failedLoginCount: user.failedLoginCount,
           AND: [
-            { OR: [{ mfaLastUsedStep: null }, { mfaLastUsedStep: { lt: step } }] },
+            ...(whatsapp
+              ? []
+              : [{ OR: [{ mfaLastUsedStep: null }, { mfaLastUsedStep: { lt: step! } }] }]),
             { OR: [{ lockedUntil: null }, { lockedUntil: { lte: now } }] },
           ],
         },
-        data: { mfaLastUsedStep: step, failedLoginCount: 0, lockedUntil: null, lastLoginAt: now },
+        data: {
+          ...(whatsapp ? {} : { mfaLastUsedStep: step }),
+          failedLoginCount: 0,
+          lockedUntil: null,
+          lastLoginAt: now,
+        },
       });
       if (accepted.count !== 1) {
         // Say what won: another request with this code, or another change to the account.
@@ -377,7 +453,8 @@ export class AuthService {
           where: { id: user.id },
           select: { mfaLastUsedStep: true },
         });
-        const reused = latest?.mfaLastUsedStep != null && latest.mfaLastUsedStep >= step;
+        const reused =
+          latest?.mfaLastUsedStep != null && latest.mfaLastUsedStep >= (step ?? Infinity);
         await writeAudit(tx, request, {
           action: 'auth.mfa.failed',
           organisationId: claims.organisationId,

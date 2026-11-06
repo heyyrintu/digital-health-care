@@ -4,6 +4,7 @@ import type { MeResponse } from '@dhc/contracts';
 import { Badge, StaffShell, type NavItem } from '@dhc/ui-web';
 import {
   CalendarClock,
+  Settings,
   FileSignature,
   FlaskConical,
   IndianRupee,
@@ -54,6 +55,12 @@ export function ClinicShell({ children }: { children: (me: MeResponse) => ReactN
       ? []
       : [
           { href: '/clinic', label: t('dashboard.searchPatients'), icon: Users, exact: true },
+          ...(me.role === 'clinic_admin'
+            ? [
+                { href: '/clinic/settings', label: t('identity.settings'), icon: Settings },
+                { href: '/clinic/staff', label: t('identity.team'), icon: UserPlus },
+              ]
+            : []),
           { href: '/clinic/queue', label: t('dashboard.queue'), icon: ListOrdered },
           { href: '/clinic/availability', label: t('dashboard.availability'), icon: CalendarClock },
           { href: '/clinic/collections', label: t('dashboard.collections'), icon: IndianRupee },

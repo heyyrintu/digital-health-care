@@ -1,0 +1,29 @@
+# CodeBuild, repository root context. ECR repositories must already exist.
+# No deployment secrets are needed in this build project.
+version: 0.2
+phases:
+  pre_build:
+    commands:
+      - set -eu
+      - export DOCKER_BUILDKIT=1
+      - test -n "${AWS_ACCOUNT_ID:-}"
+      - test -n "${AWS_DEFAULT_REGION:-}"
+      - export REGISTRY="$AWS_ACCOUNT_ID.dkr.ecr.$AWS_DEFAULT_REGION.amazonaws.com"
+      - export IMAGE_TAG="${CODEBUILD_RESOLVED_SOURCE_VERSION}-${CODEBUILD_BUILD_NUMBER}"
+      - aws ecr get-login-password --region "$AWS_DEFAULT_REGION" | docker login --username AWS --password-stdin "$REGISTRY"
+  build:
+    commands:
+      - docker build --target backend -t dhc-backend-base:build .
+      - docker build -f deploy/ecs/Dockerfile.backend -t "$REGISTRY/dhc-backend:$IMAGE_TAG" .
+      - docker build --target web -t "$REGISTRY/dhc-web:$IMAGE_TAG" .
+      - docker build -f deploy/ecs/Dockerfile.gateway -t "$REGISTRY/dhc-gateway:$IMAGE_TAG" .
+  post_build:
+    commands:
+      - test "$CODEBUILD_BUILD_SUCCEEDING" = "1"
+      - docker push "$REGISTRY/dhc-backend:$IMAGE_TAG"
+      - docker push "$REGISTRY/dhc-web:$IMAGE_TAG"
+      - docker push "$REGISTRY/dhc-gateway:$IMAGE_TAG"
+      - printf '[{"name":"api","imageUri":"%s/dhc-backend:%s"},{"name":"workers","imageUri":"%s/dhc-backend:%s"},{"name":"web","imageUri":"%s/dhc-web:%s"},{"name":"gateway","imageUri":"%s/dhc-gateway:%s"}]' "$REGISTRY" "$IMAGE_TAG" "$REGISTRY" "$IMAGE_TAG" "$REGISTRY" "$IMAGE_TAG" "$REGISTRY" "$IMAGE_TAG" > imagedefinitions.json
+artifacts:
+  files:
+    - imagedefinitions.json

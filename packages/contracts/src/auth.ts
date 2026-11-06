@@ -42,13 +42,6 @@ export const LoginBody = z.object({
 });
 export type LoginBody = z.infer<typeof LoginBody>;
 
-/**
- * Staff accounts are always set up through an invite (authenticator included), so the
- * password step only ever leads to the authenticator-code step.
- */
-export const LoginResponse = z.object({ status: z.literal('mfa_required'), mfaToken: z.string() });
-export type LoginResponse = z.infer<typeof LoginResponse>;
-
 /** New staff passwords: length over complexity rules (NIST SP 800-63B). */
 export const NewPassword = z
   .string()
@@ -70,6 +63,18 @@ export const TokenResponse = z.object({
   refreshToken: z.string(),
 });
 export type TokenResponse = z.infer<typeof TokenResponse>;
+
+/** Password-only deployments return tokens; other policies require a second factor. */
+export const MfaRequiredResponse = z.object({
+  status: z.literal('mfa_required'),
+  mfaToken: z.string(),
+  method: z.enum(['totp', 'whatsapp']).optional(),
+});
+export const LoginResponse = z.union([
+  MfaRequiredResponse,
+  TokenResponse.extend({ status: z.literal('signed_in') }),
+]);
+export type LoginResponse = z.infer<typeof LoginResponse>;
 
 export const RefreshBody = z.object({ refreshToken: z.string().min(1) });
 export type RefreshBody = z.infer<typeof RefreshBody>;

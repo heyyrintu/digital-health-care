@@ -1,4 +1,21 @@
 export const en = {
+  'login.whatsappCode': 'Enter the 6-digit code sent to your WhatsApp',
+
+  'identity.settings': 'Clinic settings',
+  'identity.team': 'Doctors and staff',
+  'identity.doctor': 'Edit doctor profile',
+  'identity.inviteHint':
+    'To add a doctor, use Invite staff below, choose Doctor, enter their name and email or mobile number, then create their invitation link. Share the link privately; the doctor sets up their password and authenticator.',
+
+  'identity.clinic': 'Clinic organisation name',
+  'identity.staff': 'Your staff profile',
+  'identity.name': 'Your name',
+  'identity.clinicHint':
+    'Used on staff screens and new receipts. Edit location names and addresses below; patient-facing branding is managed in Branding.',
+  'identity.staffHint':
+    'Your name appears across your clinic memberships. Sign-in details stay the same.',
+  'identity.edit': 'Edit details',
+
   'delivery.kind.appointment_update': 'Appointment update',
 
   'clinicOps.title': 'Clinic session changes',
@@ -1731,7 +1748,8 @@ export const en = {
   'portal.keepSignedIn': 'Keep me signed in on this device',
   'portal.keepSignedInHint':
     'For 30 days. Leave it off on a shared computer: you are then signed out when the browser closes or after 15 minutes without use.',
-  'portal.consents.unavailable': 'Not available. Please contact the clinic.',
+  'portal.consents.unavailable':
+    'Profile setup is paused because the clinic has not published its Privacy Notice and Terms links. Please ask the clinic to configure them.',
   'portal.privacy.withdrawConfirm':
     'The portal and the app will stop showing health records until you accept again.',
   'portal.appts.callToCancel': 'Too close to cancel online. Please call the clinic.',

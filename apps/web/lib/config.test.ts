@@ -23,6 +23,20 @@ describe('consent documents', () => {
     expect(warn.mock.calls[0]![0]).toMatch(/PRIVACY_NOTICE_URL and TERMS_URL/);
   });
 
+  it('links built-in documents in the synthetic preview only', () => {
+    expect(consentDocuments({ NODE_ENV: 'production', DEPLOYMENT_MODE: 'demo' }, vi.fn())).toEqual({
+      urls: { privacy_notice: '/privacy', terms: '/terms' },
+      missing: false,
+    });
+    expect(
+      consentDocuments({ NODE_ENV: 'production', DEPLOYMENT_MODE: 'demo', ...urls }, vi.fn()).urls
+        .terms,
+    ).toBe('https://example.com/terms');
+    expect(
+      consentDocuments({ NODE_ENV: 'production', DEPLOYMENT_MODE: 'live' }, vi.fn()).missing,
+    ).toBe(true);
+  });
+
   it('outside production, lets development go on without them', () => {
     const warn = vi.fn();
     expect(consentDocuments({ NODE_ENV: 'development' }, warn)).toEqual({

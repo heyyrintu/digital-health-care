@@ -13,7 +13,7 @@ import { PlatformLocaleToggle, usePlatformSession } from '../session-provider';
 
 const LABEL = 'block text-sm font-medium';
 
-type Step = { kind: 'password' } | { kind: 'code'; mfaToken: string };
+type Step = { kind: 'password' } | { kind: 'code'; mfaToken: string; method?: 'totp' | 'whatsapp' };
 
 /** Platform operators' sign-in: work email and password, then the authenticator code. */
 export default function PlatformLoginPage() {
@@ -49,11 +49,14 @@ export default function PlatformLoginPage() {
     setError(null);
     setInvalid(false);
     try {
-      const result = await postPlatformSession<PlatformLoginResponse>('login', {
+      const result = await postPlatformSession<PlatformLoginResponse | SessionTokens>('login', {
         email: email.trim(),
         password: String(form.get('password') ?? ''),
       });
-      setStep({ kind: 'code', mfaToken: result.mfaToken });
+      if ('accessToken' in result) {
+        await startSession(result);
+        router.replace('/platform');
+      } else setStep({ kind: 'code', mfaToken: result.mfaToken, method: result.method });
     } catch (e) {
       fail(e, 'password');
     } finally {
@@ -172,7 +175,7 @@ export default function PlatformLoginPage() {
           >
             <div className="space-y-1.5">
               <label htmlFor="code" className={LABEL}>
-                {t('login.codeTitle')}
+                {t(step.method === 'whatsapp' ? 'login.whatsappCode' : 'login.codeTitle')}
               </label>
               <Input
                 id="code"

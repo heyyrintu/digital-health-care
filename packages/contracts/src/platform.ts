@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { OrganisationSlug } from './auth';
+import { LoginResponse, OrganisationSlug } from './auth';
 import { QUEUE_NAMES } from './job-queues';
 
 /**
@@ -17,11 +17,7 @@ export const PlatformLoginBody = z.object({
 });
 export type PlatformLoginBody = z.infer<typeof PlatformLoginBody>;
 
-/** Operators always have an authenticator (set when they are created), so this is the only answer. */
-export const PlatformLoginResponse = z.object({
-  status: z.literal('mfa_required'),
-  mfaToken: z.string(),
-});
+export const PlatformLoginResponse = LoginResponse;
 export type PlatformLoginResponse = z.infer<typeof PlatformLoginResponse>;
 
 export const PlatformOperator = z.object({

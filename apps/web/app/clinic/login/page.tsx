@@ -21,7 +21,9 @@ export default function LoginPage() {
   );
 }
 
-type Step = { kind: 'password'; roles: string[] } | { kind: 'code'; mfaToken: string };
+type Step =
+  | { kind: 'password'; roles: string[] }
+  | { kind: 'code'; mfaToken: string; method?: 'totp' | 'whatsapp' };
 
 /** Staff sign-in: clinic, email or mobile and password, then the authenticator code. */
 function Login() {
@@ -63,7 +65,7 @@ function Login() {
     setBusy(true);
     setError(null);
     try {
-      const result = await postSession<LoginResponse>('login', {
+      const result = await postSession<LoginResponse | SessionTokens>('login', {
         organisation,
         identifier: String(form.get('identifier') ?? ''),
         password: String(form.get('password') ?? ''),
@@ -74,7 +76,10 @@ function Login() {
       } catch {
         // Remembering the clinic is only a convenience.
       }
-      setStep({ kind: 'code', mfaToken: result.mfaToken });
+      if ('accessToken' in result) {
+        await startSession(result);
+        router.replace('/clinic');
+      } else setStep({ kind: 'code', mfaToken: result.mfaToken, method: result.method });
     } catch (e) {
       const roles = e instanceof ApiError ? rolesFromField(e.fields.role) : [];
       if (roles.length > 1) setStep({ kind: 'password', roles });
@@ -209,7 +214,7 @@ function Login() {
           >
             <div className="space-y-1.5">
               <label htmlFor="code" className={LABEL}>
-                {t('login.codeTitle')}
+                {t(step.method === 'whatsapp' ? 'login.whatsappCode' : 'login.codeTitle')}
               </label>
               <Input
                 id="code"

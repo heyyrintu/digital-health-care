@@ -233,3 +233,13 @@ describe('platform console session', () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 });
+
+it('sets only the correct refresh cookie when password-only login completes', async () => {
+  mockApi({ status: 200, body: { status: 'signed_in', ...tokens } });
+  const response = await login(req('/api/platform-session/login', { body: {} }));
+  expect(response.status).toBe(200);
+  const body = await response.json();
+  expect(body).toEqual({ accessToken: tokens.accessToken, expiresIn: tokens.expiresIn });
+  expect(response.headers.get('set-cookie')).toContain('dhc_platform_session=');
+  expect(response.headers.get('set-cookie')).toMatch(/HttpOnly/i);
+});

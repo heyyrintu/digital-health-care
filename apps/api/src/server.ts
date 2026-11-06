@@ -5,6 +5,7 @@ import { buildApp } from './app';
 import { corsOrigins, loadConfig, platformAllowlist, proxyTrust } from './config';
 import { scheduleNoShowSweep } from './modules/appointments/no-shows';
 import { samplePdf } from './modules/documents/document-samples';
+import { checkPdfStartup } from './modules/documents/pdf-startup';
 import { createServices } from './services';
 
 const config = loadConfig();
@@ -31,9 +32,13 @@ const stopRecordPurge = schedulePatientRecordPurge(services, app.log);
 const stopPrepaid = schedulePrepaidSweep(services);
 const stopSweep = scheduleNoShowSweep(services, config.NO_SHOW_SWEEP_SECONDS, app.log);
 
-// Rebuild a sample PDF once: a missing worker file or a pdf-lib that can no longer be capped
-// would otherwise show up only as refused uploads (threat model T27).
-const pdfStartup = services.pdf.selfTest(samplePdf());
+// Fail closed for broken PDF handling. A resource-constrained cold start may time out
+// the known sample once; retry it finitely without changing upload processing limits.
+const pdfStartup = checkPdfStartup(
+  () => services.pdf.selfTest(samplePdf()),
+  (attempt) =>
+    app.log.warn({ attempt }, 'PDF startup sample timed out; retrying before serving traffic'),
+);
 void pdfStartup.then(
   (problem) => {
     if (problem)

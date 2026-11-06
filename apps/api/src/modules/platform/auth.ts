@@ -1,3 +1,4 @@
+import { createMfaOtp, deliverMfaOtp, consumeMfaOtp } from '../../auth/mfa-otp';
 import type { PlatformLoginBody, PlatformLoginResponse, TokenResponse } from '@dhc/contracts';
 import { withPlatform, type Tx } from '@dhc/db';
 import type { FastifyRequest } from 'fastify';
@@ -124,12 +125,46 @@ export class PlatformAuthService {
         });
         return { error: INVALID_LOGIN() };
       }
+      if (this.s.platformMfaMode === 'disabled') {
+        const accepted = await tx.platformOperator.updateMany({
+          where: {
+            id: operator.id,
+            status: 'active',
+            passwordHash: operator.passwordHash,
+            failedLoginCount: operator.failedLoginCount,
+            OR: [{ lockedUntil: null }, { lockedUntil: { lte: now } }],
+          },
+          data: { failedLoginCount: 0, lockedUntil: null, lastLoginAt: now },
+        });
+        if (accepted.count !== 1) return { error: INVALID_LOGIN() };
+        return {
+          response: {
+            status: 'signed_in' as const,
+            ...(await this.startSession(tx, request, operator.id)),
+          },
+        };
+      }
+      if (this.s.platformMfaMode === 'whatsapp') {
+        const mfaToken = await this.s.platformTokens.createMfaToken(operator.id);
+        const pending = await createMfaOtp(this.s, tx, mfaToken, {
+          audience: 'platform',
+          subjectId: operator.id,
+          phone: this.s.platformMfaPhones[operator.email.toLowerCase()] ?? '',
+          passwordHash: operator.passwordHash,
+          secret: operator.mfaSecret,
+        });
+        return {
+          response: { status: 'mfa_required' as const, mfaToken, method: 'whatsapp' as const },
+          pending,
+        };
+      }
       // The failure count is not reset here: only a correct authenticator code resets it,
       // so someone who knows the password cannot keep guessing codes across sign-ins.
       const mfaToken = await this.s.platformTokens.createMfaToken(operator.id);
-      return { response: { status: 'mfa_required' as const, mfaToken } };
+      return { response: { status: 'mfa_required' as const, mfaToken, method: 'totp' as const } };
     });
     if ('error' in outcome) throw outcome.error;
+    if ('pending' in outcome && outcome.pending) await deliverMfaOtp(this.s, outcome.pending);
     return outcome.response;
   }
 
@@ -150,14 +185,24 @@ export class PlatformAuthService {
         return { error: LOCKED() };
       }
 
-      const step = matchTotpStep(this.s.cipher.decrypt(operator.mfaSecret), code, now.getTime());
-      if (
-        step === null ||
-        (operator.mfaLastUsedStep !== null && step <= operator.mfaLastUsedStep)
-      ) {
+      if (this.s.platformMfaMode === 'disabled') return { error: INVALID_CODE() };
+      const whatsapp = this.s.platformMfaMode === 'whatsapp';
+      const step = whatsapp
+        ? null
+        : matchTotpStep(this.s.cipher.decrypt(operator.mfaSecret), code, now.getTime());
+      const valid = whatsapp
+        ? await consumeMfaOtp(this.s, tx, mfaToken, code, {
+            audience: 'platform',
+            subjectId: operator.id,
+            phone: this.s.platformMfaPhones[operator.email.toLowerCase()] ?? '',
+            passwordHash: operator.passwordHash,
+            secret: operator.mfaSecret,
+          })
+        : step !== null && (operator.mfaLastUsedStep === null || step > operator.mfaLastUsedStep);
+      if (!valid) {
         await recordOperatorFailure(tx, operator.id, now);
         await auditOperator(tx, request, 'platform.auth.mfa.failed', operator.id, {
-          reason: step === null ? 'wrong_code' : 'code_reused',
+          reason: whatsapp || step === null ? 'wrong_code' : 'code_reused',
         });
         return { error: INVALID_CODE() };
       }
@@ -171,13 +216,21 @@ export class PlatformAuthService {
           status: 'active',
           // The code was checked against this secret: a reset meanwhile makes it void.
           mfaSecret: operator.mfaSecret,
+          passwordHash: operator.passwordHash,
           failedLoginCount: operator.failedLoginCount,
           AND: [
-            { OR: [{ mfaLastUsedStep: null }, { mfaLastUsedStep: { lt: step } }] },
+            ...(whatsapp
+              ? []
+              : [{ OR: [{ mfaLastUsedStep: null }, { mfaLastUsedStep: { lt: step! } }] }]),
             { OR: [{ lockedUntil: null }, { lockedUntil: { lte: now } }] },
           ],
         },
-        data: { mfaLastUsedStep: step, failedLoginCount: 0, lockedUntil: null, lastLoginAt: now },
+        data: {
+          ...(whatsapp ? {} : { mfaLastUsedStep: step }),
+          failedLoginCount: 0,
+          lockedUntil: null,
+          lastLoginAt: now,
+        },
       });
       if (accepted.count !== 1) {
         // Say what won: another request with this code, or another change to the operator.
@@ -185,42 +238,51 @@ export class PlatformAuthService {
           where: { id: operator.id },
           select: { mfaLastUsedStep: true },
         });
-        const reused = latest?.mfaLastUsedStep != null && latest.mfaLastUsedStep >= step;
+        const reused =
+          latest?.mfaLastUsedStep != null && latest.mfaLastUsedStep >= (step ?? Infinity);
         await auditOperator(tx, request, 'platform.auth.mfa.failed', operator.id, {
           reason: reused ? 'code_reused' : 'changed_meanwhile',
         });
         return { error: INVALID_CODE() };
       }
 
-      const refreshToken = newRefreshToken();
-      const session = await tx.platformSession.create({
-        data: {
-          operatorId: operator.id,
-          refreshTokenHash: hashToken(refreshToken),
-          userAgent: request.headers['user-agent']?.slice(0, 300) ?? null,
-          ip: request.ip,
-          expiresAt: new Date(now.getTime() + PLATFORM_SESSION_MS),
-          lastUsedAt: now,
-          createdAt: now,
-        },
-      });
-      await auditOperator(tx, request, 'platform.auth.login.succeeded', operator.id, {
-        sessionId: session.id,
-      });
-      return {
-        tokens: {
-          tokenType: 'Bearer' as const,
-          accessToken: await this.s.platformTokens.createAccessToken({
-            operatorId: operator.id,
-            sessionId: session.id,
-          }),
-          expiresIn: ACCESS_TOKEN_TTL_SECONDS,
-          refreshToken,
-        },
-      };
+      return { tokens: await this.startSession(tx, request, operator.id) };
     });
     if ('error' in outcome) throw outcome.error;
     return outcome.tokens;
+  }
+
+  private async startSession(
+    tx: Tx,
+    request: FastifyRequest,
+    operatorId: string,
+  ): Promise<TokenResponse> {
+    const now = this.s.now();
+    const refreshToken = newRefreshToken();
+    const session = await tx.platformSession.create({
+      data: {
+        operatorId,
+        refreshTokenHash: hashToken(refreshToken),
+        userAgent: request.headers['user-agent']?.slice(0, 300) ?? null,
+        ip: request.ip,
+        expiresAt: new Date(now.getTime() + PLATFORM_SESSION_MS),
+        lastUsedAt: now,
+        createdAt: now,
+      },
+    });
+    await auditOperator(tx, request, 'platform.auth.login.succeeded', operatorId, {
+      sessionId: session.id,
+      secondFactor: this.s.platformMfaMode,
+    });
+    return {
+      tokenType: 'Bearer',
+      accessToken: await this.s.platformTokens.createAccessToken({
+        operatorId,
+        sessionId: session.id,
+      }),
+      expiresIn: ACCESS_TOKEN_TTL_SECONDS,
+      refreshToken,
+    };
   }
 
   async refresh(request: FastifyRequest, refreshToken: string): Promise<TokenResponse> {
