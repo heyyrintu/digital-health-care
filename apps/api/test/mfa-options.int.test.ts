@@ -149,3 +149,62 @@ it('database roles cannot read the other audience or expose OTPs to clinic sessi
     withTenant(h.services.db, clinics.a.org.id, (tx) => tx.mfaOtpChallenge.findMany()),
   ).rejects.toThrow();
 });
+
+it.each(['staff', 'platform'] as const)(
+  'password-only %s sign-in cannot clear a concurrent account lock',
+  async (audience) => {
+    const platform = audience === 'platform';
+    const operator = platform ? await addOperator(h) : null;
+    h.services.staffMfaMode = 'disabled';
+    h.services.platformMfaMode = 'disabled';
+    const id = operator?.operatorId ?? clinics.a.doctor.userId;
+    let release!: () => void;
+    let announce!: () => void;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const locked = new Promise<void>((resolve) => {
+      announce = resolve;
+    });
+    const until = new Date(h.clock.ms + 15 * 60_000);
+    const changing = h.owner.$transaction(
+      async (tx) => {
+        if (platform)
+          await tx.$queryRaw`SELECT id FROM platform_operators WHERE id = ${id}::uuid FOR UPDATE`;
+        else await tx.$queryRaw`SELECT id FROM users WHERE id = ${id}::uuid FOR UPDATE`;
+        announce();
+        await held;
+        if (platform)
+          await tx.platformOperator.update({
+            where: { id },
+            data: { lockedUntil: until, failedLoginCount: 0 },
+          });
+        else
+          await tx.user.update({
+            where: { id },
+            data: { lockedUntil: until, failedLoginCount: 0 },
+          });
+      },
+      { timeout: 10000 },
+    );
+    await locked;
+    const signingIn = platform
+      ? post('/platform/auth/login', { email: operator!.email, password: STAFF_PASSWORD })
+      : login();
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    } finally {
+      release();
+    }
+    await changing;
+    const response = await signingIn;
+    expect([401, 429]).toContain(response.statusCode);
+    const row = platform
+      ? await h.owner.platformOperator.findUniqueOrThrow({ where: { id } })
+      : await h.owner.user.findUniqueOrThrow({ where: { id } });
+    expect(row.lockedUntil?.getTime()).toBe(until.getTime());
+    expect(platform ? await h.owner.platformSession.count() : await h.owner.session.count()).toBe(
+      0,
+    );
+  },
+);
