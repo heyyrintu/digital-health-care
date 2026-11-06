@@ -280,10 +280,13 @@ enum MembershipStatus {
   /// Created by a staff invite; becomes active when the invite is completed.
   invited
   active
+  /// Clinic access disabled; retained roles may be restored.
+  suspended
   revoked
 }
 
 model Organisation {
+  staffContactChanges StaffContactChange[]
   reconciliationRuns        CashfreeReconRun[]
   reconciliationSettlements CashfreeReconSettlement[]
   reconciliationEvents      CashfreeReconEvent[]
@@ -380,6 +383,8 @@ model User {
   createdAt              DateTime             @default(now()) @map("created_at") @db.Timestamptz(3)
   updatedAt              DateTime             @updatedAt @map("updated_at") @db.Timestamptz(3)
 
+  staffContactChanges  StaffContactChange[] @relation("StaffContactSubject")
+  staffContactRequests StaffContactChange[] @relation("StaffContactInitiator")
   memberships          Membership[]
   sessions             Session[]
   pushDevices          PushDevice[]
@@ -2488,4 +2493,26 @@ model MfaOtpChallenge {
   consumedAt DateTime? @map("consumed_at") @db.Timestamptz(3)
   @@index([audience, subjectId, createdAt])
   @@map("mfa_otp_challenges")
+}
+
+model StaffContactChange {
+  id String @id @db.Uuid
+  organisationId String @map("organisation_id") @db.Uuid
+  userId String @map("user_id") @db.Uuid
+  actorUserId String @map("actor_user_id") @db.Uuid
+  field String
+  encryptedValue String @map("encrypted_value")
+  version String
+  codeHash String @map("code_hash")
+  attempts Int @default(0)
+  createdAt DateTime @map("created_at") @db.Timestamptz(3)
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(3)
+  deliveredAt DateTime? @map("delivered_at") @db.Timestamptz(3)
+  consumedAt DateTime? @map("consumed_at") @db.Timestamptz(3)
+  cancelledAt DateTime? @map("cancelled_at") @db.Timestamptz(3)
+  user User @relation("StaffContactSubject", fields:[userId], references:[id], onDelete:NoAction, onUpdate:NoAction)
+  initiator User @relation("StaffContactInitiator", fields:[actorUserId], references:[id], onDelete:NoAction, onUpdate:NoAction)
+  organisation Organisation @relation(fields:[organisationId], references:[id], onDelete:NoAction, onUpdate:NoAction)
+  @@index([organisationId,userId,createdAt],map:"staff_contact_changes_subject_idx")
+  @@map("staff_contact_changes")
 }

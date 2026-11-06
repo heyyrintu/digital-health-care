@@ -387,7 +387,7 @@ export async function inviteeAccount(
 
 export interface JoinInviteParams {
   organisationId: string;
-  user: { id: string };
+  user: { id: string; email: string | null; phone: string | null };
   role: StaffRole;
   now: Date;
   /** The clinic admin issuing it; for a platform-issued invite, the invitee (as for support resets). */
@@ -409,6 +409,31 @@ export async function issueJoinInvite(
   params: JoinInviteParams,
 ) {
   const { organisationId, user, role, now } = params;
+  // Serialise against global staff identity edits before attaching another clinic.
+  const [identityLock] = await tx.$queryRaw<
+    { locked: boolean }[]
+  >`SELECT pg_try_advisory_xact_lock(hashtextextended(${`staff-identity:${user.id}`}, 0)) AS locked`;
+  if (!identityLock?.locked)
+    throw new AppError(
+      409,
+      'CONFLICT',
+      'This account is being updated. Retry or check the invitation list.',
+      { identifier: 'invited' },
+    );
+  await tx.$executeRawUnsafe('SET LOCAL ROLE dhc_auth');
+  const currentIdentity = await tx.user.findUnique({
+    where: { id: user.id },
+    select: { email: true, phone: true, status: true },
+  });
+  await tx.$executeRawUnsafe('SET LOCAL ROLE dhc_app');
+  if (
+    !currentIdentity ||
+    currentIdentity.status !== 'active' ||
+    currentIdentity.email !== user.email ||
+    currentIdentity.phone !== user.phone
+  )
+    throw new AppError(409, 'CONFLICT', 'This account changed. Start the invitation again.');
+
   const token = randomBytes(32).toString('base64url');
   const key = { organisationId, userId: user.id, role };
   const membership = await tx.membership.findUnique({

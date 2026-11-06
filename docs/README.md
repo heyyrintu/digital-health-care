@@ -55,3 +55,5 @@ Never paste real patient data (names, phone numbers, prescriptions, screenshots)
 - [Hosted Meta WhatsApp OTP setup](runbooks/whatsapp-cloud-api-setup.md) — approved template, credentials, Coolify activation, callback configuration and patient-login acceptance.
 
 - [Staff and platform second-factor options](runbooks/second-factor-auth.md) - deployment-owner choice of authenticator, WhatsApp OTP or password-only login.
+
+- [Clinic People administration](runbooks/clinic-people.md) — searchable staff profiles, clinic roles/access, security and verified sign-in detail changes.

@@ -418,6 +418,6 @@ it('does not transfer a profile after patient access is revoked', async () => {
     where: { organisationId: clinics.a.org.id, role: 'patient' },
     data: { status: 'revoked' },
   });
-  expect((await verify(r.id)).statusCode).toBe(409);
+  expect((await verify(r.id)).statusCode).toBe(401);
   expect((await h.owner.patient.findUniqueOrThrow({ where: { id } })).phone).toBe('+91' + oldPhone);
 });

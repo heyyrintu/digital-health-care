@@ -831,20 +831,20 @@ Validation: all 48 migrations applied to fresh disposable databases; 72 affected
 At the owner's request, remaining feature development is paused in favour of hosting the existing web progress for a client demonstration. The local implementation now includes production Node container targets, a single-origin Coolify Compose stack, private persistent PostgreSQL/Redis/file storage, ordered migrations, service health checks, synthetic-only manual bootstrap with normal MFA, runtime preview notice, log limits, a paired backup script and hosting/demo instructions. Native CI builds are opt-in while native development is paused. See ADR 0032 and `docs/runbooks/coolify.md`.
 
 This is preparation and local container verification, not an actual Coolify deployment or completion of the remaining real-patient launch gates. The hosting branch must contain the local web work; an older remote commit will not include it. Actual-host HTTPS, proxy CIDR, secrets, monitoring/backups and the client rehearsal still need to be configured on Coolify.
-## Pending owner request — clinic people administration (6 November 2026)
+## Owner request — clinic people administration (6 November 2026)
 
-- [ ] Build a clinic user-management portal similar to Microsoft 365 admin: searchable
+- [x] Build a clinic user-management portal similar to Microsoft 365 admin: searchable
   doctor/staff directory and a detail page with Profile, Roles, Access and Security.
-- [ ] Let authorised clinic admins manage staff names, verified email/mobile changes,
+- [x] Let authorised clinic admins manage staff names, verified email/mobile changes,
   clinic-scoped roles and account access. Define how edits to shared user identities
   affect memberships in other clinics before implementation.
-- [ ] Add permission checks, audit history, session revocation when access changes,
+- [x] Add permission checks, audit history, session revocation when access changes,
   self-lockout/last-admin safeguards and tests for clinic isolation. Integrate existing
   invitations, authenticator recovery and session controls into this portal.
 
-**Status: pending; requested by the owner, not implemented.** Local settings/team navigation
-and staff self-name editing are a smaller separate increment and do not complete this
-request. Existing deferred work and web release requirements remain open.
+**Status: implemented and under release validation.** See the implementation update below
+and the clinic People runbook for shared-identity limits and verification provider setup.
+Existing deferred work and real-provider acceptance requirements remain open.
 
 The owner also asked whether two-factor authentication can be disabled. Staff and platform
 sign-in currently require an authenticator; there is no disable setting. No authentication
@@ -866,3 +866,22 @@ See [second-factor configuration](../runbooks/second-factor-auth.md) for deploym
 recipient requirements. This is not a per-user/clinic management UI; the People portal
 above remains pending. Initial invitation/operator enrollment still uses the existing
 trusted authenticator setup. No hosted policy or credentials were changed.
+
+
+### Implementation update - clinic People portal (6 November 2026)
+
+The previously pending clinic user-management increment is now implemented locally:
+searchable/paginated People directory; per-person Profile, Roles, Access, Security and
+Activity pages; exclusive staff display-name editing; clinic-scoped role assignment and
+access disable/re-enable; self/last-admin safeguards; security/device/reset integration;
+version checks and audit history. Email/mobile changes require admin password reauthentication,
+a code delivered to the new destination, and confirmation by the signed-in staff owner
+with their current password. Contact updates are atomic and end staff sessions. Shared
+staff/patient identities require platform support, preserving cross-clinic ownership.
+
+SMTP email verification is optional/configuration-gated; mobile verification uses the
+existing WhatsApp sender. Initial account enrollment and deployment-level MFA policy
+are unchanged. Provider credentials, live delivery acceptance and release verification
+remain required. This supersedes the pending implementation status above for this scope;
+it does not implement Microsoft 365 mailboxes, general platform-user editing, shared-account
+identity migrations or per-user MFA preferences. See [People administration](../runbooks/clinic-people.md).

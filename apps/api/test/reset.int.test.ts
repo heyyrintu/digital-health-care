@@ -192,7 +192,7 @@ describe('authenticator reset', () => {
     });
     const res = await post(resetUrl(clinics.b.doctor.userId), {}, bearer(adminA));
     expect(res.statusCode).toBe(409);
-    expect(res.json().error.message).toMatch(/another clinic/);
+    expect(res.json().error.message).toMatch(/shared sign-in/);
     // Nothing was changed.
     const user = await h.owner.user.findUniqueOrThrow({ where: { id: clinics.b.doctor.userId } });
     expect(user.mfaSecret).not.toBeNull();
@@ -213,7 +213,7 @@ describe('authenticator reset', () => {
     expect(res.statusCode).toBe(400);
   });
 
-  it('leaves the person’s patient sessions alone', async () => {
+  it('refuses a shared patient identity and leaves patient sessions alone', async () => {
     // The doctor is also a patient elsewhere, signed in by mobile code.
     const phone = '+919811122233';
     await h.owner.user.update({ where: { id: clinics.a.doctor.userId }, data: { phone } });
@@ -228,7 +228,8 @@ describe('authenticator reset', () => {
       })
     ).json();
 
-    await reset(clinics.a.doctor.userId);
+    const response = await post(resetUrl(clinics.a.doctor.userId), {}, bearer(adminA));
+    expect(response.statusCode).toBe(409);
     expect(
       (await h.app.inject({ method: 'GET', url: '/v1/me', headers: bearer(patient) })).statusCode,
     ).toBe(200);

@@ -73,6 +73,23 @@ describe('HealthResponse', () => {
 describe('buildOpenApiDocument', () => {
   const doc = buildOpenApiDocument({ version: '0.0.0' });
 
+  it('declares every templated People path parameter', () => {
+    for (const [path, operations] of Object.entries(doc.paths)) {
+      if (!path.startsWith('/staff/people/') && !path.startsWith('/staff/profile/contact-changes/'))
+        continue;
+      const names = [...path.matchAll(/\{([^}]+)\}/g)].map((match) => match[1]);
+      for (const operation of Object.values(operations)) {
+        const parameters =
+          (operation as { parameters?: { name: string; in: string; required?: boolean }[] })
+            .parameters ?? [];
+        for (const name of names)
+          expect(parameters).toContainEqual(
+            expect.objectContaining({ name, in: 'path', required: true }),
+          );
+      }
+    }
+  });
+
   it('produces an OpenAPI 3.1 document with the error component', () => {
     expect(doc.openapi).toBe('3.1.0');
     expect(doc.components.schemas.ErrorResponse).toMatchObject({ type: 'object' });

@@ -7,6 +7,7 @@ export type {
   OtpChallenge,
   Patient,
   Session,
+  StaffContactChange,
   User,
 } from './generated/prisma/client.ts';
 export {

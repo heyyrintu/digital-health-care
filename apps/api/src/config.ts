@@ -58,6 +58,19 @@ const Env = z
       .default('false')
       .transform((v) => v === 'true'),
     WHATSAPP_INBOX_CHANNELS_JSON: z.string().optional(),
+    STAFF_EMAIL_VERIFICATION_ENABLED: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((v) => v === 'true'),
+    SMTP_HOST: z.string().trim().min(1).optional(),
+    SMTP_PORT: z.coerce
+      .number()
+      .int()
+      .refine((p) => p === 465 || p === 587)
+      .default(587),
+    SMTP_USER: z.string().min(1).optional(),
+    SMTP_PASSWORD: z.string().min(1).optional(),
+    SMTP_FROM: z.email().optional(),
     STAFF_MFA_MODE: z.enum(['totp', 'whatsapp', 'disabled']).default('totp'),
     PLATFORM_MFA_MODE: z.enum(['totp', 'whatsapp', 'disabled']).default('totp'),
     /** Operator-controlled recipient maps, keyed by account email, never browser input. */
@@ -168,6 +181,14 @@ const Env = z
     },
   )
   .superRefine((env, ctx) => {
+    if (env.STAFF_EMAIL_VERIFICATION_ENABLED)
+      for (const key of ['SMTP_HOST', 'SMTP_USER', 'SMTP_PASSWORD', 'SMTP_FROM'] as const)
+        if (!env[key])
+          ctx.addIssue({
+            code: 'custom',
+            path: [key],
+            message: 'Required for staff email verification.',
+          });
     for (const key of ['STAFF_MFA_PHONES_JSON', 'PLATFORM_MFA_PHONES_JSON'] as const) {
       try {
         const recipients = parseMfaPhones(env[key]);
@@ -409,6 +430,10 @@ export function proxyTrust(
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const input = { ...env };
   for (const key of [
+    'SMTP_HOST',
+    'SMTP_USER',
+    'SMTP_PASSWORD',
+    'SMTP_FROM',
     'WHATSAPP_ACCESS_TOKEN',
     'WHATSAPP_PHONE_NUMBER_ID',
     'WHATSAPP_GRAPH_API_VERSION',

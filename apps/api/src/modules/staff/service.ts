@@ -1,3 +1,4 @@
+import { PeopleService, exclusiveIdentity, tenantRole } from './people';
 import {
   STAFF_ROLES,
   type CreatedStaffInvite,
@@ -207,105 +208,101 @@ export class StaffService {
         'You can’t reset your own sign-in. Ask another clinic admin.',
       );
     }
+    if (!actor.sessionId) throw new AppError(401, 'UNAUTHENTICATED', 'Please sign in again.');
     const now = this.s.now();
-
-    // Another organisation's staff are invisible here, so they read as not found.
-    const roles = (
-      await withTenant(this.s.db, actor.organisationId, (tx) =>
-        tx.membership.findMany({
-          where: { userId: targetUserId, role: { in: STAFF }, status: 'active' },
-          select: { role: true },
-        }),
-      )
-    ).map((m) => m.role as StaffRole);
-    if (roles.length === 0) throw new AppError(404, 'NOT_FOUND', 'Not found.');
-    const role = body.role ?? roles[0]!;
-    if (!roles.includes(role)) {
-      throw new AppError(400, 'VALIDATION_FAILED', 'This person does not have that role here.', {
-        role: roles.join(','),
-      });
-    }
-
-    const user = await withAuth(this.s.db, async (tx) => {
-      // The authenticator belongs to the person, not the clinic. Resetting someone who also
-      // works elsewhere would let this clinic take over their access to the other one.
-      const elsewhere = await tx.membership.count({
-        where: {
-          userId: targetUserId,
-          role: { in: STAFF },
-          status: 'active',
-          organisationId: { not: actor.organisationId },
-        },
-      });
-      if (elsewhere > 0) {
-        throw new AppError(
-          409,
-          'CONFLICT',
-          'This person also works at another clinic, so their sign-in can only be reset by platform support.',
-        );
-      }
-
-      const updated = await tx.user.update({
-        where: { id: targetUserId },
-        data: {
-          passwordHash: null,
-          mfaSecret: null,
-          mfaPendingSecret: null,
-          mfaLastUsedStep: null,
-          failedLoginCount: 0,
-          lockedUntil: null,
-        },
-      });
-      const ending = await liveSessionIds(tx, { userId: targetUserId, staffOnly: true });
-      const revoked = await tx.session.updateMany({
-        where: { id: { in: ending }, revokedAt: null },
-        data: { revokedAt: now, revokedReason: 'authenticator_reset' },
-      });
-      await revokePushDevicesForSessions(tx, ending, 'authenticator_reset', now);
-      await writeAudit(tx, request, {
-        action: 'staff.authenticator.reset',
-        organisationId: actor.organisationId,
-        actorUserId: actor.userId,
-        entityType: 'user',
-        entityId: targetUserId,
-        metadata: { sessionsRevoked: revoked.count },
-      });
-      return updated;
-    });
-
     const token = randomBytes(32).toString('base64url');
-    const invite = await withTenant(this.s.db, actor.organisationId, async (tx) => {
-      // Only the newest setup link works.
-      await tx.staffInvite.updateMany({
-        where: { userId: targetUserId, acceptedAt: null, revokedAt: null },
-        data: { revokedAt: now },
-      });
-      const created = await tx.staffInvite.create({
-        data: {
+    return new PeopleService(this.s).admin(
+      { ...actor, sessionId: actor.sessionId },
+      targetUserId,
+      async (tx) => {
+        const roles = (
+          await tx.membership.findMany({
+            where: {
+              organisationId: actor.organisationId,
+              userId: targetUserId,
+              role: { in: STAFF },
+              status: 'active',
+            },
+            select: { role: true },
+          })
+        ).map((m) => m.role as StaffRole);
+        if (!roles.length) throw new AppError(404, 'NOT_FOUND', 'Not found.');
+        const role = body.role ?? roles[0]!;
+        if (!roles.includes(role))
+          throw new AppError(
+            400,
+            'VALIDATION_FAILED',
+            'This person does not have that role here.',
+            { role: roles.join(',') },
+          );
+        if (!(await exclusiveIdentity(tx, targetUserId, actor.organisationId)))
+          throw new AppError(
+            409,
+            'CONFLICT',
+            'This person has a shared sign-in, so only platform support can reset it.',
+          );
+        const user = await tx.user.update({
+          where: { id: targetUserId },
+          data: {
+            passwordHash: null,
+            mfaSecret: null,
+            mfaPendingSecret: null,
+            mfaLastUsedStep: null,
+            failedLoginCount: 0,
+            lockedUntil: null,
+          },
+        });
+        const ending = await liveSessionIds(tx, { userId: targetUserId, staffOnly: true });
+        const revoked = await tx.session.updateMany({
+          where: { id: { in: ending }, revokedAt: null },
+          data: { revokedAt: now, revokedReason: 'authenticator_reset' },
+        });
+        await revokePushDevicesForSessions(tx, ending, 'authenticator_reset', now);
+        await tx.staffContactChange.updateMany({
+          where: { userId: targetUserId, consumedAt: null, cancelledAt: null },
+          data: { cancelledAt: now },
+        });
+        await tx.mfaOtpChallenge.deleteMany({
+          where: { audience: 'staff', subjectId: targetUserId },
+        });
+        await writeAudit(tx, request, {
+          action: 'staff.authenticator.reset',
           organisationId: actor.organisationId,
-          userId: targetUserId,
-          role,
-          purpose: 'reset',
-          tokenHash: hashToken(token),
-          createdByUserId: actor.userId,
-          expiresAt: new Date(now.getTime() + INVITE_TTL_MS),
-          createdAt: now,
-        },
-      });
-      await writeAudit(tx, request, {
-        action: 'staff.reset.link_created',
-        organisationId: actor.organisationId,
-        actorUserId: actor.userId,
-        entityType: 'staff_invite',
-        entityId: created.id,
-        metadata: { targetUserId },
-      });
-      return created;
-    });
-
-    return {
-      ...toStaffInvite(invite, user, now),
-      inviteUrl: `${this.s.webBaseUrl}/invite#${token}`,
-    };
+          actorUserId: actor.userId,
+          entityType: 'user',
+          entityId: targetUserId,
+          metadata: { sessionsRevoked: revoked.count },
+        });
+        await tenantRole(tx, actor.organisationId);
+        await tx.staffInvite.updateMany({
+          where: { userId: targetUserId, acceptedAt: null, revokedAt: null },
+          data: { revokedAt: now },
+        });
+        const invite = await tx.staffInvite.create({
+          data: {
+            organisationId: actor.organisationId,
+            userId: targetUserId,
+            role,
+            purpose: 'reset',
+            tokenHash: hashToken(token),
+            createdByUserId: actor.userId,
+            expiresAt: new Date(now.getTime() + INVITE_TTL_MS),
+            createdAt: now,
+          },
+        });
+        await writeAudit(tx, request, {
+          action: 'staff.reset.link_created',
+          organisationId: actor.organisationId,
+          actorUserId: actor.userId,
+          entityType: 'staff_invite',
+          entityId: invite.id,
+          metadata: { targetUserId },
+        });
+        return {
+          ...toStaffInvite(invite, user, now),
+          inviteUrl: `${this.s.webBaseUrl}/invite#${token}`,
+        };
+      },
+    );
   }
 }

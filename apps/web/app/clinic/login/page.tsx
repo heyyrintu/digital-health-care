@@ -110,11 +110,13 @@ function Login() {
   }
 
   const notice =
-    endedReason === 'idle'
-      ? t('session.idleSignedOut')
-      : endedReason === 'expired'
-        ? t('session.expired')
-        : null;
+    params.get('account') === 'updated'
+      ? t('people.signInUpdated')
+      : endedReason === 'idle'
+        ? t('session.idleSignedOut')
+        : endedReason === 'expired'
+          ? t('session.expired')
+          : null;
 
   return (
     <main className="grid min-h-screen place-items-center bg-hero px-4 py-10 font-sans text-foreground">

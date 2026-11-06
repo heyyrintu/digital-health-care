@@ -118,3 +118,12 @@ their name and email or mobile number, and create the private invitation link.
 The doctor opens it to set their password and authenticator. Doctors edit their own
 name and professional profile at `/clinic/profile`. These pages require the latest
 web/API deployment and the practice identity migration.
+
+## Manage a person
+
+Open **Doctors and staff**, search the People directory, and select a person. Use Profile,
+Roles, Access, Security and Activity. Shared identities stay read-only; roles/access remain
+clinic-specific. You cannot disable yourself or change your own roles. To change email or
+mobile, request verification from the profile. The staff member confirms through **Your
+account** with their current password and the code received at the new destination.
+See [People administration](../runbooks/clinic-people.md) for delivery setup and safeguards.

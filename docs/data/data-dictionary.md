@@ -245,3 +245,12 @@ with matching account/credentials can complete a password-verified MFA step.
 Deployment variables `STAFF_MFA_MODE`/`PLATFORM_MFA_MODE` choose `totp`, `whatsapp` or
 `disabled` independently; no account schema or per-clinic policy switch is introduced.
 See [operator configuration](../runbooks/second-factor-auth.md).
+
+## Staff sign-in contact changes (6 November 2026)
+
+`staff_contact_changes` is an auth-only table with clinic, staff subject and initiating
+admin IDs, email/phone field, encrypted new value, opaque profile/credential/membership
+version, keyed code hash, attempt count, expiry/delivery/consumption/cancellation timestamps.
+Only `dhc_auth` has access; tenant and platform database roles have no grant. HTTP handlers
+scope admin requests to their clinic and confirmations to the authenticated staff owner.
+Current User contact values are not overwritten until ownership verification completes.
