@@ -735,6 +735,32 @@ describe('organisations', () => {
 });
 
 describe('onboarding races', () => {
+  it('rolls back a busy account onboarding and retries the same clinic ID safely', async () => {
+    const tokens = await platformLogin(h, op);
+    const email = 'busy.admin@shared-admin.test';
+    const user = await h.owner.user.create({ data: { email } });
+    const body = {
+      name: 'Synthetic busy clinic',
+      slug: 'busy-clinic',
+      clinic: { name: 'Main' },
+      admin: { identifier: email },
+    };
+    await withAuth(h.services.db, async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`staff-identity:${user.id}`}, 0))`;
+      const busy = await call('POST', '/platform/organisations', tokens, body);
+      expect(busy.statusCode, busy.body).toBe(409);
+      expect(busy.json().error.fields).toEqual({ identifier: 'invited' });
+      expect(await h.owner.organisation.count({ where: { slug: body.slug } })).toBe(0);
+      expect(await h.owner.membership.count({ where: { userId: user.id } })).toBe(0);
+      expect(await h.owner.staffInvite.count({ where: { userId: user.id } })).toBe(0);
+    });
+    const retried = await call('POST', '/platform/organisations', tokens, body);
+    expect(retried.statusCode, retried.body).toBe(201);
+    expect(await h.owner.organisation.count({ where: { slug: body.slug } })).toBe(1);
+    expect(await h.owner.membership.count({ where: { userId: user.id } })).toBe(1);
+    expect(await h.owner.staffInvite.count({ where: { userId: user.id } })).toBe(1);
+    expect(await h.owner.user.count({ where: { email } })).toBe(1);
+  });
   it('two onboardings for the same new admin share one account', async () => {
     const tokens = await platformLogin(h, op);
     const body = (slug: string) => ({
@@ -748,8 +774,30 @@ describe('onboarding races', () => {
         call('POST', '/platform/organisations', tokens, body(slug)),
       ),
     );
-    expect(results.map((r) => r.statusCode)).toEqual([201, 201]);
-    expect(await h.owner.user.count({ where: { email: 'pooja.singh@shared-admin.test' } })).toBe(1);
+    // Identity edits deliberately use a nonblocking global lock to avoid cross-clinic
+    // deadlocks. Overlapping invites may therefore ask the caller to retry, but must
+    // roll back the whole organisation and remain safe to retry with the same slug.
+    const slugs = ['shared-one', 'shared-two'];
+    for (const [index, result] of results.entries()) {
+      if (result.statusCode === 409) {
+        expect(result.json().error).toMatchObject({
+          code: 'CONFLICT',
+          message: 'This account is being updated. Retry or check the invitation list.',
+          fields: { identifier: 'invited' },
+        });
+        expect(await h.owner.organisation.count({ where: { slug: slugs[index]! } })).toBe(0);
+        const retried = await call('POST', '/platform/organisations', tokens, body(slugs[index]!));
+        expect(retried.statusCode, retried.body).toBe(201);
+      } else expect(result.statusCode, result.body).toBe(201);
+    }
+    const shared = await h.owner.user.findUniqueOrThrow({
+      where: { email: 'pooja.singh@shared-admin.test' },
+    });
+    expect(await h.owner.user.count({ where: { email: shared.email } })).toBe(1);
+    expect(await h.owner.organisation.count({ where: { slug: { in: slugs } } })).toBe(2);
+    expect(
+      await h.owner.membership.count({ where: { userId: shared.id, role: 'clinic_admin' } }),
+    ).toBe(2);
   });
 });
 

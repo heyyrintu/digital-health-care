@@ -72,5 +72,19 @@ reviewed data-loss window; a backup existing is not proof that restoration was t
 
 ## Current evidence
 
-PR, CI, backup, deployment and hosted workflow results are recorded when actually observed;
-this preparation note does not claim they have completed.
+- PR [55](https://github.com/heyyrintu/digital-health-care/pull/55) contains this release.
+- Review fixes passed 45 focused API integrations (including the corrected 18-test signing
+  suite), four mobile/desktop browser scenarios, type checks, lint and formatting. The
+  local web build passed with webpack after the local Turbopack worker-port failure.
+- At revision `070f066`, GitHub build/unit/browser/container checks and three integration
+  groups passed. The fourth exposed an outdated onboarding concurrency assertion: the
+  existing nonblocking staff-identity lock intentionally returns a retryable conflict.
+  The revised test checks exact refusal, full rollback, safe retry and shared-account
+  uniqueness without weakening the lock. Updated-head CI remains required before merge.
+- A paired database/private-file backup was created on the application host at
+  `/var/backups/dhc/pre-pr55-20261107T133000Z`, with writes paused. `pg_restore -l`, tar
+  listing and both SHA-256 checks passed; `COMPLETE` is present. All six long-running
+  application services were healthy after restart. This is a same-host recovery copy;
+  no restore drill or off-host disaster recovery is claimed.
+- Coolify source is `heyyrintu/digital-health-care`, branch `main`, revision `HEAD`.
+  Deployment and authenticated hosted workflow verification remain pending.
