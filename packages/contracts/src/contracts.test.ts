@@ -135,6 +135,8 @@ describe('buildOpenApiDocument', () => {
       'POST /platform/auth/refresh',
       'POST /public/payments/{token}/check',
       'POST /public/payments/{token}/checkout',
+      'POST /review-links/open',
+      'POST /review-links/resolve',
       'POST /verify',
       'POST /verify/referral-letter',
       'POST /webhooks/cashfree',

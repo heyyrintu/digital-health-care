@@ -264,8 +264,36 @@ export class DataExportService {
               : null,
           });
         }
+        const reviewRequests = cap(
+          await tx.reviewRequest.findMany({
+            where,
+            take,
+            select: {
+              id: true,
+              appointmentId: true,
+              patientId: true,
+              createdAt: true,
+              expiresAt: true,
+              cancelledAt: true,
+              openedAt: true,
+            },
+          }),
+        );
+        const reviewConsent = await tx.whatsAppOptIn.findMany({
+          where: { category: 'reviews', changedByUserId: a.userId },
+          select: {
+            enabled: true,
+            version: true,
+            changedAt: true,
+            phone: true,
+            senderPhoneNumberId: true,
+          },
+          take,
+        });
         return {
           profiles,
+          reviewRequests,
+          reviewConsent,
           assessments,
           photos,
           consents,

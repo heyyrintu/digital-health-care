@@ -238,3 +238,14 @@ These changes do not implement validated clinical scoring instruments, branching
 questionnaires, review requests, bank-statement matching, import, online consultations,
 ABDM or the other remaining development/acceptance requirements. They are development
 branch work and have not been claimed deployed to the client-preview host.
+
+### Review-request follow-up — 7 November 2026
+
+ADR 0034 supersedes the core review-request gap: locally implemented neutral invitations,
+independent consent and STOP, completed-visit/cooldown rules, durable single-send
+authorization, provider tracking and explicit link-open counts. Clinic settings, public
+Google destination validation, cancellation and owned data-export inclusion are covered.
+Reviews remain optional; no star/text collection or posted-review claim is made.
+Real Meta template approval/delivery and hosted acceptance remain separate. EMR import,
+online consultations, ABDM and the remaining release work are still open; native apps,
+cloud DSC, AI and SMS keep their existing paused/deferred status.

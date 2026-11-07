@@ -47,3 +47,13 @@ export function createFinanceLinkToken(id: string, expires: Date, secret: string
 export function verifyFinanceLinkToken(token: string, secret: string, now = new Date()) {
   return secret.length < 32 ? null : verifyRecordLinkToken(token, financeSecret(secret), now);
 }
+
+const reviewSecret = (secret: string) =>
+  createHmac('sha256', secret).update('dhc-review-invitation').digest('hex');
+export function createReviewLinkToken(id: string, expires: Date, secret: string) {
+  if (secret.length < 32) throw new Error('Invalid review link configuration');
+  return createRecordLinkToken(id, expires, reviewSecret(secret));
+}
+export function verifyReviewLinkToken(token: string, secret: string, now = new Date()) {
+  return secret.length < 32 ? null : verifyRecordLinkToken(token, reviewSecret(secret), now);
+}

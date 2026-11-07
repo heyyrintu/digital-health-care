@@ -1863,6 +1863,7 @@ model PlatformSession {
 
 /// WhatsApp OTP delivery metadata; contains no OTP or recipient phone.
 model WhatsAppDelivery {
+  reviewRequestId String? @unique @map("review_request_id") @db.Uuid
   operationalUpdateId String?               @map("operational_update_id") @db.Uuid
   financialOrderId    String?               @map("financial_order_id") @db.Uuid
   receiptPaymentId    String?               @map("receipt_payment_id") @db.Uuid
@@ -2541,4 +2542,28 @@ model PatientAssessment {
   createdAt DateTime @map("created_at") @db.Timestamptz(3)
   @@index([organisationId, patientId, id])
   @@map("patient_assessments")
+}
+
+model ReviewSettings {
+ organisationId String @id @map("organisation_id") @db.Uuid
+ version Int @default(1)
+ enabled Boolean @default(false)
+ googleUrl String? @map("google_url")
+ cooldownDays Int @default(90) @map("cooldown_days")
+ @@map("review_settings")
+}
+model ReviewRequest {
+ id String @id @db.Uuid
+ organisationId String @map("organisation_id") @db.Uuid
+ appointmentId String @unique @map("appointment_id") @db.Uuid
+ patientId String @map("patient_id") @db.Uuid
+ createdByUserId String @map("created_by_user_id") @db.Uuid
+ settingsVersion Int @map("settings_version")
+ destinationUrl String @map("destination_url")
+ createdAt DateTime @map("created_at") @db.Timestamptz(3)
+ expiresAt DateTime @map("expires_at") @db.Timestamptz(3)
+ cancelledAt DateTime? @map("cancelled_at") @db.Timestamptz(3)
+ openedAt DateTime? @map("opened_at") @db.Timestamptz(3)
+ @@index([organisationId,createdAt,id])
+ @@map("review_requests")
 }

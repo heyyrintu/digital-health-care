@@ -36,3 +36,13 @@ describe('authenticated-navigation link signatures', () => {
     expect(() => createRecordLinkToken(id, new Date('bad'), secret)).toThrow();
   });
 });
+
+it('domain-separates optional review invitations from clinical record-navigation tokens', async () => {
+  const { createReviewLinkToken, verifyReviewLinkToken } = await import('./index');
+  const token = createReviewLinkToken(id, expiry, secret);
+  expect(verifyReviewLinkToken(token, secret, now)?.deliveryId).toBe(id);
+  expect(verifyRecordLinkToken(token, secret, now)).toBeNull();
+  expect(verifyReviewLinkToken(createRecordLinkToken(id, expiry, secret), secret, now)).toBeNull();
+  expect(verifyReviewLinkToken(token, secret, expiry)).toBeNull();
+  expect(verifyReviewLinkToken(token + 'a', secret, now)).toBeNull();
+});

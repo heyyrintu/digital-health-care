@@ -1,4 +1,58 @@
 export const en = {
+  'reviews.title': 'Review requests',
+  'reviews.neutral':
+    'Invite honest feedback without incentives or rating-based selection. Reviews are optional and do not affect care.',
+  'reviews.error': 'Could not load or save review requests. Please try again.',
+  'reviews.settings': 'Clinic review settings',
+  'reviews.enabled': 'Allow optional review invitations',
+  'reviews.url': 'Direct Google review link',
+  'reviews.urlHint':
+    'Use a g.page/r/\u2026/review link or search.google.com/local/writereview?placeid=\u2026 from your Business Profile.',
+  'reviews.cooldown': 'Days between requests to one number (30\u2013365)',
+  'reviews.settingsHint':
+    'Saving settings invalidates older invitations. Completed requests stay in history.',
+  'reviews.deliveryOff':
+    'WhatsApp review delivery still needs setup before invitations can be sent.',
+  'reviews.save': 'Save review settings',
+  'reviews.saved': 'Review settings saved.',
+  'reviews.request': 'Request an honest review',
+  'reviews.eligibility':
+    "Only completed visits from the last 30 days qualify. The number holder must opt in separately. A prior request, including failed or cancelled requests, consumes the number's cooldown.",
+  'reviews.visitDate': 'Visit date',
+  'reviews.loadVisits': 'Load completed visits',
+  'reviews.visit': 'Completed visit',
+  'reviews.choose': 'Choose a visit',
+  'reviews.queued': 'Review invitation queued. Queued does not mean sent.',
+  'reviews.retry': 'Retry same request',
+  'reviews.retryHint':
+    'Retry uses the same request ID. If consent or eligibility must change, refresh this page after resolving it.',
+  'reviews.tracking': 'Request tracking',
+  'reviews.metric.total': 'Requested',
+  'reviews.metric.accepted': 'Accepted or later',
+  'reviews.metric.sent': 'Sent or later',
+  'reviews.metric.delivered': 'Delivered or read',
+  'reviews.metric.opened': 'Link opened',
+  'reviews.metricsHint':
+    'Delivery counts use current provider states. Link opened counts a deliberate Continue action, not a posted review or a star rating. No rating or review text is collected.',
+  'reviews.refresh': 'Refresh review requests',
+  'reviews.status': 'Delivery status',
+  'reviews.opened': 'Review link opened',
+  'reviews.cancelled': 'Cancelled; link disabled',
+  'reviews.cancel': 'Cancel request / disable link',
+  'reviews.empty': 'No review invitations have been requested.',
+  'reviews.more': 'Load more requests',
+  'reviews.back': 'Back to patient portal',
+  'reviews.consentTitle': 'Optional review invitations',
+  'reviews.consentInfo':
+    'Choose whether this clinic may send optional WhatsApp invitations to give an honest Google review. This choice is separate from care, appointment reminders and payment messages, and covers family records using your number. You can opt out here or reply STOP. Opting out never affects care.',
+  'reviews.consentOn': 'Optional review invitations are on.',
+  'reviews.consentOff': 'Optional review invitations are off.',
+  'reviews.agree': 'I agree to optional WhatsApp invitations to leave an honest Google review.',
+  'reviews.optIn': 'Allow review invitations',
+  'reviews.optOut': 'Stop review invitations',
+  'reviews.unavailable': 'Review invitations are not available for this clinic yet.',
+  'delivery.kind.review_request': 'Review invitation',
+  'delivery.state.unavailable': 'Unavailable',
   'recon.exportSettlements': 'Download settlements CSV',
   'recon.exportIssues': 'Download issues CSV',
   'recon.exportHint':

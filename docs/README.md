@@ -62,3 +62,7 @@ Never paste real patient data (names, phone numbers, prescriptions, screenshots)
   consented responses, chart permissions, encrypted scores and history/trends.
 - [Accountant reconciliation CSV exports](runbooks/reconciliation-export.md) — private
   snapshot downloads, exact paise and spreadsheet import guidance.
+
+- [ADR 0034: optional review requests](adr/0034-patient-review-requests.md) — separate
+  consent, guarded WhatsApp delivery and deliberate link-open tracking.
+  [Activation and recovery](runbooks/review-requests.md).

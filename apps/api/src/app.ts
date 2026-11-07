@@ -1,3 +1,4 @@
+import { reviewRoutes } from './modules/reviews/routes';
 import { assessmentRoutes } from './modules/assessments/routes';
 import { clinicOperationRoutes } from './modules/clinic-operations/routes';
 import { inboxRoutes } from './modules/whatsapp-inbox/routes';
@@ -140,6 +141,7 @@ export function buildApp({
     app.register(queueRoutes, { prefix: '/v1', services });
     app.register(clinicalRoutes, { prefix: '/v1', services });
     app.register(assessmentRoutes, { prefix: '/v1', services });
+    app.register(reviewRoutes, { prefix: '/v1', services });
     app.register(prescribingRoutes, { prefix: '/v1', services, signInRateLimit });
     app.register(doctorRoutes, { prefix: '/v1', services, signInRateLimit });
     app.register(publicDoctorRoutes, { prefix: '/v1', services });

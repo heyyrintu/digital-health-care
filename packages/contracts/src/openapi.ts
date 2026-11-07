@@ -1,4 +1,17 @@
 import {
+  ReviewSettings,
+  ReviewSettingsBody,
+  ReviewConsent,
+  ReviewConsentBody,
+  ReviewRequest,
+  ReviewRequestList,
+  RequestReview,
+  ReviewQuery,
+  ResolveReviewBody,
+  ReviewLanding,
+  ReviewDestination,
+} from './reviews';
+import {
   AssessmentForms,
   AssessmentForm,
   AssessmentPageQuery,
@@ -401,6 +414,80 @@ interface Operation {
 
 /** Every endpoint, in one list. Field detail always comes from the Zod schemas. */
 const operations: Operation[] = [
+  {
+    method: 'get',
+    path: '/review-settings',
+    operationId: 'getReviewSettings',
+    summary: 'Clinic review link and cooldown (clinic admin)',
+    response: ReviewSettings,
+  },
+  {
+    method: 'put',
+    path: '/review-settings',
+    operationId: 'saveReviewSettings',
+    summary: 'Versioned neutral review settings (clinic admin)',
+    body: ReviewSettingsBody,
+    response: ReviewSettings,
+  },
+  {
+    method: 'get',
+    path: '/portal/review-consent',
+    operationId: 'getReviewConsent',
+    summary: 'Independent optional review invitation consent (patient)',
+    response: ReviewConsent,
+  },
+  {
+    method: 'put',
+    path: '/portal/review-consent',
+    operationId: 'setReviewConsent',
+    summary: 'Verified number holder grants or revokes review consent',
+    body: ReviewConsentBody,
+    response: ReviewConsent,
+  },
+  {
+    method: 'get',
+    path: '/review-requests',
+    operationId: 'listReviewRequests',
+    summary: 'Clinic review requests and delivery/open counts (staff)',
+    query: ReviewQuery,
+    response: ReviewRequestList,
+  },
+  {
+    method: 'post',
+    path: '/review-requests',
+    operationId: 'requestReview',
+    summary: 'Queue eligible completed-visit invitation with contact cooldown (staff)',
+    body: RequestReview,
+    response: ReviewRequest,
+    status: 201,
+  },
+  {
+    method: 'post',
+    path: '/review-requests/{id}/cancel',
+    pathParams: ['id'],
+    operationId: 'cancelReviewRequest',
+    summary: 'Cancel unsent request and invalidate its link (staff)',
+    response: ReviewRequest,
+  },
+  {
+    method: 'post',
+    path: '/review-links/resolve',
+    operationId: 'resolveReviewLink',
+    summary: 'Verify opaque invitation without counting an open',
+    public: true,
+    body: ResolveReviewBody,
+    response: ReviewLanding,
+  },
+  {
+    method: 'post',
+    path: '/review-links/open',
+    operationId: 'openReviewLink',
+    summary: 'Record a deliberate invitation open and return trusted Google destination',
+    public: true,
+    body: ResolveReviewBody,
+    response: ReviewDestination,
+  },
+
   {
     method: 'get',
     path: '/reconciliation/runs/{id}/export/{kind}',

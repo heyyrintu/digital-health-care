@@ -49,6 +49,14 @@ const Env = z
     CASHFREE_MERCHANTS_JSON: z.string().optional(),
     CASHFREE_LINK_SECRET: z.string().min(32).regex(/^\S+$/).optional(),
     CASHFREE_WEBHOOK_URL: z.url().optional(),
+    WHATSAPP_REVIEWS_ENABLED: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((v) => v === 'true'),
+    WHATSAPP_REVIEW_LINK_SECRET: z.preprocess(
+      (v) => (v === '' ? undefined : v),
+      z.string().min(32).regex(/^\S+$/).optional(),
+    ),
     WHATSAPP_OPERATIONS_ENABLED: z
       .enum(['true', 'false'])
       .default('false')
@@ -308,7 +316,8 @@ const Env = z
     }
 
     if (
-      (env.WHATSAPP_OPERATIONS_ENABLED ||
+      (env.WHATSAPP_REVIEWS_ENABLED ||
+        env.WHATSAPP_OPERATIONS_ENABLED ||
         env.WHATSAPP_APPOINTMENTS_ENABLED ||
         env.WHATSAPP_RECORDS_ENABLED ||
         env.WHATSAPP_PAYMENTS_ENABLED) &&
@@ -321,6 +330,12 @@ const Env = z
           'Optional WhatsApp messages require callbacks for delivery receipts and STOP replies',
       });
     }
+    if (env.WHATSAPP_REVIEWS_ENABLED && !env.WHATSAPP_REVIEW_LINK_SECRET)
+      ctx.addIssue({
+        code: 'custom',
+        path: ['WHATSAPP_REVIEW_LINK_SECRET'],
+        message: 'Required for review requests',
+      });
     if (env.WHATSAPP_WEBHOOK_ENABLED) {
       for (const key of [
         'WHATSAPP_APP_SECRET',
@@ -430,6 +445,9 @@ export function proxyTrust(
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const input = { ...env };
   for (const key of [
+    'WHATSAPP_APP_SECRET',
+    'WHATSAPP_WEBHOOK_VERIFY_TOKEN',
+    'WHATSAPP_BUSINESS_ACCOUNT_ID',
     'SMTP_HOST',
     'SMTP_USER',
     'SMTP_PASSWORD',

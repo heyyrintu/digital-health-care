@@ -160,6 +160,7 @@ function PortalNav() {
     { href: '/app/book', label: t('booking.book'), icon: CalendarPlus },
     { href: '/app/prescriptions', label: t('patient.nav.prescriptions'), icon: FileText },
     { href: '/app/payments', label: t('finance.title'), icon: FileText },
+    { href: '/app/reviews', label: t('reviews.consentTitle'), icon: FileText },
     { href: '/app/assessments', label: t('assess.title'), icon: FileText },
     { href: '/app/tests', label: t('patient.nav.tests'), icon: FlaskConical },
     { href: '/app/referrals', label: t('patient.nav.referrals'), icon: FileText },
