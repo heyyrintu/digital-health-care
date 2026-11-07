@@ -2,6 +2,8 @@ import type { MessageKey } from './en';
 
 /** Hindi strings. Needs review by a native speaker before release. */
 export const hi: Record<MessageKey, string> = {
+  'online.guardianAck':
+    'मैंने अलग से सत्यापित किया है कि नामित अभिभावक वयस्क और मौजूद है तथा इस बच्चे के लिए अधिकृत है।',
   'online.profileDob': 'क्लिनिक प्रोफ़ाइल में जन्म तिथि',
   'online.profileDobRequired':
     'डॉक्टर की पहचान जाँच से पहले प्रोफ़ाइल में जन्म तिथि भरें। इसे बदलने पर पुराने ऑनलाइन विवरण फिर भरने होंगे।',

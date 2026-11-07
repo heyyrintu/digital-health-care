@@ -40,9 +40,12 @@ Starting and signing an online visit recheck enabled settings, current verified 
 patient/guardian state, the current verified consent holder and active membership, current
 care consents, appointment/profile snapshot, explicit online consent and assigned-doctor
 verification. Old declarations or copied browser state do not satisfy the check. Existing
-in-person consultation behavior remains unchanged. This increment applies readiness checks
-to online signing, including signing an amendment; clinical rollout must review that
-behavior alongside the existing correction/retention workflows.
+in-person consultation behavior remains unchanged. Amendment signing instead requires a
+signed parent for the same appointment, patient and doctor, plus retained identity, consent
+and assigned-doctor verification evidence recorded before the original signature. Later
+settings, profile or consent changes do not prevent correcting an existing signed record.
+Existing signing permissions, PIN and prescription safety checks still apply. This exception
+does not authorize a new consultation or restore access to call details.
 
 ## Joining and withdrawal
 

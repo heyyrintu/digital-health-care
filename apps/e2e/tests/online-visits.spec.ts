@@ -17,9 +17,10 @@ for (const width of [390, 1280]) {
         where: { organisationId: org.id, name: 'Asha Verma' },
       }),
       phone = syntheticMobile();
+    const dob = width === 390 ? '2016-01-01' : '1990-01-01';
     await db.patient.update({
       where: { id: patient.id },
-      data: { phone: '+91' + phone, dob: new Date('1990-01-01') },
+      data: { phone: '+91' + phone, dob: new Date(dob) },
     });
     await db.doctorProfile.create({
       data: {
@@ -122,10 +123,16 @@ for (const width of [390, 1280]) {
       .toBe(1);
     await portal.goto('/app/online/' + visit.id);
     await portal.getByLabel('Full patient name', { exact: true }).fill('Asha Verma');
-    await portal.getByLabel('Patient date of birth', { exact: true }).fill('1990-01-01');
+    await portal.getByLabel('Patient date of birth', { exact: true }).fill(dob);
     await portal
       .getByLabel('Patient current address', { exact: true })
       .fill('Synthetic address, India');
+    if (width === 390) {
+      await portal
+        .getByLabel('Adult guardian name (required for minors)', { exact: true })
+        .fill('Synthetic Guardian');
+      await portal.getByLabel('Guardian relationship', { exact: true }).fill('parent');
+    }
     await portal.getByRole('checkbox', { name: /The identity details are accurate/ }).check();
     await portal.getByRole('button', { name: 'Save identity and consent', exact: true }).click();
     await expect(portal.getByRole('status')).toHaveText('Consent recorded for this appointment');
@@ -133,6 +140,15 @@ for (const width of [390, 1280]) {
     await doctorPage
       .getByRole('checkbox', { name: /I confirmed the patient's identity and age/ })
       .check();
+    if (width === 390) {
+      await expect(
+        doctorPage.getByRole('button', { name: 'Confirm doctor identity check', exact: true }),
+      ).toBeDisabled();
+      await doctorPage.getByRole('checkbox', { name: /I separately verified/ }).check();
+    } else
+      await expect(doctorPage.getByRole('checkbox', { name: /I separately verified/ })).toHaveCount(
+        0,
+      );
     await doctorPage
       .getByRole('button', { name: 'Confirm doctor identity check', exact: true })
       .click();

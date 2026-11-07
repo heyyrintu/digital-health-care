@@ -1,4 +1,6 @@
 export const en = {
+  'online.guardianAck':
+    'I separately verified that the named guardian is an adult, is present and has authority for this child.',
   'online.profileDob': 'Date of birth in clinic profile',
   'online.profileDobRequired':
     'Complete the profile date of birth before the doctor identity check. Updating it resets earlier online details.',

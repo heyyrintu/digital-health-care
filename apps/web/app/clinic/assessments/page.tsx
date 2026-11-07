@@ -1,4 +1,5 @@
 'use client';
+import { ApiError } from '@dhc/api-client';
 import {
   AssessmentForms,
   AssessmentForm,
@@ -70,8 +71,12 @@ function Forms() {
       setDraft(blank());
       setNotice(t('assess.published'));
       await load();
-    } catch {
-      setError(t('assess.retrySame'));
+    } catch (error) {
+      if (error instanceof ApiError && [400, 403, 404, 409, 422].includes(error.status)) {
+        pending.current = null;
+        setRecovering(false);
+        setError(t('assess.error'));
+      } else setError(t('assess.retrySame'));
     } finally {
       setBusy(false);
     }

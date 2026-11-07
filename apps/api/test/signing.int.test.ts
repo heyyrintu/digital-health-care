@@ -6,6 +6,8 @@
  */
 import {
   AppointmentDetail,
+  CURRENT_CONSENT_VERSIONS,
+  ONLINE_CONSENT_VERSION,
   DoctorProfile,
   Prescription,
   PrescriptionCheck,
@@ -41,6 +43,7 @@ import {
   seedTwoClinics,
   STAFF_PASSWORD,
   staffLogin,
+  patientLogin,
 } from './harness';
 
 const h = createHarness();
@@ -99,7 +102,7 @@ const call = (method: string, url: string, tokens: TokenResponse | null, payload
   });
 
 let token = 0;
-async function visit() {
+async function visit(typeId = inPerson) {
   const startAt = new Date('2026-10-06T04:30:00.000Z');
   token += 1;
   const row = await h.owner.appointment.create({
@@ -108,7 +111,7 @@ async function visit() {
       patientId: clinics.a.patients[0]!.id,
       doctorUserId: clinics.a.doctor.userId,
       clinicId,
-      consultationTypeId: inPerson,
+      consultationTypeId: typeId,
       date: new Date('2026-10-06T00:00:00.000Z'),
       startAt,
       endAt: new Date(startAt.getTime() + 15 * 60_000),
@@ -761,4 +764,98 @@ describe('signed prescription notification outbox', () => {
     );
     expect(begun).toEqual([]);
   });
+});
+
+it('signs a completed online amendment from original evidence after settings, profile and consent change', async () => {
+  await readyToSign();
+  const type = await h.owner.consultationType.create({
+    data: {
+      organisationId: clinics.a.org.id,
+      name: 'Synthetic video',
+      mode: 'video',
+      defaultDurationMin: 15,
+      feePaise: 0,
+    },
+  });
+  const id = await visit(type.id),
+    pid = clinics.a.patients[0]!.id;
+  await h.owner.patient.update({ where: { id: pid }, data: { phone: '+919876543210' } });
+  const admin = await staffLogin(h, 'clinic-a', clinics.a.admin),
+    patient = await patientLogin(h, 'clinic-a', '9876543210');
+  expect(
+    (
+      await call('POST', '/portal/consents', patient, {
+        accept: Object.entries(CURRENT_CONSENT_VERSIONS).map(([kind, version]) => ({
+          kind,
+          version,
+        })),
+      })
+    ).statusCode,
+  ).toBe(200);
+  expect(
+    (await call('PUT', '/online-settings', admin, { version: 0, enabled: true })).statusCode,
+  ).toBe(200);
+  expect(
+    (
+      await call('PUT', `/portal/appointments/${id}/online`, patient, {
+        version: 0,
+        consentVersion: ONLINE_CONSENT_VERSION,
+        agreed: true,
+        identity: {
+          name: 'Synthetic Patient',
+          dob: '1985-01-01',
+          address: 'Synthetic address',
+          guardianName: null,
+          guardianRelationship: null,
+          authorityConfirmed: true,
+        },
+      })
+    ).statusCode,
+  ).toBe(200);
+  expect(
+    (
+      await call('POST', `/appointments/${id}/online/verify`, doctorA, {
+        version: 1,
+        identityConfirmed: true,
+        ageConfirmed: true,
+        guardianConfirmed: false,
+        suitable: true,
+        method: 'video',
+      })
+    ).statusCode,
+  ).toBe(200);
+  const first = await saved(id, [await line('Paracetamol 500')]);
+  const original = await signed(id, first.revision);
+  expect(
+    (await call('POST', `/appointments/${id}/actions`, doctorA, { action: 'complete' })).statusCode,
+  ).toBe(200);
+  expect(
+    (await call('PUT', '/online-settings', admin, { version: 1, enabled: false })).statusCode,
+  ).toBe(200);
+  expect(
+    (await call('PATCH', `/patients/${pid}`, admin, { address: 'Updated synthetic address' }))
+      .statusCode,
+  ).toBe(200);
+  expect(
+    (await call('POST', `/portal/appointments/${id}/online/withdraw`, patient, { version: 2 }))
+      .statusCode,
+  ).toBe(200);
+  expect((await call('POST', '/portal/consents/health_data/withdraw', patient)).statusCode).toBe(
+    200,
+  );
+  const amendment = await call('POST', `/appointments/${id}/prescription/amend`, doctorA, {
+    reason: 'Correct the retained record',
+  });
+  expect(amendment.statusCode, amendment.body).toBe(201);
+  const corrected = await signed(id, Prescription.parse(amendment.json()).revision);
+  expect(corrected.status).toBe('signed');
+  expect(corrected.version).toBe(original.version + 1);
+  expect(corrected.number).toBe(original.number);
+  expect(
+    (await h.owner.prescription.findUniqueOrThrow({ where: { id: corrected.id } }))
+      .amendsPrescriptionId,
+  ).toBe(original.id);
+  const next = await visit(type.id),
+    draft = await saved(next, [await line('Paracetamol 500')]);
+  expect((await sign(next, draft.revision)).statusCode).toBe(409);
 });

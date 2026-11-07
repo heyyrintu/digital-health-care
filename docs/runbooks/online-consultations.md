@@ -69,9 +69,12 @@ online prepayment or provider call-state synchronization is added here.
 - After an interrupted save or a stale-version error, use **Reload online details**.
   Inspect the returned current state before submitting another change. Mutations use
   version checks and retain immutable encrypted snapshots; do not delete history to retry.
-- Existing signed documents remain retained. Online signing, including amendment signing,
-  currently requires current readiness; review correction/retention scenarios during
-  clinic acceptance and do not infer automatic exemptions.
+- Existing signed documents remain retained. Corrections to a signed online prescription
+  use retained identity, consent and assigned-doctor verification from before its original
+  signature, bound to the same appointment, patient and doctor. Later settings, profile or
+  consent changes do not block that correction. Signing permissions, PIN and prescription
+  safety checks still apply. This does not authorize new care or new join access. Missing
+  original evidence blocks amendment signing; do not recreate evidence after signing.
 
 Before a real rollout, obtain clinic/clinical/policy acceptance of the consent text and
 identity/age/guardian procedure, rehearse one authorised call and withdrawal in the real

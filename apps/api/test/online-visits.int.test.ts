@@ -7,7 +7,10 @@ import {
   type TokenResponse,
 } from '@dhc/contracts';
 import { withTenant, withPlatform } from '@dhc/db';
-import { assertOnlineReady } from '../src/modules/online-visits/service';
+import {
+  assertOnlineReady,
+  assertOnlineAmendmentEvidence,
+} from '../src/modules/online-visits/service';
 import {
   createHarness,
   resetDatabase,
@@ -526,4 +529,42 @@ it('supports an owned child through the verified guardian account', async () => 
   await expect(
     withTenant(h.services.db, clinics.a.org.id, (tx) => assertOnlineReady(h.services, tx, id)),
   ).resolves.toBeUndefined();
+});
+
+async function historicalParent(signedAt: Date) {
+  return h.owner.prescription.create({
+    data: {
+      organisationId: clinics.a.org.id,
+      appointmentId: id,
+      patientId: pid,
+      doctorUserId: clinics.a.doctor.userId,
+      status: 'signed',
+      number: 'SYNTHETIC-' + randomUUID(),
+      signedAt,
+      pdfFileKey: 'synthetic.pdf',
+      pdfSha256: 'a'.repeat(64),
+      templateVersion: 'test',
+      paperSize: 'a4',
+      signatureMethod: 'test_key',
+      signature: 'synthetic',
+      verificationCode: randomUUID(),
+    },
+  });
+}
+it('rejects online amendments without original verification evidence', async () => {
+  const parent = await historicalParent(h.services.now());
+  await expect(
+    withTenant(h.services.db, clinics.a.org.id, (tx) =>
+      assertOnlineAmendmentEvidence(h.services, tx, id, parent.id),
+    ),
+  ).rejects.toThrow();
+});
+it('rejects verification added only after the original prescription was signed', async () => {
+  const parent = await historicalParent(new Date(h.clock.ms - 60000));
+  await ready();
+  await expect(
+    withTenant(h.services.db, clinics.a.org.id, (tx) =>
+      assertOnlineAmendmentEvidence(h.services, tx, id, parent.id),
+    ),
+  ).rejects.toThrow();
 });

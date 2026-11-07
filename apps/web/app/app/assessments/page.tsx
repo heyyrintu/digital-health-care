@@ -1,4 +1,5 @@
 'use client';
+import { ApiError } from '@dhc/api-client';
 import { PatientAssessments, PatientAssessment } from '@dhc/contracts';
 import { Button, Field, NativeSelect, Surface } from '@dhc/ui-web';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -105,8 +106,12 @@ function Response({
       });
       setDone(true);
       await reload();
-    } catch {
-      setError(t('assess.retrySame'));
+    } catch (error) {
+      if (error instanceof ApiError && [400, 403, 404, 409, 422].includes(error.status)) {
+        attempt.current = null;
+        setLocked(false);
+        setError(t('assess.error'));
+      } else setError(t('assess.retrySame'));
     } finally {
       setBusy(false);
     }
@@ -146,7 +151,15 @@ function Response({
                 <NativeSelect
                   value={answers[q.id] ?? ''}
                   required
-                  onChange={(e) => setAnswers({ ...answers, [q.id]: Number(e.target.value) })}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setAnswers((old) => {
+                      const next = { ...old };
+                      if (value === '') delete next[q.id];
+                      else next[q.id] = Number(value);
+                      return next;
+                    });
+                  }}
                 >
                   <option value="">{t('assess.choose')}</option>
                   {Array.from({ length: q.max - q.min + 1 }, (_, i) => q.min + i).map((n) => (

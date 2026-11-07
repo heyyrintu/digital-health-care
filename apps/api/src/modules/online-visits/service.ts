@@ -18,6 +18,8 @@ import { accountPhone, ownPatient } from '../portal/account';
 import { PortalService } from '../portal/service';
 import { writeAudit } from '../audit/write';
 const State = z.object({
+  patientId: z.uuid(),
+  doctorUserId: z.uuid(),
   snapshot: z.string(),
   settingsVersion: z.number(),
   identity: OnlineIdentity.nullable(),
@@ -72,6 +74,8 @@ async function context(s: Services, tx: Tx, id: string) {
     saved && !stale
       ? saved
       : {
+          patientId: a.patientId,
+          doctorUserId: a.doctorUserId,
           snapshot,
           settingsVersion: settings?.version ?? 0,
           identity: null,
@@ -148,6 +152,50 @@ export async function assertOnlineReady(s: Services, tx: Tx, id: string) {
     throw conflict(
       'Complete online identity verification and patient consent before starting or signing this visit.',
     );
+}
+/** Corrections use retained evidence from before the original signature, not new care consent. */
+export async function assertOnlineAmendmentEvidence(
+  s: Services,
+  tx: Tx,
+  id: string,
+  parentId: string,
+) {
+  const appointment = await tx.appointment.findUnique({
+    where: { id },
+    include: { consultationType: true },
+  });
+  if (!appointment || appointment.consultationType.mode === 'in_person') return;
+  const parent = await tx.prescription.findUnique({ where: { id: parentId } });
+  if (
+    !parent ||
+    parent.appointmentId !== id ||
+    parent.patientId !== appointment.patientId ||
+    parent.doctorUserId !== appointment.doctorUserId ||
+    !parent.signedAt ||
+    !['signed', 'superseded'].includes(parent.status)
+  )
+    throw conflict(
+      'The signed parent and its original online verification evidence are required for this correction.',
+    );
+  const event = await tx.onlineVisitEvent.findFirst({
+    where: { appointmentId: id, action: 'verify', actorUserId: parent.doctorUserId },
+    orderBy: { version: 'asc' },
+  });
+  const state = event ? State.parse(JSON.parse(s.cipher.decrypt(event.stateCipher))) : null;
+  if (
+    !state?.identity ||
+    state.patientId !== parent.patientId ||
+    state.doctorUserId !== parent.doctorUserId ||
+    !state.consentAt ||
+    !state.consentBy ||
+    !state.consentVersion ||
+    !state.verifiedAt ||
+    state.verifiedBy !== parent.doctorUserId ||
+    state.verificationMethod !== appointment.consultationType.mode ||
+    new Date(state.consentAt) > new Date(state.verifiedAt) ||
+    new Date(state.verifiedAt) > parent.signedAt
+  )
+    throw conflict('The original online identity and consent evidence is unavailable.');
 }
 export class OnlineVisitsService {
   constructor(private s: Services) {}

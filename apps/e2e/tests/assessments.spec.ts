@@ -20,13 +20,57 @@ for (const width of [390, 1280]) {
     await page.goto('/clinic/assessments');
     await page.getByLabel('Title (English)', { exact: true }).fill('Synthetic daily questionnaire');
     await page.getByLabel('Question (English)', { exact: true }).fill('Synthetic rating');
+    const publishIds: string[] = [];
+    await page.route('**/assessment-forms', async (route) => {
+      if (route.request().method() !== 'POST') return route.continue();
+      publishIds.push(route.request().postDataJSON().id);
+      if (publishIds.length === 1)
+        return route.fulfill({
+          status: 422,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            error: {
+              code: 'VALIDATION_FAILED',
+              message: 'Synthetic validation rejection',
+              requestId: 'synthetic',
+            },
+          }),
+        });
+      return route.continue();
+    });
+    await page.getByRole('button', { name: 'Publish form', exact: true }).click();
+    await expect(page.getByLabel('Title (English)', { exact: true })).toBeEnabled();
     await page.getByRole('button', { name: 'Publish form', exact: true }).click();
     await expect(page.getByRole('status')).toHaveText('Form published.');
+    expect(new Set(publishIds).size).toBe(2);
     await page.goto(`/clinic/patients/${patient.id}/assessments`);
     await page
       .getByRole('combobox', { name: 'Assessment form', exact: true })
       .selectOption({ label: 'Synthetic daily questionnaire' });
+    const assignmentIds: string[] = [];
+    await page.route('**/patients/*/assessments', async (route) => {
+      if (route.request().method() !== 'POST') return route.continue();
+      assignmentIds.push(route.request().postDataJSON().id);
+      if (assignmentIds.length === 1)
+        return route.fulfill({
+          status: 409,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            error: {
+              code: 'CONFLICT',
+              message: 'Synthetic assignment rejection',
+              requestId: 'synthetic',
+            },
+          }),
+        });
+      return route.continue();
+    });
     await page.getByRole('button', { name: 'Assign assessment', exact: true }).click();
+    await expect(
+      page.getByRole('combobox', { name: 'Assessment form', exact: true }),
+    ).toBeEnabled();
+    await page.getByRole('button', { name: 'Assign assessment', exact: true }).click();
+    expect(new Set(assignmentIds).size).toBe(2);
     await expect(page.getByText(/Awaiting answers/)).toBeVisible();
     const context = await browser.newContext({ viewport: { width, height: 1000 } }),
       portal = await context.newPage();
@@ -36,7 +80,40 @@ for (const width of [390, 1280]) {
     await portal.getByRole('checkbox', { name: /health records/i }).check();
     await portal.getByRole('button', { name: 'Accept and continue' }).click();
     await portal.goto('/app/assessments');
+    let rejectSubmission = true,
+      interruptSubmission = false;
+    await portal.route('**/portal/assessments/*/submit', async (route) => {
+      if (rejectSubmission) {
+        rejectSubmission = false;
+        return route.fulfill({
+          status: 422,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            error: {
+              code: 'VALIDATION_FAILED',
+              message: 'Synthetic answer rejection',
+              requestId: 'synthetic',
+            },
+          }),
+        });
+      }
+      const response = await route.fetch();
+      if (interruptSubmission) {
+        interruptSubmission = false;
+        return route.abort('failed');
+      }
+      return route.fulfill({ response });
+    });
     await portal.getByRole('combobox', { name: 'Synthetic rating', exact: true }).selectOption('7');
+    await portal.getByRole('combobox', { name: 'Synthetic rating', exact: true }).selectOption('');
+    await expect(
+      portal.getByRole('combobox', { name: 'Synthetic rating', exact: true }),
+    ).toHaveValue('');
+    await portal.getByRole('combobox', { name: 'Synthetic rating', exact: true }).selectOption('7');
+    await portal.getByRole('button', { name: 'Submit answers', exact: true }).click();
+    await expect(
+      portal.getByRole('combobox', { name: 'Synthetic rating', exact: true }),
+    ).toBeEnabled();
     await portal.getByRole('button', { name: 'Submit answers', exact: true }).click();
     await expect(portal.getByText('Raw score: 7 (0–10)', { exact: true })).toBeVisible();
     await expect(portal.getByRole('button', { name: 'Submit answers', exact: true })).toHaveCount(
@@ -52,7 +129,12 @@ for (const width of [390, 1280]) {
     await expect(page.getByText(/Awaiting answers/)).toBeVisible();
     await portal.reload();
     await portal.getByRole('combobox', { name: 'Synthetic rating', exact: true }).selectOption('4');
+    interruptSubmission = true;
     await portal.getByRole('button', { name: 'Submit answers', exact: true }).click();
+    await expect(
+      portal.getByRole('combobox', { name: 'Synthetic rating', exact: true }),
+    ).toBeDisabled();
+    await portal.getByRole('button', { name: 'Retry same request', exact: true }).click();
     await expect(portal.getByText('Raw score: 4 (0–10)', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: 'Reload latest assessments', exact: true }).click();
     await expect(page.getByText('Raw score: 4 (0–10)', { exact: true })).toBeVisible();

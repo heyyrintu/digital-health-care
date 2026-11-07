@@ -14,6 +14,7 @@ function Visit({ id, doctor }: { id: string; doctor: boolean }) {
     [value, setValue] = useState<OnlineVisit | null>(null),
     [contact, setContact] = useState(''),
     [confirmed, setConfirmed] = useState(false),
+    [guardianConfirmed, setGuardianConfirmed] = useState(false),
     [method, setMethod] = useState('video'),
     [error, setError] = useState(''),
     [busy, setBusy] = useState(false);
@@ -23,6 +24,7 @@ function Visit({ id, doctor }: { id: string; doctor: boolean }) {
     setContact(r.mode === 'video' ? (r.meetingUrl ?? '') : (r.callPhone ?? ''));
     setMethod(r.mode);
     setConfirmed(false);
+    setGuardianConfirmed(false);
   }
   useEffect(() => {
     api
@@ -138,8 +140,23 @@ function Visit({ id, doctor }: { id: string; doctor: boolean }) {
                 />
                 {t('online.doctorAck')}
               </label>
+              {value.identity?.guardianName && (
+                <label className="flex min-h-11 items-start gap-3">
+                  <input
+                    type="checkbox"
+                    checked={guardianConfirmed}
+                    onChange={(e) => setGuardianConfirmed(e.target.checked)}
+                  />
+                  {t('online.guardianAck')}
+                </label>
+              )}
               <Button
-                disabled={busy || !confirmed || !value.consented}
+                disabled={
+                  busy ||
+                  !confirmed ||
+                  !value.consented ||
+                  (!!value.identity?.guardianName && !guardianConfirmed)
+                }
                 onClick={() =>
                   void work(async () =>
                     show(
@@ -150,7 +167,7 @@ function Visit({ id, doctor }: { id: string; doctor: boolean }) {
                           method,
                           identityConfirmed: true,
                           ageConfirmed: true,
-                          guardianConfirmed: true,
+                          guardianConfirmed: !!value.identity?.guardianName && guardianConfirmed,
                           suitable: true,
                         },
                       }),
