@@ -944,3 +944,12 @@ documents, migration reconciliation against a real source export, backup rehears
 clinic/doctor acceptance remain open. The full EMR migration requirement is not complete.
 Hosted deployment, online consultations, ABDM and all other remaining/deferred work retain
 their existing status.
+
+### Historical EMR migration intake — 7 November 2026
+
+Historical migration preparation has begun. The source intake/mapping document at
+`docs/data/historical-emr-intake.md` defines required export evidence, exact legacy patient
+matching, historical attribution, attachment verification and the proposed doctor-review
+boundary. It is a preparation document, not an implemented clinical importer. Source EMR
+name/format and an anonymised sample export are pending; do not guess clinical mappings
+or mark historical migration complete. The completed demographic importer is unchanged.

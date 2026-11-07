@@ -39,6 +39,8 @@ previews/results and remains retained after application expiry.
 
 This guide covers demographics only. Historical notes, prescriptions, visits, attachments,
 balances and other clinical/financial migration require a separate validated migration.
+Use the [historical export intake checklist](../data/historical-emr-intake.md) to prepare
+the source sample and identify the required mapping and clinical-review decisions.
 Before a real clinic migration, rehearse against a nonproduction copy, reconcile counts
 and sampled fields with the source, verify UHID allocation and arrange a tested backup and
 doctor/clinic sign-off. No real source data is used by the automated development tests.
