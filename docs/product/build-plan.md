@@ -929,3 +929,18 @@ See the review-request runbook for the approved neutral Meta template, configura
 real-recipient acceptance. No live provider activation or hosted deployment is claimed.
 Next core development is EMR import with mapping, dry runs and validated application;
 the other open/deferred work above remains open.
+
+### Patient demographic import — 7 November 2026
+
+Implemented locally (ADR 0035): clinic-admin CSV upload and column mapping, bounded
+100-row encrypted dry runs, legacy source IDs/UHIDs, duplicate/shared-contact checks,
+explicit creator confirmation, stale-preview rechecks, atomic creation, cancellation and
+retry/re-upload recovery. Existing patients are never overwritten or automatically merged.
+Owned patient exports include import provenance. No account, consent or external message
+is created by importing a profile.
+
+This closes the demographic import wizard slice. Historical clinical/financial records,
+documents, migration reconciliation against a real source export, backup rehearsal and
+clinic/doctor acceptance remain open. The full EMR migration requirement is not complete.
+Hosted deployment, online consultations, ABDM and all other remaining/deferred work retain
+their existing status.

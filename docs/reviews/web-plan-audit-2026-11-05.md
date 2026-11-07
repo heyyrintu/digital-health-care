@@ -249,3 +249,11 @@ Reviews remain optional; no star/text collection or posted-review claim is made.
 Real Meta template approval/delivery and hosted acceptance remain separate. EMR import,
 online consultations, ABDM and the remaining release work are still open; native apps,
 cloud DSC, AI and SMS keep their existing paused/deferred status.
+
+### Demographic import follow-up — 7 November 2026
+
+ADR 0035 supersedes the missing demographic import wizard finding: mapped CSV upload,
+immutable encrypted previews, duplicate validation, shared-contact warnings, source-ID
+provenance, atomic confirmed creation and safe retry/re-upload are implemented locally.
+Historical clinical/financial/document migration and real export/parallel-run acceptance
+remain open; these cannot be treated as completed by a demographics-only import.

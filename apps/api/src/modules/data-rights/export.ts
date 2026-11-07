@@ -290,8 +290,16 @@ export class DataExportService {
           },
           take,
         });
+        const importProvenance = cap(
+          await tx.patientImportRecord.findMany({
+            where,
+            take,
+            select: { source: true, externalId: true, patientId: true },
+          }),
+        );
         return {
           profiles,
+          importProvenance,
           reviewRequests,
           reviewConsent,
           assessments,

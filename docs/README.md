@@ -66,3 +66,7 @@ Never paste real patient data (names, phone numbers, prescriptions, screenshots)
 - [ADR 0034: optional review requests](adr/0034-patient-review-requests.md) — separate
   consent, guarded WhatsApp delivery and deliberate link-open tracking.
   [Activation and recovery](runbooks/review-requests.md).
+
+- [ADR 0035: CSV patient imports](adr/0035-patient-demographic-imports.md) — mapped
+  demographic dry runs, duplicate guards and atomic confirmed application.
+  [Import operator guide](runbooks/patient-import.md).

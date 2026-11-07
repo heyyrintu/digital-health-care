@@ -58,6 +58,7 @@ export function ClinicShell({ children }: { children: (me: MeResponse) => ReactN
           ...(me.role === 'clinic_admin'
             ? [
                 { href: '/clinic/settings', label: t('identity.settings'), icon: Settings },
+                { href: '/clinic/imports', label: t('imports.title'), icon: Users },
                 { href: '/clinic/staff', label: t('identity.team'), icon: UserPlus },
               ]
             : []),

@@ -2567,3 +2567,30 @@ model ReviewRequest {
  @@index([organisationId,createdAt,id])
  @@map("review_requests")
 }
+
+model PatientImportJob {
+  id String @id @db.Uuid
+  organisationId String @map("organisation_id") @db.Uuid
+  createdByUserId String @map("created_by_user_id") @db.Uuid
+  source String
+  inputHash String @map("input_hash")
+  payloadCipher String @map("payload_cipher")
+  resultCipher String? @map("result_cipher")
+  status String @default("preview")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(3)
+  appliedAt DateTime? @map("applied_at") @db.Timestamptz(3)
+  @@index([organisationId, createdAt])
+  @@map("patient_import_jobs")
+}
+model PatientImportRecord {
+  id String @id @default(uuid()) @db.Uuid
+  organisationId String @map("organisation_id") @db.Uuid
+  jobId String @map("job_id") @db.Uuid
+  source String
+  externalId String @map("external_id")
+  rowHash String @map("row_hash")
+  patientId String @map("patient_id") @db.Uuid
+  @@unique([organisationId, source, externalId])
+  @@map("patient_import_records")
+}

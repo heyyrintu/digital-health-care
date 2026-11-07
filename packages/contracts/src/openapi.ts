@@ -1,4 +1,10 @@
 import {
+  ApplyPatientImport,
+  PatientImport,
+  PatientImportList,
+  PreviewPatientImport,
+} from './imports';
+import {
   ReviewSettings,
   ReviewSettingsBody,
   ReviewConsent,
@@ -414,6 +420,47 @@ interface Operation {
 
 /** Every endpoint, in one list. Field detail always comes from the Zod schemas. */
 const operations: Operation[] = [
+  {
+    method: 'get',
+    path: '/patient-imports',
+    operationId: 'listPatientImports',
+    summary: 'Recent clinic patient imports (admin)',
+    response: PatientImportList,
+  },
+  {
+    method: 'get',
+    path: '/patient-imports/{id}',
+    operationId: 'getPatientImport',
+    summary: 'Audited private patient import preview (admin)',
+    pathParams: ['id'],
+    response: PatientImport,
+  },
+  {
+    method: 'post',
+    path: '/patient-imports/preview',
+    operationId: 'previewPatientImport',
+    summary: 'Validate mapped CSV without creating patients (admin)',
+    body: PreviewPatientImport,
+    response: PatientImport,
+  },
+  {
+    method: 'post',
+    path: '/patient-imports/{id}/apply',
+    operationId: 'applyPatientImport',
+    summary: 'Confirm unchanged preview atomically (creator admin)',
+    pathParams: ['id'],
+    body: ApplyPatientImport,
+    response: PatientImport,
+  },
+  {
+    method: 'post',
+    path: '/patient-imports/{id}/cancel',
+    operationId: 'cancelPatientImport',
+    summary: 'Cancel an unapplied import (creator admin)',
+    pathParams: ['id'],
+    response: PatientImport,
+  },
+
   {
     method: 'get',
     path: '/review-settings',
