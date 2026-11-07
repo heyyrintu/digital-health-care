@@ -36,8 +36,8 @@ const istTime = (instant: Date) =>
   new Date(instant.getTime() + 330 * 60_000).toISOString().slice(11, 16);
 
 /**
- * In-person self-booking; supporting web clients can opt into gated Cashfree prepayment.
- * Online modes still require the separate identity/telemedicine consent workflow.
+ * Supporting web clients can opt into gated Cashfree prepayment. Online bookings also
+ * require clinic enablement and a verified doctor; payment never replaces online consent.
  */
 const bookableType: Prisma.ConsultationTypeWhereInput = {
   active: true,
@@ -115,7 +115,13 @@ export class PortalBookingService {
       ? {
           OR: [
             inPerson,
-            { active: true, mode: { in: ['audio', 'video'] }, requiresPrepayment: false },
+            {
+              active: true,
+              mode: { in: ['audio', 'video'] },
+              ...(this.prepaidEnabled(actor) && includePrepaid
+                ? {}
+                : { requiresPrepayment: false }),
+            },
           ],
         }
       : inPerson;

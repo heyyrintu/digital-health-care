@@ -94,7 +94,7 @@ export type CreatePortalPatientBody = z.infer<typeof CreatePortalPatientBody>;
 
 // ---- Booking, appointments and prescriptions (PRD §4.3, §4.4) -------------------------
 
-/** In-person booking options; prepaid types appear only for supporting clients when enabled. */
+/** Clinic-enabled booking options; prepaid types require supporting clients and payment enablement. */
 export const BookingOptions = z.object({
   doctors: z.array(
     z.object({

@@ -80,11 +80,22 @@ reviewed data-loss window; a backup existing is not proof that restoration was t
   groups passed. The fourth exposed an outdated onboarding concurrency assertion: the
   existing nonblocking staff-identity lock intentionally returns a retryable conflict.
   The revised test checks exact refusal, full rollback, safe retry and shared-account
-  uniqueness without weakening the lock. Updated-head CI remains required before merge.
+  uniqueness without weakening the lock. The updated `0cca790` head passed full
+  [CI](https://github.com/heyyrintu/digital-health-care/actions/runs/42378267417) and
+  [container verification](https://github.com/heyyrintu/digital-health-care/actions/runs/42378267216).
 - A paired database/private-file backup was created on the application host at
   `/var/backups/dhc/pre-pr55-20261107T133000Z`, with writes paused. `pg_restore -l`, tar
   listing and both SHA-256 checks passed; `COMPLETE` is present. All six long-running
   application services were healthy after restart. This is a same-host recovery copy;
   no restore drill or off-host disaster recovery is claimed.
 - Coolify source is `heyyrintu/digital-health-care`, branch `main`, revision `HEAD`.
-  Deployment and authenticated hosted workflow verification remain pending.
+  PR 55 merged as `0d8f123f50f1486fd1e78ad0565b5a601ac11f5b`. Coolify deployment
+  [`4cbg7ngu2kc6qfs08waebipg`](https://coolify.dronalogitech.com/project/4s2cy8kn8rhchajmw8hj37ar/environment/z38r6qtsnygwkzze0p02b7p8/application/jnpqnls9ff7mnx1jiueyzchw/deployment/4cbg7ngu2kc6qfs08waebipg)
+  finished successfully in 7m 39s. Migration logs report all five new migrations applied
+  successfully (57 total). API startup logs show the PDF rebuild self-test passed and
+  readiness requests returning 200; worker logs show webhooks/system queues started.
+- Hosted `/v1/ready` reports `ready`. Patient, staff and platform sign-in pages and the
+  Privacy Notice/Terms pages load after deployment. Authenticated hosted workflow
+  verification remains pending a signed-in clinic session; local/full CI browser results
+  do not substitute for that acceptance. Existing feature switches and credentials were
+  preserved; no provider messages, payments or calls were sent as a smoke test.

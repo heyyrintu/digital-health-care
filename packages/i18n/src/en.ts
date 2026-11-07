@@ -15,7 +15,7 @@ export const en = {
   'online.external':
     "Calls use the clinic's external meeting service or phone number. The external provider handles the call. This app does not record calls.",
   'online.settingsInfo':
-    'Enable audio/video bookings without online prepayment. Online checkout is not included. Only verified doctors can receive online bookings. Saving settings invalidates existing online consent and call details.',
+    'Enable audio/video bookings for verified doctors. Types marked Paid at booking also need clinic online payments enabled. Payment does not replace identity checks or consent. Saving settings invalidates existing online consent and call details.',
   'online.enable': 'Enable online consultations',
   'online.date': 'Visit date',
   'online.load': 'Load online visits',
