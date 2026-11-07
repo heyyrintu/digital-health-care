@@ -96,3 +96,10 @@ checks passed across online visits and existing portal/profile workflows, includ
 390px/1280px online self-booking, identity, doctor verification, intercepted external
 joining and withdrawal. API/web production builds, formatting and diff checks passed.
 These are synthetic local checks, not real calls, legal/clinical approval or deployment.
+
+
+## Follow-up
+
+ADR 0037 extends this initial non-prepaid increment with optional audio/video prepayment
+through the existing gated Cashfree reservation flow. Payment does not replace any online
+identity, guardian, consent, doctor verification or joining checks described here.

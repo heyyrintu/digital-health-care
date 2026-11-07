@@ -8,8 +8,11 @@
    People/profile workflow and platform registration verification. Pending or incomplete
    doctor profiles cannot take online self-bookings or authorize online intake.
 3. Create a separate audio or video consultation type and its clinic/doctor availability.
-   Leave **requires prepayment** off: online checkout is not included in this increment.
-   Agree how the clinic will collect any fee using its existing billing workflow.
+   For pay-at-clinic bookings, leave **requires prepayment** off and agree fee collection.
+   For prepaid bookings (ADR 0037), mark **Paid at booking**, set the standard fee to
+   ₹1–₹1,00,000, and complete the Cashfree sandbox checks in the payment runbook before
+   enabling the existing prepaid-booking switch and clinic merchant. Both clinic online
+   enablement and payment availability are required. A slot must be at least 35 minutes away.
 4. As clinic admin, open **Online consultation**, enable it and choose **Save online settings**.
    Changing/saving these settings invalidates earlier online snapshots. Avoid changing
    global availability during active online visits without arranging renewed intake.
@@ -17,6 +20,21 @@
    schedule them through existing appointment controls. A used consultation type's mode
    cannot be edited; create a new type for another mode. Rebook when a different mode is
    required rather than rewriting the old appointment's mode/history.
+
+## Prepaid booking
+
+The patient reserves the slot and opens the secure payment link. The booking remains
+pending until the server verifies payment; returning from checkout is not confirmation.
+Manual-approval clinics must also confirm the paid booking. While pending, online intake
+and joining are unavailable. Once confirmed, follow the identity/consent steps below.
+
+Use **Check payment and booking** to recover an interrupted checkout. Retain the original
+reservation/order. Uncertain provider outcomes keep the slot held until verified closure.
+Late payments require staff review and never restore a released slot. Cancellation or
+consent withdrawal does not refund payment automatically; use the explicit admin refund
+workflow and contact the patient when care cannot proceed. Disabling online visits blocks
+joining but does not cancel existing payment obligations. Prepaid rescheduling remains
+clinic-assisted. See [Cashfree operations](cashfree-reconciliation.md).
 
 ## One appointment
 
@@ -50,7 +68,8 @@
 
 No automated government identity check or guardian document verification is provided.
 No in-app media, recording, meeting creation, automatic reminders for this new workflow,
-online prepayment or provider call-state synchronization is added here.
+provider call-state synchronization is added here. Online prepayment reuses the existing
+Cashfree workflow described above; it does not create or manage a provider room.
 
 ## Privacy, withdrawal and recovery
 

@@ -2,7 +2,12 @@ import { randomUUID } from 'node:crypto';
 import type { Page } from '@playwright/test';
 import type { Db } from '@dhc/db';
 import { expect, signInAsPatient, syntheticMobile, test, type Clinic } from '../fixtures';
-async function setup(page: Page, db: Db, clinic: Clinic) {
+async function setup(
+  page: Page,
+  db: Db,
+  clinic: Clinic,
+  mode: 'in_person' | 'audio' | 'video' = 'in_person',
+) {
   const org = await db.organisation.findUniqueOrThrow({ where: { slug: clinic.slug } }),
     doctor = await db.user.findUniqueOrThrow({ where: { email: clinic.email('doctor') } });
   await db.membership.updateMany({
@@ -49,7 +54,7 @@ async function setup(page: Page, db: Db, clinic: Clinic) {
           {
             id: typeId,
             name: 'Prepaid visit',
-            mode: 'in_person',
+            mode,
             defaultDurationMin: 15,
             feePaise: 80000,
             requiresPrepayment: true,
@@ -123,3 +128,20 @@ test('patient explicitly confirms closing an unpaid reservation', async ({ page,
   await expect(page.getByRole('status')).toHaveText('Reservation released');
   await expect(page.getByRole('link', { name: 'Continue to secure payment' })).toHaveCount(0);
 });
+
+for (const mode of ['audio', 'video'] as const) {
+  for (const width of [390, 1280]) {
+    test(`patient reserves a prepaid ${mode} visit with explicit payment status (${width}px)`, async ({
+      page,
+      db,
+      clinic,
+    }) => {
+      await page.setViewportSize({ width, height: 1000 });
+      await setup(page, db, clinic, mode);
+      await expect(page.getByText(/Arrange payment with the clinic/)).toHaveCount(0);
+      await page.getByRole('button', { name: 'Check payment and booking' }).click();
+      await expect(page.getByText('Your booking is confirmed.')).toBeVisible();
+      await expect(page.getByRole('link', { name: 'Continue to secure payment' })).toHaveCount(0);
+    });
+  }
+}

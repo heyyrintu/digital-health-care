@@ -1,6 +1,10 @@
 import { createHmac, randomUUID } from 'node:crypto';
 import { beforeEach, afterAll, describe, it, expect, vi } from 'vitest';
-import { CURRENT_CONSENT_VERSIONS, type TokenResponse } from '@dhc/contracts';
+import {
+  CURRENT_CONSENT_VERSIONS,
+  ONLINE_CONSENT_VERSION,
+  type TokenResponse,
+} from '@dhc/contracts';
 import { withPayments, withTenant } from '@dhc/db';
 import { sweepPrepaidBookings } from '../src/payments/prepaid';
 import { sweepOrganisation } from '../src/modules/appointments/no-shows';
@@ -55,7 +59,7 @@ const gateway = {
       r.order_status = closing ? 'TERMINATION_REQUESTED' : 'TERMINATED';
   }),
 };
-const call = (method: 'GET' | 'POST', path: string, payload?: object, token = patient) =>
+const call = (method: 'GET' | 'POST' | 'PUT', path: string, payload?: object, token = patient) =>
   h.app.inject({ method, url: '/v1' + path, headers: bearer(token), payload });
 const body = (id = randomUUID(), patientId = clinics.a.patients[0]!.id) => ({
   id,
@@ -438,3 +442,148 @@ describe('prepaid in-person booking', () => {
     ).toBe('pending');
   });
 });
+
+async function enableOnline(mode: 'audio' | 'video') {
+  await h.owner.consultationType.update({ where: { id: type }, data: { mode } });
+  await h.owner.user.update({
+    where: { id: clinics.a.doctor.userId },
+    data: { displayName: 'Synthetic online doctor' },
+  });
+  await h.owner.patient.update({
+    where: { id: clinics.a.patients[0]!.id },
+    data: { dob: new Date('1990-01-01') },
+  });
+  await h.owner.doctorProfile.create({
+    data: {
+      organisationId: clinics.a.org.id,
+      userId: clinics.a.doctor.userId,
+      registrationNumber: 'SYNTHETIC-ONLINE',
+      council: 'Synthetic council',
+      qualifications: 'Synthetic qualification',
+      verification: 'verified',
+      verifiedAt: h.services.now(),
+    },
+  });
+  await h.owner.onlineVisitSettings.create({
+    data: { organisationId: clinics.a.org.id, enabled: true },
+  });
+}
+for (const mode of ['audio', 'video'] as const) {
+  describe('prepaid ' + mode + ' booking', () => {
+    it('requires both clinic online enablement and payments, supporting clients and a verified doctor', async () => {
+      await enableOnline(mode);
+      expect((await call('GET', '/portal/booking-options')).json().consultationTypes).toEqual([]);
+      expect(
+        (await call('GET', '/portal/booking-options?prepaid=true')).json().consultationTypes,
+      ).toContainEqual(expect.objectContaining({ id: type, mode, requiresPrepayment: true }));
+      expect((await call('POST', '/portal/appointments', body())).statusCode).toBe(400);
+      await h.owner.onlineVisitSettings.update({
+        where: { organisationId: clinics.a.org.id },
+        data: { enabled: false, version: { increment: 1 } },
+      });
+      expect((await call('POST', '/portal/prepaid-bookings', body())).statusCode).toBe(400);
+      expect(
+        (await call('GET', '/portal/booking-options?prepaid=true')).json().consultationTypes,
+      ).toEqual([]);
+      await h.owner.onlineVisitSettings.update({
+        where: { organisationId: clinics.a.org.id },
+        data: { enabled: true, version: { increment: 1 } },
+      });
+      await h.owner.doctorProfile.updateMany({
+        data: { verification: 'pending', verifiedAt: null },
+      });
+      expect((await call('POST', '/portal/prepaid-bookings', body())).statusCode).toBe(409);
+      await h.owner.doctorProfile.updateMany({
+        data: { verification: 'verified', verifiedAt: h.services.now() },
+      });
+      h.services.cashfree!.prepaidBookingEnabled = false;
+      expect((await call('POST', '/portal/prepaid-bookings', body())).statusCode).toBe(503);
+      expect(
+        (await call('GET', '/portal/booking-options?prepaid=true')).json().consultationTypes,
+      ).toEqual([]);
+      expect(await h.owner.cashfreeBooking.count()).toBe(0);
+      expect(gateway.create).not.toHaveBeenCalled();
+    });
+    it('holds an unpaid visit and confirms a single verified receipt without bypassing online consent or joining rules', async () => {
+      await enableOnline(mode);
+      const b = body(),
+        r = await create(b);
+      const online = '/portal/appointments/' + r.appointmentId + '/online';
+      const staff = '/appointments/' + r.appointmentId + '/online';
+      expect((await view(r.id)).json().appointmentStatus).toBe('pending');
+      expect((await call('POST', online + '/join')).statusCode).toBe(409);
+      expect(
+        (
+          await call(
+            'POST',
+            '/appointments/' + r.appointmentId + '/actions',
+            { action: 'confirm' },
+            admin,
+          )
+        ).statusCode,
+      ).not.toBe(200);
+      const paidResponse = await paid(r.id);
+      expect(paidResponse.statusCode, paidResponse.body).toBe(200);
+      expect((await paid(r.id)).statusCode).toBe(200);
+      expect((await view(r.id)).json()).toMatchObject({
+        state: 'confirmed',
+        appointmentStatus: 'confirmed',
+        paymentUrl: null,
+      });
+      expect(await h.owner.payment.count()).toBe(1);
+      h.clock.ms = Date.parse(b.startAt) - 5 * 60000;
+      patient = await patientLogin(h, 'clinic-a', '9876543210');
+      admin = await staffLogin(h, 'clinic-a', clinics.a.admin);
+      doctor = await staffLogin(h, 'clinic-a', clinics.a.doctor);
+      expect((await call('POST', online + '/join')).statusCode).toBe(409);
+      const link = 'https://meet.google.com/abc-defg-hij',
+        phone = '+919000000010';
+      const configured = await call(
+        'PUT',
+        staff + '/call',
+        {
+          version: 0,
+          meetingUrl: mode === 'video' ? link : null,
+          callPhone: mode === 'audio' ? phone : null,
+        },
+        admin,
+      );
+      expect(configured.statusCode, configured.body).toBe(200);
+      const consent = await call('PUT', online, {
+        version: 1,
+        consentVersion: ONLINE_CONSENT_VERSION,
+        agreed: true,
+        identity: {
+          name: 'Synthetic online patient',
+          dob: '1990-01-01',
+          address: 'Synthetic address, India',
+          guardianName: null,
+          guardianRelationship: null,
+          authorityConfirmed: true,
+        },
+      });
+      expect(consent.statusCode, consent.body).toBe(200);
+      const checked = await call(
+        'POST',
+        staff + '/verify',
+        {
+          version: 2,
+          method: mode,
+          identityConfirmed: true,
+          ageConfirmed: true,
+          guardianConfirmed: false,
+          suitable: true,
+        },
+        doctor,
+      );
+      expect(checked.statusCode, checked.body).toBe(200);
+      expect((await call('POST', online + '/join')).json().url).toBe(
+        mode === 'video' ? link : 'tel:' + phone,
+      );
+      expect((await call('POST', online + '/withdraw', { version: 3 })).statusCode).toBe(200);
+      expect((await call('POST', online + '/join')).statusCode).toBe(409);
+      expect(await h.owner.payment.count()).toBe(1);
+      expect((await view(r.id)).json().state).toBe('confirmed');
+    });
+  });
+}

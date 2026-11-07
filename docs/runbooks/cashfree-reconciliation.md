@@ -4,7 +4,7 @@ Owner: Backend lead (technical), clinic admin (business follow-up).
 
 ## Implemented scope
 
-Online collection for an existing bill is implemented and disabled by default. This includes a manually shared payment link, hosted web checkout, verified payment callbacks/status checks, numbered receipts and collection reports. Refunds, read-only settlement reconciliation and prepaid in-person web booking are also implemented behind independent disabled flags; native/telemedicine checkout and automated payment message delivery remain pending.
+Online collection for an existing bill is implemented and disabled by default. This includes a manually shared payment link, hosted web checkout, verified payment callbacks/status checks, numbered receipts and collection reports. Refunds, read-only settlement reconciliation and prepaid in-person web booking are also implemented behind independent disabled flags; native checkout and live provider acceptance remain pending. Audio/video web checkout is covered by ADR 0037.
 
 ## Configure later
 
@@ -39,7 +39,7 @@ Set `CASHFREE_ACCEPT_NEW_PAYMENTS=false` to stop new links and checkout. Leave `
 
 ## Next increments
 
-Refunds, scheduled settlement reconciliation and prepaid in-person web booking now have their own sections below. Native/telemedicine checkout and automatic payment messages remain pending. See [ADR 0021](../adr/0021-cashfree-existing-bill-collection.md) for official provider references and current boundaries.
+Refunds, scheduled settlement reconciliation and prepaid in-person web booking now have their own sections below. Native checkout and live provider acceptance remain pending. See [ADR 0021](../adr/0021-cashfree-existing-bill-collection.md) for official provider references and current boundaries.
 
 ## Refund implementation update — 2026-11-04
 
@@ -72,9 +72,9 @@ Cashfree's reported settlement status and UTR do not prove that your bank statem
 
 Before enabling: run a sandbox collection and partial refund, wait for reporting availability, test more than one report page, compare gross/fees/tax/adjustments/net and UTR with the merchant dashboard, verify a deliberately unmatched transaction appears, and confirm that acknowledging it changes no balance. None of these live-provider checks has been performed without credentials.
 
-## Prepaid in-person web bookings (ADR 0024)
+## Prepaid web bookings (ADRs 0024 and 0037)
 
-Set `CASHFREE_PREPAID_BOOKING_ENABLED=true` on the API only after sandbox verification; it defaults false. Keep `CASHFREE_ENABLED=true`, the original clinic account and callbacks available for existing reservations. No extra provider credentials or worker queue is needed. Configure an active in-person consultation type with **Requires prepayment**, a standard fee of ₹1–₹1,00,000, and a schedule. The web portal opts into supported prepaid options. Older mobile clients continue seeing the existing pay-at-clinic options; native checkout remains pending.
+Set `CASHFREE_PREPAID_BOOKING_ENABLED=true` on the API only after sandbox verification; it defaults false. Keep `CASHFREE_ENABLED=true`, the original clinic account and callbacks available for existing reservations. No extra provider credentials or worker queue is needed. Configure an active in-person consultation type, or a clinic-enabled audio/video type with a verified doctor, with **Paid at booking**, a standard fee of ₹1–₹1,00,000, and a schedule. The web portal opts into supported prepaid options. Older mobile clients continue seeing the existing pay-at-clinic options; native checkout remains pending.
 
 The patient reserves a slot before opening checkout. The server snapshots the fee and clinic approval policy and creates a pending reservation, bill and original order atomically. Checkout lasts 30 minutes, and the selected slot must be at least 35 minutes away and pass the ordinary clinic cutoff. An unknown provider response keeps the reservation discoverable in **Appointments**; retry/check that same reservation, never create a replacement payment. Dependants pay through their number holder's account.
 
@@ -84,4 +84,4 @@ Each API instance sweeps due reservations every 30 seconds, using a shared datab
 
 Late success after release or after the slot starts records the receipt and requires clinic review; it never restores the appointment. Open the bill to see the reservation state, inspect the receipt/provider account, and use the explicit admin refund flow if needed. Audit actions use `booking.prepaid_*`. Unpaid holds are excluded from automatic no-show penalties. Cancelled/closed quote bills remain frozen historical records and cannot be collected through a replacement order/counter payment.
 
-Prepaid bookings cannot be rescheduled here. Cancel the existing appointment, review/refund its payment when appropriate, then create a new booking. Automatic refunds, payment-link/receipt messages, telemedicine booking and native checkout are not included. Before enabling, test real sandbox paid/failed/abandoned checkout, return without callback, callback without return, asynchronous cancellation, delayed success and a partial/full refund.
+Prepaid bookings cannot be rescheduled here. Cancel the existing appointment, review/refund its payment when appropriate, then create a new booking. Automatic refunds and native checkout are not included. Audio/video bookings use the same reservation flow, with independent clinic enablement, verified doctor and online consent/identity requirements. Before enabling, test real sandbox paid/failed/abandoned checkout, return without callback, callback without return, asynchronous cancellation, delayed success and a partial/full refund.

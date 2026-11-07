@@ -267,3 +267,12 @@ time-windowed join authorization, withdrawal and readiness guards are implemente
 This is not government-ID verification, in-app video, online checkout or real provider/
 clinical acceptance. Those limits and the other release gaps remain open. Historical
 clinical migration is owner-deferred until resumed with a source sample.
+
+
+### Online prepayment follow-up — 7 November 2026
+
+ADR 0037 adds locally implemented audio/video web prepayment through the existing Cashfree
+reservation processor. This supersedes the earlier missing online-checkout finding only;
+identity/consent and private joining remain independently enforced. Real Cashfree sandbox
+acceptance, clinic call/guardian/policy acceptance, deployment and the other release gates
+remain open. No live provider transaction or feature activation is claimed.

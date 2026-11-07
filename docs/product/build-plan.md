@@ -969,3 +969,20 @@ Real provider-call/admission/revocation rehearsal, clinical/policy/guardian acce
 telemedicine checkout, production signing and the other existing release requirements
 remain open. Native apps and SMS stay paused/deferred; cloud DSC and AI remain deferred.
 This is local development work, not a new PR or hosted deployment.
+
+
+### Online consultation prepayment — 7 November 2026
+
+ADR 0037 extends the existing gated Cashfree web reservation flow to clinic-enabled audio
+and video types. Verified doctor checks, supporting-client options, server-priced holds,
+original-order recovery and confirmed payment are required. Online identity, guardian,
+consent, verification and joining-window checks remain independent of payment. Existing
+uncertain closure, late-payment review, manual approval and explicit refund policies remain
+in force. No new migration or credentials are needed. This is a local development increment;
+provider acceptance, hosted deployment and all other open/deferred work remain separate.
+
+Validation: 14 prepaid integration tests and the 17-test online consultation suite passed,
+including audio/video payment/consent/joining cases. Eight browser scenarios passed,
+covering prepaid fees and server-confirmed checkout for both modes at 390px/1280px and
+existing online identity/guardian/withdrawal. Scoped lint/type checks and API/web builds
+passed. All tests use synthetic gateways and intercepted call/payment destinations.
