@@ -2594,3 +2594,29 @@ model PatientImportRecord {
   @@unique([organisationId, source, externalId])
   @@map("patient_import_records")
 }
+
+model OnlineVisitSettings {
+ organisationId String @id @map("organisation_id") @db.Uuid
+ version Int @default(1)
+ enabled Boolean @default(false)
+ @@map("online_visit_settings")
+}
+model OnlineVisit {
+ appointmentId String @id @map("appointment_id") @db.Uuid
+ organisationId String @map("organisation_id") @db.Uuid
+ version Int @default(1)
+ stateCipher String @map("state_cipher")
+ @@map("online_visits")
+}
+model OnlineVisitEvent {
+ id String @id @default(uuid()) @db.Uuid
+ organisationId String @map("organisation_id") @db.Uuid
+ appointmentId String @map("appointment_id") @db.Uuid
+ version Int
+ actorUserId String @map("actor_user_id") @db.Uuid
+ action String
+ stateCipher String @map("state_cipher")
+ createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+ @@unique([appointmentId,version])
+ @@map("online_visit_events")
+}

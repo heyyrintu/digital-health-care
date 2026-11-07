@@ -953,3 +953,19 @@ matching, historical attribution, attachment verification and the proposed docto
 boundary. It is a preparation document, not an implemented clinical importer. Source EMR
 name/format and an anonymised sample export are pending; do not guess clinical mappings
 or mark historical migration complete. The completed demographic importer is unchanged.
+
+### Web online consultations — 7 November 2026
+
+Historical clinical migration is owner-deferred. ADR 0036 adds locally implemented
+clinic-controlled non-prepaid audio/video booking, explicit appointment-specific identity/
+guardian declaration and versioned consent, verified doctor credentials, assigned-doctor
+identity/age/mode/suitability confirmation, private external meeting/phone configuration,
+time-limited owned join authorization and withdrawal. Profile/appointment/settings changes
+invalidate stale readiness; start/signing recheck authorization. Used consultation modes
+are preserved. RLS, encrypted immutable evidence, private export and mobile/desktop pages
+are included. No provider media or online checkout is claimed.
+
+Real provider-call/admission/revocation rehearsal, clinical/policy/guardian acceptance,
+telemedicine checkout, production signing and the other existing release requirements
+remain open. Native apps and SMS stay paused/deferred; cloud DSC and AI remain deferred.
+This is local development work, not a new PR or hosted deployment.

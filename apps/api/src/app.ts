@@ -1,3 +1,4 @@
+import { onlineVisitRoutes } from './modules/online-visits/routes';
 import { patientImportRoutes } from './modules/imports/routes';
 import { reviewRoutes } from './modules/reviews/routes';
 import { assessmentRoutes } from './modules/assessments/routes';
@@ -142,6 +143,7 @@ export function buildApp({
     app.register(queueRoutes, { prefix: '/v1', services });
     app.register(clinicalRoutes, { prefix: '/v1', services });
     app.register(assessmentRoutes, { prefix: '/v1', services });
+    app.register(onlineVisitRoutes, { prefix: '/v1', services });
     app.register(patientImportRoutes, { prefix: '/v1', services });
     app.register(reviewRoutes, { prefix: '/v1', services });
     app.register(prescribingRoutes, { prefix: '/v1', services, signInRateLimit });

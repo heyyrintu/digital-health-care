@@ -257,3 +257,13 @@ immutable encrypted previews, duplicate validation, shared-contact warnings, sou
 provenance, atomic confirmed creation and safe retry/re-upload are implemented locally.
 Historical clinical/financial/document migration and real export/parallel-run acceptance
 remain open; these cannot be treated as completed by a demographics-only import.
+
+### Web online consultation follow-up — 7 November 2026
+
+ADR 0036 supersedes the missing core online intake/join workflow: default-off clinic
+enablement, non-prepaid audio/video self-booking, verified doctor details, explicit identity/
+guardian declaration and consent, assigned-doctor checks, private external-call details,
+time-windowed join authorization, withdrawal and readiness guards are implemented locally.
+This is not government-ID verification, in-app video, online checkout or real provider/
+clinical acceptance. Those limits and the other release gaps remain open. Historical
+clinical migration is owner-deferred until resumed with a source sample.

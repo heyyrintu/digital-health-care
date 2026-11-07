@@ -62,6 +62,7 @@ export function ClinicShell({ children }: { children: (me: MeResponse) => ReactN
                 { href: '/clinic/staff', label: t('identity.team'), icon: UserPlus },
               ]
             : []),
+          { href: '/clinic/online', label: t('online.title'), icon: CalendarClock },
           { href: '/clinic/reviews', label: t('reviews.title'), icon: Send },
           { href: '/clinic/account', label: t('people.yourAccount'), icon: Users },
           { href: '/clinic/queue', label: t('dashboard.queue'), icon: ListOrdered },

@@ -99,8 +99,26 @@ export class PortalBookingService {
       this.s.cashfree.merchants[actor.organisationId]
     );
   }
-  private types(actor: Actor) {
-    return this.prepaidEnabled(actor) ? { active: true, mode: 'in_person' as const } : bookableType;
+  private async types(
+    tx: Tx,
+    actor: Actor,
+    includePrepaid = true,
+  ): Promise<Prisma.ConsultationTypeWhereInput> {
+    const online = await tx.onlineVisitSettings.findUnique({
+      where: { organisationId: actor.organisationId },
+    });
+    const inPerson =
+      this.prepaidEnabled(actor) && includePrepaid
+        ? { active: true, mode: 'in_person' as const }
+        : bookableType;
+    return online?.enabled
+      ? {
+          OR: [
+            inPerson,
+            { active: true, mode: { in: ['audio', 'video'] }, requiresPrepayment: false },
+          ],
+        }
+      : inPerson;
   }
   async options(actor: Actor, includePrepaid = false): Promise<BookingOptions> {
     return withTenant(this.s.db, actor.organisationId, async (tx) => {
@@ -109,7 +127,7 @@ export class PortalBookingService {
         orderBy: { name: 'asc' },
       });
       const types = await tx.consultationType.findMany({
-        where: includePrepaid ? this.types(actor) : bookableType,
+        where: await this.types(tx, actor, includePrepaid),
         orderBy: { name: 'asc' },
       });
       const doctors = await tx.membership.findMany({
@@ -627,10 +645,39 @@ export class PortalBookingService {
     consultationTypeId: string,
     doctorUserId: string,
   ) {
+    await tx.$queryRaw`SELECT organisation_id FROM online_visit_settings WHERE organisation_id=${actor.organisationId}::uuid FOR SHARE`;
     const type = await tx.consultationType.findFirst({
-      where: { AND: [{ id: consultationTypeId }, this.types(actor)] },
-      select: { id: true },
+      where: { AND: [{ id: consultationTypeId }, await this.types(tx, actor)] },
+      select: { id: true, mode: true },
     });
+    if (
+      type &&
+      type.mode !== 'in_person' &&
+      !(await tx.doctorProfile.count({
+        where: {
+          userId: doctorUserId,
+          verification: 'verified',
+          registrationNumber: { not: null },
+          council: { not: null },
+          qualifications: { not: null },
+        },
+      }))
+    )
+      throw new AppError(409, 'CONFLICT', 'Online booking requires a verified doctor.');
+    if (type && type.mode !== 'in_person') {
+      const identity = await withAuth(this.s.db, (t) =>
+        t.user.findUnique({
+          where: { id: doctorUserId },
+          select: { displayName: true, status: true },
+        }),
+      );
+      if (!identity?.displayName || identity.status !== 'active')
+        throw new AppError(
+          409,
+          'CONFLICT',
+          'Online booking requires an active doctor with a completed profile.',
+        );
+    }
     if (!type) {
       throw new AppError(
         400,

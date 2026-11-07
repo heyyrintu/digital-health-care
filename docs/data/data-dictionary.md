@@ -266,3 +266,16 @@ erase retained encrypted history. Raw CSV and unmapped columns are not persisted
 the original normalized row hash and the creating job. Provenance is immutable. Both
 tables have tenant RLS; platform/auth roles have no grant. Clinic-admin HTTP access is
 audited. Owned data-rights exports include only the patient's source/external ID.
+
+## Online consultation evidence
+
+`online_visit_settings` stores per-clinic availability and revision, initially disabled.
+`online_visits` stores an appointment-bound revision and encrypted current state: profile/
+appointment/settings fingerprint, declared identity/guardian details, consent version,
+holder/time, doctor check actor/time/method and private call details.
+`online_visit_events` stores append-only encrypted snapshots for intake, withdrawal, call
+configuration and doctor verification, unique per appointment/revision with actor/time.
+All tables have tenant RLS; platform/auth roles have no grants. HTTP readers have separate
+patient/assigned-doctor/operational projections. Data-rights exports exclude call secrets.
+Used consultation modes cannot be rewritten; appointment locks/version checks serialize
+online authorization and state changes.

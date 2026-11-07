@@ -46,3 +46,4 @@ export * from './people';
 export * from './assessments';
 export * from './reviews';
 export * from './imports';
+export * from './online-visits';

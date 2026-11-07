@@ -297,8 +297,30 @@ export class DataExportService {
             select: { source: true, externalId: true, patientId: true },
           }),
         );
+        const onlineConsultations = cap(
+          await tx.onlineVisitEvent.findMany({
+            where: { appointmentId: { in: appointments.map((a) => a.id) } },
+            take,
+          }),
+        ).map((event) => {
+          const state = JSON.parse(this.s.cipher.decrypt(event.stateCipher));
+          return {
+            appointmentId: event.appointmentId,
+            version: event.version,
+            action: event.action,
+            createdAt: event.createdAt,
+            identity: state.identity,
+            consentAt: state.consentAt,
+            consentVersion: state.consentVersion,
+            verificationMethod: state.verificationMethod,
+            consentBy: state.consentBy,
+            verifiedAt: state.verifiedAt,
+            verifiedBy: state.verifiedBy,
+          };
+        });
         return {
           profiles,
+          onlineConsultations,
           importProvenance,
           reviewRequests,
           reviewConsent,

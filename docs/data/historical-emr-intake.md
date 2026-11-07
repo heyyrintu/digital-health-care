@@ -84,6 +84,7 @@ it must not be called to turn an old prescription into a newly signed document.
 
 ## Current dependency
 
-Await the source system name, export format and anonymised sample. No source field mapping,
+Historical migration is deferred at the owner's request. When resumed, obtain the source
+system name, export format and anonymised sample. No source field mapping,
 archive parser, historical clinical schema or doctor-review implementation is final until
 the sample establishes the actual relationships and record formats.

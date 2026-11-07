@@ -70,3 +70,7 @@ Never paste real patient data (names, phone numbers, prescriptions, screenshots)
 - [ADR 0035: CSV patient imports](adr/0035-patient-demographic-imports.md) — mapped
   demographic dry runs, duplicate guards and atomic confirmed application.
   [Import operator guide](runbooks/patient-import.md).
+
+- [ADR 0036: web online consultations](adr/0036-web-online-consultations.md) — gated
+  booking, appointment-specific consent, assigned-doctor checks and private external joining.
+  [Clinic setup guide](runbooks/online-consultations.md).

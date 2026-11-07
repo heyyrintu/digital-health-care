@@ -1,3 +1,4 @@
+import { assertOnlineReady } from '../online-visits/service';
 import {
   ConsultationNotes,
   type AmendPrescriptionBody,
@@ -150,6 +151,7 @@ export class SigningService {
 
     return withTenant(this.s.db, actor.organisationId, async (tx) => {
       const { appointment, existing, consultation } = await writableVisit(tx, actor, appointmentId);
+      await assertOnlineReady(this.s, tx, appointmentId);
       // A prescription may order tests only (PRD §7.1).
       const tests = await tx.testOrder.findMany({
         where: { appointmentId },

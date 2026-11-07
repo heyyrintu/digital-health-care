@@ -1,4 +1,60 @@
 export const en = {
+  'online.profileDob': 'Date of birth in clinic profile',
+  'online.profileDobRequired':
+    'Complete the profile date of birth before the doctor identity check. Updating it resets earlier online details.',
+  'online.saveSettings': 'Save online settings',
+  'online.fee':
+    'Fee {fee}. Arrange payment with the clinic; this booking does not collect payment.',
+  'online.provider': 'Call service',
+  'online.disabled': 'The clinic has disabled online consultations. Contact the clinic.',
+  'online.openCall': 'Open clinic call',
+  'online.title': 'Online consultation',
+  'online.error': 'Unable to load online consultation details.',
+  'online.external':
+    "Calls use the clinic's external meeting service or phone number. The external provider handles the call. This app does not record calls.",
+  'online.settingsInfo':
+    'Enable audio/video bookings without online prepayment. Online checkout is not included. Only verified doctors can receive online bookings. Saving settings invalidates existing online consent and call details.',
+  'online.enable': 'Enable online consultations',
+  'online.date': 'Visit date',
+  'online.load': 'Load online visits',
+  'online.refresh': 'Reload online details',
+  'online.verified': 'Identity verified by the assigned doctor',
+  'online.awaitingDoctor': 'Patient consent received; doctor identity check pending',
+  'online.awaitingPatient': 'Patient identity and consent required',
+  'online.stale': 'Visit, profile or settings changed. Complete online details again.',
+  'online.meeting': 'Private meeting URL (Google Meet, Zoom or Teams)',
+  'online.phone': 'Clinic call number (+91 followed by 10 digits)',
+  'online.saveCall': 'Save call details',
+  'online.doctorCheck': 'Online identity and consent check',
+  'online.name': 'Full patient name',
+  'online.dob': 'Patient date of birth',
+  'online.address': 'Patient current address',
+  'online.guardian': 'Adult guardian name (required for minors)',
+  'online.relationship': 'Guardian relationship',
+  'online.method': 'Identity check method',
+  'online.audio': 'Audio call',
+  'online.video': 'Video call',
+  'online.doctorAck':
+    "I confirmed the patient's identity and age, my credentials were made available, any guardian is an adult with authority and is present, the patient agrees to continue, and this mode is suitable for this consultation.",
+  'online.verify': 'Confirm doctor identity check',
+  'online.back': 'Back to appointments',
+  'online.doctorVerified': 'Doctor registration verified by the platform',
+  'online.doctorPending': 'Doctor registration is awaiting verification',
+  'online.joinWindow':
+    "Joining opens 15 minutes before the booked start and closes 60 minutes after its end. Use the clinic's contact if details are unavailable.",
+  'online.consentOn': 'Consent recorded for this appointment',
+  'online.consentOff': 'No current consent for this appointment',
+  'online.identity': 'Patient identity and consent',
+  'online.identityInfo':
+    'These details are an identity declaration for the doctor to check. They do not change your profile or establish government-ID verification. A minor needs an authorised adult guardian present.',
+  'online.consentText':
+    'I request this audio/video consultation and understand its limits, including the absence of a physical examination. The doctor may require an in-person visit. This is not an emergency service. My declaration, consent and doctor checks are retained in my care record. I may withdraw before continuing; retained care records are preserved. The call uses the external service shown by the clinic.',
+  'online.patientAck':
+    "The identity details are accurate. I am the patient or the authorised adult guardian, and I agree to this appointment's online consultation.",
+  'online.consent': 'Save identity and consent',
+  'online.withdraw': 'Withdraw online consent',
+  'online.join': 'Connect using clinic details',
+
   'imports.rowError': 'Needs correction',
   'imports.title': 'Patient import',
   'imports.scope':
