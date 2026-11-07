@@ -226,3 +226,44 @@ Validation: all 48 migrations applied to fresh disposable databases; 72 affected
 ## Coolify client-preview hosting follow-up
 
 The owner prioritised hosting the current web progress for a client demonstration over further features. `docker-compose.coolify.yml`, the multi-target Dockerfile, private storage volumes, migration ordering, readiness probes, explicit synthetic bootstrap, preview banner, log limits, backup script, container verification workflow and deployment/demo runbooks are now implemented locally (ADR 0032). A worker runtime dependency issue and standalone web origin handling were corrected during container verification. The earlier "no deployment packaging" finding is superseded for the single-server synthetic preview. Real-patient launch, deferred providers and actual Coolify host acceptance remain open.
+
+## Development follow-up — 7 November 2026
+
+The audit's original assessment and accountant-export rows are superseded for these
+bounded local implementations: fixed numeric questionnaires with doctor assignment,
+consented family response, encrypted immutable answers, raw totals and same-form score
+history/trends (ADR 0033); and private clinic-admin settlement/issue CSV exports from
+complete reconciliation snapshots, with exact paise, formula protection and export audit.
+These changes do not implement validated clinical scoring instruments, branching/text
+questionnaires, review requests, bank-statement matching, import, online consultations,
+ABDM or the other remaining development/acceptance requirements. They are development
+branch work and have not been claimed deployed to the client-preview host.
+
+### Review-request follow-up — 7 November 2026
+
+ADR 0034 supersedes the core review-request gap: locally implemented neutral invitations,
+independent consent and STOP, completed-visit/cooldown rules, durable single-send
+authorization, provider tracking and explicit link-open counts. Clinic settings, public
+Google destination validation, cancellation and owned data-export inclusion are covered.
+Reviews remain optional; no star/text collection or posted-review claim is made.
+Real Meta template approval/delivery and hosted acceptance remain separate. EMR import,
+online consultations, ABDM and the remaining release work are still open; native apps,
+cloud DSC, AI and SMS keep their existing paused/deferred status.
+
+### Demographic import follow-up — 7 November 2026
+
+ADR 0035 supersedes the missing demographic import wizard finding: mapped CSV upload,
+immutable encrypted previews, duplicate validation, shared-contact warnings, source-ID
+provenance, atomic confirmed creation and safe retry/re-upload are implemented locally.
+Historical clinical/financial/document migration and real export/parallel-run acceptance
+remain open; these cannot be treated as completed by a demographics-only import.
+
+### Web online consultation follow-up — 7 November 2026
+
+ADR 0036 supersedes the missing core online intake/join workflow: default-off clinic
+enablement, non-prepaid audio/video self-booking, verified doctor details, explicit identity/
+guardian declaration and consent, assigned-doctor checks, private external-call details,
+time-windowed join authorization, withdrawal and readiness guards are implemented locally.
+This is not government-ID verification, in-app video, online checkout or real provider/
+clinical acceptance. Those limits and the other release gaps remain open. Historical
+clinical migration is owner-deferred until resumed with a source sample.

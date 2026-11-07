@@ -90,6 +90,18 @@ describe('buildOpenApiDocument', () => {
     }
   });
 
+  it('describes reconciliation CSV media and the export kind enum', () => {
+    const operation = doc.paths['/reconciliation/runs/{id}/export/{kind}']!.get as {
+      responses: Record<string, { content: Record<string, unknown> }>;
+      parameters: { name: string; schema: unknown }[];
+    };
+    expect(operation.responses['200']!.content).toHaveProperty('text/csv');
+    expect(operation.parameters.find((p) => p.name === 'kind')!.schema).toEqual({
+      type: 'string',
+      enum: ['settlements', 'issues'],
+    });
+  });
+
   it('produces an OpenAPI 3.1 document with the error component', () => {
     expect(doc.openapi).toBe('3.1.0');
     expect(doc.components.schemas.ErrorResponse).toMatchObject({ type: 'object' });
@@ -123,6 +135,8 @@ describe('buildOpenApiDocument', () => {
       'POST /platform/auth/refresh',
       'POST /public/payments/{token}/check',
       'POST /public/payments/{token}/checkout',
+      'POST /review-links/open',
+      'POST /review-links/resolve',
       'POST /verify',
       'POST /verify/referral-letter',
       'POST /webhooks/cashfree',

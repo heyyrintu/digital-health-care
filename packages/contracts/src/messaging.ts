@@ -15,6 +15,7 @@ export const WhatsAppDeliveryStatus = z.enum([
   'uncertain',
 ]);
 export const WhatsAppDeliveryKind = z.enum([
+  'review_request',
   'payment_link',
   'receipt_ready',
   'refund_ready',

@@ -63,9 +63,14 @@ const uhidOf = (prefix: string, n: number) => `${prefix}${n}`;
 /**
  * Takes the next number under a row lock, so concurrent registrations never share a
  * UHID. Numbers already in use (imported patients keep their UHIDs, or an admin moved
- * the counter back) are skipped.
+ * the counter back) are skipped. Import batches also reserve explicit legacy UHIDs
+ * before allocating new numbers.
  */
-export async function allocateUhid(tx: Tx, organisationId: string): Promise<string> {
+export async function allocateUhid(
+  tx: Tx,
+  organisationId: string,
+  reserved: readonly string[] = [],
+): Promise<string> {
   await tx.$executeRaw`
     INSERT INTO uhid_settings (organisation_id, prefix, next_number, updated_at)
     VALUES (${organisationId}::uuid, '', ${DEFAULT_UHID_START}, now())
@@ -80,7 +85,7 @@ export async function allocateUhid(tx: Tx, organisationId: string): Promise<stri
       where: { organisationId_uhid: { organisationId, uhid } },
       select: { id: true },
     });
-    if (!taken) return uhid;
+    if (!taken && !reserved.includes(uhid)) return uhid;
   }
   throw new AppError(
     409,
@@ -178,6 +183,7 @@ export class PatientService {
     const tagIds = [...new Set(body.tagIds ?? [])];
 
     return withTenant(this.s.db, actor.organisationId, async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${actor.organisationId},84))`;
       if (fields.phone)
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`auth-phone:${fields.phone}`}, 0))`;
       if (!fields.phone && !fields.guardianPatientId) {
@@ -245,6 +251,7 @@ export class PatientService {
     if (body.name !== undefined) fields.name = cleanName(body.name);
 
     return withTenant(this.s.db, actor.organisationId, async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${actor.organisationId},84))`;
       if (fields.phone)
         await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`auth-phone:${fields.phone}`}, 0))`;
       await tx.$queryRaw`SELECT id FROM patients WHERE id=${id}::uuid FOR UPDATE`;

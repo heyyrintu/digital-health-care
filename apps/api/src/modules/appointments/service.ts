@@ -1,3 +1,4 @@
+import { assertOnlineReady } from '../online-visits/service';
 import {
   ACTIVE_APPOINTMENT_STATUSES,
   type Appointment,
@@ -171,6 +172,7 @@ export class AppointmentService {
           `This appointment is ${appointment.status.replace('_', ' ')} and cannot be changed that way.`,
         );
       }
+      if (body.action === 'start') await assertOnlineReady(this.s, tx, id);
       const hold = await tx.cashfreeBooking.findUnique({ where: { appointmentId: id } });
       if (hold && hold.state !== 'confirmed')
         throw new AppError(409, 'CONFLICT', 'Verify or close the booking payment first.');

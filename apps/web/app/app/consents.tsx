@@ -89,6 +89,9 @@ export function ConsentsStep({ status }: { status: ConsentStatus }) {
     >
       {error && <Notice tone="error">{error}</Notice>}
       {revoke}
+      <Link href="/app/reviews" className="underline">
+        {t('reviews.consentTitle')}
+      </Link>
       <Surface className="space-y-5 p-5 sm:p-6">
         <ul className="space-y-5">
           {pending.map((kind) => {

@@ -885,3 +885,87 @@ are unchanged. Provider credentials, live delivery acceptance and release verifi
 remain required. This supersedes the pending implementation status above for this scope;
 it does not implement Microsoft 365 mailboxes, general platform-user editing, shared-account
 identity migrations or per-user MFA preferences. See [People administration](../runbooks/clinic-people.md).
+
+### Web development resumed — 7 November 2026
+
+The owner resumed remaining web development after the client-preview deployment.
+Numeric patient assessments and accountant reconciliation exports are now implemented
+on the development branch; this entry does not claim a new hosted deployment.
+
+- [x] Assessment form publishing/archiving with fixed definitions and EN/HI author text.
+- [x] Doctor assignment and chart-authorised history; patient/guardian answering with
+  current consents, encrypted responses, raw server scores and same-form score trends.
+- [x] Retry/concurrency controls, immutable clinical response history, clinic RLS, audit
+  events and inclusion in owned patient data exports.
+- [x] Complete successful reconciliation snapshot exports for settlements and issues:
+  clinic-admin access, exact INR paise, private downloads, export auditing, CSV escaping
+  and formula protection, with a 5,000-row bound per file.
+
+See ADR 0033 and the reconciliation-export runbook. This closes the core numeric-scale
+assessment journey and CSV accountant-export gaps. Named/licensed clinical scoring packs,
+branching/free-text assessments, notifications and automated assessment corrections are
+not part of this increment. Bank-statement matching and automated financial discrepancy
+resolution remain separate open work.
+
+Remaining development includes EMR import/mapping/dry
+runs, online-consultation identity/consent/join workflows, ABHA/ABDM M1/Scan & Share/M2,
+remaining messaging administration and usage, confirmed specialty packs, production
+storage/scanning, monitoring/hardening and broader public-site/platform features from
+the maintained audit. Existing provider activation, clinical/pilot acceptance and actual
+host backup/restore gaps remain open. Native apps and SMS stay paused; cloud DSC and AI
+stay deferred until the owner resumes them. The complete web product is not finished.
+
+### Optional review requests — 7 November 2026
+
+Implemented locally (ADR 0034): clinic review settings, independent verified-number-holder
+opt-in/withdrawal, completed-visit eligibility, shared-contact cooldowns, stable request
+recovery and cancellation. A default-off durable WhatsApp worker rechecks authorization,
+preserves signed delivery callbacks and does not resend uncertain outcomes. Purpose-bound
+fragment links expose only the clinic; an explicit Continue action counts one opening.
+Provider delivery states and openings do not claim a posted review. Tenant isolation,
+audit, settings invalidation, STOP and owned data exports are included.
+
+See the review-request runbook for the approved neutral Meta template, configuration and
+real-recipient acceptance. No live provider activation or hosted deployment is claimed.
+Next core development is EMR import with mapping, dry runs and validated application;
+the other open/deferred work above remains open.
+
+### Patient demographic import — 7 November 2026
+
+Implemented locally (ADR 0035): clinic-admin CSV upload and column mapping, bounded
+100-row encrypted dry runs, legacy source IDs/UHIDs, duplicate/shared-contact checks,
+explicit creator confirmation, stale-preview rechecks, atomic creation, cancellation and
+retry/re-upload recovery. Existing patients are never overwritten or automatically merged.
+Owned patient exports include import provenance. No account, consent or external message
+is created by importing a profile.
+
+This closes the demographic import wizard slice. Historical clinical/financial records,
+documents, migration reconciliation against a real source export, backup rehearsal and
+clinic/doctor acceptance remain open. The full EMR migration requirement is not complete.
+Hosted deployment, online consultations, ABDM and all other remaining/deferred work retain
+their existing status.
+
+### Historical EMR migration intake — 7 November 2026
+
+Historical migration preparation has begun. The source intake/mapping document at
+`docs/data/historical-emr-intake.md` defines required export evidence, exact legacy patient
+matching, historical attribution, attachment verification and the proposed doctor-review
+boundary. It is a preparation document, not an implemented clinical importer. Source EMR
+name/format and an anonymised sample export are pending; do not guess clinical mappings
+or mark historical migration complete. The completed demographic importer is unchanged.
+
+### Web online consultations — 7 November 2026
+
+Historical clinical migration is owner-deferred. ADR 0036 adds locally implemented
+clinic-controlled non-prepaid audio/video booking, explicit appointment-specific identity/
+guardian declaration and versioned consent, verified doctor credentials, assigned-doctor
+identity/age/mode/suitability confirmation, private external meeting/phone configuration,
+time-limited owned join authorization and withdrawal. Profile/appointment/settings changes
+invalidate stale readiness; start/signing recheck authorization. Used consultation modes
+are preserved. RLS, encrypted immutable evidence, private export and mobile/desktop pages
+are included. No provider media or online checkout is claimed.
+
+Real provider-call/admission/revocation rehearsal, clinical/policy/guardian acceptance,
+telemedicine checkout, production signing and the other existing release requirements
+remain open. Native apps and SMS stay paused/deferred; cloud DSC and AI remain deferred.
+This is local development work, not a new PR or hosted deployment.

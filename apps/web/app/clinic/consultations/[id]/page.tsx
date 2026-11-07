@@ -207,6 +207,11 @@ function ConsultationScreen({ id, me }: { id: string; me: MeResponse }) {
 
   return (
     <div className="space-y-6">
+      {a.mode !== 'in_person' && (
+        <Link className="underline" href={'/clinic/online/' + id}>
+          {t('online.doctorCheck')}
+        </Link>
+      )}
       <section className="space-y-4">
         <p>
           <Link href={`/clinic/queue?date=${a.date}`} className={backLink}>

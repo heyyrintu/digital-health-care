@@ -57,3 +57,20 @@ Never paste real patient data (names, phone numbers, prescriptions, screenshots)
 - [Staff and platform second-factor options](runbooks/second-factor-auth.md) - deployment-owner choice of authenticator, WhatsApp OTP or password-only login.
 
 - [Clinic People administration](runbooks/clinic-people.md) — searchable staff profiles, clinic roles/access, security and verified sign-in detail changes.
+
+- [ADR 0033: patient assessments](adr/0033-patient-assessments.md) — fixed numeric forms,
+  consented responses, chart permissions, encrypted scores and history/trends.
+- [Accountant reconciliation CSV exports](runbooks/reconciliation-export.md) — private
+  snapshot downloads, exact paise and spreadsheet import guidance.
+
+- [ADR 0034: optional review requests](adr/0034-patient-review-requests.md) — separate
+  consent, guarded WhatsApp delivery and deliberate link-open tracking.
+  [Activation and recovery](runbooks/review-requests.md).
+
+- [ADR 0035: CSV patient imports](adr/0035-patient-demographic-imports.md) — mapped
+  demographic dry runs, duplicate guards and atomic confirmed application.
+  [Import operator guide](runbooks/patient-import.md).
+
+- [ADR 0036: web online consultations](adr/0036-web-online-consultations.md) — gated
+  booking, appointment-specific consent, assigned-doctor checks and private external joining.
+  [Clinic setup guide](runbooks/online-consultations.md).

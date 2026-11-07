@@ -44,6 +44,8 @@ export interface Services {
   otpSender: OtpSender;
   emailSender?: EmailSender;
   appointmentMessagingSender?: string;
+  reviewMessagingSender?: string;
+  reviewLinkSecret?: string;
   operationMessagingSender?: string;
   recordMessagingSender?: string;
   paymentMessagingSender?: string;
@@ -137,6 +139,10 @@ export function createServices(
           },
         }
       : {}),
+    reviewMessagingSender: config.WHATSAPP_REVIEWS_ENABLED
+      ? config.WHATSAPP_PHONE_NUMBER_ID
+      : undefined,
+    reviewLinkSecret: config.WHATSAPP_REVIEW_LINK_SECRET,
     operationMessagingSender: config.WHATSAPP_OPERATIONS_ENABLED
       ? config.WHATSAPP_PHONE_NUMBER_ID
       : undefined,

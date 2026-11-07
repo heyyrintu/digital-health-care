@@ -230,6 +230,36 @@ function Reconciliation() {
                 })}
               </p>
               <p>{t('recon.reviewHint')}</p>
+              <div className="flex flex-wrap gap-3">
+                {(['settlements', 'issues'] as const).map((kind) => (
+                  <Button
+                    key={kind}
+                    disabled={busy}
+                    variant="outline"
+                    onClick={() =>
+                      void action(async () => {
+                        const blob = await api.requestFile(
+                          'GET',
+                          `/reconciliation/runs/${selected.id}/export/${kind}`,
+                          { accept: 'text/csv' },
+                        );
+                        const url = URL.createObjectURL(blob),
+                          link = document.createElement('a');
+                        link.href = url;
+                        link.download = `reconciliation-${selected.id}-${kind}.csv`;
+                        document.body.appendChild(link);
+                        link.click();
+                        link.remove();
+                        setTimeout(() => URL.revokeObjectURL(url), 60000);
+                      })
+                    }
+                  >
+                    {t(kind === 'settlements' ? 'recon.exportSettlements' : 'recon.exportIssues')}
+                  </Button>
+                ))}
+              </div>
+              <p>{t('recon.exportHint')}</p>
+
               <label>
                 {t('recon.reason')}{' '}
                 <select

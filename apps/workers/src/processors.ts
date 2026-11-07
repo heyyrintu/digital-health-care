@@ -1,3 +1,4 @@
+import { reviewNoticeProcessor } from './review-notices';
 import { operationalNoticeProcessor } from './operational-notices';
 import { paymentNoticeProcessor } from './payment-notices';
 import { reconciliationProcessor } from './reconciliation';
@@ -25,12 +26,15 @@ export function createProcessors(
       : {}),
     ...(db &&
     config &&
-    (config.WHATSAPP_OPERATIONS_ENABLED ||
+    (config.WHATSAPP_REVIEWS_ENABLED ||
+      config.WHATSAPP_OPERATIONS_ENABLED ||
       config.WHATSAPP_APPOINTMENTS_ENABLED ||
       config.WHATSAPP_RECORDS_ENABLED ||
       config.WHATSAPP_PAYMENTS_ENABLED)
       ? {
           messaging: async (job: Job) => {
+            if (job.name === 'review-request' && config.WHATSAPP_REVIEWS_ENABLED)
+              return reviewNoticeProcessor(db, config)(job);
             if (job.name === 'appointment-update' && config.WHATSAPP_OPERATIONS_ENABLED)
               return operationalNoticeProcessor(db, config)(job);
             if (job.name === 'payment-notice' && config.WHATSAPP_PAYMENTS_ENABLED)

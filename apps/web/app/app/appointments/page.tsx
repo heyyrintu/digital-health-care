@@ -155,6 +155,11 @@ function AppointmentList({
     <ul className="space-y-3" data-testid={testId}>
       {items.map((a) => (
         <li key={a.id} className="surface space-y-1 p-4 text-sm" data-testid="appointment">
+          {a.mode !== 'in_person' && (
+            <Link className="underline" href={'/app/online/' + a.id}>
+              {t('online.title')}
+            </Link>
+          )}
           <p className="font-display text-base font-bold">{a.patient.name}</p>
           <p className="font-medium">
             {shortDate(a.date, locale)} · <span className="tabular">{a.startTime}</span> ·{' '}

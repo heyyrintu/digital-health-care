@@ -54,15 +54,14 @@ export default defineConfig({
         WHATSAPP_RECORDS_ENABLED: process.env.E2E_WHATSAPP === '1' ? 'true' : 'false',
         WHATSAPP_RECORD_LINK_SECRET: 'synthetic-browser-record-link-secret-32-characters',
         WHATSAPP_APPOINTMENTS_ENABLED: process.env.E2E_WHATSAPP === '1' ? 'true' : 'false',
-        WHATSAPP_WEBHOOK_ENABLED: process.env.E2E_WHATSAPP === '1' ? 'true' : 'false',
-        ...(process.env.E2E_WHATSAPP === '1'
-          ? {
-              WHATSAPP_APP_SECRET: 'synthetic-browser-app-secret',
-              WHATSAPP_WEBHOOK_VERIFY_TOKEN: 'synthetic-browser-verify-token-32-characters',
-              WHATSAPP_PHONE_NUMBER_ID: '1234',
-              WHATSAPP_BUSINESS_ACCOUNT_ID: '5678',
-            }
-          : {}),
+        // Review tests enqueue only; no worker/provider is started. All credentials here are synthetic.
+        WHATSAPP_REVIEWS_ENABLED: 'true',
+        WHATSAPP_REVIEW_LINK_SECRET: 'synthetic-browser-review-secret-32-characters',
+        WHATSAPP_WEBHOOK_ENABLED: 'true',
+        WHATSAPP_APP_SECRET: 'synthetic-browser-app-secret',
+        WHATSAPP_WEBHOOK_VERIFY_TOKEN: 'synthetic-browser-verify-token-32-characters',
+        WHATSAPP_PHONE_NUMBER_ID: '1234',
+        WHATSAPP_BUSINESS_ACCOUNT_ID: '5678',
         // Prescriptions are signed with the test key and stored in a throwaway folder.
         SIGNER: 'test_key',
         FILE_STORE_DIR: E2E_FILE_STORE_DIR,

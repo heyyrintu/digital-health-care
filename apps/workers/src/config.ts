@@ -10,6 +10,28 @@ const Env = z
       .transform((v) => v === 'true'),
     CASHFREE_MERCHANTS_JSON: z.string().optional(),
     CASHFREE_RECONCILIATION_LOOKBACK_DAYS: z.coerce.number().int().min(1).max(31).default(7),
+    WHATSAPP_REVIEWS_ENABLED: z
+      .enum(['true', 'false'])
+      .default('false')
+      .transform((v) => v === 'true'),
+    WHATSAPP_REVIEW_LINK_SECRET: z.preprocess(
+      (v) => (v === '' ? undefined : v),
+      z.string().min(32).regex(/^\S+$/).optional(),
+    ),
+    WHATSAPP_REVIEW_TEMPLATE: z.preprocess(
+      (v) => (v === '' ? undefined : v),
+      z
+        .string()
+        .regex(/^[a-z0-9_]+$/)
+        .optional(),
+    ),
+    WHATSAPP_REVIEW_TEMPLATE_LANGUAGE: z.preprocess(
+      (v) => (v === '' ? undefined : v),
+      z
+        .string()
+        .regex(/^[a-z]{2,3}(?:_[A-Z]{2})?$/)
+        .optional(),
+    ),
     WHATSAPP_OPERATIONS_ENABLED: z
       .enum(['true', 'false'])
       .default('false')
@@ -94,6 +116,7 @@ const Env = z
       }
     }
     if (
+      !env.WHATSAPP_REVIEWS_ENABLED &&
       !env.WHATSAPP_OPERATIONS_ENABLED &&
       !env.WHATSAPP_APPOINTMENTS_ENABLED &&
       !env.WHATSAPP_RECORDS_ENABLED &&
@@ -101,6 +124,13 @@ const Env = z
     )
       return;
     for (const key of [
+      ...(env.WHATSAPP_REVIEWS_ENABLED
+        ? ([
+            'WHATSAPP_REVIEW_LINK_SECRET',
+            'WHATSAPP_REVIEW_TEMPLATE',
+            'WHATSAPP_REVIEW_TEMPLATE_LANGUAGE',
+          ] as const)
+        : []),
       'DATABASE_URL',
       'WHATSAPP_ACCESS_TOKEN',
       'WHATSAPP_PHONE_NUMBER_ID',
@@ -149,7 +179,14 @@ const Env = z
 export type WorkerConfig = z.infer<typeof Env>;
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): WorkerConfig {
-  const parsed = Env.safeParse(env);
+  const input = { ...env };
+  for (const key of [
+    'WHATSAPP_ACCESS_TOKEN',
+    'WHATSAPP_PHONE_NUMBER_ID',
+    'WHATSAPP_GRAPH_API_VERSION',
+  ])
+    if (input[key] === '') delete input[key];
+  const parsed = Env.safeParse(input);
   if (!parsed.success) throw new Error(`Invalid environment: ${z.prettifyError(parsed.error)}`);
   return parsed.data;
 }

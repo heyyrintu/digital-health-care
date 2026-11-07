@@ -157,9 +157,19 @@ export class SchedulingSettingsService {
   ) {
     return this.uniqueName(() =>
       withTenant(this.s.db, actor.organisationId, async (tx) => {
-        if (!(await tx.consultationType.findUnique({ where: { id }, select: { id: true } }))) {
-          throw NOT_FOUND();
-        }
+        await tx.$queryRaw`SELECT id FROM consultation_types WHERE id=${id}::uuid FOR UPDATE`;
+        const current = await tx.consultationType.findUnique({ where: { id } });
+        if (!current) throw NOT_FOUND();
+        if (
+          body.mode &&
+          body.mode !== current.mode &&
+          (await tx.appointment.count({ where: { consultationTypeId: id } }))
+        )
+          throw new AppError(
+            409,
+            'CONFLICT',
+            'A used consultation mode cannot change. Create a new consultation type.',
+          );
         const type = await tx.consultationType.update({ where: { id }, data: body });
         await writeAudit(tx, request, {
           action: 'consultation_type.updated',

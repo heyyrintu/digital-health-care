@@ -274,9 +274,16 @@ function BookForm({
         <div className="space-y-1 text-sm text-muted-foreground">
           {type.requiresPrepayment && <p>{t('prepaid.beforeBook')}</p>}
           <p>
-            {t(type.requiresPrepayment ? 'prepaid.fee' : 'patient.book.fee', {
-              fee: formatInr(type.feePaise, locale),
-            })}
+            {t(
+              type.requiresPrepayment
+                ? 'prepaid.fee'
+                : type.mode === 'in_person'
+                  ? 'patient.book.fee'
+                  : 'online.fee',
+              {
+                fee: formatInr(type.feePaise, locale),
+              },
+            )}
           </p>
           <p>{t('portal.book.policy', { minutes: options.cancelCutoffMinutes })}</p>
         </div>

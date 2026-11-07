@@ -1,5 +1,5 @@
 import { withTenant } from '@dhc/db';
-import { ConsultationNotes } from '@dhc/contracts';
+import { AssessmentDefinition, AssessmentResult, ConsultationNotes } from '@dhc/contracts';
 import { createHash } from 'node:crypto';
 import type { FastifyRequest } from 'fastify';
 import type { Services } from '../../services';
@@ -239,8 +239,92 @@ export class DataExportService {
             include: { file: true },
           }),
         );
+        const assessments = [];
+        const assessmentRows = cap(await tx.patientAssessment.findMany({ where, take }));
+        const assessmentForms = new Map(
+          (
+            await tx.assessmentForm.findMany({
+              where: { id: { in: [...new Set(assessmentRows.map((r) => r.formId))] } },
+            })
+          ).map((f) => [f.id, f]),
+        );
+        for (const row of assessmentRows) {
+          const form = assessmentForms.get(row.formId);
+          if (!form) throw new Error('EXPORT_ASSESSMENT_INTEGRITY');
+          assessments.push({
+            id: row.id,
+            patientId: row.patientId,
+            formId: row.formId,
+            definition: AssessmentDefinition.parse(form.definition),
+            state: row.state,
+            createdAt: row.createdAt,
+            submittedAt: row.submittedAt,
+            result: row.resultCipher
+              ? AssessmentResult.parse(JSON.parse(this.s.cipher.decrypt(row.resultCipher)))
+              : null,
+          });
+        }
+        const reviewRequests = cap(
+          await tx.reviewRequest.findMany({
+            where,
+            take,
+            select: {
+              id: true,
+              appointmentId: true,
+              patientId: true,
+              createdAt: true,
+              expiresAt: true,
+              cancelledAt: true,
+              openedAt: true,
+            },
+          }),
+        );
+        const reviewConsent = await tx.whatsAppOptIn.findMany({
+          where: { category: 'reviews', changedByUserId: a.userId },
+          select: {
+            enabled: true,
+            version: true,
+            changedAt: true,
+            phone: true,
+            senderPhoneNumberId: true,
+          },
+          take,
+        });
+        const importProvenance = cap(
+          await tx.patientImportRecord.findMany({
+            where,
+            take,
+            select: { source: true, externalId: true, patientId: true },
+          }),
+        );
+        const onlineConsultations = cap(
+          await tx.onlineVisitEvent.findMany({
+            where: { appointmentId: { in: appointments.map((a) => a.id) } },
+            take,
+          }),
+        ).map((event) => {
+          const state = JSON.parse(this.s.cipher.decrypt(event.stateCipher));
+          return {
+            appointmentId: event.appointmentId,
+            version: event.version,
+            action: event.action,
+            createdAt: event.createdAt,
+            identity: state.identity,
+            consentAt: state.consentAt,
+            consentVersion: state.consentVersion,
+            verificationMethod: state.verificationMethod,
+            consentBy: state.consentBy,
+            verifiedAt: state.verifiedAt,
+            verifiedBy: state.verifiedBy,
+          };
+        });
         return {
           profiles,
+          onlineConsultations,
+          importProvenance,
+          reviewRequests,
+          reviewConsent,
+          assessments,
           photos,
           consents,
           requests,

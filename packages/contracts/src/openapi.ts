@@ -1,4 +1,42 @@
 import {
+  OnlineIntake,
+  OnlineCall,
+  OnlineVerify,
+  OnlineVersion,
+  OnlineVisit,
+  OnlineSettings,
+  OnlineDestination,
+} from './online-visits';
+import {
+  ApplyPatientImport,
+  PatientImport,
+  PatientImportList,
+  PreviewPatientImport,
+} from './imports';
+import {
+  ReviewSettings,
+  ReviewSettingsBody,
+  ReviewConsent,
+  ReviewConsentBody,
+  ReviewRequest,
+  ReviewRequestList,
+  RequestReview,
+  ReviewQuery,
+  ResolveReviewBody,
+  ReviewLanding,
+  ReviewDestination,
+} from './reviews';
+import {
+  AssessmentForms,
+  AssessmentForm,
+  AssessmentPageQuery,
+  CreateAssessmentForm,
+  AssignAssessment,
+  PatientAssessments,
+  PatientAssessment,
+  SubmitAssessment,
+} from './assessments';
+import {
   PeopleList,
   PeopleQuery,
   PeopleDetail,
@@ -377,6 +415,7 @@ interface Operation {
   /** The response is a PDF file instead of JSON. */
   pdf?: boolean;
   zip?: boolean;
+  csv?: boolean;
   /**
    * The request body is a file (an uploaded result, `logo`: a PNG, JPEG or WebP logo, or
    * `document`: a PDF, JPEG, PNG or WebP document).
@@ -390,6 +429,279 @@ interface Operation {
 
 /** Every endpoint, in one list. Field detail always comes from the Zod schemas. */
 const operations: Operation[] = [
+  {
+    method: 'get',
+    path: '/online-settings',
+    operationId: 'onlineSettings',
+    summary: 'Online consultation settings',
+    response: OnlineSettings,
+  },
+  {
+    method: 'put',
+    path: '/online-settings',
+    operationId: 'saveOnlineSettings',
+    summary: 'Set online booking availability',
+    response: OnlineSettings,
+    body: OnlineSettings,
+  },
+  {
+    method: 'get',
+    path: '/appointments/{id}/online',
+    operationId: 'staffOnlineVisit',
+    summary: 'Role-limited online visit details',
+    response: OnlineVisit,
+    pathParams: ['id'],
+  },
+  {
+    method: 'put',
+    path: '/appointments/{id}/online/call',
+    operationId: 'saveOnlineCall',
+    summary: 'Private clinic call details',
+    response: OnlineVisit,
+    body: OnlineCall,
+    pathParams: ['id'],
+  },
+  {
+    method: 'post',
+    path: '/appointments/{id}/online/verify',
+    operationId: 'verifyOnlineIdentity',
+    summary: 'Assigned doctor identity verification',
+    response: OnlineVisit,
+    body: OnlineVerify,
+    pathParams: ['id'],
+  },
+  {
+    method: 'get',
+    path: '/portal/appointments/{id}/online',
+    operationId: 'portalOnlineVisit',
+    summary: 'Owned online appointment intake',
+    response: OnlineVisit,
+    pathParams: ['id'],
+  },
+  {
+    method: 'put',
+    path: '/portal/appointments/{id}/online',
+    operationId: 'consentOnlineVisit',
+    summary: 'Patient identity declaration and explicit consent',
+    response: OnlineVisit,
+    body: OnlineIntake,
+    pathParams: ['id'],
+  },
+  {
+    method: 'post',
+    path: '/portal/appointments/{id}/online/withdraw',
+    operationId: 'withdrawOnlineConsent',
+    summary: 'Withdraw without reaccepting health-data consent',
+    response: OnlineVisit,
+    body: OnlineVersion,
+    pathParams: ['id'],
+  },
+  {
+    method: 'post',
+    path: '/portal/appointments/{id}/online/join',
+    operationId: 'joinOnlineVisit',
+    summary: 'Resolve private call inside authorized time window',
+    response: OnlineDestination,
+    pathParams: ['id'],
+  },
+  {
+    method: 'get',
+    path: '/patient-imports',
+    operationId: 'listPatientImports',
+    summary: 'Recent clinic patient imports (admin)',
+    response: PatientImportList,
+  },
+  {
+    method: 'get',
+    path: '/patient-imports/{id}',
+    operationId: 'getPatientImport',
+    summary: 'Audited private patient import preview (admin)',
+    pathParams: ['id'],
+    response: PatientImport,
+  },
+  {
+    method: 'post',
+    path: '/patient-imports/preview',
+    operationId: 'previewPatientImport',
+    summary: 'Validate mapped CSV without creating patients (admin)',
+    body: PreviewPatientImport,
+    response: PatientImport,
+  },
+  {
+    method: 'post',
+    path: '/patient-imports/{id}/apply',
+    operationId: 'applyPatientImport',
+    summary: 'Confirm unchanged preview atomically (creator admin)',
+    pathParams: ['id'],
+    body: ApplyPatientImport,
+    response: PatientImport,
+  },
+  {
+    method: 'post',
+    path: '/patient-imports/{id}/cancel',
+    operationId: 'cancelPatientImport',
+    summary: 'Cancel an unapplied import (creator admin)',
+    pathParams: ['id'],
+    response: PatientImport,
+  },
+
+  {
+    method: 'get',
+    path: '/review-settings',
+    operationId: 'getReviewSettings',
+    summary: 'Clinic review link and cooldown (clinic admin)',
+    response: ReviewSettings,
+  },
+  {
+    method: 'put',
+    path: '/review-settings',
+    operationId: 'saveReviewSettings',
+    summary: 'Versioned neutral review settings (clinic admin)',
+    body: ReviewSettingsBody,
+    response: ReviewSettings,
+  },
+  {
+    method: 'get',
+    path: '/portal/review-consent',
+    operationId: 'getReviewConsent',
+    summary: 'Independent optional review invitation consent (patient)',
+    response: ReviewConsent,
+  },
+  {
+    method: 'put',
+    path: '/portal/review-consent',
+    operationId: 'setReviewConsent',
+    summary: 'Verified number holder grants or revokes review consent',
+    body: ReviewConsentBody,
+    response: ReviewConsent,
+  },
+  {
+    method: 'get',
+    path: '/review-requests',
+    operationId: 'listReviewRequests',
+    summary: 'Clinic review requests and delivery/open counts (staff)',
+    query: ReviewQuery,
+    response: ReviewRequestList,
+  },
+  {
+    method: 'post',
+    path: '/review-requests',
+    operationId: 'requestReview',
+    summary: 'Queue eligible completed-visit invitation with contact cooldown (staff)',
+    body: RequestReview,
+    response: ReviewRequest,
+    status: 201,
+  },
+  {
+    method: 'post',
+    path: '/review-requests/{id}/cancel',
+    pathParams: ['id'],
+    operationId: 'cancelReviewRequest',
+    summary: 'Cancel unsent request and invalidate its link (staff)',
+    response: ReviewRequest,
+  },
+  {
+    method: 'post',
+    path: '/review-links/resolve',
+    operationId: 'resolveReviewLink',
+    summary: 'Verify opaque invitation without counting an open',
+    public: true,
+    body: ResolveReviewBody,
+    response: ReviewLanding,
+  },
+  {
+    method: 'post',
+    path: '/review-links/open',
+    operationId: 'openReviewLink',
+    summary: 'Record a deliberate invitation open and return trusted Google destination',
+    public: true,
+    body: ResolveReviewBody,
+    response: ReviewDestination,
+  },
+
+  {
+    method: 'get',
+    path: '/reconciliation/runs/{id}/export/{kind}',
+    pathParams: [
+      'id',
+      { name: 'kind', schema: { type: 'string', enum: ['settlements', 'issues'] } },
+    ],
+    csv: true,
+    operationId: 'exportReconciliationCsv',
+    summary:
+      'Complete successful snapshot CSV, settlements or issues, 5000-row bound (clinic admin)',
+  },
+  {
+    method: 'get',
+    path: '/assessment-forms',
+    operationId: 'listAssessmentForms',
+    summary: 'Clinic assessment form catalog (doctor/admin)',
+    query: AssessmentPageQuery,
+    response: AssessmentForms,
+  },
+  {
+    method: 'post',
+    path: '/assessment-forms',
+    operationId: 'createAssessmentForm',
+    summary: 'Publish an immutable numeric questionnaire (doctor/admin)',
+    body: CreateAssessmentForm,
+    response: AssessmentForm,
+    status: 201,
+  },
+  {
+    method: 'post',
+    path: '/assessment-forms/{id}/archive',
+    pathParams: ['id'],
+    operationId: 'archiveAssessmentForm',
+    summary: 'Archive a form; existing assignments remain available',
+    response: AssessmentForm,
+  },
+  {
+    method: 'get',
+    path: '/patients/{id}/assessments',
+    pathParams: ['id'],
+    operationId: 'listPatientAssessments',
+    summary: 'Assessment history and raw scores (doctor with chart access)',
+    query: AssessmentPageQuery,
+    response: PatientAssessments,
+  },
+  {
+    method: 'post',
+    path: '/patients/{id}/assessments',
+    pathParams: ['id'],
+    operationId: 'assignAssessment',
+    summary: 'Assign a published questionnaire (doctor with chart access)',
+    body: AssignAssessment,
+    response: PatientAssessment,
+    status: 201,
+  },
+  {
+    method: 'post',
+    path: '/assessments/{id}/cancel',
+    pathParams: ['id'],
+    operationId: 'cancelAssessment',
+    summary: 'Cancel an unanswered assessment (doctor with chart access)',
+    response: PatientAssessment,
+  },
+  {
+    method: 'get',
+    path: '/portal/patients/{id}/assessments',
+    pathParams: ['id'],
+    operationId: 'listOwnAssessments',
+    summary: 'Family-owned assessment history, requires current consents',
+    query: AssessmentPageQuery,
+    response: PatientAssessments,
+  },
+  {
+    method: 'post',
+    path: '/portal/assessments/{id}/submit',
+    pathParams: ['id'],
+    operationId: 'submitAssessment',
+    summary: 'Submit once or recover the same response (patient/guardian)',
+    body: SubmitAssessment,
+    response: PatientAssessment,
+  },
+
   {
     method: 'get',
     path: '/clinic-operations/options',
@@ -2981,32 +3293,37 @@ export function buildOpenApiDocument(options: { version: string; serverUrl?: str
           }
         : {}),
       responses: {
-        [String(status)]: op.zip
+        [String(status)]: op.csv
           ? {
-              description: 'Private patient-facing data ZIP',
-              content: { 'application/zip': { schema: { type: 'string', format: 'binary' } } },
+              description: 'Private reconciliation CSV (integer INR paise)',
+              content: { 'text/csv': { schema: { type: 'string', format: 'binary' } } },
             }
-          : op.pdf
+          : op.zip
             ? {
-                description: 'PDF',
-                content: { 'application/pdf': { schema: { type: 'string', format: 'binary' } } },
+                description: 'Private patient-facing data ZIP',
+                content: { 'application/zip': { schema: { type: 'string', format: 'binary' } } },
               }
-            : op.file
+            : op.pdf
               ? {
-                  description: 'The file, as uploaded',
-                  content:
-                    op.file === 'logo'
-                      ? logoBinary
-                      : op.file === 'document'
-                        ? documentBinary
-                        : binary,
+                  description: 'PDF',
+                  content: { 'application/pdf': { schema: { type: 'string', format: 'binary' } } },
                 }
-              : status === 204 || !op.response
-                ? { description: 'No content' }
-                : {
-                    description: status === 201 ? 'Created' : 'OK',
-                    content: { 'application/json': { schema: toSchema(op.response) } },
-                  },
+              : op.file
+                ? {
+                    description: 'The file, as uploaded',
+                    content:
+                      op.file === 'logo'
+                        ? logoBinary
+                        : op.file === 'document'
+                          ? documentBinary
+                          : binary,
+                  }
+                : status === 204 || !op.response
+                  ? { description: 'No content' }
+                  : {
+                      description: status === 201 ? 'Created' : 'OK',
+                      content: { 'application/json': { schema: toSchema(op.response) } },
+                    },
         ...(op.replay && op.response
           ? {
               '200': {

@@ -1863,6 +1863,7 @@ model PlatformSession {
 
 /// WhatsApp OTP delivery metadata; contains no OTP or recipient phone.
 model WhatsAppDelivery {
+  reviewRequestId String? @unique @map("review_request_id") @db.Uuid
   operationalUpdateId String?               @map("operational_update_id") @db.Uuid
   financialOrderId    String?               @map("financial_order_id") @db.Uuid
   receiptPaymentId    String?               @map("receipt_payment_id") @db.Uuid
@@ -2515,4 +2516,107 @@ model StaffContactChange {
   organisation Organisation @relation(fields:[organisationId], references:[id], onDelete:NoAction, onUpdate:NoAction)
   @@index([organisationId,userId,createdAt],map:"staff_contact_changes_subject_idx")
   @@map("staff_contact_changes")
+}
+
+model AssessmentForm {
+  id String @id @db.Uuid
+  organisationId String @map("organisation_id") @db.Uuid
+  createdByUserId String @map("created_by_user_id") @db.Uuid
+  definition Json
+  active Boolean @default(true)
+  createdAt DateTime @map("created_at") @db.Timestamptz(3)
+  @@index([organisationId, id])
+  @@map("assessment_forms")
+}
+
+model PatientAssessment {
+  id String @id @db.Uuid
+  organisationId String @map("organisation_id") @db.Uuid
+  patientId String @map("patient_id") @db.Uuid
+  formId String @map("form_id") @db.Uuid
+  assignedByUserId String @map("assigned_by_user_id") @db.Uuid
+  state String @default("pending")
+  resultCipher String? @map("result_cipher")
+  submittedByUserId String? @map("submitted_by_user_id") @db.Uuid
+  submittedAt DateTime? @map("submitted_at") @db.Timestamptz(3)
+  createdAt DateTime @map("created_at") @db.Timestamptz(3)
+  @@index([organisationId, patientId, id])
+  @@map("patient_assessments")
+}
+
+model ReviewSettings {
+ organisationId String @id @map("organisation_id") @db.Uuid
+ version Int @default(1)
+ enabled Boolean @default(false)
+ googleUrl String? @map("google_url")
+ cooldownDays Int @default(90) @map("cooldown_days")
+ @@map("review_settings")
+}
+model ReviewRequest {
+ id String @id @db.Uuid
+ organisationId String @map("organisation_id") @db.Uuid
+ appointmentId String @unique @map("appointment_id") @db.Uuid
+ patientId String @map("patient_id") @db.Uuid
+ createdByUserId String @map("created_by_user_id") @db.Uuid
+ settingsVersion Int @map("settings_version")
+ destinationUrl String @map("destination_url")
+ createdAt DateTime @map("created_at") @db.Timestamptz(3)
+ expiresAt DateTime @map("expires_at") @db.Timestamptz(3)
+ cancelledAt DateTime? @map("cancelled_at") @db.Timestamptz(3)
+ openedAt DateTime? @map("opened_at") @db.Timestamptz(3)
+ @@index([organisationId,createdAt,id])
+ @@map("review_requests")
+}
+
+model PatientImportJob {
+  id String @id @db.Uuid
+  organisationId String @map("organisation_id") @db.Uuid
+  createdByUserId String @map("created_by_user_id") @db.Uuid
+  source String
+  inputHash String @map("input_hash")
+  payloadCipher String @map("payload_cipher")
+  resultCipher String? @map("result_cipher")
+  status String @default("preview")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(3)
+  appliedAt DateTime? @map("applied_at") @db.Timestamptz(3)
+  @@index([organisationId, createdAt])
+  @@map("patient_import_jobs")
+}
+model PatientImportRecord {
+  id String @id @default(uuid()) @db.Uuid
+  organisationId String @map("organisation_id") @db.Uuid
+  jobId String @map("job_id") @db.Uuid
+  source String
+  externalId String @map("external_id")
+  rowHash String @map("row_hash")
+  patientId String @map("patient_id") @db.Uuid
+  @@unique([organisationId, source, externalId])
+  @@map("patient_import_records")
+}
+
+model OnlineVisitSettings {
+ organisationId String @id @map("organisation_id") @db.Uuid
+ version Int @default(1)
+ enabled Boolean @default(false)
+ @@map("online_visit_settings")
+}
+model OnlineVisit {
+ appointmentId String @id @map("appointment_id") @db.Uuid
+ organisationId String @map("organisation_id") @db.Uuid
+ version Int @default(1)
+ stateCipher String @map("state_cipher")
+ @@map("online_visits")
+}
+model OnlineVisitEvent {
+ id String @id @default(uuid()) @db.Uuid
+ organisationId String @map("organisation_id") @db.Uuid
+ appointmentId String @map("appointment_id") @db.Uuid
+ version Int
+ actorUserId String @map("actor_user_id") @db.Uuid
+ action String
+ stateCipher String @map("state_cipher")
+ createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+ @@unique([appointmentId,version])
+ @@map("online_visit_events")
 }

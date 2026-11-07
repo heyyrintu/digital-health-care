@@ -1,3 +1,4 @@
+import { reconciliationCsv } from './reconciliation-csv';
 import {
   CreateReconRun,
   ReconDetail,
@@ -187,6 +188,137 @@ export const reconciliationRoutes: FastifyPluginAsync<{ services: Services }> = 
         });
       }),
     );
+  app.get(
+    '/reconciliation/runs/:id/export/:kind',
+    { ...guard, config: { rateLimit: { max: 10, timeWindow: '1 minute' } } },
+    async (req, reply) => {
+      const a = authOf(req),
+        { id, kind } = z
+          .object({ id: z.uuid(), kind: z.enum(['settlements', 'issues']) })
+          .parse(req.params);
+      const csv = await withTenant(s.db, a.organisationId, async (tx) => {
+        const run = await tx.cashfreeReconRun.findUnique({ where: { id } });
+        if (!run) throw missing();
+        if (run.status !== 'succeeded')
+          throw new AppError(
+            409,
+            'CONFLICT',
+            'Wait for a complete reconciliation report before exporting.',
+          );
+        const prefix = [
+          id,
+          run.environment,
+          run.fromDate.toISOString().slice(0, 10),
+          run.toDate.toISOString().slice(0, 10),
+        ];
+        const headers = ['run_id', 'environment', 'from_date', 'to_date'];
+        let result: string, count: number;
+        if (kind === 'settlements') {
+          const rows = await tx.cashfreeReconSettlement.findMany({
+            where: { runId: id },
+            orderBy: { id: 'asc' },
+            take: 5001,
+          });
+          if (rows.length > 5000)
+            throw new AppError(
+              422,
+              'BUSINESS_RULE',
+              'This report is too large to export. Run a smaller date range.',
+            );
+          count = rows.length;
+          result = reconciliationCsv(
+            [
+              ...headers,
+              'settlement_id',
+              'status',
+              'charging_basis',
+              'utr',
+              'currency',
+              'gross_paise',
+              'fees_paise',
+              'tax_paise',
+              'adjustment_paise',
+              'net_paise',
+            ],
+            rows.map((r) => [
+              ...prefix,
+              r.settlementId,
+              r.status,
+              r.chargingBasis,
+              r.utr,
+              'INR',
+              r.grossPaise,
+              r.feesPaise,
+              r.taxPaise,
+              r.adjustmentPaise,
+              r.netPaise,
+            ]),
+          );
+        } else {
+          const rows = await tx.cashfreeReconIssue.findMany({
+            where: { runId: id },
+            orderBy: { id: 'asc' },
+            take: 5001,
+          });
+          if (rows.length > 5000)
+            throw new AppError(
+              422,
+              'BUSINESS_RULE',
+              'This report is too large to export. Run a smaller date range.',
+            );
+          count = rows.length;
+          result = reconciliationCsv(
+            [
+              ...headers,
+              'issue_id',
+              'code',
+              'severity',
+              'provider_reference',
+              'settlement_id',
+              'order_id',
+              'payment_id',
+              'appointment_id',
+              'currency',
+              'expected_paise',
+              'reported_paise',
+              'reviewed_at',
+              'review_reason',
+            ],
+            rows.map((r) => [
+              ...prefix,
+              r.id,
+              r.code,
+              r.severity,
+              r.providerReference,
+              r.settlementId,
+              r.orderId,
+              r.paymentId,
+              r.appointmentId,
+              'INR',
+              r.expectedPaise,
+              r.reportedPaise,
+              r.reviewedAt?.toISOString() ?? null,
+              r.reviewReason,
+            ]),
+          );
+        }
+        await writeAudit(tx, req, {
+          organisationId: a.organisationId,
+          actorUserId: a.userId,
+          action: 'reconciliation.exported',
+          entityType: 'reconciliation',
+          entityId: id,
+          metadata: { kind, rows: count },
+        });
+        return result;
+      });
+      return reply
+        .type('text/csv; charset=utf-8')
+        .header('Content-Disposition', `attachment; filename="reconciliation-${id}-${kind}.csv"`)
+        .header('X-Content-Type-Options', 'nosniff')
+        .send(Buffer.from(csv, 'utf8'));
+    },
+  );
   app.post('/reconciliation/issues/:id/review', guard, async (req) => {
     const a = authOf(req),
       id = Id.parse(req.params).id,

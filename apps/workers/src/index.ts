@@ -1,3 +1,4 @@
+import { startReviewDispatch } from './review-notices';
 import { startOperationalDispatch } from './operational-notices';
 import { startPaymentDispatch } from './payment-notices';
 import { startReconciliationDispatch } from './reconciliation';
@@ -14,6 +15,8 @@ const config = loadConfig();
 const connection = createRedis(config.REDIS_URL);
 const db = config.DATABASE_URL ? createDb(config.DATABASE_URL) : undefined;
 const processors = createProcessors(db, config);
+const stopReviews =
+  db && config.WHATSAPP_REVIEWS_ENABLED ? startReviewDispatch(db, config) : async () => {};
 const stopOperations =
   db && config.WHATSAPP_OPERATIONS_ENABLED ? startOperationalDispatch(db, config) : async () => {};
 const stopAppointments =
@@ -51,6 +54,7 @@ for (const worker of workers) {
 console.warn(`Workers started for queues: ${workers.map((w) => w.name).join(', ')}`);
 
 const shutdown = async () => {
+  await stopReviews();
   await stopReconciliation();
   await stopAppointments();
   await stopOperations();

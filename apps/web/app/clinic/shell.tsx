@@ -58,9 +58,12 @@ export function ClinicShell({ children }: { children: (me: MeResponse) => ReactN
           ...(me.role === 'clinic_admin'
             ? [
                 { href: '/clinic/settings', label: t('identity.settings'), icon: Settings },
+                { href: '/clinic/imports', label: t('imports.title'), icon: Users },
                 { href: '/clinic/staff', label: t('identity.team'), icon: UserPlus },
               ]
             : []),
+          { href: '/clinic/online', label: t('online.title'), icon: CalendarClock },
+          { href: '/clinic/reviews', label: t('reviews.title'), icon: Send },
           { href: '/clinic/account', label: t('people.yourAccount'), icon: Users },
           { href: '/clinic/queue', label: t('dashboard.queue'), icon: ListOrdered },
           { href: '/clinic/availability', label: t('dashboard.availability'), icon: CalendarClock },
@@ -98,6 +101,7 @@ export function ClinicShell({ children }: { children: (me: MeResponse) => ReactN
           ...(me.role === 'clinic_admin' || me.role === 'doctor'
             ? [
                 { href: '/clinic/library', label: t('dashboard.library'), icon: Library },
+                { href: '/clinic/assessments', label: t('assess.forms'), icon: ScrollText },
                 { href: '/clinic/data-rights', label: t('dataRights.title'), icon: Library },
               ]
             : []),
