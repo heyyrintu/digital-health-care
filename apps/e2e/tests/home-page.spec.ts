@@ -224,7 +224,9 @@ test.describe('public home page', () => {
       await expect(directory.getByTestId('fee-from')).toHaveText('₹500 से');
       await page.goto('/?lang=hi');
       // Marked Hindi in the server's HTML, before any script runs.
-      const html = await (await page.request.get('/?lang=hi')).text();
+      // A reset keep-alive connection is safe to retry for this read-only request.
+      // HTTP failures and all page/content assertions still fail normally.
+      const html = await (await page.request.get('/?lang=hi', { maxRetries: 2 })).text();
       expect(html).toMatch(/<div lang="hi"/);
       await expect(page.getByRole('link', { name: 'मरीज़ साइन इन' })).toBeVisible();
       await page.getByRole('button', { name: 'English' }).click();
