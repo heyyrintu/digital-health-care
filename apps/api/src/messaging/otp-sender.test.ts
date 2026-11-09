@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { loadConfig } from '../config';
-import { createOtpSender, MetaWhatsAppOtpSender } from './otp-sender';
+import { createOtpSender, MetaWhatsAppOtpSender, OtpDeliveryError } from './otp-sender';
 
 const settings = {
   accessToken: 'synthetic-meta-token',
@@ -73,6 +73,60 @@ describe('Meta WhatsApp authentication delivery', () => {
       expect(fetcher).toHaveBeenCalledOnce();
     },
   );
+
+  it('retains only numeric rejection diagnostics', async () => {
+    const secret = 'synthetic-meta-token +919876543210 012345';
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      Response.json(
+        {
+          error: { code: 131030, message: secret, error_data: { details: secret } },
+        },
+        { status: 400 },
+      ),
+    );
+    const error = await new MetaWhatsAppOtpSender(settings, fetcher)
+      .send('+919876543210', '012345')
+      .catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(OtpDeliveryError);
+    expect(error).toMatchObject({ providerCode: 131030, providerHttpStatus: 400 });
+    expect(JSON.stringify(error)).not.toContain(secret);
+    expect(String(error)).not.toContain(secret);
+    expect(error).not.toHaveProperty('cause');
+    expect(error).not.toHaveProperty('error_data');
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
+
+  it.each(['131030', -1, 1.5, 2147483648, null])(
+    'discards invalid provider code %s',
+    async (code) => {
+      const fetcher = vi
+        .fn<typeof fetch>()
+        .mockResolvedValue(Response.json({ error: { code } }, { status: 400 }));
+      const error = await new MetaWhatsAppOtpSender(settings, fetcher)
+        .send('+919876543210', '012345')
+        .catch((e: unknown) => e);
+      expect(error).toMatchObject({ providerHttpStatus: 400 });
+      expect((error as OtpDeliveryError).providerCode).toBeUndefined();
+    },
+  );
+
+  it.each([200, 400])('bounds provider response size for HTTP %s', async (status) => {
+    const cancel = vi.fn();
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('x'.repeat(16385)));
+      },
+      cancel,
+    });
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(new Response(body, { status }));
+    const error = await new MetaWhatsAppOtpSender(settings, fetcher)
+      .send('+919876543210', '012345')
+      .catch((e: unknown) => e);
+    expect(error).toMatchObject({ statusCode: 503, code: 'UNAVAILABLE' });
+    expect((error as OtpDeliveryError).providerCode).toBeUndefined();
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
 
   it.each([{}, { messages: [] }, { messaging_product: 'whatsapp', messages: [{ id: '' }] }])(
     'refuses an unconfirmed success payload %j',

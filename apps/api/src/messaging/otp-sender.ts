@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { Config } from '../config';
 import { AppError } from '../errors';
 import type { OtpSender } from '../services';
+import { boundedMetaJson } from './meta-response';
 
 const Accepted = z.object({
   messaging_product: z.literal('whatsapp'),
@@ -16,8 +17,23 @@ type MetaOtpConfig = {
   language: string;
 };
 
-const unavailable = () =>
-  new AppError(503, 'UNAVAILABLE', 'We could not send your sign-in code. Please try again later.');
+const ProviderCode = z.number().int().min(0).max(2147483647);
+const Rejected = z.object({ error: z.object({ code: ProviderCode }) });
+
+/** Only numeric diagnostics survive; no provider text, request, response or cause is retained. */
+export class OtpDeliveryError extends AppError {
+  readonly providerCode?: number;
+  readonly providerHttpStatus?: number;
+  constructor(providerCode?: unknown, providerHttpStatus?: unknown) {
+    super(503, 'UNAVAILABLE', 'We could not send your sign-in code. Please try again later.');
+    const code = ProviderCode.safeParse(providerCode);
+    if (code.success) this.providerCode = code.data;
+    const status = z.number().int().min(400).max(599).safeParse(providerHttpStatus);
+    if (status.success) this.providerHttpStatus = status.data;
+  }
+}
+
+const unavailable = () => new OtpDeliveryError();
 
 /** Only authentication templates; clinical content never passes through this adapter. */
 export class MetaWhatsAppOtpSender implements OtpSender {
@@ -65,14 +81,21 @@ export class MetaWhatsAppOtpSender implements OtpSender {
         },
       );
       if (!response.ok) {
-        await response.body?.cancel();
-        throw unavailable();
+        let code: number | undefined;
+        try {
+          const parsed = Rejected.safeParse(await boundedMetaJson(response, 16384));
+          if (parsed.success) code = parsed.data.error.code;
+        } catch {
+          // Invalid, oversized or interrupted bodies provide no trustworthy code.
+        }
+        throw new OtpDeliveryError(code, response.status);
       }
-      const accepted = Accepted.parse(await response.json());
+      const accepted = Accepted.parse(await boundedMetaJson(response, 16384));
       return { messageId: accepted.messages[0]!.id };
-    } catch {
+    } catch (error) {
       // Provider errors can echo the recipient, token or code. Do not propagate their
       // response body, exception or cause into Fastify logs or the public error.
+      if (error instanceof OtpDeliveryError) throw error;
       throw unavailable();
     }
   }

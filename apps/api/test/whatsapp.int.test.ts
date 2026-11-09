@@ -2,6 +2,7 @@ import { WhatsAppDeliveryList } from '@dhc/contracts';
 import { withAuth, withMessaging, withTenant } from '@dhc/db';
 import { createHmac, randomUUID } from 'node:crypto';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { MetaWhatsAppOtpSender } from '../src/messaging/otp-sender';
 import { bearer, createHarness, resetDatabase, seedTwoClinics, staffLogin } from './harness';
 
 const h = createHarness();
@@ -174,6 +175,119 @@ describe('WhatsApp receipt inbox and delivery log', () => {
         .consumedAt,
     ).not.toBeNull();
   });
+  it('stores numeric submission diagnostics without exposing provider text', async () => {
+    const secret = 'synthetic-token +919876543210 private-provider-details';
+    const sender = new MetaWhatsAppOtpSender(
+      {
+        accessToken: 'synthetic-token',
+        phoneNumberId: settings.senderId,
+        version: 'v23.0',
+        templateName: 'patient_sign_in',
+        language: 'en_US',
+      },
+      vi.fn<typeof fetch>().mockResolvedValue(
+        Response.json(
+          {
+            error: { code: 131030, message: secret },
+          },
+          { status: 400 },
+        ),
+      ),
+    );
+    vi.spyOn(h.services.otpSender, 'send').mockImplementationOnce((...args) =>
+      sender.send(...args),
+    );
+    const response = await h.app.inject({
+      method: 'POST',
+      url: '/v1/auth/otp/request',
+      payload: { organisation: 'clinic-a', phone: '9876543210' },
+    });
+    expect(response.statusCode).toBe(503);
+    expect(response.body).not.toMatch(/131030|private-provider-details|synthetic-token|9876543210/);
+    const delivery = await h.owner.whatsAppDelivery.findFirstOrThrow();
+    expect(delivery).toMatchObject({ status: 'submission_failed', errorCode: 131030 });
+    const challenge = await h.owner.otpChallenge.findUniqueOrThrow({
+      where: { id: delivery.otpChallengeId! },
+    });
+    expect(challenge.consumedAt).not.toBeNull();
+    const audit = await h.owner.auditLog.findFirstOrThrow({
+      where: { action: 'auth.otp.delivery_failed' },
+    });
+    expect(audit.metadata).toEqual({
+      deliveryStage: 'provider',
+      providerCode: 131030,
+      providerHttpStatus: 400,
+    });
+    expect(JSON.stringify(audit)).not.toContain(secret);
+    const tokens = await staffLogin(h, 'clinic-a', clinics.a.admin);
+    const log = await h.app.inject({ url: '/v1/delivery-log', headers: bearer(tokens) });
+    expect(log.statusCode).toBe(200);
+    expect(WhatsAppDeliveryList.parse(log.json()).data[0]).toMatchObject({ errorCode: 131030 });
+  });
+
+  it('distinguishes acceptance-recording failures and retains confirmed delivery', async () => {
+    vi.spyOn(h.services.otpSender, 'send').mockImplementationOnce(async (_phone, _code, id) => {
+      await receipt({ id: id!, providerMessageId: null }, 'delivered');
+      await drain();
+      return { messageId: 'wamid.mismatched' };
+    });
+    const response = await h.app.inject({
+      method: 'POST',
+      url: '/v1/auth/otp/request',
+      payload: { organisation: 'clinic-a', phone: '9876543210' },
+    });
+    expect(response.statusCode).toBe(503);
+    expect(response.body).not.toContain('wamid.');
+    const delivery = await h.owner.whatsAppDelivery.findFirstOrThrow();
+    expect(delivery).toMatchObject({ status: 'delivered', errorCode: null });
+    const audit = await h.owner.auditLog.findFirstOrThrow({
+      where: { action: 'auth.otp.delivery_failed' },
+    });
+    expect(audit.metadata).toEqual({ deliveryStage: 'receipt' });
+    expect(
+      (await h.owner.otpChallenge.findUniqueOrThrow({ where: { id: delivery.otpChallengeId! } }))
+        .consumedAt,
+    ).not.toBeNull();
+  });
+
+  it('keeps the diagnostic function restricted and preserves stronger callback evidence', async () => {
+    const delivery = await createDelivery();
+    await expect(
+      withTenant(
+        h.services.db,
+        clinics.a.org.id,
+        (tx) =>
+          tx.$executeRaw`SELECT auth_fail_whatsapp_delivery(${delivery.id}::uuid, now(), 131030)`,
+      ),
+    ).rejects.toThrow();
+    await expect(
+      withMessaging(
+        h.services.db,
+        (tx) =>
+          tx.$executeRaw`SELECT auth_fail_whatsapp_delivery(${delivery.id}::uuid, now(), 131030)`,
+      ),
+    ).rejects.toThrow();
+    await expect(
+      withAuth(
+        h.services.db,
+        (tx) => tx.$executeRaw`SELECT auth_fail_whatsapp_delivery(${delivery.id}::uuid, now(), -1)`,
+      ),
+    ).rejects.toThrow();
+    await receipt(delivery, 'read');
+    await drain();
+    await withAuth(
+      h.services.db,
+      (tx) =>
+        tx.$executeRaw`SELECT auth_fail_whatsapp_delivery(${delivery.id}::uuid, now(), 131030)`,
+    );
+    expect(await row(delivery)).toMatchObject({ status: 'read', errorCode: null });
+    await withAuth(
+      h.services.db,
+      (tx) => tx.$executeRaw`SELECT auth_fail_whatsapp_delivery(${delivery.id}::uuid, now())`,
+    );
+    expect(await row(delivery)).toMatchObject({ status: 'read', errorCode: null });
+  });
+
   it('does not associate unknown IDs or mismatched correlation data', async () => {
     const a = await createDelivery();
     const b = await createDelivery('clinic-b');

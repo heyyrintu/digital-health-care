@@ -32,7 +32,10 @@ test.describe('staff web sign-in', () => {
     await setUpFromInvite(page, clinic.inviteLink('doctor'), PASSWORD);
     await page.getByRole('button', { name: 'Sign out' }).click();
     await expect(page).toHaveURL(/\/clinic\/login$/);
-    expect((await context.cookies()).some((c) => c.name === 'dhc_session')).toBe(false);
+    // The UI clears immediately; the keepalive logout response removes the httpOnly cookie.
+    await expect
+      .poll(async () => (await context.cookies()).some((c) => c.name === 'dhc_session'))
+      .toBe(false);
 
     await page.goto('/clinic');
     await expect(page).toHaveURL(/\/clinic\/login$/);

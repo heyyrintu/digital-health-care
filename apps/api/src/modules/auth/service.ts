@@ -9,6 +9,7 @@ import { normaliseIndianMobile } from '../../auth/phone';
 import { ACCESS_TOKEN_TTL_SECONDS, hashToken, newRefreshToken, type Role } from '../../auth/tokens';
 import { matchTotpStep } from '../../auth/totp';
 import { AppError } from '../../errors';
+import { OtpDeliveryError } from '../../messaging/otp-sender';
 import type { Services } from '../../services';
 import { writeAudit } from '../audit/write';
 import { revokePushDevicesForSessions } from '../devices/revoke';
@@ -93,17 +94,20 @@ export class AuthService {
       return created;
     });
 
+    let deliveryStage: 'provider' | 'receipt' = 'provider';
     try {
       const receipt = await this.s.otpSender.send(phone, code, deliveryId);
       if (deliveryId) {
         if (!receipt) throw new Error('WhatsApp acceptance missing');
+        deliveryStage = 'receipt';
         await withAuth(
           this.s.db,
           (tx) => tx.$executeRaw`
           SELECT auth_accept_whatsapp_delivery(${deliveryId}::uuid, ${receipt.messageId}, ${this.s.now()})`,
         );
       }
-    } catch {
+    } catch (error) {
+      const diagnostic = error instanceof OtpDeliveryError ? error : undefined;
       // A timeout can happen after Meta accepted the message. Retire this challenge so a
       // late code cannot sign in; retain it for rate limiting and never store the code.
       await withAuth(this.s.db, async (tx) => {
@@ -112,12 +116,22 @@ export class AuthService {
           data: { consumedAt: this.s.now() },
         });
         if (deliveryId)
-          await tx.$executeRaw`SELECT auth_fail_whatsapp_delivery(${deliveryId}::uuid, ${this.s.now()})`;
+          await tx.$executeRaw`SELECT auth_fail_whatsapp_delivery(${deliveryId}::uuid,
+            ${this.s.now()}, ${diagnostic?.providerCode ?? null}::integer)`;
         await writeAudit(tx, request, {
           action: 'auth.otp.delivery_failed',
           organisationId: challenge.organisationId,
           entityType: 'otp_challenge',
           entityId: challenge.id,
+          metadata: {
+            deliveryStage,
+            ...(diagnostic?.providerCode !== undefined
+              ? { providerCode: diagnostic.providerCode }
+              : {}),
+            ...(diagnostic?.providerHttpStatus !== undefined
+              ? { providerHttpStatus: diagnostic.providerHttpStatus }
+              : {}),
+          },
         });
       });
       throw new AppError(
