@@ -21,7 +21,10 @@ test('reviews and publishes a synthetic catalogue only to the platform sandbox',
     part.source = source;
     part.fingerprint = fingerprint;
   }
-  const medicinesBefore = await db.medicine.count();
+  // Other parallel browser tests may create clinic-owned medicines. Compare only
+  // the shared reference catalogue, and check that no staged brand was inserted anywhere.
+  const referenceBefore = await db.medicine.count({ where: { organisationId: null } });
+  const stagedNames = bundle.catalogue.records.map((r: { name: string }) => r.name);
   await signInToConsole(page, operator);
   await page.getByRole('link', { name: 'Medicine catalogue review' }).click();
   await expect(page.getByRole('heading', { name: 'Medicine catalogue review' })).toBeVisible();
@@ -52,7 +55,8 @@ test('reviews and publishes a synthetic catalogue only to the platform sandbox',
   await expect(page.getByText('Active sandbox:', { exact: false })).toContainText(
     source.datasetKey,
   );
-  expect(await db.medicine.count()).toBe(medicinesBefore);
+  expect(await db.medicine.count({ where: { organisationId: null } })).toBe(referenceBefore);
+  expect(await db.medicine.count({ where: { name: { in: stagedNames } } })).toBe(0);
   // The client refuses an explicitly real manifest before making an upload request.
   bundle.catalogue.source.dataKind = 'real';
   await page.getByLabel('Synthetic review-bundle.json (up to 2 MiB)').setInputFiles({
