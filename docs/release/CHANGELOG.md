@@ -4,6 +4,8 @@ All notable changes are recorded here, newest first. Format: version, date, summ
 
 ## [Unreleased]
 
+- Medicine catalogue database: stable source identities, immutable release names and brand relationships, automatic transactional indexing and migration backfill. The index stays separate from prescribing; the owner's licence application is pending approval.
+
 - Platform synthetic medicine snapshots can export an audited clinician review worksheet: one row per ingredient, blank clinical mapping/reviewer fields, source provenance, spreadsheet-safe text IDs and bounded CSV output. Export does not change prescribing or confer clinical approval.
 
 - Platform medicine review sandbox: upload bounded synthetic staging bundles, inspect candidates/quarantine/provenance and release differences, record immutable review decisions, and activate or reactivate a sandbox release with revision checks. No clinical medicine or prescription writes; real CDCI licensing and publication remain pending.

@@ -26,7 +26,8 @@ The recommended source is NRCeS / C-DAC's **Common Drug Codes for India (CDCI)**
 The owner downloaded the official package; its licence and all seven master files have
 been inspected. The licence states CC BY 4.0 and permits implementation products/services
 within India, with applicable SNOMED affiliate terms for included International content.
-Owner affiliate registration is still to be confirmed before production publication.
+The owner reported submitting the affiliate application on 13 November 2026. Approval
+and its evidence are still pending before production publication.
 
 The package has 93,911 brand rows and 10,305 generic rows. Fourteen brand rows need
 quarantine for missing/unresolved generic links. All brand regulatory licence statuses
@@ -56,6 +57,7 @@ partially complete: clinical mapping/review, external-ID support in the live med
 master, licence approval and real-data publication still remain. There is no real-data
 publication endpoint. Source hashes establish consistency, not authenticity or licensing;
 the synthetic manifest is an operator declaration, not a content classifier.
+
 ### Review preparation — clinician worksheet
 
 This increment adds a downloadable, audited synthetic-only CSV worksheet
@@ -68,3 +70,21 @@ Remaining: name the clinical reviewer, confirm licensing, build validated mappin
 clinical sign-off storage, add stable external IDs to the clinical master, then implement
 reviewed real-data publication and maintenance. The worksheet is preparation for those
 steps, not completion of them.
+
+### Relational catalogue database — 13 November 2026
+
+The catalogue now has a relational source index, populated atomically whenever a synthetic
+review snapshot is uploaded. Stable UUIDs are keyed by dataset, source entity kind and the
+original text identifier. Release-specific names and brand links cover products, suppliers,
+generics, ingredients, forms and routes. A renamed source entry in a later release reuses
+the identity without overwriting historical names. Quarantined brands are not indexed.
+
+The migration backfills existing snapshots without changing their bundle, fingerprint,
+review decision, revision or active sandbox selection. The platform role can read the index;
+only the migration-owner trigger can populate it. Clinic and authentication roles cannot
+access it. The index is source provenance, not a validated clinical mapping.
+
+This is the database foundation for the future licensed catalogue. It does not remove the
+current synthetic-only upload limit (500 candidates), import the full real CDCI package,
+attach licence evidence, map source entities into clinical medicines, or enable prescribing.
+Those remaining publication steps still require approval evidence and clinical review.

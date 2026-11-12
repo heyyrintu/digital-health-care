@@ -2668,6 +2668,7 @@ model PlatformMedicineStage {
   creator        PlatformOperator @relation("MedicineStageCreator", fields:[createdBy], references:[id])
   reviewer       PlatformOperator? @relation("MedicineStageReviewer", fields:[reviewedBy], references:[id])
   sandboxSlot    PlatformMedicineSandbox?
+  entities       PlatformMedicineEntity[]
 
   @@unique([datasetKey,sourceVersion], map:"platform_medicine_stages_dataset_key_source_version_key")
   @@index([createdAt(sort: Desc),id(sort: Desc)],map:"platform_medicine_stage_page")
@@ -2682,4 +2683,46 @@ model PlatformMedicineSandbox {
   stage     PlatformMedicineStage @relation(fields:[stageId],references:[id])
   operator  PlatformOperator @relation("MedicineSandboxPublisher",fields:[updatedBy],references:[id])
   @@map("platform_medicine_sandbox")
+}
+
+/// Stable source identities; a name belongs to a release, not to the identifier.
+/// Kept separate from medicines until licensing and clinical mapping are complete.
+model PlatformMedicineIdentity {
+  id         String @id @default(uuid()) @db.Uuid
+  datasetKey String @map("dataset_key")
+  kind       String
+  sourceId   String @map("source_id")
+  entities   PlatformMedicineEntity[]
+
+  @@unique([datasetKey, kind, sourceId], map: "platform_medicine_identity_source_key")
+  @@map("platform_medicine_identities")
+}
+
+/// Immutable, release-specific names indexed from an accepted staged candidate.
+model PlatformMedicineEntity {
+  stageId    String @map("stage_id") @db.Uuid
+  identityId String @map("identity_id") @db.Uuid
+  name       String
+  stage      PlatformMedicineStage @relation(fields: [stageId], references: [id], onDelete: Cascade)
+  identity   PlatformMedicineIdentity @relation(fields: [identityId], references: [id], onDelete: Restrict)
+  outgoing   PlatformMedicineLink[] @relation("MedicineLinkFrom")
+  incoming   PlatformMedicineLink[] @relation("MedicineLinkTo")
+
+  @@id([stageId, identityId])
+  @@index([identityId, stageId])
+  @@map("platform_medicine_entities")
+}
+
+/// A brand's original source links. Both ends must exist in the same release.
+/// These are source assertions, not validated clinical mappings or dose rules.
+model PlatformMedicineLink {
+  stageId String @map("stage_id") @db.Uuid
+  fromId  String @map("from_id") @db.Uuid
+  toId    String @map("to_id") @db.Uuid
+  from    PlatformMedicineEntity @relation("MedicineLinkFrom", fields: [stageId, fromId], references: [stageId, identityId], onDelete: Cascade)
+  to      PlatformMedicineEntity @relation("MedicineLinkTo", fields: [stageId, toId], references: [stageId, identityId], onDelete: Cascade)
+
+  @@id([stageId, fromId, toId])
+  @@index([stageId, toId])
+  @@map("platform_medicine_links")
 }

@@ -180,3 +180,35 @@ There is no completed-worksheet importer, clinical sign-off endpoint or prescrib
 publication path in this increment. Completing a downloaded worksheet cannot change
 any medicine, prescription or immutable staged snapshot. Real data and real publication
 remain deferred pending licensing and a named clinical reviewer.
+
+## Relational source index
+
+Migration `20261113090000_medicine_catalogue_index` adds:
+
+| Table | Stores |
+| --- | --- |
+| `platform_medicine_identities` | Stable UUID for each dataset + entity kind + original text source ID |
+| `platform_medicine_entities` | The name of that identity in a particular immutable snapshot |
+| `platform_medicine_links` | Each accepted brand's original product, supplier, generic, ingredient, form and route links within that snapshot |
+
+The upload transaction automatically builds all three tables. A failed index operation
+rolls back the upload. A replayed upload does not duplicate identities or release rows.
+Both endpoints of a link have composite foreign keys into the same snapshot. Old release
+names remain available after a rename, and identical source IDs in different datasets or
+entity kinds remain distinct. Original bundles retain regulatory status, source dates,
+review requirements, file hashes and quarantine reports.
+
+Existing snapshots are backfilled during migration. No fixture is auto-loaded into a fresh
+production database. The migration does not change clinical `medicines`, ingredients,
+prescriptions, review decisions or sandbox selection. It grants no new clinical access.
+
+Platform operators have read access only to the index. Its private, security-definer
+trigger writes as the migration owner; its helper functions cannot be invoked directly by
+the platform, clinic or authentication roles. This follows the repository's existing
+migration-owner deployment model; run migrations with the owner connection.
+
+The current source is still synthetic-only. Licence application submission does not set
+an approval flag. When the approval letter is available, verify the licence holder, affiliate
+reference, permitted territories and applicable package terms before building the real-data
+publication path. Clinical mapping/sign-off and a bounded full-release import remain separate
+work; the source index supplies their durable identifiers and release history.
