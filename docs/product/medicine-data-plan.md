@@ -19,3 +19,32 @@ permission. The owner must choose/authorise the data source; no purchase is impl
 this plan. Until validated data is loaded, keep synthetic preview records clearly marked.
 
 Mobile, AI providers, cloud prescription signing and ABDM remain outside this increment.
+
+### Source research and inspection — 12 November 2026
+
+The recommended source is NRCeS / C-DAC's **Common Drug Codes for India (CDCI)**.
+The owner downloaded the official package; its licence and all seven master files have
+been inspected. The licence states CC BY 4.0 and permits implementation products/services
+within India, with applicable SNOMED affiliate terms for included International content.
+Owner affiliate registration is still to be confirmed before production publication.
+
+The package has 93,911 brand rows and 10,305 generic rows. Fourteen brand rows need
+quarantine for missing/unresolved generic links. All brand regulatory licence statuses
+are UNKNOWN, and clinical safety fields are incomplete; neither is proof of approval or
+absence of interactions. See [the inspection and source comparison](medicine-data-sources-2026-11-12.md).
+
+Next: confirm applicable licensing, add external-ID/provenance support, implement a staging
+import and clinician review. No live medicine import or patient-ABDM integration has occurred.
+
+### Staging implementation — licensing deferred
+
+The owner chose **Check later** for SNOMED affiliate licensing. Real-data publication
+remains pending. The first staging increment is implemented using entirely synthetic
+fixtures: an offline command validates the seven master tables, quarantines bad links
+and duplicate identifiers, retains source IDs/checksums/version, and produces review
+and comparison artifacts. No database schema/data or hosted page was changed.
+
+See [the staging runbook](../runbooks/medicine-catalogue-staging.md). Stage 2 remains
+partially complete: durable app staging storage, an authorized review/publication UI,
+clinical mapping/review and real-data publication still remain. The offline tool has no
+publication path and cannot silently deactivate missing medicines or overwrite a prior run.

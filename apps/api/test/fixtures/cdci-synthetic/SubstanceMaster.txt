@@ -1,0 +1,3 @@
+Identifier	Substance Name
+990000000000000101	Synthetic substance Alpha	
+990000000000000102	Synthetic substance Beta	

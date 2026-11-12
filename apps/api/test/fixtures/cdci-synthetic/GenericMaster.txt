@@ -1,0 +1,3 @@
+Identifier	Generic Name	Substance Identifier	Route of Administration	Dose Form	Interaction with Drugs	last_updated_on
+990000000000000201	Synthetic Alpha 5 mg tablet	990000000000000101	990000000000000401	990000000000000301	Synthetic narrative, never a safety rule	20260101	
+990000000000000202	Synthetic Alpha + Beta mixture	990000000000000101+990000000000000102	990000000000000401+990000000000000402	990000000000000301		20260102	
