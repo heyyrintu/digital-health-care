@@ -1,5 +1,6 @@
 export const en = {
   'people.policy.email': 'Email code',
+  'security.passwordReset': 'Password reset. Sign in with your new password.',
   'security.forgot': 'Forgot password?',
   'security.recoveryHint':
     'Enter your sign-in details to request a password reset code at your registered email.',
@@ -16,7 +17,7 @@ export const en = {
   'security.title': 'Two-step verification',
   'security.current': 'Current method',
   'security.settingsHint':
-    'Choose how to verify future sign-ins. Changes apply to this account across its clinic memberships and sign out existing sessions. WhatsApp and email require a configured sender and a contact on your account.',
+    'Choose how to verify future sign-ins. Changes apply to this account and sign out existing sessions. WhatsApp and email require a configured sender and a contact on your account.',
   'security.chooseMethod': 'Verification method',
   'security.offHint': 'Password-only sign-in. You can enable a second step again later.',
   'security.continue': 'Continue',

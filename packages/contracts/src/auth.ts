@@ -114,17 +114,21 @@ export const SecurityChangeBody = z.object({
   password: z.string().min(1).max(256),
   method: SecondFactorMethod,
 });
-export const SecurityConfirmBody = z.object({
-  challengeId: z.uuid(),
-  currentCode: z
-    .string()
-    .regex(/^\d{6}$/)
-    .optional(),
-  newCode: z
-    .string()
-    .regex(/^\d{6}$/)
-    .optional(),
-});
+export const SecurityConfirmBody = z
+  .object({
+    challengeId: z.uuid(),
+    currentCode: z
+      .string()
+      .regex(/^\d{6}$/)
+      .optional(),
+    newCode: z
+      .string()
+      .regex(/^\d{6}$/)
+      .optional(),
+  })
+  .refine((body) => Boolean(body.currentCode || body.newCode), {
+    message: 'Enter a verification code.',
+  });
 export const SecurityChangeResponse = SecurityChallengeResponse.extend({
   currentMethod: SecondFactorMethod,
   targetMethod: SecondFactorMethod,

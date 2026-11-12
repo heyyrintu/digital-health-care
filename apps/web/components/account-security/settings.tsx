@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState, useEffectEvent, type FormEvent } from 'react';
 import type { ApiClient } from '@dhc/api-client';
 import {
   SecuritySettingsResponse,
@@ -35,6 +35,9 @@ export function SecuritySettings({
     [busy, setBusy] = useState(false),
     [error, setError] = useState('');
   const base = `${platform ? '/platform' : ''}/auth/security`;
+  const reportError = useEffectEvent((e: unknown) =>
+    setError(e instanceof Error ? e.message : t('error.generic')),
+  );
   useEffect(() => {
     let live = true;
     api
@@ -46,12 +49,12 @@ export function SecuritySettings({
         }
       })
       .catch((e) => {
-        if (live) setError(e instanceof Error ? e.message : t('error.generic'));
+        if (live) reportError(e);
       });
     return () => {
       live = false;
     };
-  }, [api, base, t]);
+  }, [api, base]);
   const label = (value: SecondFactorMethodValue) => t(`security.method.${value}`);
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -167,7 +170,10 @@ export function SecuritySettings({
                   type="button"
                   disabled={busy}
                   className="ml-4 underline"
-                  onClick={() => setChallenge(null)}
+                  onClick={() => {
+                    setChallenge(null);
+                    setError('');
+                  }}
                 >
                   {t('security.startAgain')}
                 </button>

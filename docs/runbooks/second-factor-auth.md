@@ -11,7 +11,7 @@ after five minutes and sign out all account sessions. Keep the enrolled authenti
 it can be restored later. Initial invitation/operator setup still enrolls an authenticator.
 Only configured, deliverable methods appear: email needs the SMTP sender and an account
 email; WhatsApp needs the real sender plus the existing stored/mapped mobile number.
-Phone numbers cannot be supplied during sign-in or security changes.
+Phone numbers cannot be supplied as factor recipients during sign-in or security changes.
 
 The following environment variables remain the **defaults for accounts that have never
 chosen a personal method**. Personal choices override these deployment defaults.
@@ -86,7 +86,9 @@ Both `/clinic/login` and `/platform/login` link to Forgot password. A six-digit 
 to the existing account email. Clinic staff must also enter their clinic ID. Requests give
 the same acknowledgement for unknown, inactive and rate-limited identities. Codes expire
 after five minutes, allow five guesses and are stored only as keyed hashes. Requests are
-limited to three per account per ten minutes plus the endpoint IP limit.
+limited to three per account per ten minutes plus the endpoint IP limit. An hourly,
+bounded cleanup removes challenges expired more than 24 hours ago, separately for each
+audience; audit entries retain the security-event history.
 
 Recovery requires `STAFF_EMAIL_VERIFICATION_ENABLED=true` and the existing SMTP settings
 (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`). Despite the historical

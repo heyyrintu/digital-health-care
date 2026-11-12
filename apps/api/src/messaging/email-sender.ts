@@ -34,7 +34,7 @@ export function createEmailSender(config: Config): EmailSender | undefined {
             purpose === 'password_reset'
               ? 'Reset your Digital Healthcare password'
               : 'Your Digital Healthcare verification code',
-          text: `Your verification code is ${code}. It expires in five minutes. Do not share this code. If you did not request this, ignore the message and contact your clinic.`,
+          text: `Your verification code is ${code}. It expires in five minutes. Do not share this code. If you did not request this, ignore the message and contact your administrator or support team.`,
         });
         if (result.rejected?.length || !result.accepted?.length) throw new Error('Not accepted');
       } catch {
@@ -51,7 +51,7 @@ export function createEmailSender(config: Config): EmailSender | undefined {
           from: config.SMTP_FROM,
           to: email,
           subject: 'Confirm your clinic account email change',
-          text: `A clinic administrator requested this email address for your staff account. Your verification code is ${code}. It expires in 10 minutes. Sign in to your existing clinic account and open Your account to confirm the change. Do not give this code or your password to anyone. If you did not request this, ignore the message and contact your clinic.`,
+          text: `A clinic administrator requested this email address for your staff account. Your verification code is ${code}. It expires in 10 minutes. Sign in to your existing clinic account and open Your account to confirm the change. Do not give this code or your password to anyone. If you did not request this, ignore the message and contact your administrator or support team.`,
         });
         if (result.rejected?.length || !result.accepted?.length) throw new Error('Not accepted');
       } catch {

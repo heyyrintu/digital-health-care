@@ -1,4 +1,5 @@
 'use client';
+import Link from 'next/link';
 
 import { ApiError } from '@dhc/api-client';
 import type { LoginResponse } from '@dhc/contracts';
@@ -110,13 +111,15 @@ function Login() {
   }
 
   const notice =
-    params.get('account') === 'updated'
-      ? t('people.signInUpdated')
-      : endedReason === 'idle'
-        ? t('session.idleSignedOut')
-        : endedReason === 'expired'
-          ? t('session.expired')
-          : null;
+    params.get('password') === 'reset'
+      ? t('security.passwordReset')
+      : params.get('account') === 'updated'
+        ? t('people.signInUpdated')
+        : endedReason === 'idle'
+          ? t('session.idleSignedOut')
+          : endedReason === 'expired'
+            ? t('session.expired')
+            : null;
 
   return (
     <main className="grid min-h-screen place-items-center bg-hero px-4 py-10 font-sans text-foreground">
@@ -185,9 +188,12 @@ function Login() {
                 autoComplete="current-password"
               />
             </div>
-            <a className="block text-sm underline" href="/clinic/forgot-password">
+            <Link
+              className="block text-sm underline"
+              href={`/clinic/forgot-password?clinic=${encodeURIComponent(clinic)}`}
+            >
               {t('security.forgot')}
-            </a>
+            </Link>
             {step.roles.length > 1 && (
               <fieldset className="roles rounded-xl border border-border p-4">
                 <legend className="px-1 text-sm font-medium">{t('login.chooseRole')}</legend>

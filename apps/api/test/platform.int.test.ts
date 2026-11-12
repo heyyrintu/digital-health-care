@@ -1524,7 +1524,7 @@ describe('in the database (dhc_platform)', () => {
     ).rejects.toThrow(/row-level security/);
   });
 
-  it('has no privilege beyond platform tables, audience-isolated MFA codes and inserting audit entries', async () => {
+  it('has no privilege beyond platform tables, audience-isolated security challenges and inserting audit entries', async () => {
     const tables = await h.owner.$queryRaw<
       { table: string; any: boolean; read: boolean; insert: boolean }[]
     >`

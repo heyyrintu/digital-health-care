@@ -1,6 +1,7 @@
-import { NextResponse, type NextRequest } from 'next/server';
+import { type NextRequest } from 'next/server';
 import {
   callApi,
+  passThrough,
   forbiddenOrigin,
   isSameOrigin,
   readJson,
@@ -12,10 +13,6 @@ export async function POST(request: NextRequest) {
   const result = await callApi(request, '/platform/auth/password/confirm', {
     body: await readJson(request),
   });
-  const response =
-    result.status === 204
-      ? new NextResponse(null, { status: 204 })
-      : NextResponse.json(result.body, { status: result.status });
-  response.headers.set('cache-control', 'no-store');
+  const response = passThrough(result);
   return result.status === 204 ? clearSession(response, PLATFORM_COOKIE) : response;
 }

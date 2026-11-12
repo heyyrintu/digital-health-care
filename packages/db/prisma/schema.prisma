@@ -2641,5 +2641,6 @@ model AccountSecurityChallenge {
   consumedAt   DateTime? @map("consumed_at") @db.Timestamptz(3)
 
   @@index([audience, subjectId, createdAt], map: "security_subject_created")
+  @@index([expiresAt], map: "security_expiry")
   @@map("account_security_challenges")
 }

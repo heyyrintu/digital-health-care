@@ -1,3 +1,8 @@
+import { drainSecurityDeliveries } from '../src/modules/account-security/routes';
+import { AccountSecurityService } from '../src/modules/account-security/service';
+import * as passwordPrimitives from '../src/auth/password';
+import type { FastifyRequest } from 'fastify';
+import { purgeAccountSecurityChallenges } from '../src/modules/account-security/purge';
 import { withAuth, withPlatform, withTenant } from '@dhc/db';
 import { beforeEach, afterAll, expect, it, vi } from 'vitest';
 import { totpAt } from '../src/auth/totp';
@@ -15,6 +20,7 @@ const h = createHarness();
 let clinics: Awaited<ReturnType<typeof seedTwoClinics>>;
 const emails: { email: string; code: string; purpose: string }[] = [];
 beforeEach(async () => {
+  h.clock.ms = Date.UTC(2026, 9, 6, 4, 30);
   await resetDatabase(h.owner);
   clinics = await seedTwoClinics(h);
   emails.length = 0;
@@ -40,13 +46,20 @@ afterAll(async () => {
   await h.app.close();
   await h.owner.$disconnect();
 });
-const post = (path: string, body: Record<string, unknown>, headers?: Record<string, string>) =>
-  h.app.inject({
+const post = async (
+  path: string,
+  body: Record<string, unknown>,
+  headers?: Record<string, string>,
+) => {
+  const result = await h.app.inject({
     method: 'POST',
     url: '/v1' + path,
     payload: body,
     ...(headers ? { headers } : {}),
   });
+  await drainSecurityDeliveries(h.services);
+  return result;
+};
 const login = () =>
   post('/auth/login', {
     organisation: 'clinic-a',
@@ -493,4 +506,116 @@ it('blocks old authentication images from issuing sessions after account securit
       }),
     ),
   ).rejects.toThrow();
+});
+
+it('purges only security challenges expired more than 24 hours ago across both audiences', async () => {
+  const current = await recovery();
+  const expiresAt = new Date(h.clock.ms - 25 * 60 * 60_000);
+  await h.owner.accountSecurityChallenge.createMany({
+    data: ['staff', 'platform'].map((audience) => ({
+      id: crypto.randomUUID(),
+      audience,
+      subjectId: clinics.a.doctor.userId,
+      purpose: 'recovery',
+      bindingHash: 'synthetic',
+      newCodeHash: 'synthetic',
+      createdAt: new Date(expiresAt.getTime() - 300_000),
+      expiresAt,
+    })),
+  });
+  await purgeAccountSecurityChallenges(h.services);
+  expect(await h.owner.accountSecurityChallenge.count()).toBe(1);
+  expect(
+    await h.owner.accountSecurityChallenge.findUnique({ where: { id: current.challengeId } }),
+  ).not.toBeNull();
+});
+it('uses personal methods for People readiness, enabling access, and retaining the last capable admin', async () => {
+  const tokens = await staffLogin(h, 'clinic-a', clinics.a.admin),
+    headers = bearer(tokens);
+  await h.owner.user.update({
+    where: { id: clinics.a.doctor.userId },
+    data: { mfaMode: 'email', mfaSecret: null },
+  });
+  const detail = await h.app.inject({
+    url: `/v1/staff/people/${clinics.a.doctor.userId}`,
+    headers,
+  });
+  expect(detail.statusCode, detail.body).toBe(200);
+  expect(detail.json().signInReady).toBe(true);
+  expect(detail.json().secondFactorMode).toBe('email');
+  const update = await h.app.inject({
+    method: 'PATCH',
+    url: `/v1/staff/people/${clinics.a.doctor.userId}`,
+    headers,
+    payload: {
+      version: detail.json().version,
+      displayName: detail.json().displayName,
+      roles: ['doctor', 'clinic_admin'],
+      enabled: true,
+    },
+  });
+  expect(update.statusCode, update.body).toBe(200);
+  const step = await post('/auth/login', {
+    organisation: 'clinic-a',
+    identifier: clinics.a.doctor.email,
+    password: STAFF_PASSWORD,
+    role: 'clinic_admin',
+  });
+  expect(step.statusCode, step.body).toBe(200);
+  const signed = await post('/auth/mfa/verify', {
+    mfaToken: step.json().mfaToken,
+    code: emails.at(-1)!.code,
+  });
+  expect(signed.statusCode, signed.body).toBe(200);
+  const actorHeaders = bearer(signed.json());
+  const adminDetail = await h.app.inject({
+    url: `/v1/staff/people/${clinics.a.admin.userId}`,
+    headers: actorHeaders,
+  });
+  expect(adminDetail.statusCode).toBe(200);
+  const demote = await h.app.inject({
+    method: 'PATCH',
+    url: `/v1/staff/people/${clinics.a.admin.userId}`,
+    headers: actorHeaders,
+    payload: {
+      version: adminDetail.json().version,
+      displayName: null,
+      roles: ['front_desk'],
+      enabled: true,
+    },
+  });
+  expect(demote.statusCode, demote.body).toBe(200);
+});
+
+it('acknowledges recovery before looking up the supplied account', async () => {
+  const spy = vi.spyOn(h.services.db, '$transaction');
+  try {
+    const service = new AccountSecurityService(h.services, 'staff');
+    const pending = await service.requestRecovery(
+      { id: 'synthetic-request', ip: '127.0.0.1', headers: {} } as FastifyRequest,
+      clinics.a.doctor.email,
+      'clinic-a',
+    );
+    expect(spy).not.toHaveBeenCalled();
+    await pending.deliver();
+    expect(spy).toHaveBeenCalled();
+    expect(emails).toHaveLength(1);
+  } finally {
+    spy.mockRestore();
+  }
+});
+it('rejects invalid reset challenges without performing password hashing', async () => {
+  const spy = vi.spyOn(passwordPrimitives, 'hashPassword');
+  try {
+    const response = await post('/auth/password/confirm', {
+      challengeId: crypto.randomUUID(),
+      code: '123456',
+      organisation: 'clinic-a',
+      newPassword: 'synthetic replacement passphrase',
+    });
+    expect(response.statusCode).toBe(400);
+    expect(spy).not.toHaveBeenCalled();
+  } finally {
+    spy.mockRestore();
+  }
 });

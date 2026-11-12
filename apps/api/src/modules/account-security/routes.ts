@@ -10,6 +10,11 @@ import type { Services } from '../../services';
 import { AppError } from '../../errors';
 import { AccountSecurityService } from './service';
 
+const deliveries = new WeakMap<Services, Set<Promise<void>>>();
+export async function drainSecurityDeliveries(s: Services) {
+  await Promise.allSettled([...(deliveries.get(s) ?? [])]);
+}
+
 type Context = { id: string; organisationId?: string; sessionId?: string; role?: string };
 export async function registerAccountSecurity(
   app: FastifyInstance,
@@ -20,6 +25,13 @@ export async function registerAccountSecurity(
   contextOf: (request: FastifyRequest) => Context,
 ) {
   const service = new AccountSecurityService(services, audience);
+  let active = deliveries.get(services);
+  if (!active) {
+    active = new Set();
+    deliveries.set(services, active);
+  }
+  const tasks = active;
+  app.addHook('onClose', () => drainSecurityDeliveries(services));
   const config = { rateLimit: { max: signInRateLimit, timeWindow: '1 minute' } };
   const own = {
     config,
@@ -38,7 +50,13 @@ export async function registerAccountSecurity(
     reply.code(202).send(pending.response);
     // Never serialize the transient delivery closure/code, and never make response timing
     // depend on the provider or reveal whether the account exists.
-    await pending.deliver();
+    const task = pending.deliver();
+    tasks.add(task);
+    try {
+      await task;
+    } finally {
+      tasks.delete(task);
+    }
     return reply;
   });
   app.post('/auth/password/confirm', { config }, async (request, reply) => {

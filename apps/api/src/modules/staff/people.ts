@@ -114,7 +114,7 @@ export function person(
     signInReady:
       user.status === 'active' &&
       !!user.passwordHash &&
-      (s.staffMfaMode !== 'totp' || !!user.mfaSecret),
+      ((user.mfaMode ?? s.staffMfaMode) !== 'totp' || !!user.mfaSecret),
     lastLoginAt: user.lastLoginAt?.toISOString() ?? null,
   };
 }
@@ -276,7 +276,8 @@ export class PeopleService {
         throw new AppError(409, 'CONFLICT', 'This account is disabled. Contact platform support.');
       if (
         body.enabled &&
-        (!user.passwordHash || (this.s.staffMfaMode === 'totp' && !user.mfaSecret))
+        (!user.passwordHash ||
+          ((user.mfaMode ?? this.s.staffMfaMode) === 'totp' && !user.mfaSecret))
       )
         throw new AppError(
           409,
@@ -296,7 +297,11 @@ export class PeopleService {
             user: {
               status: 'active',
               passwordHash: { not: null },
-              ...(this.s.staffMfaMode === 'totp' ? { mfaSecret: { not: null } } : {}),
+              OR: [
+                { mfaSecret: { not: null } },
+                { mfaMode: { in: ['email', 'whatsapp', 'disabled'] } },
+                ...(this.s.staffMfaMode !== 'totp' ? [{ mfaMode: null }] : []),
+              ],
             },
           },
         });

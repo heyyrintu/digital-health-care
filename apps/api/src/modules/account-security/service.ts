@@ -236,58 +236,55 @@ export class AccountSecurityService {
       code = randomCode(),
       now = this.s.now();
     const expiresAt = new Date(now.getTime() + 5 * 60_000);
-    const found = await this.run(async (tx) => {
-      if (this.audience === 'platform') {
-        const row = await tx.platformOperator.findUnique({
-          where: { email: identifier.trim().toLowerCase() },
-        });
-        return row ? { id: row.id } : null;
-      }
-      const org = organisation
-        ? await tx.organisation.findUnique({ where: { slug: organisation } })
-        : null;
-      if (org?.status !== 'active') return null;
-      const value = identifier.trim().toLowerCase();
-      const phone = normaliseIndianMobile(value);
-      const row = value.includes('@')
-        ? await tx.user.findUnique({ where: { email: value } })
-        : phone
-          ? await tx.user.findUnique({ where: { phone } })
-          : null;
-      return row ? { id: row.id, organisationId: org.id } : null;
-    });
-    // Same expensive operation for existing and unknown identities. Mail delivery begins
-    // only after the route has sent the identical acknowledgement to the browser.
-    await verifyPassword('recovery-request-timing', DUMMY_PASSWORD_HASH);
-    const pending = found
-      ? await this.run(async (tx) => {
-          const u = await this.lockedSubject(tx, found.id);
-          if (
-            !this.active(u) ||
-            !u.email ||
-            !(await this.hasAccess(tx, found)) ||
-            !(await this.canRequest(tx, u, 'recovery'))
-          )
-            return null;
-          await tx.accountSecurityChallenge.create({
-            data: {
-              id,
-              audience: this.audience,
-              subjectId: u.id,
-              purpose: 'recovery',
-              bindingHash: this.binding(u, found, 'recovery'),
-              newCodeHash: this.s.hashOtp(`${id}:new`, code),
-              createdAt: now,
-              expiresAt,
-            },
-          });
-          await this.audit(tx, request, found, 'password_reset.requested');
-          return u;
-        })
-      : null;
     return {
       response: { challengeId: id, expiresAt: expiresAt.toISOString() },
       deliver: async () => {
+        const found = await this.run(async (tx) => {
+          if (this.audience === 'platform') {
+            const row = await tx.platformOperator.findUnique({
+              where: { email: identifier.trim().toLowerCase() },
+            });
+            return row ? { id: row.id } : null;
+          }
+          const org = organisation
+            ? await tx.organisation.findUnique({ where: { slug: organisation } })
+            : null;
+          if (org?.status !== 'active') return null;
+          const value = identifier.trim().toLowerCase();
+          const phone = normaliseIndianMobile(value);
+          const row = value.includes('@')
+            ? await tx.user.findUnique({ where: { email: value } })
+            : phone
+              ? await tx.user.findUnique({ where: { phone } })
+              : null;
+          return row ? { id: row.id, organisationId: org.id } : null;
+        });
+        const pending = found
+          ? await this.run(async (tx) => {
+              const u = await this.lockedSubject(tx, found.id);
+              if (
+                !this.active(u) ||
+                !u.email ||
+                !(await this.hasAccess(tx, found)) ||
+                !(await this.canRequest(tx, u, 'recovery'))
+              )
+                return null;
+              await tx.accountSecurityChallenge.create({
+                data: {
+                  id,
+                  audience: this.audience,
+                  subjectId: u.id,
+                  purpose: 'recovery',
+                  bindingHash: this.binding(u, found, 'recovery'),
+                  newCodeHash: this.s.hashOtp(`${id}:new`, code),
+                  createdAt: now,
+                  expiresAt,
+                },
+              });
+              await this.audit(tx, request, found, 'password_reset.requested');
+              return u;
+            })
+          : null;
         if (!pending || !found) return;
         try {
           await this.send('email', pending, code, 'password_reset');
@@ -317,7 +314,6 @@ export class AccountSecurityService {
     password: string,
     organisation?: string,
   ) {
-    const hash = await hashPassword(password);
     const result = await this.run(async (tx) => {
       const row = await tx.accountSecurityChallenge.findUnique({ where: { id } });
       if (!row || row.purpose !== 'recovery') return false;
@@ -345,6 +341,9 @@ export class AccountSecurityService {
         });
         return false;
       }
+      // Only valid, locked challenges may spend password-hashing work. A failed hash
+      // rolls back consumption; concurrent confirmations wait for this transaction.
+      const hash = await hashPassword(password);
       await tx.accountSecurityChallenge.update({
         where: { id },
         data: { consumedAt: this.s.now() },

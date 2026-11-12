@@ -1,4 +1,5 @@
 'use client';
+import Link from 'next/link';
 import { useEffect, useState, type FormEvent } from 'react';
 import { Button, Input } from '@dhc/ui-web';
 import { SecurityChallengeResponse } from '@dhc/contracts';
@@ -65,7 +66,13 @@ function Recovery({ platform, t }: { platform: boolean; t: Translator }) {
       }
       setChallenge(SecurityChallengeResponse.parse(payload).challengeId);
     } catch (e) {
-      setError(e instanceof Error ? e.message : t('error.network'));
+      setError(
+        e instanceof TypeError
+          ? t('error.network')
+          : e instanceof Error
+            ? e.message
+            : t('error.generic'),
+      );
     } finally {
       setBusy(false);
     }
@@ -154,9 +161,9 @@ function Recovery({ platform, t }: { platform: boolean; t: Translator }) {
             {t('security.startAgain')}
           </button>
         )}
-        <a className="block underline" href={login}>
+        <Link className="block underline" href={login}>
           {t('security.backToLogin')}
-        </a>
+        </Link>
       </section>
     </main>
   );

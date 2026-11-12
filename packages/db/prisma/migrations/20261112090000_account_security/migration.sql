@@ -7,8 +7,9 @@ CREATE TABLE account_security_challenges (
  subject_id uuid NOT NULL, purpose text NOT NULL CHECK (purpose IN ('recovery','mfa_change')),
  binding_hash text NOT NULL, target_mode text CHECK (target_mode IN ('totp','whatsapp','email','disabled')),
  old_code_hash text, new_code_hash text NOT NULL, attempts integer NOT NULL DEFAULT 0 CHECK (attempts >= 0),
- created_at timestamptz NOT NULL, expires_at timestamptz NOT NULL, delivered_at timestamptz, consumed_at timestamptz
+ created_at timestamptz(3) NOT NULL, expires_at timestamptz(3) NOT NULL, delivered_at timestamptz(3), consumed_at timestamptz(3)
 );
+CREATE INDEX security_expiry ON account_security_challenges(expires_at);
 CREATE INDEX security_subject_created ON account_security_challenges(audience,subject_id,created_at);
 ALTER TABLE account_security_challenges ENABLE ROW LEVEL SECURITY;
 ALTER TABLE account_security_challenges FORCE ROW LEVEL SECURITY;

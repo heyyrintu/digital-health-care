@@ -1,4 +1,5 @@
 'use client';
+import Link from 'next/link';
 
 import { ApiError } from '@dhc/api-client';
 import type { PlatformLoginResponse } from '@dhc/contracts';
@@ -27,6 +28,10 @@ export default function PlatformLoginPage() {
   const [busy, setBusy] = useState(false);
   // Kept when the code step sends the operator back to the password.
   const [email, setEmail] = useState('');
+  const [passwordReset, setPasswordReset] = useState(false);
+  useEffect(() => {
+    setPasswordReset(new URLSearchParams(window.location.search).get('password') === 'reset');
+  }, []);
 
   useEffect(() => {
     if (status === 'signedIn') router.replace('/platform');
@@ -87,8 +92,9 @@ export default function PlatformLoginPage() {
     }
   }
 
-  const notice =
-    endedReason === 'idle'
+  const notice = passwordReset
+    ? t('security.passwordReset')
+    : endedReason === 'idle'
       ? t('session.idleSignedOut')
       : endedReason === 'expired'
         ? t('session.expired')
@@ -162,9 +168,9 @@ export default function PlatformLoginPage() {
                 autoComplete="current-password"
               />
             </div>
-            <a className="block text-sm underline" href="/platform/forgot-password">
+            <Link className="block text-sm underline" href="/platform/forgot-password">
               {t('security.forgot')}
-            </a>
+            </Link>
             <Button type="submit" size="lg" className="w-full" disabled={busy}>
               {t('login.signIn')}
             </Button>
