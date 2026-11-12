@@ -151,7 +151,10 @@ function ReviewScreen() {
   const filtered = records.filter((r) =>
     `${r.name} ${r.generic.name}`.toLowerCase().includes(search.toLowerCase()),
   );
-  const previous = new Map(active?.bundle.catalogue.records.map((r) => [r.sourceId, r]) ?? []);
+  const comparable = !active || active.datasetKey === selected?.datasetKey;
+  const previous = new Map(
+    comparable ? (active?.bundle.catalogue.records.map((r) => [r.sourceId, r]) ?? []) : [],
+  );
   const current = new Map(records.map((r) => [r.sourceId, r]));
   const changes = {
     new: records.filter((r) => !previous.has(r.sourceId)).length,
@@ -240,13 +243,17 @@ function ReviewScreen() {
             </h2>
             <p>{t('medicineReview.safety')}</p>
             <h3 className="font-semibold">{t('medicineReview.changes')}</h3>
-            <ul>
-              {(Object.keys(changes) as (keyof typeof changes)[]).map((k) => (
-                <li key={k}>
-                  {t(`medicineReview.${k}`)}: {changes[k]}
-                </li>
-              ))}
-            </ul>
+            {!comparable ? (
+              <p>{t('medicineReview.notComparable')}</p>
+            ) : (
+              <ul>
+                {(Object.keys(changes) as (keyof typeof changes)[]).map((k) => (
+                  <li key={k}>
+                    {t(`medicineReview.${k}`)}: {changes[k]}
+                  </li>
+                ))}
+              </ul>
+            )}
             <label className="block">
               {t('medicineReview.search')}
               <Input value={search} onChange={(e) => setSearch(e.target.value)} />
@@ -258,7 +265,7 @@ function ReviewScreen() {
                   <tr>
                     {(['brand', 'generic', 'ingredients', 'form', 'regulatory'] as const).map(
                       (k) => (
-                        <th className="p-2" key={k}>
+                        <th scope="col" className="p-2" key={k}>
                           {t(`medicineReview.${k}`)}
                         </th>
                       ),
@@ -272,6 +279,19 @@ function ReviewScreen() {
                         {r.name}
                         <br />
                         <small>{r.sourceId}</small>
+                        <details>
+                          <summary>{t('medicineReview.details')}</summary>
+                          <p>
+                            {t('medicineReview.product')}: {r.product.name} ({r.product.sourceId})
+                          </p>
+                          <p>
+                            {t('medicineReview.supplier')}: {r.supplier.name} ({r.supplier.sourceId}
+                            )
+                          </p>
+                          <p>
+                            {t('medicineReview.updated')}: {r.sourceUpdatedAt ?? '—'}
+                          </p>
+                        </details>
                       </td>
                       <td className="p-2">{r.generic.name}</td>
                       <td className="p-2">{r.ingredients.map((i) => i.name).join(', ')}</td>

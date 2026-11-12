@@ -2,6 +2,13 @@ import type { MessageKey } from './en';
 
 /** Hindi strings. Needs review by a native speaker before release. */
 export const hi: Record<MessageKey, string> = {
+  'medicineReview.notComparable':
+    'सक्रिय स्नैपशॉट दूसरे डेटासेट का है; रिलीज़ के बदलावों की तुलना नहीं की जा सकती।',
+  'medicineReview.details': 'स्रोत विवरण',
+  'medicineReview.product': 'उत्पाद',
+  'medicineReview.supplier': 'आपूर्तिकर्ता',
+  'medicineReview.updated': 'स्रोत अपडेट तिथि',
+
   'medicineReview.title': 'दवा सूची की समीक्षा',
   'medicineReview.scope':
     'केवल काल्पनिक सैंडबॉक्स। यहाँ प्रकाशन से क्लिनिक की दवा सूची नहीं बदलती। वास्तविक डेटा के लिए लाइसेंस समीक्षा बाकी है।',
@@ -22,7 +29,7 @@ export const hi: Record<MessageKey, string> = {
   'medicineReview.issues': 'अलग रखी गई पंक्तियों की रिपोर्ट',
   'medicineReview.search': 'ब्रांड या जेनेरिक से खोजें',
   'medicineReview.safety':
-    'क्लिनिकल सुरक्षा, मात्रा और नियामक स्थिति की अलग समीक्षा आवश्यक है। ये रिकॉर्ड प्रिस्क्रिप्शन के लिए स्वीकृत नहीं हैं।',
+    'क्लिनिकल सुरक्षा, औषधि की शक्ति और नियामक स्थिति की अलग समीक्षा आवश्यक है। ये रिकॉर्ड प्रिस्क्रिप्शन के लिए स्वीकृत नहीं हैं।',
   'medicineReview.brand': 'ब्रांड',
   'medicineReview.generic': 'जेनेरिक',
   'medicineReview.ingredients': 'घटक',

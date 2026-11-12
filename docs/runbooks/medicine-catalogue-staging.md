@@ -34,7 +34,7 @@ entirely fabricated and does not include the downloaded real catalogue.
 
 ## Input contract
 
-`manifest.json` must contain exactly:
+`manifest.json` has exactly four keys. The supplied fixture uses:
 
 ```json
 {
@@ -44,6 +44,11 @@ entirely fabricated and does not include the downloaded real catalogue.
   "version": "fixture-1"
 }
 ```
+
+`format` must be `cdci-flat-files/v1` and `dataKind` must be `synthetic`.
+Choose `datasetKey` (1–80 lowercase letters, digits, dots, underscores or hyphens;
+start with a letter or digit) and a nonblank `version` of up to 80 characters.
+Use a new version for a changed release; the fixture values are examples.
 
 Supply the seven `*Master.txt` files in the same directory: Brand, Generic, Product,
 Supplier, Substance, DrugForm and RouteOfAdministration. Files are UTF-8 TSV. The parser
@@ -135,3 +140,8 @@ files are not uploaded, so the server cannot reproduce the candidate derivation.
 must ensure all contents are fabricated. Real CDCI content remains deferred until the
 owner confirms applicable licensing. There is no real-data publishing switch or API in
 this increment, and no clinic can prescribe from this sandbox.
+
+Expansion bounds: linked generic and candidate JSON each have a conservative 64 MiB
+budget, counted before retaining each expanded record. Every artifact also has a
+128 MiB conservative estimate checked before serialization, in addition to the final
+256 MiB output-byte cap. Oversized expansions fail instead of exhausting memory.

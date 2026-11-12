@@ -159,3 +159,24 @@ it('keeps the browser review fixture reproducible from the seven synthetic sourc
   const prepared = JSON.parse(readFileSync(new URL('review-bundle.json', fixture), 'utf8'));
   expect(prepared).toEqual(stage());
 });
+
+it('bounds repeated reference expansion before retaining a huge candidate catalogue', () => {
+  const files = source();
+  // Use the actual fixture name independently of its wording.
+  const rows = files['SubstanceMaster.txt'].split('\n');
+  const first = rows[1]!.split('\t');
+  first[1] = 'X'.repeat(99_000);
+  rows[1] = first.join('\t');
+  files['SubstanceMaster.txt'] = rows.join('\n');
+  const brands = files['BrandMaster.txt'].split('\n');
+  const template = brands[1]!.split('\t');
+  files['BrandMaster.txt'] =
+    brands[0] +
+    '\n' +
+    Array.from({ length: 1500 }, (_, i) => {
+      const row = [...template];
+      row[0] = String(800000 + i);
+      return row.join('\t');
+    }).join('\n');
+  expect(() => stage(files)).toThrow('Expanded staging JSON budget');
+});

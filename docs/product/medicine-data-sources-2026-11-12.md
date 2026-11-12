@@ -81,7 +81,7 @@ Do not import scraped pharmacy/Kaggle data solely because a download is free.
 
 ## Download inspection
 
-Archive: `/Users/getitrent/Downloads/CommonDrugCodesForIndia_FlatFilePackage.zip`
+Archive: `CommonDrugCodesForIndia_FlatFilePackage.zip (private local download)`
 
 SHA-256: `aebd30ac95d73accf573c86fd4dae1dc90eff03ae0fbcd312bc761011e88270a`
 
@@ -115,9 +115,9 @@ repeatable import; source identifiers must remain strings.
 
 Inspection artifacts (local, not loaded into the hosted application):
 
-- `/private/tmp/dhc-cdci-inspection-2026-11-12/inspection.json`
-- `/private/tmp/dhc-cdci-inspection-2026-11-12/brand-reference-quarantine.csv`
-- `/private/tmp/dhc-cdci-inspection-2026-11-12/License.txt`
+- `private local inspection directory: inspection.json`
+- `private local inspection directory: brand-reference-quarantine.csv`
+- `private local inspection directory: License.txt`
 
 Licensing references:
 

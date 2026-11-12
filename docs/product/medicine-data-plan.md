@@ -42,9 +42,9 @@ The owner chose **Check later** for SNOMED affiliate licensing. Real-data public
 remains pending. The first staging increment is implemented using entirely synthetic
 fixtures: an offline command validates the seven master tables, quarantines bad links
 and duplicate identifiers, retains source IDs/checksums/version, and produces review
-and comparison artifacts. That offline increment did not change the database or hosted page.
+artifacts, plus comparison artifacts when `--previous` names a completed stage. That offline increment did not change the database or hosted page.
 
-The next increment adds platform-only durable synthetic snapshots, a review screen at
+This increment adds platform-only durable synthetic snapshots, a review screen at
 `/platform/medicines`, immutable review decisions, and an active sandbox release with
 conflict protection and reactivation of an earlier reviewed release. It displays
 candidate links, quarantine rows, provenance and changes from the active sandbox.

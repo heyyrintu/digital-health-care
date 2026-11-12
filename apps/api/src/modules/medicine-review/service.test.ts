@@ -37,3 +37,15 @@ it('bounds review candidates and quarantine reports', () => {
   manyIssues.report.issues = Array.from({ length: 2001 }, () => fresh().report.issues[0]!);
   expect(() => validateReviewBundle(manyIssues)).toThrow();
 });
+
+it('rejects blank labels and contradictory indexed/quarantine evidence', () => {
+  const blank = fresh();
+  blank.catalogue.records[0]!.supplier.name = '   ';
+  expect(() => validateReviewBundle(blank)).toThrow();
+  const counts = fresh();
+  counts.report.tables['BrandMaster.txt'].indexedRows = 0;
+  expect(() => validateReviewBundle(counts)).toThrow('counts');
+  const quarantined = fresh();
+  quarantined.report.issues[0]!.sourceId = quarantined.catalogue.records[0]!.sourceId;
+  expect(() => validateReviewBundle(quarantined)).toThrow('also be quarantined');
+});

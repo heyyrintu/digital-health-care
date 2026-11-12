@@ -36,6 +36,10 @@ test('reviews and publishes a synthetic catalogue only to the platform sandbox',
   await page.getByRole('button', { name: 'Upload review bundle', exact: true }).click();
   await expect(page.getByRole('status')).toHaveText('Snapshot uploaded.');
   await expect(page.getByRole('table')).toContainText(bundle.catalogue.records[0].name);
+  await page.getByText('Source details', { exact: true }).first().click();
+  await expect(
+    page.getByText(new RegExp(bundle.catalogue.records[0].supplier.name)).first(),
+  ).toBeVisible();
   await page.getByText('Quarantine report (1)', { exact: true }).click();
   await expect(page.getByText(/generic_reference/)).toBeVisible();
   await expect(page.getByRole('button', { name: 'Mark reviewed', exact: true })).toBeDisabled();
@@ -57,6 +61,35 @@ test('reviews and publishes a synthetic catalogue only to the platform sandbox',
   );
   expect(await db.medicine.count({ where: { organisationId: null } })).toBe(referenceBefore);
   expect(await db.medicine.count({ where: { name: { in: stagedNames } } })).toBe(0);
+  const otherDataset = structuredClone(bundle);
+  const otherSource = { ...source, datasetKey: `${source.datasetKey}-other` };
+  const otherFingerprint = createHash('sha256')
+    .update(
+      JSON.stringify({
+        schemaVersion: 1,
+        source: otherSource,
+        hashes: otherDataset.provenance.fileSha256,
+      }),
+    )
+    .digest('hex');
+  for (const part of [otherDataset.catalogue, otherDataset.report, otherDataset.provenance]) {
+    part.source = otherSource;
+    part.fingerprint = otherFingerprint;
+  }
+  await page
+    .getByLabel('Synthetic review-bundle.json (up to 2 MiB)')
+    .setInputFiles({
+      name: 'other.json',
+      mimeType: 'application/json',
+      buffer: Buffer.from(JSON.stringify(otherDataset)),
+    });
+  await page.getByRole('button', { name: 'Upload review bundle', exact: true }).click();
+  await expect(
+    page.getByText(
+      'The active snapshot belongs to another dataset; release differences cannot be compared.',
+      { exact: true },
+    ),
+  ).toBeVisible();
   // The client refuses an explicitly real manifest before making an upload request.
   bundle.catalogue.source.dataKind = 'real';
   await page.getByLabel('Synthetic review-bundle.json (up to 2 MiB)').setInputFiles({

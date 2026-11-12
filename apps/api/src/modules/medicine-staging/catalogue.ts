@@ -1,3 +1,4 @@
+import { assertJsonBudget } from './json-budget';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 
@@ -107,7 +108,8 @@ function table(file: FileName, text: string, issues: Issue[]) {
   for (const r of parsed) {
     const values = Object.fromEntries(header.map((h, i) => [h, (r.cells[i] ?? '').trim()]));
     const id = values[FILES[file][0]] ?? '';
-    const issue = (reason: string) => issues.push({ file, line: r.line, sourceId: id, reason });
+    const issue = (reason: string) =>
+      issues.push({ file, line: r.line, sourceId: id.slice(0, 100), reason });
     if (!identifier.safeParse(id).success) {
       issue('invalid_identifier');
       continue;
@@ -167,6 +169,7 @@ export function stageCatalogue(rawManifest: unknown, files: Record<FileName, str
       form: Candidate['form'];
     }
   >();
+  let genericBytes = 0;
   for (const [id, r] of tables['GenericMaster.txt'].index) {
     const ingredients = refs('SubstanceMaster.txt', r.values['Substance Identifier']!),
       routes = refs('RouteOfAdministrationMaster.txt', r.values['Route of Administration']!),
@@ -180,9 +183,12 @@ export function stageCatalogue(rawManifest: unknown, files: Record<FileName, str
       });
       continue;
     }
-    generics.set(id, { generic: ref('GenericMaster.txt', id)!, ingredients, routes, form });
+    const linked = { generic: ref('GenericMaster.txt', id)!, ingredients, routes, form };
+    genericBytes += assertJsonBudget(linked, 64 * 1024 * 1024 - genericBytes);
+    generics.set(id, linked);
   }
   const records: Candidate[] = [];
+  let candidateBytes = 0;
   for (const [id, r] of tables['BrandMaster.txt'].index) {
     const product = ref('ProductMaster.txt', r.values['Product Identifier']!),
       supplier = ref('SupplierMaster.txt', r.values['Supplier Identifier']!),
@@ -203,7 +209,7 @@ export function stageCatalogue(rawManifest: unknown, files: Record<FileName, str
       });
       continue;
     }
-    records.push({
+    const candidate: Candidate = {
       sourceId: id,
       name: r.values['Brand Name']!,
       product,
@@ -213,7 +219,9 @@ export function stageCatalogue(rawManifest: unknown, files: Record<FileName, str
       regulatoryStatus: r.values['License Status'] || 'UNKNOWN',
       clinicalSafety: 'not_assessed',
       reviewRequired: ['strength_mapping', 'route_mapping', 'clinical_review', 'regulatory_review'],
-    });
+    };
+    candidateBytes += assertJsonBudget(candidate, 64 * 1024 * 1024 - candidateBytes);
+    records.push(candidate);
   }
   records.sort((a, b) => (a.sourceId < b.sourceId ? -1 : a.sourceId > b.sourceId ? 1 : 0));
   const catalogue = Catalogue.parse({

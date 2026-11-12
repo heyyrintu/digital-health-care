@@ -9,11 +9,11 @@ export const Manifest = z
   .strict();
 export type Manifest = z.infer<typeof Manifest>;
 const identifier = z.string().regex(/^\d{1,18}$/);
-const namedReference = z.object({ sourceId: identifier, name: z.string().min(1) }).strict();
+const namedReference = z.object({ sourceId: identifier, name: z.string().trim().min(1) }).strict();
 export const Candidate = z
   .object({
     sourceId: identifier,
-    name: z.string().min(1),
+    name: z.string().trim().min(1),
     product: namedReference,
     supplier: namedReference,
     generic: namedReference,
@@ -21,7 +21,7 @@ export const Candidate = z
     routes: z.array(namedReference).min(1),
     form: namedReference,
     sourceUpdatedAt: z.iso.date().nullable(),
-    regulatoryStatus: z.string().min(1),
+    regulatoryStatus: z.string().trim().min(1),
     clinicalSafety: z.literal('not_assessed'),
     reviewRequired: z.tuple([
       z.literal('strength_mapping'),

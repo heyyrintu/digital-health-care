@@ -1,3 +1,4 @@
+import { assertJsonBudget, jsonBudget } from './json-budget';
 import { MedicineReviewBundle } from '@dhc/contracts';
 import { lstat, mkdir, open, writeFile } from 'node:fs/promises';
 import { constants } from 'node:fs';
@@ -51,18 +52,25 @@ export async function stageDirectory(inputPath: string, outputPath: string, prev
   // mkdir is exclusive: never overwrite an existing report or source directory.
   await mkdir(output, { mode: 0o700 });
   const checksums: Record<string, string> = {};
-  const reviewBundle = MedicineReviewBundle.safeParse(staged);
+  const reviewBundle =
+    staged.catalogue.records.length <= 500 && staged.report.issues.length <= 2000
+      ? MedicineReviewBundle.safeParse(staged)
+      : null;
   const reviewBundleAvailable =
-    reviewBundle.success &&
+    reviewBundle?.success === true &&
+    jsonBudget(reviewBundle.data, 2 * 1024 * 1024) <= 2 * 1024 * 1024 &&
     Buffer.byteLength(JSON.stringify(reviewBundle.data, null, 2) + '\n') <= 2 * 1024 * 1024;
   const artifacts = {
-    ...(reviewBundleAvailable ? { 'review-bundle.json': reviewBundle.data } : {}),
+    ...(reviewBundleAvailable && reviewBundle?.success
+      ? { 'review-bundle.json': reviewBundle.data }
+      : {}),
     'catalogue.json': staged.catalogue,
     'report.json': staged.report,
     'provenance.json': staged.provenance,
     ...(delta ? { 'delta.json': delta } : {}),
   };
   for (const [name, value] of Object.entries(artifacts)) {
+    assertJsonBudget(value, 128 * 1024 * 1024);
     const text = JSON.stringify(value, null, 2) + '\n';
     if (Buffer.byteLength(text) > 256 * 1024 * 1024)
       throw new Error('Staging artifact exceeds 256 MiB.');

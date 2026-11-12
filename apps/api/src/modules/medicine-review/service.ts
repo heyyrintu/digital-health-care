@@ -49,6 +49,7 @@ export function validateReviewBundle(input: unknown) {
     throw invalid('The source metadata and fingerprint do not match. Recreate the review bundle.');
   if (
     report.candidateBrands !== catalogue.records.length ||
+    report.candidateBrands > report.tables['BrandMaster.txt'].indexedRows ||
     report.candidateBrands + report.rejectedBrands !== report.tables['BrandMaster.txt'].inputRows ||
     Object.values(report.tables).some((t) => t.indexedRows > t.inputRows)
   )
@@ -78,6 +79,8 @@ export function validateReviewBundle(input: unknown) {
       names.set(key, ref.name);
     }
   }
+  if (report.issues.some((i) => i.file === 'BrandMaster.txt' && ids.has(i.sourceId)))
+    throw invalid('A candidate cannot also be quarantined.');
   return bundle;
 }
 
@@ -102,6 +105,8 @@ export class MedicineReviewService {
   async list(req: FastifyRequest, operatorId: string, cursor?: string, state?: string) {
     return withPlatform(this.s.db, async (tx) => {
       const anchor = cursor ? await this.row(tx, cursor) : null;
+      if (anchor && state && anchor.state !== state)
+        throw invalid('The cursor does not belong to this state filter. Restart the listing.');
       const rows = await tx.platformMedicineStage.findMany({
         where: {
           ...(state ? { state } : {}),
@@ -149,6 +154,7 @@ export class MedicineReviewService {
       });
       if (existing) {
         if (existing.bundleHash !== bundleHash) throw conflict();
+        await this.audit(tx, req, operatorId, 'upload.replayed', existing.id);
         return { created: false, stage: detail(existing) };
       }
       // Prisma's insert includes default-valued columns. Use an explicit column list

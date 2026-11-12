@@ -54,3 +54,14 @@ CREATE TRIGGER platform_medicine_stage_guard BEFORE UPDATE ON platform_medicine_
  FOR EACH ROW EXECUTE FUNCTION guard_medicine_stage_transition();
 
 REVOKE ALL ON FUNCTION guard_medicine_stage_transition() FROM PUBLIC;
+
+CREATE FUNCTION guard_medicine_sandbox_stage() RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog,public AS $$
+BEGIN
+ IF NOT EXISTS (SELECT 1 FROM public.platform_medicine_stages WHERE id=NEW.stage_id AND state='published_demo') THEN
+  RAISE EXCEPTION 'Only published synthetic snapshots can become active';
+ END IF;
+ RETURN NEW;
+END $$;
+REVOKE ALL ON FUNCTION guard_medicine_sandbox_stage() FROM PUBLIC;
+CREATE TRIGGER medicine_sandbox_stage_guard BEFORE INSERT OR UPDATE ON platform_medicine_sandbox
+ FOR EACH ROW EXECUTE FUNCTION guard_medicine_sandbox_stage();

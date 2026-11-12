@@ -1,4 +1,11 @@
 export const en = {
+  'medicineReview.notComparable':
+    'The active snapshot belongs to another dataset; release differences cannot be compared.',
+  'medicineReview.details': 'Source details',
+  'medicineReview.product': 'Product',
+  'medicineReview.supplier': 'Supplier',
+  'medicineReview.updated': 'Source updated',
+
   'medicineReview.title': 'Medicine catalogue review',
   'medicineReview.scope':
     'Synthetic sandbox only. Publishing here does not change clinic prescribing. Real-data publication awaits licence review.',

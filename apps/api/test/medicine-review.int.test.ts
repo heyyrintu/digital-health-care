@@ -64,6 +64,9 @@ it('uploads idempotently, audits decisions, and keeps sandbox publication out of
   const duplicate = await call('POST', 'medicine-stages', bundle());
   expect(duplicate.statusCode).toBe(200);
   expect(duplicate.json().id).toBe(stage.id);
+  expect(
+    await h.owner.auditLog.count({ where: { action: 'platform.medicine.upload.replayed' } }),
+  ).toBe(1);
   expect((await publish(stage.id, 1)).statusCode).toBe(409);
   expect((await review(stage.id)).statusCode).toBe(200);
   expect((await review(stage.id)).statusCode).toBe(409);
@@ -156,6 +159,13 @@ it('denies unauthenticated, clinic and disallowed-network access and enforces da
   await restricted.owner.$disconnect();
   const stage = await upload();
   await expect(
+    withPlatform(h.services.db, (tx) =>
+      tx.platformMedicineSandbox.create({
+        data: { id: 1, stageId: stage.id, updatedBy: op.operatorId, updatedAt: h.clock.now() },
+      }),
+    ),
+  ).rejects.toThrow('Only published synthetic snapshots');
+  await expect(
     withAuth(h.services.db, (tx) => tx.platformMedicineStage.findMany()),
   ).rejects.toThrow();
   await expect(
@@ -181,6 +191,9 @@ it('paginates immutable snapshots without skipping ties and makes a rejected sna
   const second = (await call('GET', `medicine-stages?cursor=${first.nextCursor}`)).json();
   expect(second.data).toHaveLength(2);
   expect(second.nextCursor).toBeNull();
+  expect(
+    (await call('GET', `medicine-stages?state=rejected&cursor=${first.nextCursor}`)).statusCode,
+  ).toBe(400);
   expect(new Set([...first.data, ...second.data].map((r) => r.id)).size).toBe(22);
   const id = first.data[0].id;
   expect((await review(id, 1, 'rejected')).statusCode).toBe(200);

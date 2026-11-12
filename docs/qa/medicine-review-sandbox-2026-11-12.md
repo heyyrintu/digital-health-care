@@ -9,7 +9,7 @@ were loaded and no licence was accepted or registered.
 - `/platform/medicines` supports synthetic bundle upload, immutable staged snapshots,
   candidate search, quarantine/provenance inspection, differences from the active
   sandbox, review/rejection notes and sandbox activation/reactivation.
-- The platform token and network allowlist protect every endpoint. Clinic identity
+- The platform token and network allowlist protect every medicine review endpoint. Clinic identity
   roles cannot read the new tables. Platform access does not grant clinical writes.
 - Snapshot versions are immutable. Identical uploads return their original snapshot;
   replacements under an existing version fail. Review revisions and the expected
@@ -24,11 +24,11 @@ were loaded and no licence was accepted or registered.
 
 | Check | Result |
 |---|---|
-| Offline staging/review unit tests | 31 passed |
+| Offline staging/review unit tests | 34 passed |
 | New medicine + existing platform integration suites | 66 passed; 1 existing optional check skipped |
 | Shared contract tests, including OpenAPI security classification | 129 passed |
 | English/Hindi message consistency | 4 passed |
-| Browser workflow | Passed: upload, quarantine, review, publication, persistence after reload, real-manifest rejection; medicine count unchanged |
+| Browser workflow | Passed: upload, quarantine, review, publication, persistence after reload, source details, unrelated-dataset comparison and real-manifest rejection; reference catalogue unchanged |
 | API/web/contracts/e2e type checks and lint | Passed |
 | Production API build | Passed |
 | Production web build | Passed with `next build --webpack`; Turbopack's local helper could not bind a port in this environment |
@@ -38,7 +38,7 @@ were loaded and no licence was accepted or registered.
 Integration checks cover duplicate and malformed bundles, false safety claims, incomplete
 review acknowledgement, racing review decisions, stale sandbox publication, reactivation,
 pagination with tied timestamps, rejected snapshots, network/authentication boundaries,
-database grants, audit metadata and unchanged clinical tables.
+database grants, direct activation of an unpublished snapshot, replay audit metadata and unchanged clinical tables. Unit tests also exercise bounded repeated-reference expansion, blank labels and contradictory review evidence.
 
 No live credentials, patients, prescriptions, clinic medicine rows or deployment settings
 were changed. Temporary databases were used only for this verification.

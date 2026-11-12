@@ -10,6 +10,7 @@ import {
   writeFile,
 } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -117,7 +118,7 @@ it(
   async () => {
     const run = promisify(execFile),
       entry = new URL('../../scripts/stage-medicines.ts', import.meta.url);
-    const args = ['--import', 'tsx', entry.pathname];
+    const args = ['--import', 'tsx', fileURLToPath(entry)];
     const result = await run(process.execPath, [...args, '--input', input, '--output', output], {
       env: { ...process.env, DATABASE_URL: 'invalid-database-url-must-not-be-read' },
       timeout: 10_000,
