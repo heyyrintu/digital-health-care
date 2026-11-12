@@ -1840,6 +1840,9 @@ model PlatformOperator {
   updatedAt        DateTime   @updatedAt @map("updated_at") @db.Timestamptz(3)
 
   sessions PlatformSession[]
+  createdMedicineStages PlatformMedicineStage[] @relation("MedicineStageCreator")
+  reviewedMedicineStages PlatformMedicineStage[] @relation("MedicineStageReviewer")
+  medicineSandboxPublications PlatformMedicineSandbox[] @relation("MedicineSandboxPublisher")
 
   @@map("platform_operators")
 }
@@ -2643,4 +2646,40 @@ model AccountSecurityChallenge {
   @@index([audience, subjectId, createdAt], map: "security_subject_created")
   @@index([expiresAt], map: "security_expiry")
   @@map("account_security_challenges")
+}
+
+/// Synthetic operator review snapshots; never the clinical medicine master.
+model PlatformMedicineStage {
+  id             String   @id @default(uuid()) @db.Uuid
+  datasetKey     String   @map("dataset_key")
+  sourceVersion  String   @map("source_version")
+  fingerprint    String
+  bundleHash     String   @map("bundle_hash")
+  bundle         Json     @db.JsonB
+  candidateCount Int      @map("candidate_count")
+  issueCount     Int      @map("issue_count")
+  state          String   @default("pending")
+  revision       Int      @default(1)
+  createdBy      String   @map("created_by") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  reviewedBy     String?  @map("reviewed_by") @db.Uuid
+  reviewedAt     DateTime? @map("reviewed_at") @db.Timestamptz(3)
+  reviewNote     String?  @map("review_note")
+  creator        PlatformOperator @relation("MedicineStageCreator", fields:[createdBy], references:[id])
+  reviewer       PlatformOperator? @relation("MedicineStageReviewer", fields:[reviewedBy], references:[id])
+  sandboxSlot    PlatformMedicineSandbox?
+
+  @@unique([datasetKey,sourceVersion], map:"platform_medicine_stages_dataset_key_source_version_key")
+  @@index([createdAt(sort: Desc),id(sort: Desc)],map:"platform_medicine_stage_page")
+  @@map("platform_medicine_stages")
+}
+
+model PlatformMedicineSandbox {
+  id        Int @id @db.SmallInt
+  stageId   String @unique(map:"platform_medicine_sandbox_stage_id_key") @map("stage_id") @db.Uuid
+  updatedBy String @map("updated_by") @db.Uuid
+  updatedAt DateTime @map("updated_at") @db.Timestamptz(3)
+  stage     PlatformMedicineStage @relation(fields:[stageId],references:[id])
+  operator  PlatformOperator @relation("MedicineSandboxPublisher",fields:[updatedBy],references:[id])
+  @@map("platform_medicine_sandbox")
 }

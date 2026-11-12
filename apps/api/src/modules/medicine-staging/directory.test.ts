@@ -15,6 +15,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, beforeEach, expect, it } from 'vitest';
 import { stageDirectory } from './directory';
+import { validateReviewBundle } from '../medicine-review/service';
 import { digest } from './catalogue';
 
 let root: string, input: string, output: string;
@@ -35,6 +36,11 @@ it('writes a private completed stage with source provenance and output checksums
   expect(result.candidateBrands).toBe(2);
   expect(result.rejectedBrands).toBe(1);
   expect(result.publicationAllowed).toBe(false);
+  expect(result.reviewBundleAvailable).toBe(true);
+  const bundle = validateReviewBundle(
+    JSON.parse(await readFile(join(output, 'review-bundle.json'), 'utf8')),
+  );
+  expect(bundle.catalogue.records).toHaveLength(2);
   const complete = JSON.parse(await readFile(join(output, 'COMPLETE.json'), 'utf8'));
   for (const [file, checksum] of Object.entries(complete.sha256)) {
     expect(digest(await readFile(join(output, file)))).toBe(checksum);

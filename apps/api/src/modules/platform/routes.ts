@@ -1,3 +1,13 @@
+import {
+  MedicineReviewBundle,
+  MedicineStageDetail,
+  MedicineStageList,
+  MedicineStageQuery,
+  MedicineStageReviewBody,
+  MedicineStagePublishBody,
+  MedicineSandboxView,
+} from '@dhc/contracts';
+import { MedicineReviewService } from '../medicine-review/service';
 import { registerAccountSecurity } from '../account-security/routes';
 import {
   CreatePlatformOrganisationBody,
@@ -125,6 +135,63 @@ export const platformRoutes: FastifyPluginAsync<PlatformRoutesOptions> = async (
         request,
         platformAuthOf(request),
         PlatformUsageQuery.parse(request.query),
+      ),
+    ),
+  );
+
+  const medicines = new MedicineReviewService(services);
+  const stageParams = z.object({ id: z.uuid() });
+  app.get('/medicine-stages', operator, async (request) => {
+    const query = MedicineStageQuery.parse(request.query);
+    return MedicineStageList.parse(
+      await medicines.list(request, platformAuthOf(request).operatorId, query.cursor, query.state),
+    );
+  });
+  app.post(
+    '/medicine-stages',
+    {
+      ...operator,
+      bodyLimit: 2 * 1024 * 1024,
+      config: { rateLimit: { max: 5, timeWindow: '1 minute' } },
+    },
+    async (request, reply) => {
+      const result = await medicines.create(
+        request,
+        platformAuthOf(request).operatorId,
+        MedicineReviewBundle.parse(request.body),
+      );
+      return reply.code(result.created ? 201 : 200).send(MedicineStageDetail.parse(result.stage));
+    },
+  );
+  app.get('/medicine-stages/:id', operator, async (request) =>
+    MedicineStageDetail.parse(
+      await medicines.read(
+        request,
+        platformAuthOf(request).operatorId,
+        stageParams.parse(request.params).id,
+      ),
+    ),
+  );
+  app.post('/medicine-stages/:id/review', operator, async (request) =>
+    MedicineStageDetail.parse(
+      await medicines.review(
+        request,
+        platformAuthOf(request).operatorId,
+        stageParams.parse(request.params).id,
+        MedicineStageReviewBody.parse(request.body),
+      ),
+    ),
+  );
+  app.get('/medicine-sandbox', operator, async (request) =>
+    MedicineSandboxView.parse(await medicines.sandbox(request, platformAuthOf(request).operatorId)),
+  );
+  app.post('/medicine-stages/:id/publish-sandbox', operator, async (request) =>
+    MedicineSandboxView.parse(
+      await medicines.publish(
+        request,
+        platformAuthOf(request).operatorId,
+        stageParams.parse(request.params).id,
+        MedicineStagePublishBody.parse(request.body),
       ),
     ),
   );

@@ -3,6 +3,8 @@
 All notable changes are recorded here, newest first. Format: version, date, summary, link to release notes.
 
 ## [Unreleased]
+
+- Platform medicine review sandbox: upload bounded synthetic staging bundles, inspect candidates/quarantine/provenance and release differences, record immutable review decisions, and activate or reactivate a sandbox release with revision checks. No clinical medicine or prescription writes; real CDCI licensing and publication remain pending.
 - Cashfree refunds for verified online receipts: admin-only partial/full requests, an immutable reservation and provider idempotency key, explicit recovery after unknown responses, signed refund callbacks and read-only status checks. Confirmed refunds post once to an append-only ledger with numbered printable vouchers; original receipts and gross bill balances remain unchanged, so refunds cannot reopen collection. Verified dashboard refunds are imported before new requests; mismatches require review. Reports now show Cashfree gross collection, refunds posted and net collection, including refund-only days. New refunds remain off by default pending credentials and a real sandbox pilot.
 
 - Cashfree collection for existing bills: per-clinic merchant accounts, server-priced pay-only links, isolated hosted checkout, verified callbacks and server checks, one numbered receipt per verified order, partial-balance support, and duplicate/concurrent collection prevention. Staff can check and request closure; pending termination never releases the bill. New checkout can be paused while callbacks continue. Disabled by default; credentials and a real sandbox pilot are still required. Refunds, settlement reconciliation and prepaid booking remain future work.

@@ -154,3 +154,8 @@ it('reports additions and unchanged rows by identifier', () => {
   expect(delta.unchanged).toEqual(['990000000000000701', '990000000000000702']);
   expect(delta.changed).toEqual([]);
 });
+
+it('keeps the browser review fixture reproducible from the seven synthetic source tables', () => {
+  const prepared = JSON.parse(readFileSync(new URL('review-bundle.json', fixture), 'utf8'));
+  expect(prepared).toEqual(stage());
+});

@@ -99,3 +99,39 @@ spreadsheet formula execution; no CSV export is produced.
 Validation for this increment covers malformed tables, duplicate/missing references,
 unsafe numeric-ID conversion, release diffs, private artifacts, overwrite protection,
 file/encoding bounds, checksum tampering and the actual CLI. No live data was imported.
+
+
+## Platform sandbox review
+
+After applying migration `20261112093000_medicine_catalogue_review`, sign in to the
+platform console and open **Medicine catalogue review** (`/platform/medicines`).
+Clinic staff and patient accounts cannot access this workflow. The platform network
+allowlist still applies.
+
+1. Stage the fabricated fixture using the command above. Small stages produce
+   `review-bundle.json` alongside the usual checksum-protected artifacts.
+2. Upload that bundle. Browser imports allow 1–500 candidates, at most 2,000 report
+   entries and 2 MiB of JSON. Larger runs keep their normal offline artifacts but do
+   not produce a browser bundle. Uploads are limited to five per minute per address.
+3. Inspect candidates, quarantine reasons, source checksums and changes from the
+   active sandbox. Numeric source IDs remain strings. Unknown regulatory status and
+   unassessed clinical safety are shown explicitly; no dosing or safety approval is inferred.
+4. Write a 10–1,000-character review note and acknowledge synthetic-only scope, then
+   mark reviewed or reject. Review decisions and staged payloads are immutable.
+5. Publish a reviewed snapshot to the **sandbox only**. This changes one platform-only
+   active pointer. It never inserts, updates or deletes clinical medicines or prescriptions.
+   Missing source records are a review count; they do not deactivate anything.
+6. To reactivate an earlier published sandbox snapshot, select it and publish again.
+   If a reviewer or active release changed meanwhile, reload before deciding again;
+   stale requests fail rather than overwriting a newer decision.
+
+A repeated upload of the same bundle returns its original snapshot. A changed bundle
+under the same dataset/version is rejected; create a new version through the staging
+command. Review/upload/publication events record operator and stage identifiers in the
+audit trail, without copying candidate names or review notes into audit metadata.
+
+The bundle's hashes verify internal metadata consistency, not authenticity. Raw source
+files are not uploaded, so the server cannot reproduce the candidate derivation. The uploader
+must ensure all contents are fabricated. Real CDCI content remains deferred until the
+owner confirms applicable licensing. There is no real-data publishing switch or API in
+this increment, and no clinic can prescribe from this sandbox.

@@ -33,8 +33,8 @@ quarantine for missing/unresolved generic links. All brand regulatory licence st
 are UNKNOWN, and clinical safety fields are incomplete; neither is proof of approval or
 absence of interactions. See [the inspection and source comparison](medicine-data-sources-2026-11-12.md).
 
-Next: confirm applicable licensing, add external-ID/provenance support, implement a staging
-import and clinician review. No live medicine import or patient-ABDM integration has occurred.
+Next: confirm applicable licensing, add external-ID/provenance support to the clinical master,
+and implement clinician mapping/review before real-data publication. No live medicine import or patient-ABDM integration has occurred.
 
 ### Staging implementation — licensing deferred
 
@@ -42,9 +42,17 @@ The owner chose **Check later** for SNOMED affiliate licensing. Real-data public
 remains pending. The first staging increment is implemented using entirely synthetic
 fixtures: an offline command validates the seven master tables, quarantines bad links
 and duplicate identifiers, retains source IDs/checksums/version, and produces review
-and comparison artifacts. No database schema/data or hosted page was changed.
+and comparison artifacts. That offline increment did not change the database or hosted page.
+
+The next increment adds platform-only durable synthetic snapshots, a review screen at
+`/platform/medicines`, immutable review decisions, and an active sandbox release with
+conflict protection and reactivation of an earlier reviewed release. It displays
+candidate links, quarantine rows, provenance and changes from the active sandbox.
+Clinic prescribing does not read this sandbox, and platform operators receive no new
+permissions on clinical medicine or prescription tables.
 
 See [the staging runbook](../runbooks/medicine-catalogue-staging.md). Stage 2 remains
-partially complete: durable app staging storage, an authorized review/publication UI,
-clinical mapping/review and real-data publication still remain. The offline tool has no
-publication path and cannot silently deactivate missing medicines or overwrite a prior run.
+partially complete: clinical mapping/review, external-ID support in the live medicine
+master, licence approval and real-data publication still remain. There is no real-data
+publication endpoint. Source hashes establish consistency, not authenticity or licensing;
+the synthetic manifest is an operator declaration, not a content classifier.

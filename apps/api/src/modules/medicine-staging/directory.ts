@@ -1,3 +1,4 @@
+import { MedicineReviewBundle } from '@dhc/contracts';
 import { lstat, mkdir, open, writeFile } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { resolve, join } from 'node:path';
@@ -50,7 +51,12 @@ export async function stageDirectory(inputPath: string, outputPath: string, prev
   // mkdir is exclusive: never overwrite an existing report or source directory.
   await mkdir(output, { mode: 0o700 });
   const checksums: Record<string, string> = {};
+  const reviewBundle = MedicineReviewBundle.safeParse(staged);
+  const reviewBundleAvailable =
+    reviewBundle.success &&
+    Buffer.byteLength(JSON.stringify(reviewBundle.data, null, 2) + '\n') <= 2 * 1024 * 1024;
   const artifacts = {
+    ...(reviewBundleAvailable ? { 'review-bundle.json': reviewBundle.data } : {}),
     'catalogue.json': staged.catalogue,
     'report.json': staged.report,
     'provenance.json': staged.provenance,
@@ -77,6 +83,7 @@ export async function stageDirectory(inputPath: string, outputPath: string, prev
     rejectedBrands: staged.report.rejectedBrands,
     issues: staged.report.issues.length,
     publicationAllowed: false,
+    reviewBundleAvailable,
     ...(delta ? { delta } : {}),
   };
 }
@@ -84,7 +91,7 @@ export async function stageDirectory(inputPath: string, outputPath: string, prev
 /** Only read a previously completed artifact, and verify its checksum before diffing. */
 export async function previousCatalogue(directory: string) {
   const marker = JSON.parse(await readBounded(join(resolve(directory), 'COMPLETE.json'), 16_384));
-  const text = await readBounded(join(resolve(directory), 'catalogue.json'), 64 * 1024 * 1024);
+  const text = await readBounded(join(resolve(directory), 'catalogue.json'), 256 * 1024 * 1024);
   if (
     typeof marker.sha256?.['catalogue.json'] !== 'string' ||
     marker.sha256['catalogue.json'] !== digest(text)

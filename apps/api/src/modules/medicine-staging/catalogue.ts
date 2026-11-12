@@ -26,51 +26,11 @@ export const FILES = {
 export type FileName = keyof typeof FILES;
 export const MAX_FILE_BYTES = 32 * 1024 * 1024;
 export const MAX_ROWS = 200_000;
-export const Manifest = z
-  .object({
-    format: z.literal('cdci-flat-files/v1'),
-    dataKind: z.literal('synthetic'),
-    datasetKey: z.string().regex(/^[a-z0-9][a-z0-9._-]{0,79}$/),
-    version: z.string().trim().min(1).max(80),
-  })
-  .strict();
-export type Manifest = z.infer<typeof Manifest>;
+export { Manifest, Candidate, Catalogue } from '@dhc/contracts';
+import { Manifest, Catalogue, type Candidate } from '@dhc/contracts';
 export const digest = (value: string | Uint8Array) =>
   createHash('sha256').update(value).digest('hex');
 const identifier = z.string().regex(/^\d{1,18}$/);
-const namedReference = z.object({ sourceId: identifier, name: z.string().min(1) }).strict();
-export const Candidate = z
-  .object({
-    sourceId: identifier,
-    name: z.string().min(1),
-    product: namedReference,
-    supplier: namedReference,
-    generic: namedReference,
-    ingredients: z.array(namedReference).min(1),
-    routes: z.array(namedReference).min(1),
-    form: namedReference,
-    sourceUpdatedAt: z.iso.date().nullable(),
-    regulatoryStatus: z.string().min(1),
-    clinicalSafety: z.literal('not_assessed'),
-    reviewRequired: z.tuple([
-      z.literal('strength_mapping'),
-      z.literal('route_mapping'),
-      z.literal('clinical_review'),
-      z.literal('regulatory_review'),
-    ]),
-  })
-  .strict();
-export type Candidate = z.infer<typeof Candidate>;
-export const Catalogue = z
-  .object({
-    schemaVersion: z.literal(1),
-    source: Manifest,
-    fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
-    publicationAllowed: z.literal(false),
-    records: z.array(Candidate).max(MAX_ROWS),
-  })
-  .strict();
-export type Catalogue = z.infer<typeof Catalogue>;
 type Row = { line: number; values: Record<string, string> };
 export type Issue = { file: FileName; line: number; sourceId: string; reason: string };
 
