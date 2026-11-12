@@ -76,13 +76,11 @@ test('reviews and publishes a synthetic catalogue only to the platform sandbox',
     part.source = otherSource;
     part.fingerprint = otherFingerprint;
   }
-  await page
-    .getByLabel('Synthetic review-bundle.json (up to 2 MiB)')
-    .setInputFiles({
-      name: 'other.json',
-      mimeType: 'application/json',
-      buffer: Buffer.from(JSON.stringify(otherDataset)),
-    });
+  await page.getByLabel('Synthetic review-bundle.json (up to 2 MiB)').setInputFiles({
+    name: 'other.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(otherDataset)),
+  });
   await page.getByRole('button', { name: 'Upload review bundle', exact: true }).click();
   await expect(
     page.getByText(
