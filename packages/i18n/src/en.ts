@@ -1,4 +1,36 @@
 export const en = {
+  'people.policy.email': 'Email code',
+  'security.passwordReset': 'Password reset. Sign in with your new password.',
+  'security.forgot': 'Forgot password?',
+  'security.recoveryHint':
+    'Enter your sign-in details to request a password reset code at your registered email.',
+  'security.recoverySent':
+    'If an eligible account matches, a code will arrive at its registered email. Codes expire in five minutes. Your existing second-step verification remains in place.',
+  'security.emailCode': '6-digit code from email',
+  'security.newPassword': 'New password (at least 12 characters)',
+  'security.confirmPassword': 'Confirm new password',
+  'security.passwordMismatch': 'The passwords do not match.',
+  'security.resetPassword': 'Reset password',
+  'security.sendRecovery': 'Send reset code',
+  'security.startAgain': 'Start again',
+  'security.backToLogin': 'Back to sign in',
+  'security.title': 'Two-step verification',
+  'security.current': 'Current method',
+  'security.settingsHint':
+    'Choose how to verify future sign-ins. Changes apply to this account and sign out existing sessions. WhatsApp and email require a configured sender and a contact on your account.',
+  'security.chooseMethod': 'Verification method',
+  'security.offHint': 'Password-only sign-in. You can enable a second step again later.',
+  'security.continue': 'Continue',
+  'security.confirmHint':
+    'Confirm your current method and the new method when requested. Codes expire in five minutes. For an authenticator, use the app enrolled during account setup.',
+  'security.currentCode': 'Current verification code',
+  'security.newCode': 'Code for the new method',
+  'security.save': 'Save and sign out',
+  'security.method.totp': 'Authenticator app',
+  'security.method.whatsapp': 'WhatsApp code',
+  'security.method.email': 'Email code',
+  'security.method.disabled': 'Off — password only',
+
   'online.guardianAck':
     'I separately verified that the named guardian is an adult, is present and has authority for this child.',
   'online.profileDob': 'Date of birth in clinic profile',

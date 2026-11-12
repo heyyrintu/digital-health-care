@@ -986,3 +986,24 @@ including audio/video payment/consent/joining cases. Eight browser scenarios pas
 covering prepaid fees and server-confirmed checkout for both modes at 390px/1280px and
 existing online identity/guardian/withdrawal. Scoped lint/type checks and API/web builds
 passed. All tests use synthetic gateways and intercepted call/payment destinations.
+
+### Implementation update - account recovery and personal verification (12 November 2026)
+
+Implemented on `codex/account-security-recovery`, pending publication/deployment:
+
+- Clinic staff and platform sign-in now link to email-code password recovery. Codes
+  expire after five minutes, are single-use, and are rate/attempt limited. Resetting a
+  password preserves MFA and ends existing sessions and pending password-step tokens.
+- **Your account → Two-step verification** offers the existing authenticator, configured
+  WhatsApp/email OTP, or Off. Changes require the current password and proof of the
+  current/destination methods, and sign out all account sessions. Existing accounts
+  retain their deployment defaults until they choose a method. Patient OTP is separate.
+- The database includes a compatibility guard so an older backend cannot silently ignore
+  a personal security choice after rollback. See the
+  [second-factor runbook](../runbooks/second-factor-auth.md).
+- The licensed medicine source remains pending. The synthetic demonstration master is
+  not a clinical reference. The [medicine data plan](medicine-data-plan.md) defines source
+  approval, reviewed imports, search/favourites, updates and separate clinical safety data.
+
+This supersedes the earlier statement that second-factor selection has no per-user UI.
+No live account verification policy was changed during development.

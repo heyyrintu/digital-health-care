@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { SecondFactorMethod } from './auth';
 import { StaffRole, StaffSessionList } from './invites';
 export const PeoplePerson = z.object({
   userId: z.uuid(),
@@ -25,7 +26,7 @@ export const PeopleDetail = PeoplePerson.extend({
   version: z.string(),
   lockedUntil: z.iso.datetime().nullable(),
   authenticatorEnrolled: z.boolean(),
-  secondFactorMode: z.enum(['totp', 'whatsapp', 'disabled']),
+  secondFactorMode: SecondFactorMethod,
   emailVerificationAvailable: z.boolean(),
   phoneVerificationAvailable: z.boolean(),
   audit: z.array(

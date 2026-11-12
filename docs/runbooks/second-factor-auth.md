@@ -1,9 +1,20 @@
 # Staff and platform second-factor options
 
-The server owner chooses login policies through Coolify environment variables. These
-are deployment-wide settings, separately for clinic staff and platform operators.
-They are not per-user or per-clinic switches in the People portal (that portal remains
-pending). An unauthenticated user cannot select or bypass the configured policy.
+Clinic staff and platform operators can manage their own method from **Your account →
+Two-step verification** (`/clinic/account` or `/platform/account`). Available choices are
+Authenticator, Email OTP, WhatsApp OTP and Off. This is an account setting across clinics,
+not a role-granting control. The sign-in page cannot bypass the saved method.
+
+Changing the method requires the current password, current second-factor proof (unless
+already Off), and proof of the destination method (unless switching Off). Changes expire
+after five minutes and sign out all account sessions. Keep the enrolled authenticator;
+it can be restored later. Initial invitation/operator setup still enrolls an authenticator.
+Only configured, deliverable methods appear: email needs the SMTP sender and an account
+email; WhatsApp needs the real sender plus the existing stored/mapped mobile number.
+Phone numbers cannot be supplied as factor recipients during sign-in or security changes.
+
+The following environment variables remain the **defaults for accounts that have never
+chosen a personal method**. Personal choices override these deployment defaults.
 
 | Variable | Values | Default |
 | --- | --- | --- |
@@ -27,8 +38,11 @@ PLATFORM_MFA_MODE=totp
 ```
 
 Set `PLATFORM_MFA_MODE=disabled` as well only if password-only platform sign-in is intended.
-This affects future sign-ins. Existing sessions are not automatically signed out.
-To restore authenticator verification, set the relevant mode to `totp` and redeploy.
+This affects future sign-ins only for accounts without a personal choice. Existing
+sessions are not automatically signed out.
+For accounts without a personal choice, set the relevant mode to `totp` and redeploy
+to restore authenticator verification. Accounts with a personal choice keep it; change
+that choice in Your account → Two-step verification.
 Authenticator secrets are preserved. Initial invitation/operator enrollment and recovery
 still use the existing trusted authenticator setup workflow; these settings change normal
 sign-in, not account provisioning. Keep enrolled authenticators available for recovery.
@@ -69,13 +83,40 @@ undelivered challenge cannot authenticate. No codes or phone numbers are added t
 metadata. Live Meta delivery still requires validation with the actual sender credentials.
 
 
-## Validation for this local increment
+## Forgot password
 
-All 50 migrations applied to a fresh disposable database. Existing staff authentication
-regressions passed (31 tests); the new MFA-options/platform run passed 68 tests with one
-existing Redis-dependent case skipped. Configuration tests (3), browser-session route
-tests (27), contracts tests (118), API/web type checks and API-client type checks passed.
-API and web production builds passed (web verified with Webpack because this computer
-restricts a port used by Turbopack). No live Meta message or hosted authentication change
-was performed. Browser session routes were tested for refresh-cookie isolation and for
-not exposing refresh tokens in password-only login responses.
+Both `/clinic/login` and `/platform/login` link to Forgot password. A six-digit code goes
+to the existing account email. Clinic staff must also enter their clinic ID. Requests give
+the same acknowledgement for unknown, inactive and rate-limited identities. Codes expire
+after five minutes, allow five guesses and are stored only as keyed hashes. Requests are
+limited to three per account per ten minutes plus the endpoint IP limit. An hourly,
+bounded cleanup removes challenges expired more than 24 hours ago, separately for each
+audience; audit entries retain the security-event history.
+
+Recovery requires `STAFF_EMAIL_VERIFICATION_ENABLED=true` and the existing SMTP settings
+(`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`). Despite the historical
+flag name, this sender serves both staff and platform security mail. SMTP must accept the
+message before its code becomes usable. Delivery failures do not change credentials.
+
+A completed reset signs out all sessions and invalidates outstanding password-step tokens
+and security challenges. It preserves the selected second factor and authenticator secret.
+Losing an authenticator still uses the existing trusted support recovery process; email
+password recovery does not remove that factor. Patient WhatsApp sign-in remains separate.
+
+## Release and rollback
+
+Apply `20261112090000_account_security` and ship API and web together. The preview has
+four user rows, so CHECK validation is bounded to a tiny table. Before reusing this
+migration on a large installation, measure account-table size and schedule maintenance
+or add CHECK constraints NOT VALID followed by separate validation to avoid a long
+exclusive-lock scan. Existing accounts
+inherit their current deployment policy; the migration does not disable verification.
+Credential/contact/security changes increment an account authentication version in the
+DB. Pending password-step tokens must match it. Password resets and method changes revoke
+existing sessions in the same transaction.
+
+After a security change, the database rejects staff/platform session creation by older
+API images that do not understand the new protocol. Rolling back to those images can
+therefore block affected accounts; it must never silently substitute an older, weaker
+verification policy. Prefer a forward fix or restore a matched application/database
+snapshot through the documented restore procedure. Do not drop the guard to restore access.

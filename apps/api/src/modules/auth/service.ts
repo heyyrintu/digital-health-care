@@ -315,12 +315,13 @@ export class AuthService {
         };
       }
 
-      if (this.s.staffMfaMode === 'disabled') {
+      if ((user.mfaMode ?? this.s.staffMfaMode) === 'disabled') {
         const accepted = await tx.user.updateMany({
           where: {
             id: user.id,
             status: 'active',
             passwordHash: user.passwordHash,
+            authVersion: user.authVersion,
             failedLoginCount: user.failedLoginCount,
             OR: [{ lockedUntil: null }, { lockedUntil: { lte: now } }],
           },
@@ -343,23 +344,33 @@ export class AuthService {
         });
         return { response: { status: 'signed_in' as const, ...tokens } };
       }
-      if (this.s.staffMfaMode === 'whatsapp') {
+      if (['whatsapp', 'email'].includes(user.mfaMode ?? this.s.staffMfaMode)) {
+        const method = (user.mfaMode ?? this.s.staffMfaMode) as 'whatsapp' | 'email';
         const phone =
-          (user.email ? this.s.staffMfaPhones[user.email.toLowerCase()] : undefined) ??
-          user.phone ??
-          '';
-        const mfaToken = await this.s.tokens.createMfaToken(user.id, org.id, role);
+          method === 'email'
+            ? (user.email ?? '')
+            : ((user.email ? this.s.staffMfaPhones[user.email.toLowerCase()] : undefined) ??
+              user.phone ??
+              '');
+        const mfaToken = await this.s.tokens.createMfaToken(
+          user.id,
+          org.id,
+          role,
+          user.authVersion,
+        );
         const pending = await createMfaOtp(this.s, tx, mfaToken, {
           audience: 'staff',
           subjectId: user.id,
           phone,
+          method,
+          authVersion: user.authVersion,
           passwordHash: user.passwordHash,
           secret: user.mfaSecret,
           organisationId: org.id,
           role,
         });
         return {
-          response: { status: 'mfa_required' as const, mfaToken, method: 'whatsapp' as const },
+          response: { status: 'mfa_required' as const, mfaToken, method },
           pending,
         };
       }
@@ -375,7 +386,7 @@ export class AuthService {
         });
         return { error: SETUP_INCOMPLETE() };
       }
-      const mfaToken = await this.s.tokens.createMfaToken(user.id, org.id, role);
+      const mfaToken = await this.s.tokens.createMfaToken(user.id, org.id, role, user.authVersion);
       return { response: { status: 'mfa_required' as const, mfaToken, method: 'totp' as const } };
     });
     if ('error' in outcome) throw outcome.error;
@@ -394,8 +405,10 @@ export class AuthService {
       if (!user || user.status !== 'active') return { error: INVALID_LOGIN() };
       if (user.lockedUntil && user.lockedUntil > now) return { error: LOCKED() };
 
-      if (this.s.staffMfaMode === 'disabled') return { error: INVALID_CODE() };
-      const whatsapp = this.s.staffMfaMode === 'whatsapp';
+      if ((user.mfaMode ?? this.s.staffMfaMode) === 'disabled') return { error: INVALID_CODE() };
+      if (claims.authVersion !== user.authVersion) return { error: INVALID_CODE() };
+      const method = user.mfaMode ?? this.s.staffMfaMode;
+      const whatsapp = method === 'whatsapp' || method === 'email';
       if (!whatsapp && !user.mfaSecret) return { error: SETUP_INCOMPLETE() };
       const step = whatsapp
         ? null
@@ -404,10 +417,14 @@ export class AuthService {
         ? await consumeMfaOtp(this.s, tx, mfaToken, code, {
             audience: 'staff',
             subjectId: user.id,
+            method: method as 'whatsapp' | 'email',
+            authVersion: user.authVersion,
             phone:
-              (user.email ? this.s.staffMfaPhones[user.email.toLowerCase()] : undefined) ??
-              user.phone ??
-              '',
+              method === 'email'
+                ? (user.email ?? '')
+                : ((user.email ? this.s.staffMfaPhones[user.email.toLowerCase()] : undefined) ??
+                  user.phone ??
+                  ''),
             passwordHash: user.passwordHash ?? '',
             secret: user.mfaSecret,
             organisationId: claims.organisationId,
@@ -446,6 +463,7 @@ export class AuthService {
           // The code was checked against this secret: a reset meanwhile makes it void.
           mfaSecret: user.mfaSecret,
           passwordHash: user.passwordHash,
+          authVersion: user.authVersion,
           failedLoginCount: user.failedLoginCount,
           AND: [
             ...(whatsapp
@@ -607,6 +625,7 @@ export class AuthService {
     lifetimeMs: number,
   ): Promise<TokenResponse> {
     const refreshToken = newRefreshToken();
+    await tx.$queryRaw`SELECT set_config('app.account_security_protocol', '1', true)`;
     const session = await tx.session.create({
       data: {
         userId,

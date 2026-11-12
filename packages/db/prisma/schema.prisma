@@ -371,6 +371,8 @@ model User {
   displayName            String?              @map("display_name")
   status                 UserStatus           @default(active)
   passwordHash           String?              @map("password_hash")
+  mfaMode                String?              @map("mfa_mode")
+  authVersion            Int                  @default(0) @map("auth_version")
   /// AES-256-GCM encrypted TOTP secret (confirmed).
   mfaSecret              String?              @map("mfa_secret")
   /// AES-256-GCM encrypted TOTP secret awaiting first-code confirmation.
@@ -1825,6 +1827,8 @@ model PlatformOperator {
   displayName      String     @map("display_name")
   status           UserStatus @default(active)
   passwordHash     String     @map("password_hash")
+  mfaMode          String?    @map("mfa_mode")
+  authVersion      Int        @default(0) @map("auth_version")
   /// AES-256-GCM encrypted TOTP secret, confirmed when the operator was created.
   mfaSecret        String     @map("mfa_secret")
   /// Last accepted TOTP time step; a code is never accepted twice.
@@ -2619,4 +2623,24 @@ model OnlineVisitEvent {
  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
  @@unique([appointmentId,version])
  @@map("online_visit_events")
+}
+
+model AccountSecurityChallenge {
+  id           String    @id @db.Uuid
+  audience     String
+  subjectId    String    @map("subject_id") @db.Uuid
+  purpose      String
+  bindingHash  String    @map("binding_hash")
+  targetMode   String?   @map("target_mode")
+  oldCodeHash  String?   @map("old_code_hash")
+  newCodeHash  String    @map("new_code_hash")
+  attempts     Int       @default(0)
+  createdAt    DateTime  @map("created_at") @db.Timestamptz(3)
+  expiresAt    DateTime  @map("expires_at") @db.Timestamptz(3)
+  deliveredAt  DateTime? @map("delivered_at") @db.Timestamptz(3)
+  consumedAt   DateTime? @map("consumed_at") @db.Timestamptz(3)
+
+  @@index([audience, subjectId, createdAt], map: "security_subject_created")
+  @@index([expiresAt], map: "security_expiry")
+  @@map("account_security_challenges")
 }

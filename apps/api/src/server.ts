@@ -1,3 +1,4 @@
+import { scheduleAccountSecurityPurge } from './modules/account-security/purge';
 import { scheduleInbox } from './modules/whatsapp-inbox/dispatch';
 import { schedulePatientRecordPurge } from './modules/patient-records/purge';
 import { schedulePrepaidSweep } from './payments/prepaid';
@@ -27,6 +28,7 @@ if (trust && !trust.proxies) {
   );
 }
 
+const stopSecurityPurge = scheduleAccountSecurityPurge(services, app.log);
 const stopInbox = scheduleInbox(services);
 const stopRecordPurge = schedulePatientRecordPurge(services, app.log);
 const stopPrepaid = schedulePrepaidSweep(services);
@@ -51,6 +53,7 @@ void pdfStartup.then(
 const shutdown = async (signal: string) => {
   app.log.info({ signal }, 'Shutting down');
   stopSweep();
+  await stopSecurityPurge();
   await stopInbox();
   await stopPrepaid();
   await stopRecordPurge();
