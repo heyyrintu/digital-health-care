@@ -91,6 +91,7 @@ describe('TokenService', () => {
       userId: 'u1',
       organisationId: 'o1',
       role: 'doctor',
+      authVersion: 0,
     });
     expect(await tokens.verifyMfaToken(await tokens.createAccessToken(claims))).toBeNull();
   });
@@ -114,7 +115,7 @@ describe('PlatformTokenService', () => {
       claims,
     );
     const mfa = await platform.createMfaToken('op1');
-    expect(await platform.verifyMfaToken(mfa)).toEqual({ operatorId: 'op1' });
+    expect(await platform.verifyMfaToken(mfa)).toEqual({ operatorId: 'op1', authVersion: 0 });
     expect(await platform.verifyAccessToken(mfa)).toBeNull();
   });
 

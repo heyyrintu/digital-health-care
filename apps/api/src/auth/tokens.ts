@@ -58,8 +58,13 @@ export class TokenService {
   }
 
   /** Proves the password step passed; only exchangeable for tokens with a valid TOTP code. */
-  async createMfaToken(userId: string, organisationId: string, role: Role): Promise<string> {
-    return new SignJWT({ org: organisationId, role })
+  async createMfaToken(
+    userId: string,
+    organisationId: string,
+    role: Role,
+    authVersion = 0,
+  ): Promise<string> {
+    return new SignJWT({ org: organisationId, role, av: authVersion })
       .setProtectedHeader({ alg: 'HS256' })
       .setSubject(userId)
       .setIssuer(ISSUER)
@@ -72,7 +77,7 @@ export class TokenService {
 
   async verifyMfaToken(
     token: string,
-  ): Promise<{ userId: string; organisationId: string; role: Role } | null> {
+  ): Promise<{ userId: string; organisationId: string; role: Role; authVersion: number } | null> {
     try {
       const { payload } = await jwtVerify(token, this.key, {
         issuer: ISSUER,
@@ -85,7 +90,14 @@ export class TokenService {
         !isRole(payload.role)
       )
         return null;
-      return { userId: payload.sub, organisationId: payload.org, role: payload.role };
+      if (payload.av !== undefined && (!Number.isSafeInteger(payload.av) || Number(payload.av) < 0))
+        return null;
+      return {
+        userId: payload.sub,
+        organisationId: payload.org,
+        role: payload.role,
+        authVersion: Number(payload.av ?? 0),
+      };
     } catch {
       return null;
     }
@@ -154,8 +166,8 @@ export class PlatformTokenService {
   }
 
   /** Proves the password step passed; only exchangeable for tokens with a valid TOTP code. */
-  async createMfaToken(operatorId: string): Promise<string> {
-    return new SignJWT({})
+  async createMfaToken(operatorId: string, authVersion = 0): Promise<string> {
+    return new SignJWT({ av: authVersion })
       .setProtectedHeader({ alg: 'HS256' })
       .setSubject(operatorId)
       .setIssuer(ISSUER)
@@ -166,14 +178,18 @@ export class PlatformTokenService {
       .sign(this.key);
   }
 
-  async verifyMfaToken(token: string): Promise<{ operatorId: string } | null> {
+  async verifyMfaToken(token: string): Promise<{ operatorId: string; authVersion: number } | null> {
     try {
       const { payload } = await jwtVerify(token, this.key, {
         issuer: ISSUER,
         audience: PLATFORM_MFA_AUDIENCE,
         algorithms: ['HS256'],
       });
-      return typeof payload.sub === 'string' ? { operatorId: payload.sub } : null;
+      if (payload.av !== undefined && (!Number.isSafeInteger(payload.av) || Number(payload.av) < 0))
+        return null;
+      return typeof payload.sub === 'string'
+        ? { operatorId: payload.sub, authVersion: Number(payload.av ?? 0) }
+        : null;
     } catch {
       return null;
     }

@@ -234,7 +234,8 @@ export class PeopleService {
       version: peopleVersion(this.s, user, memberships),
       lockedUntil: user.lockedUntil?.toISOString() ?? null,
       authenticatorEnrolled: !!user.mfaSecret,
-      secondFactorMode: this.s.staffMfaMode,
+      secondFactorMode: (user.mfaMode ?? this.s.staffMfaMode) as
+        'totp' | 'whatsapp' | 'email' | 'disabled',
       emailVerificationAvailable: !!this.s.emailSender,
       phoneVerificationAvailable: this.s.otpSender.channel === 'whatsapp',
       audit: audit.map((a) => ({

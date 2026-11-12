@@ -2,6 +2,35 @@ import type { MessageKey } from './en';
 
 /** Hindi strings. Needs review by a native speaker before release. */
 export const hi: Record<MessageKey, string> = {
+  'security.forgot': 'पासवर्ड भूल गए?',
+  'security.recoveryHint': 'पंजीकृत ईमेल पर रीसेट कोड पाने के लिए साइन-इन जानकारी दर्ज करें।',
+  'security.recoverySent':
+    'पात्र खाता मिलने पर पंजीकृत ईमेल पर कोड आएगा। कोड पाँच मिनट में समाप्त होगा। मौजूदा दो-चरण सत्यापन बना रहेगा।',
+  'security.emailCode': 'ईमेल से मिला 6 अंकों का कोड',
+  'security.newPassword': 'नया पासवर्ड (कम से कम 12 अक्षर)',
+  'security.confirmPassword': 'नया पासवर्ड दोबारा दर्ज करें',
+  'security.passwordMismatch': 'दोनों पासवर्ड एक जैसे नहीं हैं।',
+  'security.resetPassword': 'पासवर्ड रीसेट करें',
+  'security.sendRecovery': 'रीसेट कोड भेजें',
+  'security.startAgain': 'फिर से शुरू करें',
+  'security.backToLogin': 'साइन इन पर वापस जाएँ',
+  'security.title': 'दो-चरण सत्यापन',
+  'security.current': 'मौजूदा तरीका',
+  'security.settingsHint':
+    'साइन-इन का सत्यापन तरीका चुनें। इस खाते की सभी क्लिनिक सदस्यताओं पर बदलाव लागू होगा और मौजूदा सत्र समाप्त होंगे। WhatsApp और ईमेल के लिए भेजने की सुविधा और खाते में संपर्क जरूरी है।',
+  'security.chooseMethod': 'सत्यापन तरीका',
+  'security.offHint': 'केवल पासवर्ड से साइन इन। बाद में दूसरा चरण फिर चालू कर सकते हैं।',
+  'security.continue': 'आगे बढ़ें',
+  'security.confirmHint':
+    'माँगे जाने पर मौजूदा और नया तरीका सत्यापित करें। कोड पाँच मिनट में समाप्त होते हैं। ऑथेंटिकेटर के लिए खाता सेटअप वाला ऐप इस्तेमाल करें।',
+  'security.currentCode': 'मौजूदा सत्यापन कोड',
+  'security.newCode': 'नए तरीके का कोड',
+  'security.save': 'सहेजें और साइन आउट करें',
+  'security.method.totp': 'ऑथेंटिकेटर ऐप',
+  'security.method.whatsapp': 'WhatsApp कोड',
+  'security.method.email': 'ईमेल कोड',
+  'security.method.disabled': 'बंद — केवल पासवर्ड',
+  'people.policy.email': 'ईमेल कोड',
   'online.guardianAck':
     'मैंने अलग से सत्यापित किया है कि नामित अभिभावक वयस्क और मौजूद है तथा इस बच्चे के लिए अधिकृत है।',
   'online.profileDob': 'क्लिनिक प्रोफ़ाइल में जन्म तिथि',

@@ -23,7 +23,7 @@ export default function LoginPage() {
 
 type Step =
   | { kind: 'password'; roles: string[] }
-  | { kind: 'code'; mfaToken: string; method?: 'totp' | 'whatsapp' };
+  | { kind: 'code'; mfaToken: string; method?: 'totp' | 'whatsapp' | 'email' };
 
 /** Staff sign-in: clinic, email or mobile and password, then the authenticator code. */
 function Login() {
@@ -185,6 +185,9 @@ function Login() {
                 autoComplete="current-password"
               />
             </div>
+            <a className="block text-sm underline" href="/clinic/forgot-password">
+              {t('security.forgot')}
+            </a>
             {step.roles.length > 1 && (
               <fieldset className="roles rounded-xl border border-border p-4">
                 <legend className="px-1 text-sm font-medium">{t('login.chooseRole')}</legend>
@@ -216,7 +219,13 @@ function Login() {
           >
             <div className="space-y-1.5">
               <label htmlFor="code" className={LABEL}>
-                {t(step.method === 'whatsapp' ? 'login.whatsappCode' : 'login.codeTitle')}
+                {t(
+                  step.method === 'email'
+                    ? 'security.emailCode'
+                    : step.method === 'whatsapp'
+                      ? 'login.whatsappCode'
+                      : 'login.codeTitle',
+                )}
               </label>
               <Input
                 id="code"

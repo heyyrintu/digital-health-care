@@ -6,11 +6,13 @@ import type { Services } from '../services';
 import { normaliseIndianMobile } from './phone';
 import { hashToken } from './tokens';
 
-export type MfaMode = 'totp' | 'whatsapp' | 'disabled';
+export type MfaMode = 'totp' | 'whatsapp' | 'email' | 'disabled';
 export interface MfaOtpContext {
   audience: 'staff' | 'platform';
   subjectId: string;
   phone: string;
+  method?: 'whatsapp' | 'email';
+  authVersion?: number;
   passwordHash: string;
   secret: string | null;
   organisationId?: string;
@@ -55,6 +57,8 @@ const binding = (s: Services, context: MfaOtpContext) =>
       context.audience,
       context.subjectId,
       context.phone,
+      context.method ?? 'whatsapp',
+      context.authVersion ?? 0,
       context.passwordHash,
       context.secret,
       context.organisationId ?? null,
@@ -64,7 +68,12 @@ const binding = (s: Services, context: MfaOtpContext) =>
 
 /** Called only after password, account, membership and lockout checks pass. */
 export async function createMfaOtp(s: Services, tx: Tx, token: string, context: MfaOtpContext) {
-  if (!normaliseIndianMobile(context.phone)) throw unavailable();
+  if (
+    context.method === 'email'
+      ? !z.email().safeParse(context.phone).success || !s.emailSender?.sendSecurityCode
+      : !normaliseIndianMobile(context.phone)
+  )
+    throw unavailable();
   const now = s.now();
   await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`mfa:${context.audience}:${context.subjectId}`}, 0))`;
   const recent = await tx.mfaOtpChallenge.count({
@@ -94,7 +103,7 @@ export async function createMfaOtp(s: Services, tx: Tx, token: string, context: 
       expiresAt: new Date(now.getTime() + 5 * 60_000),
     },
   });
-  return { id, code, phone: context.phone, audience: context.audience };
+  return { id, code, phone: context.phone, audience: context.audience, method: context.method };
 }
 
 /** Provider calls run outside the database transaction. Undelivered codes cannot sign in. */
@@ -104,7 +113,9 @@ export async function deliverMfaOtp(
 ) {
   const run = pending.audience === 'staff' ? withAuth : withPlatform;
   try {
-    await s.otpSender.send(pending.phone, pending.code);
+    if (pending.method === 'email')
+      await s.emailSender!.sendSecurityCode!(pending.phone, pending.code, 'second_factor');
+    else await s.otpSender.send(pending.phone, pending.code);
     await run(s.db, (tx) =>
       tx.mfaOtpChallenge.update({ where: { id: pending.id }, data: { deliveredAt: s.now() } }),
     );

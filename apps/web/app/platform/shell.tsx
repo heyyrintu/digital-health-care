@@ -35,6 +35,7 @@ export function PlatformShell({
   }
 
   const nav: NavItem[] = [
+    { href: '/platform/account', label: t('people.yourAccount'), icon: BadgeCheck },
     { href: '/platform', label: t('platform.nav.organisations'), icon: Building2, exact: true },
     { href: '/platform/doctors', label: t('platform.nav.verification'), icon: BadgeCheck },
     { href: '/platform/usage', label: t('platform.nav.usage'), icon: BarChart3 },

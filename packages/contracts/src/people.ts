@@ -25,7 +25,7 @@ export const PeopleDetail = PeoplePerson.extend({
   version: z.string(),
   lockedUntil: z.iso.datetime().nullable(),
   authenticatorEnrolled: z.boolean(),
-  secondFactorMode: z.enum(['totp', 'whatsapp', 'disabled']),
+  secondFactorMode: z.enum(['totp', 'whatsapp', 'email', 'disabled']),
   emailVerificationAvailable: z.boolean(),
   phoneVerificationAvailable: z.boolean(),
   audit: z.array(

@@ -13,7 +13,8 @@ import { PlatformLocaleToggle, usePlatformSession } from '../session-provider';
 
 const LABEL = 'block text-sm font-medium';
 
-type Step = { kind: 'password' } | { kind: 'code'; mfaToken: string; method?: 'totp' | 'whatsapp' };
+type Step =
+  { kind: 'password' } | { kind: 'code'; mfaToken: string; method?: 'totp' | 'whatsapp' | 'email' };
 
 /** Platform operators' sign-in: work email and password, then the authenticator code. */
 export default function PlatformLoginPage() {
@@ -161,6 +162,9 @@ export default function PlatformLoginPage() {
                 autoComplete="current-password"
               />
             </div>
+            <a className="block text-sm underline" href="/platform/forgot-password">
+              {t('security.forgot')}
+            </a>
             <Button type="submit" size="lg" className="w-full" disabled={busy}>
               {t('login.signIn')}
             </Button>
@@ -175,7 +179,13 @@ export default function PlatformLoginPage() {
           >
             <div className="space-y-1.5">
               <label htmlFor="code" className={LABEL}>
-                {t(step.method === 'whatsapp' ? 'login.whatsappCode' : 'login.codeTitle')}
+                {t(
+                  step.method === 'email'
+                    ? 'security.emailCode'
+                    : step.method === 'whatsapp'
+                      ? 'login.whatsappCode'
+                      : 'login.codeTitle',
+                )}
               </label>
               <Input
                 id="code"

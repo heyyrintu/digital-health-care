@@ -68,7 +68,7 @@ export type TokenResponse = z.infer<typeof TokenResponse>;
 export const MfaRequiredResponse = z.object({
   status: z.literal('mfa_required'),
   mfaToken: z.string(),
-  method: z.enum(['totp', 'whatsapp']).optional(),
+  method: z.enum(['totp', 'whatsapp', 'email']).optional(),
 });
 export const LoginResponse = z.union([
   MfaRequiredResponse,
@@ -90,3 +90,49 @@ export const MeResponse = z.object({
   role: Role,
 });
 export type MeResponse = z.infer<typeof MeResponse>;
+
+export const SecondFactorMethod = z.enum(['totp', 'whatsapp', 'email', 'disabled']);
+export const RecoveryRequestBody = z.object({
+  organisation: OrganisationSlug.optional(),
+  identifier: z.string().trim().min(3).max(254),
+});
+export const SecurityChallengeResponse = z.object({
+  challengeId: z.uuid(),
+  expiresAt: z.iso.datetime(),
+});
+export const RecoveryConfirmBody = z.object({
+  challengeId: z.uuid(),
+  organisation: OrganisationSlug.optional(),
+  code: z.string().regex(/^\d{6}$/),
+  newPassword: NewPassword,
+});
+export const SecuritySettingsResponse = z.object({
+  method: SecondFactorMethod,
+  available: z.array(SecondFactorMethod),
+});
+export const SecurityChangeBody = z.object({
+  password: z.string().min(1).max(256),
+  method: SecondFactorMethod,
+});
+export const SecurityConfirmBody = z.object({
+  challengeId: z.uuid(),
+  currentCode: z
+    .string()
+    .regex(/^\d{6}$/)
+    .optional(),
+  newCode: z
+    .string()
+    .regex(/^\d{6}$/)
+    .optional(),
+});
+export const SecurityChangeResponse = SecurityChallengeResponse.extend({
+  currentMethod: SecondFactorMethod,
+  targetMethod: SecondFactorMethod,
+});
+
+export type AccountSecuritySettings = z.infer<typeof SecuritySettingsResponse>;
+export type AccountSecurityChange = z.infer<typeof SecurityChangeResponse>;
+
+export const SecurityChangedResponse = z.undefined();
+
+export type SecondFactorMethodValue = z.infer<typeof SecondFactorMethod>;

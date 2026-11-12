@@ -1,4 +1,5 @@
 'use client';
+import { SecuritySettings } from '../../../components/account-security/settings';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import { ApiError } from '@dhc/api-client';
@@ -66,6 +67,7 @@ function Account() {
     <div className="mx-auto max-w-2xl space-y-5">
       <PageHeader title={t('people.yourAccount')} />
       <NameCard />
+      <SecuritySettings api={api} t={t} onChanged={() => signOut('user')} />
       <Surface className="space-y-3 p-5">
         <p>
           <strong>{t('people.email')}:</strong> {me?.user.email ?? '—'}

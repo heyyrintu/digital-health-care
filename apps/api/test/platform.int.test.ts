@@ -1537,9 +1537,12 @@ describe('in the database (dhc_platform)', () => {
       ORDER BY 1`;
     expect(tables.length).toBeGreaterThan(40);
     const granted = tables.filter(
-      (t) => t.table !== 'mfa_otp_challenges' && (t.table === 'audit_logs' ? t.read : t.any),
+      (t) =>
+        !['mfa_otp_challenges', 'account_security_challenges'].includes(t.table) &&
+        (t.table === 'audit_logs' ? t.read : t.any),
     );
     expect(tables.find((t) => t.table === 'mfa_otp_challenges')?.any).toBe(true);
+    expect(tables.find((t) => t.table === 'account_security_challenges')?.any).toBe(true);
     expect(granted.map((t) => t.table)).toEqual([]);
     expect(tables.find((t) => t.table === 'audit_logs')?.insert).toBe(true);
   });

@@ -125,12 +125,13 @@ export class PlatformAuthService {
         });
         return { error: INVALID_LOGIN() };
       }
-      if (this.s.platformMfaMode === 'disabled') {
+      if ((operator.mfaMode ?? this.s.platformMfaMode) === 'disabled') {
         const accepted = await tx.platformOperator.updateMany({
           where: {
             id: operator.id,
             status: 'active',
             passwordHash: operator.passwordHash,
+            authVersion: operator.authVersion,
             failedLoginCount: operator.failedLoginCount,
             OR: [{ lockedUntil: null }, { lockedUntil: { lte: now } }],
           },
@@ -144,23 +145,35 @@ export class PlatformAuthService {
           },
         };
       }
-      if (this.s.platformMfaMode === 'whatsapp') {
-        const mfaToken = await this.s.platformTokens.createMfaToken(operator.id);
+      if (['whatsapp', 'email'].includes(operator.mfaMode ?? this.s.platformMfaMode)) {
+        const method = (operator.mfaMode ?? this.s.platformMfaMode) as 'whatsapp' | 'email';
+        const mfaToken = await this.s.platformTokens.createMfaToken(
+          operator.id,
+          operator.authVersion,
+        );
         const pending = await createMfaOtp(this.s, tx, mfaToken, {
           audience: 'platform',
           subjectId: operator.id,
-          phone: this.s.platformMfaPhones[operator.email.toLowerCase()] ?? '',
+          phone:
+            method === 'email'
+              ? operator.email
+              : (this.s.platformMfaPhones[operator.email.toLowerCase()] ?? ''),
+          method: method as 'whatsapp' | 'email',
+          authVersion: operator.authVersion,
           passwordHash: operator.passwordHash,
           secret: operator.mfaSecret,
         });
         return {
-          response: { status: 'mfa_required' as const, mfaToken, method: 'whatsapp' as const },
+          response: { status: 'mfa_required' as const, mfaToken, method },
           pending,
         };
       }
       // The failure count is not reset here: only a correct authenticator code resets it,
       // so someone who knows the password cannot keep guessing codes across sign-ins.
-      const mfaToken = await this.s.platformTokens.createMfaToken(operator.id);
+      const mfaToken = await this.s.platformTokens.createMfaToken(
+        operator.id,
+        operator.authVersion,
+      );
       return { response: { status: 'mfa_required' as const, mfaToken, method: 'totp' as const } };
     });
     if ('error' in outcome) throw outcome.error;
@@ -185,8 +198,11 @@ export class PlatformAuthService {
         return { error: LOCKED() };
       }
 
-      if (this.s.platformMfaMode === 'disabled') return { error: INVALID_CODE() };
-      const whatsapp = this.s.platformMfaMode === 'whatsapp';
+      if ((operator.mfaMode ?? this.s.platformMfaMode) === 'disabled')
+        return { error: INVALID_CODE() };
+      if (claims.authVersion !== operator.authVersion) return { error: INVALID_CODE() };
+      const method = operator.mfaMode ?? this.s.platformMfaMode;
+      const whatsapp = method === 'whatsapp' || method === 'email';
       const step = whatsapp
         ? null
         : matchTotpStep(this.s.cipher.decrypt(operator.mfaSecret), code, now.getTime());
@@ -194,7 +210,12 @@ export class PlatformAuthService {
         ? await consumeMfaOtp(this.s, tx, mfaToken, code, {
             audience: 'platform',
             subjectId: operator.id,
-            phone: this.s.platformMfaPhones[operator.email.toLowerCase()] ?? '',
+            phone:
+              method === 'email'
+                ? operator.email
+                : (this.s.platformMfaPhones[operator.email.toLowerCase()] ?? ''),
+            method: method as 'whatsapp' | 'email',
+            authVersion: operator.authVersion,
             passwordHash: operator.passwordHash,
             secret: operator.mfaSecret,
           })
@@ -217,6 +238,7 @@ export class PlatformAuthService {
           // The code was checked against this secret: a reset meanwhile makes it void.
           mfaSecret: operator.mfaSecret,
           passwordHash: operator.passwordHash,
+          authVersion: operator.authVersion,
           failedLoginCount: operator.failedLoginCount,
           AND: [
             ...(whatsapp
@@ -259,6 +281,7 @@ export class PlatformAuthService {
   ): Promise<TokenResponse> {
     const now = this.s.now();
     const refreshToken = newRefreshToken();
+    await tx.$queryRaw`SELECT set_config('app.account_security_protocol', '1', true)`;
     const session = await tx.platformSession.create({
       data: {
         operatorId,
@@ -272,7 +295,13 @@ export class PlatformAuthService {
     });
     await auditOperator(tx, request, 'platform.auth.login.succeeded', operatorId, {
       sessionId: session.id,
-      secondFactor: this.s.platformMfaMode,
+      secondFactor:
+        (
+          await tx.platformOperator.findUniqueOrThrow({
+            where: { id: operatorId },
+            select: { mfaMode: true },
+          })
+        ).mfaMode ?? this.s.platformMfaMode,
     });
     return {
       tokenType: 'Bearer',

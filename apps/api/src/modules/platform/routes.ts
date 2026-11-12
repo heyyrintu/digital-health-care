@@ -1,3 +1,4 @@
+import { registerAccountSecurity } from '../account-security/routes';
 import {
   CreatePlatformOrganisationBody,
   CreatedPlatformOrganisation,
@@ -56,6 +57,18 @@ export const platformRoutes: FastifyPluginAsync<PlatformRoutesOptions> = async (
       throw new AppError(403, 'FORBIDDEN', 'The platform console is not available from here.');
     }
   });
+
+  await registerAccountSecurity(
+    app,
+    services,
+    'platform',
+    signInRateLimit,
+    authenticatePlatform(services),
+    (request) => {
+      const a = platformAuthOf(request);
+      return { id: a.operatorId, sessionId: a.sessionId };
+    },
+  );
 
   app.post('/auth/login', { config: SIGN_IN_LIMIT }, async (request) =>
     auth.login(request, PlatformLoginBody.parse(request.body)),

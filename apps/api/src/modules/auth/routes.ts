@@ -1,3 +1,4 @@
+import { registerAccountSecurity } from '../account-security/routes';
 import {
   LoginBody,
   MeResponse,
@@ -24,6 +25,22 @@ export const authRoutes: FastifyPluginAsync<AuthRoutesOptions> = async (
   { services, signInRateLimit },
 ) => {
   const auth = new AuthService(services);
+  await registerAccountSecurity(
+    app,
+    services,
+    'staff',
+    signInRateLimit,
+    authenticate(services),
+    (request) => {
+      const a = authOf(request);
+      return {
+        id: a.userId,
+        organisationId: a.organisationId,
+        sessionId: a.sessionId,
+        role: a.role,
+      };
+    },
+  );
   const SIGN_IN_LIMIT = { rateLimit: { max: signInRateLimit, timeWindow: '1 minute' } };
 
   app.post('/auth/otp/request', { config: SIGN_IN_LIMIT }, async (request) => {
