@@ -440,6 +440,16 @@ interface Operation {
 const operations: Operation[] = [
   {
     method: 'get',
+    path: '/platform/medicine-stages/{id}/worksheet',
+    operationId: 'downloadMedicineReviewWorksheet',
+    summary:
+      'Synthetic-only clinician review worksheet; blank mapping fields, no clinical approval (8 MiB / 10,000 rows maximum)',
+    platform: true,
+    pathParams: ['id'],
+    csv: true,
+  },
+  {
+    method: 'get',
     path: '/platform/medicine-stages',
     operationId: 'listMedicineStages',
     summary: 'Synthetic sandbox review snapshots; no clinical data',
@@ -3361,7 +3371,9 @@ export function buildOpenApiDocument(options: { version: string; serverUrl?: str
       responses: {
         [String(status)]: op.csv
           ? {
-              description: 'Private reconciliation CSV (integer INR paise)',
+              description: op.path.endsWith('/worksheet')
+                ? 'Synthetic clinician review worksheet CSV'
+                : 'Private reconciliation CSV (integer INR paise)',
               content: { 'text/csv': { schema: { type: 'string', format: 'binary' } } },
             }
           : op.zip

@@ -2,6 +2,10 @@ import type { MessageKey } from './en';
 
 /** Hindi strings. Needs review by a native speaker before release. */
 export const hi: Record<MessageKey, string> = {
+  'medicineReview.worksheet': 'चिकित्सक समीक्षा वर्कशीट डाउनलोड करें (CSV)',
+  'medicineReview.worksheetHint':
+    'प्रत्येक घटक के लिए एक पंक्ति है; मैपिंग और समीक्षक के फ़ील्ड खाली हैं। स्प्रेडशीट में सभी अंक सुरक्षित रखने के लिए स्रोत ID के आगे एक एपोस्ट्रॉफ़ है। इस वर्कशीट से दवाएँ प्रकाशित या चिकित्सकीय रूप से स्वीकृत नहीं होतीं।',
+
   'medicineReview.notComparable':
     'सक्रिय स्नैपशॉट दूसरे डेटासेट का है; रिलीज़ के बदलावों की तुलना नहीं की जा सकती।',
   'medicineReview.details': 'स्रोत विवरण',

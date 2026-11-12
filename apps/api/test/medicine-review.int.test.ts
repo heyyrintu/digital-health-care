@@ -200,3 +200,42 @@ it('paginates immutable snapshots without skipping ties and makes a rejected sna
   expect((await publish(id, 2)).statusCode).toBe(409);
   expect((await call('GET', 'medicine-stages?state=rejected')).json().data).toHaveLength(1);
 });
+
+it('exports an audited, private, synthetic worksheet without changing the snapshot or clinical data', async () => {
+  const stage = await upload();
+  const medicines = await h.owner.medicine.count();
+  const response = await call('GET', `medicine-stages/${stage.id}/worksheet`);
+  expect(response.statusCode, response.body).toBe(200);
+  expect(response.headers['content-type']).toContain('text/csv');
+  expect(response.headers['cache-control']).toBe('no-store');
+  expect(response.headers['content-disposition']).toBe(
+    `attachment; filename="medicine-review-${stage.id}.csv"`,
+  );
+  expect(response.body).toContain('synthetic_sandbox_only');
+  expect(response.body).toContain("'990000000000000701");
+  expect(response.body).not.toContain('990000000000000703');
+  expect(await h.owner.medicine.count()).toBe(medicines);
+  expect(await h.owner.prescription.count()).toBe(0);
+  expect(
+    (await h.owner.platformMedicineStage.findUniqueOrThrow({ where: { id: stage.id } })).revision,
+  ).toBe(1);
+  const audit = await h.owner.auditLog.findFirstOrThrow({
+    where: { action: 'platform.medicine.worksheet.exported' },
+  });
+  expect(audit.metadata).toEqual({ stageId: stage.id });
+  const unauth = await h.app.inject({
+    method: 'GET',
+    url: `/v1/platform/medicine-stages/${stage.id}/worksheet`,
+  });
+  expect(unauth.statusCode).toBe(401);
+  const clinics = await seedTwoClinics(h);
+  const staff = await staffLogin(h, clinics.a.org.slug, clinics.a.admin);
+  expect(
+    (await call('GET', `medicine-stages/${stage.id}/worksheet`, undefined, staff)).statusCode,
+  ).toBe(401);
+  expect((await call('GET', 'medicine-stages/invalid/worksheet')).statusCode).toBe(400);
+  expect(
+    (await call('GET', 'medicine-stages/00000000-0000-4000-8000-000000000001/worksheet'))
+      .statusCode,
+  ).toBe(404);
+});

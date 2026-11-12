@@ -145,3 +145,38 @@ Expansion bounds: linked generic and candidate JSON each have a conservative 64 
 budget, counted before retaining each expanded record. Every artifact also has a
 128 MiB conservative estimate checked before serialization, in addition to the final
 256 MiB output-byte cap. Oversized expansions fail instead of exhausting memory.
+
+
+## Clinician review worksheet (synthetic only)
+
+Select a staged snapshot and choose **Download clinician worksheet (CSV)**. The
+platform-only download is audited, uses the existing console token and network
+allowlist, and is sent with `Cache-Control: no-store`. No clinic or patient identity
+can use this endpoint.
+
+The UTF-8 CSV has one row per ingredient in an accepted candidate. Quarantined brands
+are excluded and remain in the quarantine report. Each row retains the snapshot UUID,
+dataset/version/fingerprint, original brand/generic/product/supplier links, ingredient,
+form and routes, source regulatory status and `not_assessed` clinical safety marker.
+
+A clinician can complete the blank review fields for ingredient coding system/code,
+ingredient name, strength value/unit/basis, form, routes, regulatory evidence, reviewer,
+review date, decision and notes. Values such as “5 mg” in a generic name are never
+parsed into these fields. The snapshot's structural review state is separate from
+these blank clinical review fields.
+
+Source IDs and release identity fields have a leading apostrophe to prevent spreadsheet
+programs from rounding long identifiers or changing release values. The prefix is a
+text marker for this worksheet; remove only that single marker when copying an identity
+back to the original source. Spreadsheet formulas in source-controlled text are
+neutralized, and delimiters, quotes and newlines are quoted as CSV fields.
+
+Exports stop at 10,000 ingredient rows or 8 MiB of encoded CSV, whichever comes first;
+use smaller staged snapshots when those limits are exceeded. Downloads are limited to
+ten per minute per client address. Downloads available before and after a structural
+review are still marked `synthetic_sandbox_only` and cannot confer clinical approval.
+
+There is no completed-worksheet importer, clinical sign-off endpoint or prescribing
+publication path in this increment. Completing a downloaded worksheet cannot change
+any medicine, prescription or immutable staged snapshot. Real data and real publication
+remain deferred pending licensing and a named clinical reviewer.

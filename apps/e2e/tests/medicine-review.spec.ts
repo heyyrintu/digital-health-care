@@ -36,6 +36,17 @@ test('reviews and publishes a synthetic catalogue only to the platform sandbox',
   await page.getByRole('button', { name: 'Upload review bundle', exact: true }).click();
   await expect(page.getByRole('status')).toHaveText('Snapshot uploaded.');
   await expect(page.getByRole('table')).toContainText(bundle.catalogue.records[0].name);
+  const worksheetDownload = page.waitForEvent('download');
+  await page
+    .getByRole('button', { name: 'Download clinician worksheet (CSV)', exact: true })
+    .click();
+  const worksheet = await worksheetDownload;
+  expect(worksheet.suggestedFilename()).toMatch(/^medicine-review-[a-f0-9-]+\.csv$/);
+  const worksheetText = readFileSync((await worksheet.path())!, 'utf8');
+  expect(worksheetText).toContain('synthetic_sandbox_only');
+  expect(worksheetText).toContain("'990000000000000701");
+  expect(worksheetText).toContain('review_strength_value');
+
   await page.getByText('Source details', { exact: true }).first().click();
   await expect(
     page.getByText(new RegExp(bundle.catalogue.records[0].supplier.name)).first(),

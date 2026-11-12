@@ -1,3 +1,4 @@
+import { medicineReviewWorksheet } from './worksheet';
 import { randomUUID } from 'node:crypto';
 import {
   MedicineReviewBundle,
@@ -135,6 +136,13 @@ export class MedicineReviewService {
       const r = await this.row(tx, id);
       await this.audit(tx, req, operatorId, 'viewed', id);
       return detail(r);
+    });
+  }
+  async worksheet(req: FastifyRequest, operatorId: string, id: string) {
+    return withPlatform(this.s.db, async (tx) => {
+      const csv = medicineReviewWorksheet(detail(await this.row(tx, id)));
+      await this.audit(tx, req, operatorId, 'worksheet.exported', id);
+      return csv;
     });
   }
   async create(req: FastifyRequest, operatorId: string, input: unknown) {

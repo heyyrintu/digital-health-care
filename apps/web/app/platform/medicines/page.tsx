@@ -1,5 +1,6 @@
 'use client';
 
+import { OpenFiles, browserFileDeps, saveFile } from '../../../lib/patient-files';
 import { ApiError } from '@dhc/api-client';
 import {
   MedicineReviewBundle,
@@ -32,6 +33,8 @@ function ReviewScreen() {
   const [ack, setAck] = useState(false);
   const [search, setSearch] = useState('');
   const fileInput = useRef<HTMLInputElement>(null);
+  const [downloads] = useState(() => new OpenFiles(browserFileDeps()));
+  useEffect(() => () => downloads.closeAll(), [downloads]);
   const latest = useRef(0);
   const load = useCallback(
     async (after?: string) => {
@@ -242,6 +245,25 @@ function ReviewScreen() {
               {t(`medicineReview.${selected.state}`)}
             </h2>
             <p>{t('medicineReview.safety')}</p>
+            <p>{t('medicineReview.worksheetHint')}</p>
+            <Button
+              disabled={busy}
+              onClick={() =>
+                void run(() =>
+                  saveFile(
+                    () =>
+                      api.requestFile('GET', `/platform/medicine-stages/${selected.id}/worksheet`, {
+                        accept: 'text/csv, application/json',
+                      }),
+                    `medicine-review-${selected.id}.csv`,
+                    downloads,
+                  ),
+                )
+              }
+            >
+              {t('medicineReview.worksheet')}
+            </Button>
+
             <h3 className="font-semibold">{t('medicineReview.changes')}</h3>
             {!comparable ? (
               <p>{t('medicineReview.notComparable')}</p>

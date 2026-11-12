@@ -56,3 +56,15 @@ partially complete: clinical mapping/review, external-ID support in the live med
 master, licence approval and real-data publication still remain. There is no real-data
 publication endpoint. Source hashes establish consistency, not authenticity or licensing;
 the synthetic manifest is an operator declaration, not a content classifier.
+### Review preparation — clinician worksheet
+
+This increment adds a downloadable, audited synthetic-only CSV worksheet
+to the platform review screen. It preserves source provenance and produces one row per
+ingredient, with blank fields for a clinician's ingredient, strength, form, route,
+regulatory and review decisions. It does not infer clinical mappings, import completed
+worksheets, approve clinical facts or publish medicines into prescribing.
+
+Remaining: name the clinical reviewer, confirm licensing, build validated mapping and
+clinical sign-off storage, add stable external IDs to the clinical master, then implement
+reviewed real-data publication and maintenance. The worksheet is preparation for those
+steps, not completion of them.

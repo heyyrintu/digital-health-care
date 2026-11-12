@@ -172,6 +172,19 @@ export const platformRoutes: FastifyPluginAsync<PlatformRoutesOptions> = async (
       ),
     ),
   );
+  app.get(
+    '/medicine-stages/:id/worksheet',
+    { ...operator, config: { rateLimit: { max: 10, timeWindow: '1 minute' } } },
+    async (request, reply) => {
+      const id = stageParams.parse(request.params).id;
+      const csv = await medicines.worksheet(request, platformAuthOf(request).operatorId, id);
+      return reply
+        .type('text/csv; charset=utf-8')
+        .header('cache-control', 'no-store')
+        .header('content-disposition', `attachment; filename="medicine-review-${id}.csv"`)
+        .send(csv);
+    },
+  );
   app.post('/medicine-stages/:id/review', operator, async (request) =>
     MedicineStageDetail.parse(
       await medicines.review(

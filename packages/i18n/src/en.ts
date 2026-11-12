@@ -1,4 +1,8 @@
 export const en = {
+  'medicineReview.worksheet': 'Download clinician worksheet (CSV)',
+  'medicineReview.worksheetHint':
+    'One row per ingredient, with blank mapping and reviewer fields. Source IDs have a leading apostrophe to preserve every digit in spreadsheets. This worksheet cannot publish medicines or establish clinical approval.',
+
   'medicineReview.notComparable':
     'The active snapshot belongs to another dataset; release differences cannot be compared.',
   'medicineReview.details': 'Source details',

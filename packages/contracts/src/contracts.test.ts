@@ -158,6 +158,7 @@ describe('buildOpenApiDocument', () => {
       'GET /platform/medicine-sandbox',
       'GET /platform/medicine-stages',
       'GET /platform/medicine-stages/{id}',
+      'GET /platform/medicine-stages/{id}/worksheet',
       'GET /platform/organisations',
       'GET /platform/usage',
       'POST /platform/auth/logout',
