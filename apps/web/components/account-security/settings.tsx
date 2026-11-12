@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState, useEffectEvent, type FormEvent } from 'react';
+import { useEffect, useState, useEffectEvent, useRef, type FormEvent } from 'react';
 import type { ApiClient } from '@dhc/api-client';
 import {
   SecuritySettingsResponse,
@@ -34,6 +34,10 @@ export function SecuritySettings({
     [challenge, setChallenge] = useState<Challenge | null>(null),
     [busy, setBusy] = useState(false),
     [error, setError] = useState('');
+  const codeInput = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (challenge) codeInput.current?.focus();
+  }, [challenge]);
   const base = `${platform ? '/platform' : ''}/auth/security`;
   const reportError = useEffectEvent((e: unknown) =>
     setError(e instanceof Error ? e.message : t('error.generic')),
@@ -133,7 +137,7 @@ export function SecuritySettings({
               </>
             ) : (
               <>
-                <p>{t('security.confirmHint')}</p>
+                <p role="status">{t('security.confirmHint')}</p>
                 <p>
                   {t('security.chooseMethod')}: <strong>{label(challenge.targetMethod)}</strong>
                 </p>
@@ -142,6 +146,7 @@ export function SecuritySettings({
                     {t('security.currentCode')} ({label(challenge.currentMethod)})
                     <Input
                       name="currentCode"
+                      ref={codeInput}
                       required
                       inputMode="numeric"
                       autoComplete="one-time-code"
@@ -155,6 +160,7 @@ export function SecuritySettings({
                     {t('security.newCode')} ({label(challenge.targetMethod)})
                     <Input
                       name="newCode"
+                      ref={challenge.currentMethod === 'disabled' ? codeInput : undefined}
                       required
                       inputMode="numeric"
                       autoComplete="one-time-code"

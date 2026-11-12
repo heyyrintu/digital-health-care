@@ -1,25 +1,37 @@
 'use client';
 import Link from 'next/link';
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useState, useRef, type ReactNode, type FormEvent } from 'react';
 import { Button, Input } from '@dhc/ui-web';
 import { SecurityChallengeResponse } from '@dhc/contracts';
-import { useSession } from '../../app/clinic/session-provider';
-import { usePlatformSession } from '../../app/platform/session-provider';
+import { LocaleToggle, useSession } from '../../app/clinic/session-provider';
+import { PlatformLocaleToggle, usePlatformSession } from '../../app/platform/session-provider';
 
 export function StaffForgotPassword() {
   const { t } = useSession();
-  return <Recovery platform={false} t={t} />;
+  return <Recovery platform={false} t={t} localeControl={<LocaleToggle />} />;
 }
 export function PlatformForgotPassword() {
   const { t } = usePlatformSession();
-  return <Recovery platform t={t} />;
+  return <Recovery platform t={t} localeControl={<PlatformLocaleToggle />} />;
 }
 type Translator = ReturnType<typeof useSession>['t'];
-function Recovery({ platform, t }: { platform: boolean; t: Translator }) {
+function Recovery({
+  platform,
+  t,
+  localeControl,
+}: {
+  platform: boolean;
+  t: Translator;
+  localeControl: ReactNode;
+}) {
+  const codeInput = useRef<HTMLInputElement>(null);
   const [challenge, setChallenge] = useState<string | null>(null),
     [organisation, setOrganisation] = useState(''),
     [busy, setBusy] = useState(false),
     [error, setError] = useState('');
+  useEffect(() => {
+    if (challenge) codeInput.current?.focus();
+  }, [challenge]);
   const login = platform ? '/platform/login' : '/clinic/login';
   useEffect(() => {
     if (!platform) {
@@ -80,8 +92,11 @@ function Recovery({ platform, t }: { platform: boolean; t: Translator }) {
   return (
     <main className="grid min-h-screen place-items-center bg-background p-6">
       <section className="surface w-full max-w-md space-y-5 p-6">
+        {localeControl}
         <h1 className="font-display text-2xl font-bold">{t('security.forgot')}</h1>
-        <p>{t(challenge ? 'security.recoverySent' : 'security.recoveryHint')}</p>
+        <p role={challenge ? 'status' : undefined}>
+          {t(challenge ? 'security.recoverySent' : 'security.recoveryHint')}
+        </p>
         {error && <p role="alert">{error}</p>}
         <form onSubmit={(e) => void submit(e)} className="space-y-4">
           {!challenge && (
@@ -116,6 +131,7 @@ function Recovery({ platform, t }: { platform: boolean; t: Translator }) {
                 <Input
                   required
                   name="code"
+                  ref={codeInput}
                   inputMode="numeric"
                   autoComplete="one-time-code"
                   pattern="[0-9]{6}"

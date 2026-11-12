@@ -16,6 +16,7 @@ test('staff changes to password-only sign-in after proving the current authentic
   await expect(page.getByRole('combobox', { name: 'Verification method' })).toHaveValue('disabled');
   await page.getByLabel('Password', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
+  await expect(page.getByLabel(/Current verification code/)).toBeFocused();
   await page.getByLabel(/Current verification code/).fill(totp(secret, 1));
   await page.getByRole('button', { name: 'Save and sign out', exact: true }).click();
   await expect(page).toHaveURL(/\/clinic\/login$/);
@@ -64,6 +65,7 @@ test('staff and platform password-recovery forms submit request and reset steps'
       .getByLabel(audience === 'clinic' ? 'Email or mobile number' : 'Email', { exact: true })
       .fill('staff@example.test');
     await page.getByRole('button', { name: 'Send reset code', exact: true }).click();
+    await expect(page.getByLabel('6-digit code from email', { exact: true })).toBeFocused();
     await page.getByLabel('6-digit code from email', { exact: true }).fill('123456');
     await page.getByLabel('New password (at least 12 characters)', { exact: true }).fill(password);
     await page.getByLabel('Confirm new password', { exact: true }).fill(password);

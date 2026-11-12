@@ -38,8 +38,11 @@ PLATFORM_MFA_MODE=totp
 ```
 
 Set `PLATFORM_MFA_MODE=disabled` as well only if password-only platform sign-in is intended.
-This affects future sign-ins. Existing sessions are not automatically signed out.
-To restore authenticator verification, set the relevant mode to `totp` and redeploy.
+This affects future sign-ins only for accounts without a personal choice. Existing
+sessions are not automatically signed out.
+For accounts without a personal choice, set the relevant mode to `totp` and redeploy
+to restore authenticator verification. Accounts with a personal choice keep it; change
+that choice in Your account → Two-step verification.
 Authenticator secrets are preserved. Initial invitation/operator enrollment and recovery
 still use the existing trusted authenticator setup workflow; these settings change normal
 sign-in, not account provisioning. Keep enrolled authenticators available for recovery.
@@ -102,7 +105,11 @@ password recovery does not remove that factor. Patient WhatsApp sign-in remains 
 
 ## Release and rollback
 
-Apply `20261112090000_account_security` and ship API and web together. Existing accounts
+Apply `20261112090000_account_security` and ship API and web together. The preview has
+four user rows, so CHECK validation is bounded to a tiny table. Before reusing this
+migration on a large installation, measure account-table size and schedule maintenance
+or add CHECK constraints NOT VALID followed by separate validation to avoid a long
+exclusive-lock scan. Existing accounts
 inherit their current deployment policy; the migration does not disable verification.
 Credential/contact/security changes increment an account authentication version in the
 DB. Pending password-step tokens must match it. Password resets and method changes revoke
