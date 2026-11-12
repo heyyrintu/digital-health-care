@@ -1,0 +1,175 @@
+{
+  "catalogue": {
+    "schemaVersion": 1,
+    "source": {
+      "format": "cdci-flat-files/v1",
+      "dataKind": "synthetic",
+      "datasetKey": "synthetic-medicine-catalogue",
+      "version": "fixture-1"
+    },
+    "fingerprint": "6f4f3e710188875b7c015cebfd4397e39180b2361bee6d35a89df48a81818e9f",
+    "publicationAllowed": false,
+    "records": [
+      {
+        "sourceId": "990000000000000701",
+        "name": "Synthetic brand One",
+        "product": {
+          "sourceId": "990000000000000601",
+          "name": "Synthetic product One"
+        },
+        "supplier": {
+          "sourceId": "990000000000000501",
+          "name": "Synthetic supplier"
+        },
+        "generic": {
+          "sourceId": "990000000000000201",
+          "name": "Synthetic Alpha 5 mg tablet"
+        },
+        "ingredients": [
+          {
+            "sourceId": "990000000000000101",
+            "name": "Synthetic substance Alpha"
+          }
+        ],
+        "routes": [
+          {
+            "sourceId": "990000000000000401",
+            "name": "Synthetic oral route"
+          }
+        ],
+        "form": {
+          "sourceId": "990000000000000301",
+          "name": "Synthetic oral tablet"
+        },
+        "sourceUpdatedAt": "2026-01-03",
+        "regulatoryStatus": "UNKNOWN",
+        "clinicalSafety": "not_assessed",
+        "reviewRequired": [
+          "strength_mapping",
+          "route_mapping",
+          "clinical_review",
+          "regulatory_review"
+        ]
+      },
+      {
+        "sourceId": "990000000000000702",
+        "name": "Synthetic brand Two",
+        "product": {
+          "sourceId": "990000000000000602",
+          "name": "Synthetic product Two"
+        },
+        "supplier": {
+          "sourceId": "990000000000000501",
+          "name": "Synthetic supplier"
+        },
+        "generic": {
+          "sourceId": "990000000000000202",
+          "name": "Synthetic Alpha + Beta mixture"
+        },
+        "ingredients": [
+          {
+            "sourceId": "990000000000000101",
+            "name": "Synthetic substance Alpha"
+          },
+          {
+            "sourceId": "990000000000000102",
+            "name": "Synthetic substance Beta"
+          }
+        ],
+        "routes": [
+          {
+            "sourceId": "990000000000000401",
+            "name": "Synthetic oral route"
+          },
+          {
+            "sourceId": "990000000000000402",
+            "name": "Synthetic alternative route"
+          }
+        ],
+        "form": {
+          "sourceId": "990000000000000301",
+          "name": "Synthetic oral tablet"
+        },
+        "sourceUpdatedAt": "2026-01-03",
+        "regulatoryStatus": "UNKNOWN",
+        "clinicalSafety": "not_assessed",
+        "reviewRequired": [
+          "strength_mapping",
+          "route_mapping",
+          "clinical_review",
+          "regulatory_review"
+        ]
+      }
+    ]
+  },
+  "report": {
+    "fingerprint": "6f4f3e710188875b7c015cebfd4397e39180b2361bee6d35a89df48a81818e9f",
+    "source": {
+      "format": "cdci-flat-files/v1",
+      "dataKind": "synthetic",
+      "datasetKey": "synthetic-medicine-catalogue",
+      "version": "fixture-1"
+    },
+    "publicationAllowed": false,
+    "tables": {
+      "SubstanceMaster.txt": {
+        "inputRows": 2,
+        "indexedRows": 2
+      },
+      "ProductMaster.txt": {
+        "inputRows": 2,
+        "indexedRows": 2
+      },
+      "SupplierMaster.txt": {
+        "inputRows": 1,
+        "indexedRows": 1
+      },
+      "DrugFormMaster.txt": {
+        "inputRows": 1,
+        "indexedRows": 1
+      },
+      "RouteOfAdministrationMaster.txt": {
+        "inputRows": 2,
+        "indexedRows": 2
+      },
+      "GenericMaster.txt": {
+        "inputRows": 2,
+        "indexedRows": 2
+      },
+      "BrandMaster.txt": {
+        "inputRows": 3,
+        "indexedRows": 3
+      }
+    },
+    "candidateBrands": 2,
+    "rejectedBrands": 1,
+    "issues": [
+      {
+        "file": "BrandMaster.txt",
+        "line": 4,
+        "sourceId": "990000000000000703",
+        "reason": "generic_reference"
+      }
+    ],
+    "clinicalSafety": "not_assessed"
+  },
+  "provenance": {
+    "schemaVersion": 1,
+    "source": {
+      "format": "cdci-flat-files/v1",
+      "dataKind": "synthetic",
+      "datasetKey": "synthetic-medicine-catalogue",
+      "version": "fixture-1"
+    },
+    "fingerprint": "6f4f3e710188875b7c015cebfd4397e39180b2361bee6d35a89df48a81818e9f",
+    "fileSha256": {
+      "SubstanceMaster.txt": "41292ddd55c6d314c356fce14e874e8b467664b328b7a579302a05ad966da837",
+      "ProductMaster.txt": "50020462839b3488e3e44a4b3ca0d9fca80978304981f1d707ed13aad203386b",
+      "SupplierMaster.txt": "722375d239bcfe7df92bbd1299a7d716069c518372208fa73f0ad979a8ba7f3e",
+      "DrugFormMaster.txt": "97bf0f4abe15f423666be2e98964aac3cb6a44b523f91b54dd665f734d8b23cd",
+      "RouteOfAdministrationMaster.txt": "3f3e4966796bf4bb0c56c71a0a5802b8ba5fed6c436fb0cf4797feb420eab3bd",
+      "GenericMaster.txt": "bb48bbad4366a49c19cfbc03d40d730bf9455375f5144b95fe5558ebfa0f5e0f",
+      "BrandMaster.txt": "26080050a9c6d42dfd26d014ed785a06d57ee932647d7080c84db649a89cafad"
+    }
+  }
+}

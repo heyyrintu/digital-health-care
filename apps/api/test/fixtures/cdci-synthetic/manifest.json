@@ -1,0 +1,6 @@
+{
+  "format": "cdci-flat-files/v1",
+  "dataKind": "synthetic",
+  "datasetKey": "synthetic-medicine-catalogue",
+  "version": "fixture-1"
+}

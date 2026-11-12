@@ -1,0 +1,2 @@
+Id	Dose Form
+990000000000000301	Synthetic oral tablet	

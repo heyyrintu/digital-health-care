@@ -155,10 +155,16 @@ describe('buildOpenApiDocument', () => {
       'GET /platform/doctors',
       'GET /platform/health',
       'GET /platform/me',
+      'GET /platform/medicine-sandbox',
+      'GET /platform/medicine-stages',
+      'GET /platform/medicine-stages/{id}',
       'GET /platform/organisations',
       'GET /platform/usage',
       'POST /platform/auth/logout',
       'POST /platform/doctors/{profileId}/verify',
+      'POST /platform/medicine-stages',
+      'POST /platform/medicine-stages/{id}/publish-sandbox',
+      'POST /platform/medicine-stages/{id}/review',
       'POST /platform/organisations',
     ]);
   });

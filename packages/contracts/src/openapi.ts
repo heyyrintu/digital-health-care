@@ -1,4 +1,13 @@
 import {
+  MedicineReviewBundle,
+  MedicineStageDetail,
+  MedicineStageList,
+  MedicineStageQuery,
+  MedicineStageReviewBody,
+  MedicineStagePublishBody,
+  MedicineSandboxView,
+} from './medicine-staging';
+import {
   OnlineIntake,
   OnlineCall,
   OnlineVerify,
@@ -429,6 +438,63 @@ interface Operation {
 
 /** Every endpoint, in one list. Field detail always comes from the Zod schemas. */
 const operations: Operation[] = [
+  {
+    method: 'get',
+    path: '/platform/medicine-stages',
+    operationId: 'listMedicineStages',
+    summary: 'Synthetic sandbox review snapshots; no clinical data',
+    platform: true,
+    query: MedicineStageQuery,
+    response: MedicineStageList,
+  },
+  {
+    method: 'post',
+    path: '/platform/medicine-stages',
+    operationId: 'uploadMedicineStage',
+    summary: 'Stage a synthetic review bundle (2 MiB maximum)',
+    platform: true,
+    body: MedicineReviewBundle,
+    response: MedicineStageDetail,
+    status: 201,
+    replay: 'Identical dataset/version bundle returns its original snapshot.',
+  },
+  {
+    method: 'get',
+    path: '/platform/medicine-stages/{id}',
+    operationId: 'getMedicineStage',
+    summary: 'Synthetic candidates, quarantine and provenance',
+    platform: true,
+    pathParams: ['id'],
+    response: MedicineStageDetail,
+  },
+  {
+    method: 'post',
+    path: '/platform/medicine-stages/{id}/review',
+    operationId: 'reviewMedicineStage',
+    summary: 'Record an immutable synthetic-only review; stale revisions return 409',
+    platform: true,
+    pathParams: ['id'],
+    body: MedicineStageReviewBody,
+    response: MedicineStageDetail,
+  },
+  {
+    method: 'post',
+    path: '/platform/medicine-stages/{id}/publish-sandbox',
+    operationId: 'publishMedicineSandbox',
+    summary: 'Activate a reviewed synthetic sandbox only; no clinical publication',
+    platform: true,
+    pathParams: ['id'],
+    body: MedicineStagePublishBody,
+    response: MedicineSandboxView,
+  },
+  {
+    method: 'get',
+    path: '/platform/medicine-sandbox',
+    operationId: 'getMedicineSandbox',
+    summary: 'Active synthetic sandbox; never clinic prescribing',
+    platform: true,
+    response: MedicineSandboxView,
+  },
   {
     method: 'get',
     path: '/online-settings',
