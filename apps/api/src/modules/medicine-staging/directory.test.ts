@@ -110,19 +110,29 @@ it('rejects a marker whose fingerprint disagrees with its catalogue', async () =
   await expect(stageDirectory(input, join(root, 'next'), output)).rejects.toThrow('fingerprint');
 });
 
-it('runs the operator command without database configuration and rejects publication flags', async () => {
-  const run = promisify(execFile),
-    entry = new URL('../../scripts/stage-medicines.ts', import.meta.url);
-  const args = ['--import', 'tsx', entry.pathname];
-  const result = await run(process.execPath, [...args, '--input', input, '--output', output], {
-    env: { ...process.env, DATABASE_URL: 'invalid-database-url-must-not-be-read' },
-  });
-  expect(JSON.parse(result.stdout)).toMatchObject({
-    candidateBrands: 2,
-    publicationAllowed: false,
-  });
-  await expect(
-    run(process.execPath, [...args, '--publish', '--input', input, '--output', join(root, 'live')]),
-  ).rejects.toMatchObject({ code: 1 });
-  expect(await readdir(root)).not.toContain('live');
-});
+// Two fresh Node/tsx processes can take longer when the complete CI suite runs in parallel.
+it(
+  'runs the operator command without database configuration and rejects publication flags',
+  { timeout: 30_000 },
+  async () => {
+    const run = promisify(execFile),
+      entry = new URL('../../scripts/stage-medicines.ts', import.meta.url);
+    const args = ['--import', 'tsx', entry.pathname];
+    const result = await run(process.execPath, [...args, '--input', input, '--output', output], {
+      env: { ...process.env, DATABASE_URL: 'invalid-database-url-must-not-be-read' },
+      timeout: 10_000,
+    });
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      candidateBrands: 2,
+      publicationAllowed: false,
+    });
+    await expect(
+      run(
+        process.execPath,
+        [...args, '--publish', '--input', input, '--output', join(root, 'live')],
+        { timeout: 10_000 },
+      ),
+    ).rejects.toMatchObject({ code: 1 });
+    expect(await readdir(root)).not.toContain('live');
+  },
+);
