@@ -8,6 +8,15 @@ import {
   MedicineSandboxView,
 } from '@dhc/contracts';
 import { MedicineReviewService } from '../medicine-review/service';
+import { MedicineImportService } from '../medicine-import/service';
+import {
+  ImportReleaseList,
+  ImportGenericList,
+  ImportBrandList,
+  ImportGeneric,
+  ImportMappingHistory,
+  ImportPageQuery,
+} from '@dhc/contracts';
 import { registerAccountSecurity } from '../account-security/routes';
 import {
   CreatePlatformOrganisationBody,
@@ -140,6 +149,62 @@ export const platformRoutes: FastifyPluginAsync<PlatformRoutesOptions> = async (
   );
 
   const medicines = new MedicineReviewService(services);
+  const imports = new MedicineImportService(services.db);
+  const importParams = z.object({ id: z.uuid(), sourceId: z.string().regex(/^\d{1,18}$/) });
+  app.get('/medicine-imports', operator, async (request, reply) => {
+    reply.header('cache-control', 'no-store');
+    const query = z.object({ cursor: z.uuid().optional() }).parse(request.query);
+    return ImportReleaseList.parse(
+      await imports.list(request, platformAuthOf(request).operatorId, query.cursor),
+    );
+  });
+  app.get('/medicine-imports/:id/generics', operator, async (request, reply) => {
+    reply.header('cache-control', 'no-store');
+    const id = z.object({ id: z.uuid() }).parse(request.params).id;
+    const query = ImportPageQuery.parse(request.query);
+    return ImportGenericList.parse(
+      await imports.generics(
+        request,
+        platformAuthOf(request).operatorId,
+        id,
+        query.cursor,
+        query.q,
+      ),
+    );
+  });
+  app.get('/medicine-imports/:id/generics/:sourceId/brands', operator, async (request, reply) => {
+    reply.header('cache-control', 'no-store');
+    const { id, sourceId } = importParams.parse(request.params);
+    const query = ImportPageQuery.parse(request.query);
+    return ImportBrandList.parse(
+      await imports.brands(request, platformAuthOf(request).operatorId, id, sourceId, query.cursor),
+    );
+  });
+  app.get('/medicine-imports/:id/generics/:sourceId/history', operator, async (request, reply) => {
+    reply.header('cache-control', 'no-store');
+    const { id, sourceId } = importParams.parse(request.params);
+    const { before } = z
+      .object({ before: z.coerce.number().int().positive().optional() })
+      .parse(request.query);
+    return ImportMappingHistory.parse(
+      await imports.history(request, platformAuthOf(request).operatorId, id, sourceId, before),
+    );
+  });
+  app.put(
+    '/medicine-imports/:id/generics/:sourceId/mapping',
+    {
+      ...operator,
+      bodyLimit: 128 * 1024,
+      config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
+    },
+    async (request, reply) => {
+      reply.header('cache-control', 'no-store');
+      const { id, sourceId } = importParams.parse(request.params);
+      return ImportGeneric.parse(
+        await imports.save(request, platformAuthOf(request).operatorId, id, sourceId, request.body),
+      );
+    },
+  );
   const stageParams = z.object({ id: z.uuid() });
   app.get('/medicine-stages', operator, async (request) => {
     const query = MedicineStageQuery.parse(request.query);

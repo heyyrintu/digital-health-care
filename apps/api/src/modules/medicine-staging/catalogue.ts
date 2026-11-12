@@ -28,7 +28,13 @@ export type FileName = keyof typeof FILES;
 export const MAX_FILE_BYTES = 32 * 1024 * 1024;
 export const MAX_ROWS = 200_000;
 export { Manifest, Candidate, Catalogue } from '@dhc/contracts';
-import { Manifest, Catalogue, type Candidate } from '@dhc/contracts';
+import {
+  Manifest,
+  Catalogue,
+  ImportManifest,
+  ImportCatalogue,
+  type Candidate,
+} from '@dhc/contracts';
 export const digest = (value: string | Uint8Array) =>
   createHash('sha256').update(value).digest('hex');
 const identifier = z.string().regex(/^\d{1,18}$/);
@@ -141,7 +147,24 @@ function sourceDate(value: string | undefined): string | null | false {
 }
 
 export function stageCatalogue(rawManifest: unknown, files: Record<FileName, string>) {
-  const source = Manifest.parse(rawManifest),
+  const result = stageImportCatalogue(Manifest.parse(rawManifest), files);
+  const source = Manifest.parse(result.catalogue.source);
+  return {
+    // The core already validates the candidate catalogue; only narrow the source
+    // back to the synthetic manifest without duplicating a large record array.
+    catalogue: { ...result.catalogue, source },
+    report: { ...result.report, source },
+    provenance: { ...result.provenance, source },
+  };
+}
+
+/** Private ingestion only; all output remains ineligible for clinical publication. */
+export function stageImportCatalogue(
+  rawManifest: unknown,
+  files: Record<FileName, string>,
+  options: { includeSourceRows?: boolean } = {},
+) {
+  const source = ImportManifest.parse(rawManifest),
     issues: Issue[] = [];
   const hashes = Object.fromEntries(
     (Object.keys(FILES) as FileName[]).map((f) => [f, digest(files[f])]),
@@ -220,11 +243,14 @@ export function stageCatalogue(rawManifest: unknown, files: Record<FileName, str
       clinicalSafety: 'not_assessed',
       reviewRequired: ['strength_mapping', 'route_mapping', 'clinical_review', 'regulatory_review'],
     };
-    candidateBytes += assertJsonBudget(candidate, 64 * 1024 * 1024 - candidateBytes);
+    candidateBytes += assertJsonBudget(
+      candidate,
+      (source.dataKind === 'real' ? 256 : 64) * 1024 * 1024 - candidateBytes,
+    );
     records.push(candidate);
   }
   records.sort((a, b) => (a.sourceId < b.sourceId ? -1 : a.sourceId > b.sourceId ? 1 : 0));
-  const catalogue = Catalogue.parse({
+  const catalogue = ImportCatalogue.parse({
     schemaVersion: 1,
     source,
     fingerprint,
@@ -233,6 +259,17 @@ export function stageCatalogue(rawManifest: unknown, files: Record<FileName, str
   });
   return {
     catalogue,
+    sourceRows: options.includeSourceRows
+      ? (Object.keys(FILES) as FileName[]).flatMap((file) =>
+          [...tables[file].index].map(([sourceId, row]) => ({
+            file,
+            sourceId,
+            name: row.values[FILES[file][1]]!,
+            values: row.values,
+          })),
+        )
+      : undefined,
+    genericRecords: options.includeSourceRows ? [...generics.values()] : undefined,
     report: {
       fingerprint,
       source,

@@ -4,6 +4,8 @@ All notable changes are recorded here, newest first. Format: version, date, summ
 
 ## [Unreleased]
 
+- Full private CDCI source ingestion and platform clinical mapping workspace: owner-only batched import, complete source provenance/quarantine, generic/brand/code search, validated draft/review records, conflict checks and immutable mapping history. No real clinical reviews are fabricated; prescribing remains blocked pending licence evidence, verified clinical mapping and a separate publication path.
+
 - Medicine catalogue database: stable source identities, immutable release names and brand relationships, automatic transactional indexing and migration backfill. The index stays separate from prescribing; the owner's licence application is pending approval.
 
 - Platform synthetic medicine snapshots can export an audited clinician review worksheet: one row per ingredient, blank clinical mapping/reviewer fields, source provenance, spreadsheet-safe text IDs and bounded CSV output. Export does not change prescribing or confer clinical approval.

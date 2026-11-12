@@ -1843,6 +1843,8 @@ model PlatformOperator {
   createdMedicineStages PlatformMedicineStage[] @relation("MedicineStageCreator")
   reviewedMedicineStages PlatformMedicineStage[] @relation("MedicineStageReviewer")
   medicineSandboxPublications PlatformMedicineSandbox[] @relation("MedicineSandboxPublisher")
+  medicineImports MedicineImportRelease[]
+  medicineMappings MedicineImportMapping[]
 
   @@map("platform_operators")
 }
@@ -2725,4 +2727,80 @@ model PlatformMedicineLink {
   @@id([stageId, fromId, toId])
   @@index([stageId, toId])
   @@map("platform_medicine_links")
+}
+
+/// Private full source releases, never read by prescribing. Licence evidence pending.
+model MedicineImportRelease {
+  id String @id @default(uuid()) @db.Uuid
+  datasetKey String @map("dataset_key")
+  sourceVersion String @map("source_version")
+  dataKind String @map("data_kind")
+  fingerprint String
+  packageSha256 String @map("package_sha256")
+  licenceTextSha256 String @map("licence_text_sha256")
+  report Json @db.JsonB
+  provenance Json @db.JsonB
+  brandCount Int @map("brand_count")
+  genericCount Int @map("generic_count")
+  issueCount Int @map("issue_count")
+  createdBy String @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  creator PlatformOperator @relation(fields: [createdBy], references: [id])
+  generics MedicineImportGeneric[]
+  brands MedicineImportBrand[]
+  sourceRows MedicineImportSourceRow[]
+  @@unique([datasetKey, sourceVersion])
+  @@index([createdAt, id])
+  @@map("medicine_import_releases")
+}
+
+model MedicineImportGeneric {
+  releaseId String @map("release_id") @db.Uuid
+  sourceId String @map("source_id")
+  name String
+  source Json @db.JsonB
+  revision Int @default(0)
+  mapping Json? @db.JsonB
+  release MedicineImportRelease @relation(fields: [releaseId], references: [id], onDelete: Restrict)
+  brands MedicineImportBrand[]
+  history MedicineImportMapping[]
+  @@id([releaseId, sourceId])
+  @@map("medicine_import_generics")
+}
+
+model MedicineImportBrand {
+  releaseId String @map("release_id") @db.Uuid
+  sourceId String @map("source_id")
+  genericId String @map("generic_id")
+  name String
+  source Json @db.JsonB
+  release MedicineImportRelease @relation(fields: [releaseId], references: [id], onDelete: Restrict)
+  generic MedicineImportGeneric @relation(fields: [releaseId, genericId], references: [releaseId, sourceId], onDelete: Restrict)
+  @@id([releaseId, sourceId])
+  @@index([releaseId, genericId, sourceId])
+  @@map("medicine_import_brands")
+}
+
+model MedicineImportMapping {
+  releaseId String @map("release_id") @db.Uuid
+  sourceId String @map("source_id")
+  revision Int
+  mapping Json @db.JsonB
+  recordedBy String @map("recorded_by") @db.Uuid
+  recordedAt DateTime @default(now()) @map("recorded_at") @db.Timestamptz(3)
+  recorder PlatformOperator @relation(fields: [recordedBy], references: [id])
+  generic MedicineImportGeneric @relation(fields: [releaseId, sourceId], references: [releaseId, sourceId], onDelete: Restrict)
+  @@id([releaseId, sourceId, revision])
+  @@map("medicine_import_mappings")
+}
+
+model MedicineImportSourceRow {
+  releaseId String @map("release_id") @db.Uuid
+  file String
+  sourceId String @map("source_id")
+  name String
+  values Json @db.JsonB
+  release MedicineImportRelease @relation(fields: [releaseId], references: [id], onDelete: Restrict)
+  @@id([releaseId, file, sourceId])
+  @@map("medicine_import_source_rows")
 }

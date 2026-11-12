@@ -40,6 +40,7 @@ export function PlatformShell({
     { href: '/platform/doctors', label: t('platform.nav.verification'), icon: BadgeCheck },
     { href: '/platform/usage', label: t('platform.nav.usage'), icon: BarChart3 },
     { href: '/platform/medicines', label: t('medicineReview.title'), icon: Pill },
+    { href: '/platform/medicine-imports', label: t('medicineImport.title'), icon: Pill },
     { href: '/platform/health', label: t('platform.nav.health'), icon: Activity },
   ];
 

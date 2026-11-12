@@ -5,6 +5,7 @@ export default defineConfig({
   entry: {
     server: 'src/server.ts',
     seed: 'src/scripts/seed.ts',
+    'import-medicines': 'src/scripts/import-medicines.ts',
     'support-reset-authenticator': 'src/scripts/support-reset-authenticator.ts',
     'support-verify-doctor': 'src/scripts/support-verify-doctor.ts',
     'support-platform-operator': 'src/scripts/support-platform-operator.ts',

@@ -8,6 +8,15 @@ import {
   MedicineSandboxView,
 } from './medicine-staging';
 import {
+  ImportReleaseList,
+  ImportGenericList,
+  ImportBrandList,
+  ImportGeneric,
+  ImportMappingHistory,
+  ImportPageQuery,
+  SaveClinicalMapping,
+} from './medicine-import';
+import {
   OnlineIntake,
   OnlineCall,
   OnlineVerify,
@@ -438,6 +447,53 @@ interface Operation {
 
 /** Every endpoint, in one list. Field detail always comes from the Zod schemas. */
 const operations: Operation[] = [
+  {
+    method: 'get',
+    path: '/platform/medicine-imports',
+    operationId: 'listImportedMedicineReleases',
+    summary: 'Private full source releases; licensing pending and prescribing blocked',
+    platform: true,
+    response: ImportReleaseList,
+  },
+  {
+    method: 'get',
+    path: '/platform/medicine-imports/{id}/generics',
+    operationId: 'listImportedMedicineGenerics',
+    summary: 'Search a private source release for clinical mapping',
+    platform: true,
+    pathParams: ['id'],
+    query: ImportPageQuery,
+    response: ImportGenericList,
+  },
+  {
+    method: 'get',
+    path: '/platform/medicine-imports/{id}/generics/{sourceId}/brands',
+    operationId: 'listImportedGenericBrands',
+    summary: 'Source brands linked to an imported generic',
+    platform: true,
+    pathParams: ['id', { name: 'sourceId', schema: { type: 'string', pattern: '^[0-9]{1,18}$' } }],
+    query: ImportPageQuery,
+    response: ImportBrandList,
+  },
+  {
+    method: 'get',
+    path: '/platform/medicine-imports/{id}/generics/{sourceId}/history',
+    operationId: 'importedMedicineMappingHistory',
+    summary: 'Immutable clinician mapping revisions; no prescribing approval',
+    platform: true,
+    pathParams: ['id', { name: 'sourceId', schema: { type: 'string', pattern: '^[0-9]{1,18}$' } }],
+    response: ImportMappingHistory,
+  },
+  {
+    method: 'put',
+    path: '/platform/medicine-imports/{id}/generics/{sourceId}/mapping',
+    operationId: 'saveImportedMedicineMapping',
+    summary: 'Record a source-validated clinician mapping revision; does not activate prescribing',
+    platform: true,
+    pathParams: ['id', { name: 'sourceId', schema: { type: 'string', pattern: '^[0-9]{1,18}$' } }],
+    body: SaveClinicalMapping,
+    response: ImportGeneric,
+  },
   {
     method: 'get',
     path: '/platform/medicine-stages/{id}/worksheet',

@@ -14,7 +14,7 @@ import {
   type FileName,
 } from './catalogue';
 
-async function readBounded(path: string, limit: number) {
+export async function readBounded(path: string, limit: number) {
   // No symlinks or devices. Check the opened descriptor as well as the directory entry.
   const info = await lstat(path);
   if (!info.isFile() || info.size > limit)

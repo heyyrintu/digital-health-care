@@ -88,3 +88,29 @@ This is the database foundation for the future licensed catalogue. It does not r
 current synthetic-only upload limit (500 candidates), import the full real CDCI package,
 attach licence evidence, map source entities into clinical medicines, or enable prescribing.
 Those remaining publication steps still require approval evidence and clinical review.
+
+### Full private import and mapping workflow — 13 November 2026
+
+The owner authorised full real-source ingestion while approval evidence is pending. A
+separate full-release import now stores all seven indexed source tables, valid generic
+relationships, accepted brands, file provenance and quarantine reports. It uses owner-only
+bounded batches and transactional replay/conflict protection; it does not widen the
+synthetic sandbox or write clinical medicine tables.
+
+The actual archive was imported into a private persistent local database: 188,578 source
+rows, 10,304 linked generics and 93,694 linked brands. Strict validation quarantines 217
+brands and one generic; the original files remain available. No real clinical review was
+invented or recorded. These numbers supersede the preliminary raw-link candidate estimate.
+
+The platform mapping workspace supports generic/brand/code search, editable ingredient,
+strength/unit/denominator, form, route, evidence and named clinician review fields. It
+validates exact source ingredient membership, preserves immutable revision history and
+rejects conflicting saves. A recorded review is an operator's attestation about an external
+clinician review, not independently verified credentials or prescribing approval.
+
+See [the full import and mapping runbook](../runbooks/full-medicine-import.md). Remaining:
+deploy the workflow, import into the intended hosted database, verify licence evidence,
+complete actual clinician reviews and canonical clinical molecule mapping, and implement
+the separately gated publication path and independently reviewed safety facts. The current
+software permanently reports prescribing as blocked; no upload or configuration flag can
+activate it in this increment.

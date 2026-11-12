@@ -8,6 +8,8 @@ export const Manifest = z
   })
   .strict();
 export type Manifest = z.infer<typeof Manifest>;
+/** Private full-release ingestion. This does not widen the synthetic sandbox contract. */
+export const ImportManifest = Manifest.extend({ dataKind: z.enum(['synthetic', 'real']) });
 const identifier = z.string().regex(/^\d{1,18}$/);
 const namedReference = z.object({ sourceId: identifier, name: z.string().trim().min(1) }).strict();
 export const Candidate = z
@@ -42,6 +44,7 @@ export const Catalogue = z
   })
   .strict();
 export type Catalogue = z.infer<typeof Catalogue>;
+export const ImportCatalogue = Catalogue.extend({ source: ImportManifest });
 
 export const MedicineStageFile = z.enum([
   'SubstanceMaster.txt',
