@@ -573,6 +573,26 @@ it('uses personal methods for People readiness, enabling access, and retaining t
     headers: actorHeaders,
   });
   expect(adminDetail.statusCode).toBe(200);
+  const sender = h.services.emailSender;
+  h.services.emailSender = undefined;
+  const unavailable = await h.app.inject({
+    url: `/v1/staff/people/${clinics.a.doctor.userId}`,
+    headers: actorHeaders,
+  });
+  expect(unavailable.json().signInReady).toBe(false);
+  const blocked = await h.app.inject({
+    method: 'PATCH',
+    url: `/v1/staff/people/${clinics.a.admin.userId}`,
+    headers: actorHeaders,
+    payload: {
+      version: adminDetail.json().version,
+      displayName: null,
+      roles: ['front_desk'],
+      enabled: true,
+    },
+  });
+  expect(blocked.statusCode, blocked.body).toBe(409);
+  h.services.emailSender = sender;
   const demote = await h.app.inject({
     method: 'PATCH',
     url: `/v1/staff/people/${clinics.a.admin.userId}`,

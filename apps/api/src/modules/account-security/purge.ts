@@ -16,12 +16,22 @@ export async function purgeAccountSecurityChallenges(s: Services) {
   }
 }
 
-export function scheduleAccountSecurityPurge(s: Services, log: { warn(message: string): void }) {
+export function scheduleAccountSecurityPurge(
+  s: Services,
+  log: { warn(context: object, message: string): void },
+) {
   let active: Promise<unknown> | undefined;
   const tick = () => {
     if (active) return;
     active = purgeAccountSecurityChallenges(s)
-      .catch(() => log.warn('Account security challenge cleanup unavailable; will retry'))
+      .catch((error: unknown) => {
+        const code =
+          typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : '';
+        log.warn(
+          { errorCode: /^P[0-9]{4}$/.test(code) ? code : 'unknown' },
+          'Account security challenge cleanup unavailable; will retry',
+        );
+      })
       .finally(() => {
         active = undefined;
       });

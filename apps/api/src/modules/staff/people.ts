@@ -1,3 +1,4 @@
+import { staffSignInReady } from '../../auth/second-factor';
 import type { PeopleDetail, PeoplePerson, PeopleQuery, UpdatePeopleBody } from '@dhc/contracts';
 import { STAFF_ROLES } from '@dhc/contracts';
 import { type Tx, type User, type Membership } from '@dhc/db';
@@ -111,10 +112,7 @@ export function person(
             ? 'invited'
             : 'disabled',
     identityEditable,
-    signInReady:
-      user.status === 'active' &&
-      !!user.passwordHash &&
-      ((user.mfaMode ?? s.staffMfaMode) !== 'totp' || !!user.mfaSecret),
+    signInReady: staffSignInReady(s, user),
     lastLoginAt: user.lastLoginAt?.toISOString() ?? null,
   };
 }
@@ -274,38 +272,31 @@ export class PeopleService {
         throw new AppError(409, 'CONFLICT', 'Ask another clinic admin to change your own roles.');
       if (body.enabled && user.status !== 'active')
         throw new AppError(409, 'CONFLICT', 'This account is disabled. Contact platform support.');
-      if (
-        body.enabled &&
-        (!user.passwordHash ||
-          ((user.mfaMode ?? this.s.staffMfaMode) === 'totp' && !user.mfaSecret))
-      )
+      if (body.enabled && !staffSignInReady(this.s, user))
         throw new AppError(
           409,
           'CONFLICT',
-          'This person must finish their invitation before access can be enabled or roles changed.',
+          'Sign-in is not ready. Complete the invitation and configure the selected verification method.',
         );
       if (
         active.includes('clinic_admin') &&
         (!body.enabled || !body.roles.includes('clinic_admin'))
       ) {
-        const others = await tx.membership.count({
+        const others = await tx.membership.findMany({
           where: {
             organisationId: actor.organisationId,
             role: 'clinic_admin',
             status: 'active',
             userId: { not: id },
-            user: {
-              status: 'active',
-              passwordHash: { not: null },
-              OR: [
-                { mfaSecret: { not: null } },
-                { mfaMode: { in: ['email', 'whatsapp', 'disabled'] } },
-                ...(this.s.staffMfaMode !== 'totp' ? [{ mfaMode: null }] : []),
-              ],
-            },
           },
+          include: { user: true },
         });
-        if (!others) throw new AppError(409, 'CONFLICT', 'Keep at least one active clinic admin.');
+        if (!others.some((m) => staffSignInReady(this.s, m.user)))
+          throw new AppError(
+            409,
+            'CONFLICT',
+            'Keep at least one active clinic admin with working sign-in.',
+          );
       }
       if (user.displayName !== body.displayName) {
         if (!(await exclusiveIdentity(tx, id, actor.organisationId))) throw identityConflict();

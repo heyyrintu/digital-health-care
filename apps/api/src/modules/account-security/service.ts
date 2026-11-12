@@ -1,3 +1,4 @@
+import { availableSecondFactors } from '../../auth/second-factor';
 import { STAFF_ROLES, type SecondFactorMethodValue } from '@dhc/contracts';
 import { withAuth, withPlatform, type Tx } from '@dhc/db';
 import { randomInt, randomUUID, timingSafeEqual } from 'node:crypto';
@@ -426,14 +427,7 @@ export class AccountSecurityService {
     };
   }
   private options(u: Subject): Method[] {
-    return [
-      'disabled',
-      ...(u.mfaSecret ? ['totp'] : []),
-      ...(u.email && this.s.emailSender?.sendSecurityCode ? ['email'] : []),
-      ...(normaliseIndianMobile(this.phone(u)) && this.s.otpSender.channel === 'whatsapp'
-        ? ['whatsapp']
-        : []),
-    ] as Method[];
+    return availableSecondFactors(this.s, this.audience, u);
   }
   async confirmChange(
     request: FastifyRequest,
