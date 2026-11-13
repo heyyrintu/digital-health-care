@@ -2,6 +2,19 @@ import type { MessageKey } from './en';
 
 /** Hindi strings. Needs review by a native speaker before release. */
 export const hi: Record<MessageKey, string> = {
+  'rx.catalogueRoute':
+    'यह मार्ग समीक्षित कैटलॉग रिकॉर्ड का है। दूसरा मार्ग चुनने के लिए उचित दूसरा रिकॉर्ड चुनें।',
+  'medicineImport.licenceRecorded':
+    'लाइसेंस का प्रमाण दर्ज है। प्रकाशन के लिए सही चिकित्सकीय समीक्षा और स्वतंत्र सुरक्षा स्वीकृति अभी भी आवश्यक हैं।',
+  'medicineImport.clinicalTarget': 'चिकित्सकीय घटक रिकॉर्ड',
+  'medicineImport.targetSearch': 'चिकित्सकीय घटक रिकॉर्ड खोजें',
+  'medicineImport.findTarget': 'चिकित्सकीय घटक खोजें',
+  'medicineImport.useTarget': '{name} चुनें',
+  'medicineImport.targetHint':
+    'चिकित्सक की समीक्षा के बाद सही संदर्भ रिकॉर्ड चुनें। नाम का मिलना समानता या सुरक्षा डेटा की स्वीकृति का प्रमाण नहीं है।',
+  'medicineImport.registrationHint':
+    'सत्यापित डॉक्टर प्रोफ़ाइल का पंजीकरण नंबर भरें। समीक्षा प्रमाण दर्ज करते समय चिकित्सा परिषद जाँची जाती है।',
+
   'medicineImport.percentHint':
     'प्रतिशत के लिए सांद्रता का आधार और स्रोत कारण वाले फ़ील्ड में दर्ज करें। खुराक का रूपांतरण अनुमान से न करें।',
   'medicineImport.title': 'आयातित दवाएँ और मैपिंग',
@@ -40,11 +53,11 @@ export const hi: Record<MessageKey, string> = {
   'medicineImport.evidence': 'नियामक प्रमाण और स्रोत संदर्भ',
   'medicineImport.notes': 'चिकित्सकीय समीक्षा के नोट्स और प्रमाण',
   'medicineImport.reviewer': 'समीक्षा करने वाले चिकित्सक का नाम',
-  'medicineImport.registration': 'चिकित्सक का पंजीकरण और परिषद',
+  'medicineImport.registration': 'चिकित्सक का पंजीकरण नंबर',
   'medicineImport.attest':
     'मैं पुष्टि करता/करती हूँ कि नामित चिकित्सक ने यह समीक्षा और प्रमाण दिए हैं। इससे प्रिस्क्राइबिंग सक्रिय नहीं होती।',
   'medicineImport.decision': 'समीक्षा रिकॉर्ड',
-  'medicineImport.saved': 'मैपिंग सहेजी गई। प्रिस्क्राइबिंग अभी भी बंद है।',
+  'medicineImport.saved': 'मैपिंग सहेजी गई। प्रकाशन के लिए मालिक की अलग स्वीकृति आवश्यक है।',
   'medicineImport.invalid':
     'सभी मैपिंग फ़ील्ड जाँचें। समीक्षा दर्ज करने के लिए घटक, शक्ति निर्णय, रूप, मार्ग, प्रमाण और चिकित्सक की पुष्टि आवश्यक हैं।',
   'medicineImport.history': 'मैपिंग का इतिहास',

@@ -23,6 +23,7 @@ import { historyIds, liveId } from '../patients/merged';
 import { findProfile, signingGaps } from '../doctors/service';
 import { saveDraftTests, visitOrders } from '../orders/lines';
 import { checkAndRecord, summarise, type SafetyVisit } from './safety';
+import { assertCatalogueMedicines, catalogueSearchIds } from '../medicines/catalogue-access';
 import {
   auditVisit,
   currentPrescription,
@@ -42,12 +43,7 @@ const TemplateItems = z.array(TemplateItem);
 const withoutId = ({ id: _id, ...line }: ReturnType<typeof itemOut>) => line;
 
 /** Medicines must be active and in the master this clinic can see (the platform's or its own). */
-async function checkMedicines(tx: Tx, items: { medicineId: string | null }[]): Promise<void> {
-  const ids = [...new Set(items.flatMap((i) => (i.medicineId ? [i.medicineId] : [])))];
-  if (ids.length === 0) return;
-  const found = await tx.medicine.count({ where: { id: { in: ids }, active: true } });
-  if (found !== ids.length) throw invalid('items', 'A medicine is not in the list.');
-}
+const checkMedicines = assertCatalogueMedicines;
 
 /**
  * The prescription builder (PRD §6.4): medicine search, a visit's draft lines with
@@ -59,26 +55,13 @@ export class PrescribingService {
   constructor(private readonly s: Services) {}
 
   async searchMedicines(actor: Actor, q: string): Promise<Medicine[]> {
-    const rows = await withTenant(this.s.db, actor.organisationId, (tx) =>
-      tx.medicine.findMany({
-        where: {
-          active: true,
-          OR: [
-            { name: { contains: q, mode: 'insensitive' } },
-            { genericName: { contains: q, mode: 'insensitive' } },
-            { composition: { contains: q, mode: 'insensitive' } },
-            // The names doctors typed before the clinic admin mapped them to this medicine.
-            {
-              requests: {
-                some: { decision: 'approved', name: { contains: q, mode: 'insensitive' } },
-              },
-            },
-          ],
-        },
-        orderBy: [{ name: 'asc' }],
-        take: 20,
-      }),
-    );
+    const rows = await withTenant(this.s.db, actor.organisationId, async (tx) => {
+      const ids = await catalogueSearchIds(tx, { q, aliases: true, limit: 20 });
+      return tx.medicine.findMany({
+        where: { id: { in: ids.map((r) => r.id) } },
+        orderBy: [{ name: 'asc' }, { id: 'asc' }],
+      });
+    });
     return rows.map((m) => ({
       id: m.id,
       name: m.name,
@@ -87,6 +70,7 @@ export class PrescribingService {
       form: m.form,
       defaultRoute: m.defaultRoute,
       source: m.source,
+      ...(m.catalogueRevision !== null ? { catalogueRevision: m.catalogueRevision } : {}),
     }));
   }
 

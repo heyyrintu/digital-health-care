@@ -159,6 +159,7 @@ describe('buildOpenApiDocument', () => {
       'GET /platform/medicine-imports/{id}/generics',
       'GET /platform/medicine-imports/{id}/generics/{sourceId}/brands',
       'GET /platform/medicine-imports/{id}/generics/{sourceId}/history',
+      'GET /platform/medicine-molecules',
       'GET /platform/medicine-sandbox',
       'GET /platform/medicine-stages',
       'GET /platform/medicine-stages/{id}',

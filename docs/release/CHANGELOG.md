@@ -4,6 +4,8 @@ All notable changes are recorded here, newest first. Format: version, date, summ
 
 ## [Unreleased]
 
+- Reviewed medicine publication and prescribing: explicit clinical ingredient selection, private owner-recorded licence/clinician/safety evidence, brand-specific review scope, stable medicine IDs, versioned publication/withdrawal and prescription revision guards. Expired/revoked evidence and changed safety facts block future picking/signing; signed history remains intact. Real approvals and clinical activation are not supplied by this implementation.
+
 - Full private CDCI source ingestion and platform clinical mapping workspace: owner-only batched import, complete source provenance/quarantine, generic/brand/code search, validated draft/review records, conflict checks and immutable mapping history. No real clinical reviews are fabricated; prescribing remains blocked pending licence evidence, verified clinical mapping and a separate publication path.
 
 - Medicine catalogue database: stable source identities, immutable release names and brand relationships, automatic transactional indexing and migration backfill. The index stays separate from prescribing; the owner's licence application is pending approval.

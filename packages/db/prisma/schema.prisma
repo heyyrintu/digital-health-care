@@ -1163,6 +1163,7 @@ model Medicine {
   defaultRoute   MedicineRoute  @default(oral) @map("default_route")
   source         MedicineSource
   active         Boolean        @default(true)
+  catalogueRevision Int? @map("catalogue_revision")
   createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
   /// Moves on every change, so the Clinic app can fetch only what changed (offline cache).
   updatedAt      DateTime       @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(3)
@@ -1170,8 +1171,10 @@ model Medicine {
   organisation Organisation?        @relation(fields: [organisationId], references: [id], onDelete: Restrict)
   ingredients  MedicineIngredient[]
   requests     MedicineRequest[]
+  cataloguePublication MedicineCataloguePublication?
 
   @@index([organisationId])
+  @@index([name, id])
   @@index([updatedAt, id])
   @@map("medicines")
 }
@@ -1303,6 +1306,7 @@ model PrescriptionItem {
   organisationId String         @map("organisation_id") @db.Uuid
   prescriptionId String         @map("prescription_id") @db.Uuid
   medicineId     String?        @map("medicine_id") @db.Uuid
+  catalogueRevision Int? @map("catalogue_revision")
   name           String
   composition    String?
   form           String?
@@ -1845,6 +1849,7 @@ model PlatformOperator {
   medicineSandboxPublications PlatformMedicineSandbox[] @relation("MedicineSandboxPublisher")
   medicineImports MedicineImportRelease[]
   medicineMappings MedicineImportMapping[]
+  medicineEvidence MedicineCatalogueEvidence[]
 
   @@map("platform_operators")
 }
@@ -2776,6 +2781,7 @@ model MedicineImportBrand {
   source Json @db.JsonB
   release MedicineImportRelease @relation(fields: [releaseId], references: [id], onDelete: Restrict)
   generic MedicineImportGeneric @relation(fields: [releaseId, genericId], references: [releaseId, sourceId], onDelete: Restrict)
+  publications MedicineCataloguePublication[]
   @@id([releaseId, sourceId])
   @@index([releaseId, genericId, sourceId])
   @@map("medicine_import_brands")
@@ -2803,4 +2809,59 @@ model MedicineImportSourceRow {
   release MedicineImportRelease @relation(fields: [releaseId], references: [id], onDelete: Restrict)
   @@id([releaseId, file, sourceId])
   @@map("medicine_import_source_rows")
+}
+
+/// Owner-recorded documentary evidence; source ingestion never grants approval.
+model MedicineCatalogueEvidence {
+  id String @id @default(uuid()) @db.Uuid
+  kind String
+  scopeKey String @map("scope_key")
+  documentSha256 String @map("document_sha256")
+  fileKey String @map("file_key")
+  details Json @db.JsonB
+  validFrom DateTime @map("valid_from") @db.Timestamptz(3)
+  validUntil DateTime? @map("valid_until") @db.Timestamptz(3)
+  recordedBy String @map("recorded_by") @db.Uuid
+  recordedAt DateTime @default(now()) @map("recorded_at") @db.Timestamptz(3)
+  revokedAt DateTime? @map("revoked_at") @db.Timestamptz(3)
+  revokedReason String? @map("revoked_reason")
+  recorder PlatformOperator @relation(fields: [recordedBy], references: [id])
+  licences MedicineCataloguePublication[] @relation("CatalogueLicence")
+  clinicalApprovals MedicineCataloguePublication[] @relation("CatalogueClinical")
+  safetyApprovals MedicineCataloguePublication[] @relation("CatalogueSafety")
+  @@index([kind, scopeKey])
+  @@map("medicine_catalogue_evidence")
+}
+
+/// Stable clinical medicine ID for a source brand across releases.
+model MedicineCataloguePublication {
+  datasetKey String @map("dataset_key")
+  brandSourceId String @map("brand_source_id")
+  releaseId String @map("release_id") @db.Uuid
+  medicineId String @unique @map("medicine_id") @db.Uuid
+  revision Int
+  mappingRevision Int @map("mapping_revision")
+  entryHash String @map("entry_hash")
+  licenceId String @map("licence_id") @db.Uuid
+  clinicalId String @map("clinical_id") @db.Uuid
+  safetyId String @map("safety_id") @db.Uuid
+  publishedAt DateTime @default(now()) @map("published_at") @db.Timestamptz(3)
+  medicine Medicine @relation(fields: [medicineId], references: [id], onDelete: Restrict)
+  brand MedicineImportBrand @relation(fields: [releaseId, brandSourceId], references: [releaseId, sourceId], onDelete: Restrict)
+  licence MedicineCatalogueEvidence @relation("CatalogueLicence", fields: [licenceId], references: [id], onDelete: Restrict)
+  clinical MedicineCatalogueEvidence @relation("CatalogueClinical", fields: [clinicalId], references: [id], onDelete: Restrict)
+  safety MedicineCatalogueEvidence @relation("CatalogueSafety", fields: [safetyId], references: [id], onDelete: Restrict)
+  events MedicineCataloguePublicationEvent[]
+  @@id([datasetKey, brandSourceId])
+  @@map("medicine_catalogue_publications")
+}
+
+model MedicineCataloguePublicationEvent {
+  medicineId String @map("medicine_id") @db.Uuid
+  revision Int
+  snapshot Json @db.JsonB
+  recordedAt DateTime @default(now()) @map("recorded_at") @db.Timestamptz(3)
+  publication MedicineCataloguePublication @relation(fields: [medicineId], references: [medicineId], onDelete: Restrict)
+  @@id([medicineId, revision])
+  @@map("medicine_catalogue_publication_events")
 }

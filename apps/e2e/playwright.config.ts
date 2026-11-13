@@ -15,6 +15,9 @@ if (!databaseUrl) throw new Error('E2E_DATABASE_URL is required for browser test
 
 export default defineConfig({
   testDir: './tests',
+  // Activating the reference catalogue changes global medicine selection. Exercise
+  // that cutover in a separate database, never alongside shared sample-data tests.
+  testIgnore: '**/*.catalogue.spec.ts',
   globalSetup: './global-setup.ts',
   globalTeardown: './global-teardown.ts',
   // Every test makes its own clinic, so tests can run side by side.

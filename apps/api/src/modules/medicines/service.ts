@@ -13,6 +13,7 @@ import type {
 } from '@dhc/contracts';
 import type { Prisma } from '@dhc/db';
 import { withTenant, type Tx } from '@dhc/db';
+import { assertCatalogueMedicines, catalogueSearchIds } from './catalogue-access';
 import type { FastifyRequest } from 'fastify';
 import { AppError } from '../../errors';
 import type { Services } from '../../services';
@@ -46,6 +47,7 @@ const medicineOut = (m: MedicineRow): MasterMedicine => ({
   form: m.form,
   defaultRoute: m.defaultRoute,
   source: m.source,
+  ...(m.catalogueRevision !== null ? { catalogueRevision: m.catalogueRevision } : {}),
   active: m.active,
   ingredients: m.ingredients
     .map((i) => ({
@@ -75,26 +77,25 @@ export class MedicineMasterService {
 
   async list(actor: Actor, query: MasterMedicineQuery): Promise<MasterMedicineList> {
     const q = query.q?.trim();
-    const rows = await withTenant(this.s.db, actor.organisationId, (tx) =>
-      tx.medicine.findMany({
-        where: {
-          ...(query.includeInactive ? {} : { active: true }),
-          ...(query.source ? { source: query.source } : {}),
-          ...(q
-            ? {
-                OR: [
-                  { name: { contains: q, mode: 'insensitive' } },
-                  { genericName: { contains: q, mode: 'insensitive' } },
-                  { composition: { contains: q, mode: 'insensitive' } },
-                ],
-              }
-            : {}),
-        },
+    const rows = await withTenant(this.s.db, actor.organisationId, async (tx) => {
+      const ids = await catalogueSearchIds(tx, {
+        q,
+        source: query.source,
+        includeInactive: query.includeInactive,
+        limit: LIST_LIMIT + 1,
+      });
+      const rows = await tx.medicine.findMany({
+        where: { id: { in: ids.map((r) => r.id) } },
         include: withIngredients,
         orderBy: [{ name: 'asc' }, { id: 'asc' }],
-        take: LIST_LIMIT + 1,
-      }),
-    );
+      });
+      if (!query.includeInactive) return rows;
+      const eligible = await tx.$queryRaw<
+        { id: string }[]
+      >`SELECT id FROM medicines WHERE id=ANY(${ids.map((r) => r.id)}::uuid[]) AND catalogue_medicine_eligible(id)`;
+      const allowed = new Set(eligible.map((r) => r.id));
+      return rows.map((r) => ({ ...r, active: r.active && allowed.has(r.id) }));
+    });
     return {
       data: rows.slice(0, LIST_LIMIT).map(medicineOut),
       hasMore: rows.length > LIST_LIMIT,
@@ -249,6 +250,9 @@ export class MedicineMasterService {
           medicineId: 'invalid',
         });
       }
+      await assertCatalogueMedicines(tx, [
+        { medicineId: medicine.id, catalogueRevision: medicine.catalogueRevision },
+      ]);
       return { decision: 'approved' as const, medicineId: medicine.id, reason: null };
     });
   }

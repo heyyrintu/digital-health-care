@@ -114,3 +114,25 @@ complete actual clinician reviews and canonical clinical molecule mapping, and i
 the separately gated publication path and independently reviewed safety facts. The current
 software permanently reports prescribing as blocked; no upload or configuration flag can
 activate it in this increment.
+
+### Reviewed publication and prescribing — subsequent development
+
+The source workspace now supports explicit canonical clinical ingredient selection.
+An owner-only evidence/publication command binds licence approval to the included licence
+text hash, clinician review to an exact mapping and selected brand snapshots, and independent
+safety approval to the current non-synthetic clinical facts dataset. The private import still
+never auto-publishes. Actual licence, clinician and safety documents have not been supplied.
+
+Publication keeps stable source/medicine identities, records immutable events and provides
+preview, conflict/retry protection, withdrawal and guarded reactivation. Picking and signing
+check evidence validity, and cached prescription lines carry a catalogue revision. Signed
+history remains intact; exact historical amendment copies can be opened for correction.
+Safety-fact mutations invalidate the old safety approval. Legacy reference cutover requires
+explicit confirmation and clinic acceptance.
+
+This supersedes the previous increment's absence of a publication path. See
+[the reviewed publication runbook](../runbooks/medicine-prescribing-publication.md) for the
+human evidence requirements, owner controls and exact-mass representation limits. IU,
+percentage and nonnumeric strengths remain blocked at publication rather than converted or
+silently treated as dose-checked. Real review, approvals, hosted rollout and pilot acceptance
+are still pending; no real source medicine has been activated by this development work.

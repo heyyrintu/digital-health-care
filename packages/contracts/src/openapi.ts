@@ -449,9 +449,19 @@ interface Operation {
 const operations: Operation[] = [
   {
     method: 'get',
+    path: '/platform/medicine-molecules',
+    operationId: 'searchCatalogueClinicalMolecules',
+    summary: 'Read-only canonical reference ingredient identities; no safety approval implied',
+    platform: true,
+    query: DrugMoleculeQuery,
+    response: DrugMoleculeList,
+  },
+  {
+    method: 'get',
     path: '/platform/medicine-imports',
     operationId: 'listImportedMedicineReleases',
-    summary: 'Private full source releases; licensing pending and prescribing blocked',
+    summary:
+      'Private full source releases; publication requires separate evidence and owner approval',
     platform: true,
     response: ImportReleaseList,
   },

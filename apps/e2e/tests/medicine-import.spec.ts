@@ -48,7 +48,9 @@ test('reviews a full source import and preserves clinician mapping revisions wit
   await page.getByRole('button', { name: 'Edit mapping', exact: true }).first().click();
   await expect(page.getByLabel('Strength value', { exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Save', exact: true }).click();
-  await expect(page.getByRole('status')).toHaveText('Mapping saved. Prescribing remains blocked.');
+  await expect(page.getByRole('status')).toHaveText(
+    'Mapping saved. Publication requires separate owner approval.',
+  );
   await page.getByLabel('Reviewed formulation', { exact: true }).fill('Synthetic tablet');
   await page.getByRole('combobox', { name: 'Reviewed route', exact: true }).selectOption('oral');
   await page
@@ -64,15 +66,15 @@ test('reviews a full source import and preserves clinician mapping revisions wit
     .getByLabel('Clinical review notes and evidence', { exact: true })
     .fill('Synthetic browser verification; no actual clinical approval.');
   await page.getByLabel('Reviewing clinician’s name', { exact: true }).fill('Synthetic reviewer');
-  await page
-    .getByLabel('Clinician registration and council', { exact: true })
-    .fill('Synthetic TEST-1');
+  await page.getByLabel('Clinician registration number', { exact: true }).fill('Synthetic TEST-1');
   await page.getByRole('checkbox', { name: /I confirm that the named clinician supplied/ }).check();
   await page
     .getByRole('combobox', { name: 'Review record', exact: true })
     .selectOption('review_recorded');
   await page.getByRole('button', { name: 'Save', exact: true }).click();
-  await expect(page.getByRole('status')).toHaveText('Mapping saved. Prescribing remains blocked.');
+  await expect(page.getByRole('status')).toHaveText(
+    'Mapping saved. Publication requires separate owner approval.',
+  );
   await page.reload();
   await page.getByRole('button', { name: 'Open release', exact: true }).first().click();
   await page.getByRole('button', { name: 'Edit mapping', exact: true }).first().click();

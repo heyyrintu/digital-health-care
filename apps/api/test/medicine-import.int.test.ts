@@ -53,6 +53,7 @@ const draft = (two = false): ClinicalMapping => ({
   ingredients: (two ? ['990000000000000101', '990000000000000102'] : ['990000000000000101']).map(
     (sourceId) => ({
       sourceId,
+      moleculeId: null,
       canonicalName: null,
       strengthStatus: 'unmapped',
       value: null,

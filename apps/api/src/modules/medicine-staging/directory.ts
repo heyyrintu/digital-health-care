@@ -14,7 +14,7 @@ import {
   type FileName,
 } from './catalogue';
 
-export async function readBounded(path: string, limit: number) {
+export async function readBoundedBytes(path: string, limit: number) {
   // No symlinks or devices. Check the opened descriptor as well as the directory entry.
   const info = await lstat(path);
   if (!info.isFile() || info.size > limit)
@@ -25,10 +25,15 @@ export async function readBounded(path: string, limit: number) {
     if (!stat.isFile() || stat.size > limit) throw new Error('Source file changed while opening.');
     const bytes = await handle.readFile();
     if (bytes.length > limit) throw new Error('Source file grew beyond its limit.');
-    return new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes);
+    return bytes;
   } finally {
     await handle.close();
   }
+}
+export async function readBounded(path: string, limit: number) {
+  return new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(
+    await readBoundedBytes(path, limit),
+  );
 }
 
 export async function stageDirectory(inputPath: string, outputPath: string, previousPath?: string) {

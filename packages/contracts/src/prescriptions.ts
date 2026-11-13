@@ -31,6 +31,7 @@ export type DurationUnit = z.infer<typeof DurationUnit>;
 
 export const Medicine = z.object({
   id: z.uuid(),
+  catalogueRevision: z.number().int().positive().nullable().optional(),
   name: z.string(),
   genericName: z.string(),
   composition: z.string(),
@@ -67,6 +68,7 @@ export type DoseStep = z.infer<typeof DoseStep>;
 const lineFields = {
   /** From the master; null for a free-text medicine (flagged as not in the master). */
   medicineId: z.uuid().nullable(),
+  catalogueRevision: z.number().int().positive().nullable().optional(),
   name: z.string().trim().min(1).max(200),
   composition: z.string().trim().max(300).nullable(),
   form: z.string().trim().max(40).nullable(),

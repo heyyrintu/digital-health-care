@@ -6,6 +6,7 @@ const text = (n: number) => z.string().trim().min(1).max(n);
 export const ClinicalIngredientMapping = z
   .object({
     sourceId: z.string().regex(/^\d{1,18}$/),
+    moleculeId: z.uuid().nullable().default(null),
     canonicalName: text(200).nullable(),
     strengthStatus: z.enum(['unmapped', 'mapped', 'not_applicable']),
     value: z.number().positive().max(1_000_000).nullable(),
@@ -60,6 +61,13 @@ export const ClinicalMapping = z
   .superRefine((v, ctx) => {
     if (new Set(v.ingredients.map((i) => i.sourceId)).size !== v.ingredients.length)
       ctx.addIssue({ code: 'custom', message: 'Map each source ingredient exactly once.' });
+    const targets = v.ingredients.flatMap((i) => (i.moleculeId ? [i.moleculeId] : []));
+    if (new Set(targets).size !== targets.length)
+      ctx.addIssue({
+        code: 'custom',
+        message:
+          'Different source ingredients cannot silently resolve to the same clinical molecule.',
+      });
     if (
       v.decision === 'review_recorded' &&
       (!v.form ||
@@ -78,6 +86,10 @@ export const ClinicalMapping = z
       });
   });
 export type ClinicalMapping = z.infer<typeof ClinicalMapping>;
+export const ResolvedClinicalMapping = ClinicalMapping.refine(
+  (m) => m.decision === 'review_recorded' && m.ingredients.every((i) => i.moleculeId !== null),
+  'Resolve every ingredient to a clinical molecule and record clinician review before publication.',
+);
 export const SaveClinicalMapping = z
   .object({ revision: z.number().int().nonnegative(), mapping: ClinicalMapping })
   .strict();
@@ -91,7 +103,7 @@ export const ImportReleaseSummary = z.object({
   genericCount: z.number().int(),
   issueCount: z.number().int(),
   createdAt: z.iso.datetime(),
-  licenceStatus: z.literal('pending'),
+  licenceStatus: z.enum(['pending', 'recorded']),
   clinicalPublicationAllowed: z.literal(false),
 });
 export type ImportReleaseSummary = z.infer<typeof ImportReleaseSummary>;

@@ -15,6 +15,7 @@ import {
   ImportBrandList,
   ImportGeneric,
   ImportMappingHistory,
+  DrugMoleculeQuery,
   ImportPageQuery,
 } from '@dhc/contracts';
 import { registerAccountSecurity } from '../account-security/routes';
@@ -150,6 +151,11 @@ export const platformRoutes: FastifyPluginAsync<PlatformRoutesOptions> = async (
 
   const medicines = new MedicineReviewService(services);
   const imports = new MedicineImportService(services.db);
+  app.get('/medicine-molecules', operator, async (request, reply) => {
+    reply.header('cache-control', 'no-store');
+    const { q } = DrugMoleculeQuery.parse(request.query);
+    return imports.molecules(request, platformAuthOf(request).operatorId, q);
+  });
   const importParams = z.object({ id: z.uuid(), sourceId: z.string().regex(/^\d{1,18}$/) });
   app.get('/medicine-imports', operator, async (request, reply) => {
     reply.header('cache-control', 'no-store');

@@ -15,6 +15,7 @@ import { Button, Input, PageHeader, Surface } from '@dhc/ui-web';
 import { useCallback, useEffect, useState } from 'react';
 import { PlatformShell, ErrorNotice } from '../shell';
 import { usePlatformSession } from '../session-provider';
+import { MoleculePicker } from './molecule-picker';
 
 export default function ImportsPage() {
   return <PlatformShell>{() => <Imports />}</PlatformShell>;
@@ -130,6 +131,7 @@ function Imports() {
         route: null,
         ingredients: row.source.ingredients.map((i) => ({
           sourceId: i.sourceId,
+          moleculeId: null,
           canonicalName: i.name.length <= 200 ? i.name : null,
           strengthStatus: 'unmapped',
           value: null,
@@ -165,7 +167,13 @@ function Imports() {
     <div className="space-y-6">
       <PageHeader title={t('medicineImport.title')} sub={t('medicineImport.scope')} />
       <Surface className="space-y-3 p-5">
-        <p className="font-semibold">{t('medicineImport.pending')}</p>
+        <p className="font-semibold">
+          {t(
+            release?.licenceStatus === 'recorded'
+              ? 'medicineImport.licenceRecorded'
+              : 'medicineImport.pending',
+          )}
+        </p>
         <p>{t('medicineImport.limit')}</p>
         <h2 className="font-bold">{t('medicineImport.releases')}</h2>
         {!releases.length && !busy ? <p>{t('medicineImport.empty')}</p> : null}
@@ -308,9 +316,19 @@ function Imports() {
                       <Input
                         value={i.canonicalName ?? ''}
                         maxLength={200}
-                        onChange={(e) => update({ canonicalName: e.target.value || null })}
+                        onChange={(e) =>
+                          update({ canonicalName: e.target.value || null, moleculeId: null })
+                        }
                       />
                     </label>
+                    <MoleculePicker
+                      sourceName={
+                        selected.source.ingredients.find((s) => s.sourceId === i.sourceId)!.name
+                      }
+                      selectedId={i.moleculeId}
+                      selectedName={i.canonicalName}
+                      onSelect={(id, name) => update({ moleculeId: id, canonicalName: name })}
+                    />
                     <label className="block">
                       {t('medicineImport.strengthState')}
                       <select
@@ -426,6 +444,7 @@ function Imports() {
                   onChange={(e) => edit({ reviewerRegistration: e.target.value || null })}
                 />
               </label>
+              <p>{t('medicineImport.registrationHint')}</p>
               <label className="block">
                 <input
                   type="checkbox"

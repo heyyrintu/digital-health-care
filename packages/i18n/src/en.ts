@@ -1,4 +1,17 @@
 export const en = {
+  'rx.catalogueRoute':
+    'This route belongs to the reviewed catalogue entry. Select another entry to use a different route.',
+  'medicineImport.licenceRecorded':
+    'Licence evidence recorded. Publication still requires exact clinician review and independent safety approval.',
+  'medicineImport.clinicalTarget': 'Clinical ingredient record',
+  'medicineImport.targetSearch': 'Search clinical ingredient records',
+  'medicineImport.findTarget': 'Find clinical ingredient',
+  'medicineImport.useTarget': 'Use {name}',
+  'medicineImport.targetHint':
+    'Choose an exact reference record after clinician review. Matching text does not prove equivalence or approved safety data.',
+  'medicineImport.registrationHint':
+    'Use the registration number from the verified doctor profile. Its medical council is checked when review evidence is recorded.',
+
   'medicineImport.percentHint':
     'For percentages, record the concentration basis and its source in the reason field. Do not infer a dose conversion.',
   'medicineImport.title': 'Imported medicines and mappings',
@@ -37,11 +50,11 @@ export const en = {
   'medicineImport.evidence': 'Regulatory evidence and source references',
   'medicineImport.notes': 'Clinical review notes and evidence',
   'medicineImport.reviewer': 'Reviewing clinician’s name',
-  'medicineImport.registration': 'Clinician registration and council',
+  'medicineImport.registration': 'Clinician registration number',
   'medicineImport.attest':
     'I confirm that the named clinician supplied this review and its evidence. This does not activate prescribing.',
   'medicineImport.decision': 'Review record',
-  'medicineImport.saved': 'Mapping saved. Prescribing remains blocked.',
+  'medicineImport.saved': 'Mapping saved. Publication requires separate owner approval.',
   'medicineImport.invalid':
     'Check every mapping field. Recording review requires completed ingredients, strength decisions, form, route, evidence and clinician attestation.',
   'medicineImport.history': 'Mapping history',

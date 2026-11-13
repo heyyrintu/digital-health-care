@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "test:e2e": "playwright test",
+    "test:catalogue": "playwright test --config playwright.catalogue.config.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit"
   },
