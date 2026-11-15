@@ -36,4 +36,3 @@ LANGUAGE sql VOLATILE SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp
 $$;
 REVOKE ALL ON FUNCTION catalogue_medicine_eligible(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION catalogue_medicine_eligible(uuid) TO dhc_app;
-
