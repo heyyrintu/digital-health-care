@@ -20,9 +20,16 @@ Validation passed:
 - Backfill simulation recreated the migration around an existing reviewed and active
   synthetic snapshot, preserving its bundle, revision, review note and sandbox selection.
 - Built-app browser test passed: upload, source inspection, worksheet download, review
-  and sandbox publication continued to work after all 61 migrations.
+  and sandbox publication continued to work after the first 61 migrations, through `20261113090000_medicine_catalogue_index`.
+  Later full-schema checks are recorded in the publication and review-queue QA reports.
 
 The owner reports that the affiliate licence application is submitted; approval evidence
 is pending. No real CDCI data was imported or activated. The current upload remains bounded
 to 500 synthetic candidates. Full-release import, approval-evidence handling, validated
 clinical mappings and clinical publication remain future work, as listed in the product plan.
+
+
+Subsequent increments implemented a separate full private import and gated publication
+path. The private local import contains 188,578 real source rows; the synthetic upload's
+500-candidate limit still applies only to the sandbox. Hosted rollout, actual licence and
+clinical review evidence, safety data and real medicine activation remain separate steps.

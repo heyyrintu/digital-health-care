@@ -354,6 +354,7 @@ function Imports() {
                       />
                     </label>
                     <MoleculePicker
+                      key={`${selected.releaseId}:${selected.sourceId}:${i.sourceId}`}
                       sourceName={
                         selected.source.ingredients.find((s) => s.sourceId === i.sourceId)!.name
                       }

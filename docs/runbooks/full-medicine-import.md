@@ -2,8 +2,9 @@
 
 This is a private source catalogue and review workspace. It is separate from the synthetic
 sandbox and the prescribing master. It does not write `medicines`, `drug_molecules`,
-`medicine_ingredients`, safety rules or prescriptions. All release responses say licence
-approval is pending and clinical publication is blocked. There is no activation endpoint.
+`medicine_ingredients`, safety rules or prescriptions. Release responses report licence status per release: matching active licence evidence
+changes it to recorded. Clinical publication still needs separate owner approval; there is
+no HTTP activation endpoint.
 
 ## Source package and owner command
 
@@ -34,6 +35,7 @@ command arguments and logs. From the repository, run:
 ```sh
 pnpm --filter @dhc/api medicines:import \
   --input /private/path/to/cdci-files \
+  --archive /private/path/to/original-package.zip \
   --operator-email operator@example.org \
   --package-sha256 <actual-archive-SHA-256> \
   --acknowledge-pending-licence
@@ -45,8 +47,9 @@ input directory into the container before running it. The existing owner connect
 be available; do not use the restricted platform SQL role for ingestion. Run a single import
 job at a time on a small VPS; avoid overlapping it with a build.
 
-The archive checksum is recorded as operator-supplied provenance. Verify it against the
-actual archive before executing; hashes demonstrate byte consistency, not authenticity or
+The command reads the private `--archive` file and verifies its SHA-256 against
+`--package-sha256` before database work. The operator must extract the input directory from
+that same archive; each imported file also has its own recorded checksum. These hashes demonstrate byte consistency, not authenticity or
 permission. The command hashes every master file and the included licence text itself.
 
 ## Validation and storage

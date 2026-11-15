@@ -417,6 +417,7 @@ it('rejects lossy or unsupported strengths without rounding or manufacturing saf
 it('withdraws source brands without deleting history and requires fresh post-withdrawal clinical evidence to reactivate', async () => {
   await publish();
   const m = await medicine();
+  const saved = await draft();
   const withdrawal = {
     datasetKey: source.datasetKey,
     expectedRevisions: { '990000000000000701': 1 },
@@ -427,6 +428,25 @@ it('withdraws source brands without deleting history and requires fresh post-wit
     unchanged: true,
   });
   expect((await medicine()).active).toBe(false);
+  await expect(
+    h.owner.prescriptionItem.update({
+      where: { id: saved.item.id },
+      data: { catalogueRevision: 2 },
+    }),
+  ).rejects.toThrow('Medicine catalogue changed');
+  await expect(
+    withdrawCatalogue(
+      h.owner,
+      op.operatorId,
+      audit,
+      {
+        ...withdrawal,
+        expectedRevisions: { '990000000000000701': 2 },
+        reason: 'Different synthetic withdrawal request',
+      },
+      true,
+    ),
+  ).rejects.toThrow('already withdrawn');
   await expect(
     publish({ reactivate: true, expectedRevisions: { '990000000000000701': 2 } }),
   ).rejects.toThrow('fresh clinician evidence');
@@ -579,4 +599,75 @@ it('rejects direct changes to a published name or recipe without a matching revi
       await h.owner.medicineIngredient.findFirstOrThrow({ where: { medicineId: m.id } })
     ).strengthMg!.toString(),
   ).toBe('5');
+});
+
+it('includes published catalogue revisions in the offline medicine cache', async () => {
+  await publish();
+  const m = await medicine();
+  await h.owner.medicine.update({
+    where: { id: m.id },
+    data: { updatedAt: new Date('2020-01-01') },
+  });
+  const response = await call('GET', 'sync/medicines', undefined, doctor);
+  expect(response.statusCode, response.body).toBe(200);
+  expect(response.json().data).toContainEqual(
+    expect.objectContaining({ id: m.id, catalogueRevision: 1 }),
+  );
+});
+
+it('invalidates catalogue eligibility when the reviewing user is disabled', async () => {
+  await publish();
+  const m = await medicine();
+  await h.owner.user.update({
+    where: { id: clinics.a.doctor.userId },
+    data: { status: 'disabled' },
+  });
+  const result = await withTenant(
+    h.owner,
+    clinics.b.org.id,
+    (tx) =>
+      tx.$queryRaw<
+        { eligible: boolean }[]
+      >`SELECT catalogue_medicine_eligible(${m.id}::uuid) eligible`,
+  );
+  expect(result[0]?.eligible).toBe(false);
+});
+
+it('holds clinic medicine activity stable until the prescribing transaction ends', async () => {
+  const m = await h.owner.medicine.create({
+    data: {
+      organisationId: clinics.a.org.id,
+      source: 'clinic',
+      name: 'Synthetic custom',
+      genericName: 'Synthetic custom',
+      composition: 'Synthetic',
+      form: 'tablet',
+    },
+  });
+  await withTenant(h.owner, clinics.a.org.id, async (tx) => {
+    await assertCatalogueMedicines(tx, [{ medicineId: m.id }]);
+    await expect(
+      h.owner.$transaction(async (other) => {
+        await other.$executeRawUnsafe("SET LOCAL lock_timeout='150ms'");
+        await other.medicine.update({ where: { id: m.id }, data: { active: false } });
+      }),
+    ).rejects.toThrow(/lock timeout/);
+  });
+  await h.owner.medicine.update({ where: { id: m.id }, data: { active: false } });
+  await expect(
+    withTenant(h.owner, clinics.a.org.id, (tx) =>
+      assertCatalogueMedicines(tx, [{ medicineId: m.id }]),
+    ),
+  ).rejects.toThrow('not in the list');
+});
+
+it('rejects a source publication identity attached to another dataset', async () => {
+  await publish();
+  const m = await medicine();
+  await expect(
+    h.owner.medicineCataloguePublication.update({
+      where: { medicineId: m.id },
+      data: { datasetKey: 'another-dataset' },
+    }),
+  ).rejects.toThrow(/Foreign key/);
 });

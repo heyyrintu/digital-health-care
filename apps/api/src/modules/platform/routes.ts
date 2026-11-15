@@ -16,7 +16,9 @@ import {
   ImportGeneric,
   ImportMappingHistory,
   DrugMoleculeQuery,
-  ImportPageQuery,
+  ImportReleaseQuery,
+  ImportBrandQuery,
+  ImportHistoryQuery,
   ImportGenericQuery,
 } from '@dhc/contracts';
 import { registerAccountSecurity } from '../account-security/routes';
@@ -160,7 +162,7 @@ export const platformRoutes: FastifyPluginAsync<PlatformRoutesOptions> = async (
   const importParams = z.object({ id: z.uuid(), sourceId: z.string().regex(/^\d{1,18}$/) });
   app.get('/medicine-imports', operator, async (request, reply) => {
     reply.header('cache-control', 'no-store');
-    const query = z.object({ cursor: z.uuid().optional() }).parse(request.query);
+    const query = ImportReleaseQuery.parse(request.query);
     return ImportReleaseList.parse(
       await imports.list(request, platformAuthOf(request).operatorId, query.cursor),
     );
@@ -183,7 +185,7 @@ export const platformRoutes: FastifyPluginAsync<PlatformRoutesOptions> = async (
   app.get('/medicine-imports/:id/generics/:sourceId/brands', operator, async (request, reply) => {
     reply.header('cache-control', 'no-store');
     const { id, sourceId } = importParams.parse(request.params);
-    const query = ImportPageQuery.parse(request.query);
+    const query = ImportBrandQuery.parse(request.query);
     return ImportBrandList.parse(
       await imports.brands(request, platformAuthOf(request).operatorId, id, sourceId, query.cursor),
     );
@@ -191,9 +193,7 @@ export const platformRoutes: FastifyPluginAsync<PlatformRoutesOptions> = async (
   app.get('/medicine-imports/:id/generics/:sourceId/history', operator, async (request, reply) => {
     reply.header('cache-control', 'no-store');
     const { id, sourceId } = importParams.parse(request.params);
-    const { before } = z
-      .object({ before: z.coerce.number().int().positive().optional() })
-      .parse(request.query);
+    const { before } = ImportHistoryQuery.parse(request.query);
     return ImportMappingHistory.parse(
       await imports.history(request, platformAuthOf(request).operatorId, id, sourceId, before),
     );
@@ -202,7 +202,7 @@ export const platformRoutes: FastifyPluginAsync<PlatformRoutesOptions> = async (
     '/medicine-imports/:id/generics/:sourceId/mapping',
     {
       ...operator,
-      bodyLimit: 128 * 1024,
+      bodyLimit: 1024 * 1024,
       config: { rateLimit: { max: 30, timeWindow: '1 minute' } },
     },
     async (request, reply) => {

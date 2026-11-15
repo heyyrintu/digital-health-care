@@ -59,7 +59,7 @@ export const en = {
   'medicineImport.decision': 'Review record',
   'medicineImport.saved': 'Mapping saved. Publication requires separate owner approval.',
   'medicineImport.invalid':
-    'Check every mapping field. Recording review requires completed ingredients, strength decisions, form, route, evidence and clinician attestation.',
+    'Check every mapping field. Recording review requires completed ingredients, strength decisions, form, route, evidence, review notes, clinician name, registration and clinician attestation.',
   'medicineImport.history': 'Mapping history',
 
   'medicineReview.worksheet': 'Download clinician worksheet (CSV)',

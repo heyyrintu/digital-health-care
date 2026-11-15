@@ -661,6 +661,10 @@ export async function withdrawCatalogue(
         rows.some((r) => r.revision !== input.expectedRevisions[r.brandSourceId])
       )
         unavailable('Published brands changed; refresh revisions before withdrawing.');
+      if (rows.some((r) => !r.medicine.active))
+        unavailable(
+          'A selected brand is already withdrawn; reactivate it before withdrawing again.',
+        );
       if (execute)
         for (const row of rows) {
           const revision = row.revision + 1;

@@ -13,7 +13,9 @@ import {
   ImportBrandList,
   ImportGeneric,
   ImportMappingHistory,
-  ImportPageQuery,
+  ImportReleaseQuery,
+  ImportBrandQuery,
+  ImportHistoryQuery,
   ImportGenericQuery,
   SaveClinicalMapping,
 } from './medicine-import';
@@ -464,6 +466,7 @@ const operations: Operation[] = [
     summary:
       'Private full source releases; publication requires separate evidence and owner approval',
     platform: true,
+    query: ImportReleaseQuery,
     response: ImportReleaseList,
   },
   {
@@ -483,7 +486,7 @@ const operations: Operation[] = [
     summary: 'Source brands linked to an imported generic',
     platform: true,
     pathParams: ['id', { name: 'sourceId', schema: { type: 'string', pattern: '^[0-9]{1,18}$' } }],
-    query: ImportPageQuery,
+    query: ImportBrandQuery,
     response: ImportBrandList,
   },
   {
@@ -493,6 +496,7 @@ const operations: Operation[] = [
     summary: 'Immutable clinician mapping revisions; no prescribing approval',
     platform: true,
     pathParams: ['id', { name: 'sourceId', schema: { type: 'string', pattern: '^[0-9]{1,18}$' } }],
+    query: ImportHistoryQuery,
     response: ImportMappingHistory,
   },
   {

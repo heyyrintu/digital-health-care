@@ -81,7 +81,60 @@ afterAll(async () => {
 });
 
 it('imports all source rows, quarantines broken links and replays idempotently without touching clinical tables', async () => {
-  const before = await h.owner.medicine.count();
+  const clinics = await seedTwoClinics(h);
+  const clinic = await h.owner.clinic.create({
+    data: {
+      organisationId: clinics.a.org.id,
+      name: 'Synthetic room',
+      address: 'Synthetic address',
+    },
+  });
+  const type = await h.owner.consultationType.create({
+    data: {
+      organisationId: clinics.a.org.id,
+      name: 'Synthetic visit',
+      mode: 'in_person',
+      defaultDurationMin: 15,
+      feePaise: 0,
+    },
+  });
+  const appointment = await h.owner.appointment.create({
+    data: {
+      organisationId: clinics.a.org.id,
+      patientId: clinics.a.patients[0]!.id,
+      doctorUserId: clinics.a.doctor.userId,
+      clinicId: clinic.id,
+      consultationTypeId: type.id,
+      date: new Date('2026-10-06'),
+      startAt: new Date('2026-10-06T04:30:00Z'),
+      endAt: new Date('2026-10-06T04:45:00Z'),
+      source: 'front_desk',
+      status: 'in_consultation',
+      tokenNumber: 1,
+      createdByUserId: clinics.a.doctor.userId,
+    },
+  });
+  await h.owner.prescription.create({
+    data: {
+      organisationId: clinics.a.org.id,
+      appointmentId: appointment.id,
+      patientId: appointment.patientId,
+      doctorUserId: appointment.doctorUserId,
+    },
+  });
+  await h.owner.medicine.create({
+    data: {
+      organisationId: clinics.a.org.id,
+      source: 'clinic',
+      name: 'Synthetic existing',
+      genericName: 'Synthetic existing',
+      composition: 'Synthetic',
+      form: 'tablet',
+    },
+  });
+  const medicineBefore = await h.owner.medicine.findMany();
+  const prescriptionBefore = await h.owner.prescription.findMany();
+  const before = medicineBefore.length;
   const imported = await importRelease();
   expect(imported).toMatchObject({
     created: true,
@@ -114,7 +167,8 @@ it('imports all source rows, quarantines broken links and replays idempotently w
     importMedicineRelease(h.owner, parsed(), { ...options(), packageSha256: 'c'.repeat(64) }),
   ).rejects.toThrow('different source bytes');
   expect(await h.owner.medicine.count()).toBe(before);
-  expect(await h.owner.prescription.count()).toBe(0);
+  expect(await h.owner.medicine.findMany()).toEqual(medicineBefore);
+  expect(await h.owner.prescription.findMany()).toEqual(prescriptionBefore);
 });
 
 it('lists private releases, searches exact source codes and returns source brands with a permanent publication block', async () => {

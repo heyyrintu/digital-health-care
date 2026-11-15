@@ -50,7 +50,15 @@ export function MoleculePicker({
       </p>
       <label className="block">
         {t('medicineImport.targetSearch')}
-        <Input maxLength={60} value={q} onChange={(e) => setQ(e.target.value)} />
+        <Input
+          maxLength={60}
+          value={q}
+          disabled={busy}
+          onChange={(e) => {
+            setQ(e.target.value);
+            setRows([]);
+          }}
+        />
       </label>
       <Button type="button" disabled={busy || q.trim().length < 2} onClick={() => void search()}>
         {t('medicineImport.findTarget')}
@@ -63,6 +71,7 @@ export function MoleculePicker({
           </span>
           <Button
             type="button"
+            disabled={busy}
             onClick={() => {
               onSelect(m.id, m.name);
               setRows([]);

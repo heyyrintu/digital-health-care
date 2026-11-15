@@ -355,6 +355,9 @@ it('backfills existing reviewed releases without changing their bytes, decisions
   const stage = await upload();
   await review(stage.id);
   await publish(stage.id, 2);
+  const other = await upload('fixture-second');
+  await review(other.id);
+  await publish(other.id, 2, stage.id);
   const original = await h.owner.platformMedicineStage.findUniqueOrThrow({
     where: { id: stage.id },
   });
@@ -379,10 +382,10 @@ it('backfills existing reviewed releases without changing their bytes, decisions
     );
     expect(
       (await client.query('SELECT count(*)::int AS n FROM platform_medicine_entities')).rows[0].n,
-    ).toBe(12);
+    ).toBe(24);
     expect(
       (await client.query('SELECT count(*)::int AS n FROM platform_medicine_links')).rows[0].n,
-    ).toBe(14);
+    ).toBe(28);
     const restored = (
       await client.query(
         'SELECT bundle,revision,state,review_note FROM platform_medicine_stages WHERE id=$1',
@@ -397,7 +400,7 @@ it('backfills existing reviewed releases without changing their bytes, decisions
     });
     expect(
       (await client.query('SELECT stage_id FROM platform_medicine_sandbox')).rows[0].stage_id,
-    ).toBe(stage.id);
+    ).toBe(other.id);
   } finally {
     await client.query('ROLLBACK');
     await client.end();

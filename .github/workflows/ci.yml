@@ -191,12 +191,13 @@ jobs:
           CATALOGUE_ADMIN_URL: postgresql://dhc:dhc@postgres:5432/dhc_e2e
 
       - name: Catalogue cutover and prescribing browser test
+        id: catalogue-test
         run: pnpm --filter @dhc/e2e test:catalogue
         env:
           E2E_DATABASE_URL: postgresql://dhc:dhc@postgres:5432/dhc_catalogue_e2e
 
       - name: Upload catalogue report
-        if: failure()
+        if: failure() && steps.catalogue-test.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
           name: playwright-catalogue-report

@@ -15,7 +15,8 @@ by this development run. Fabricated evidence is used only in isolated automated 
    operator attestation; it does not independently verify credentials or publish data.
 3. Obtain the actual source licence/affiliate approval covering the legal entity, India
    use and the included source licence text. The approval letter is separate from the
-   package's `License.txt`; its hash must match the imported release's licence-text hash.
+   package's `License.txt`. `licenceTextSha256` must hash that imported licence text; the
+   approval document is retained under its separate `documentSha256`.
 4. Load and independently review the clinical safety dataset. The current synthetic sample
    cannot satisfy this gate. CDCI narrative fields are not converted into interaction,
    pregnancy, renal, maximum-dose or other safety facts by this feature.

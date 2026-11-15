@@ -2751,10 +2751,12 @@ model MedicineImportRelease {
   createdBy String @map("created_by") @db.Uuid
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   creator PlatformOperator @relation(fields: [createdBy], references: [id])
+  publications MedicineCataloguePublication[]
   generics MedicineImportGeneric[]
   brands MedicineImportBrand[]
   sourceRows MedicineImportSourceRow[]
   @@unique([datasetKey, sourceVersion])
+  @@unique([id, datasetKey])
   @@index([createdAt, id])
   @@map("medicine_import_releases")
 }
@@ -2847,6 +2849,7 @@ model MedicineCataloguePublication {
   safetyId String @map("safety_id") @db.Uuid
   publishedAt DateTime @default(now()) @map("published_at") @db.Timestamptz(3)
   medicine Medicine @relation(fields: [medicineId], references: [id], onDelete: Restrict)
+  release MedicineImportRelease @relation(fields: [releaseId, datasetKey], references: [id, datasetKey], onDelete: Restrict)
   brand MedicineImportBrand @relation(fields: [releaseId, brandSourceId], references: [releaseId, sourceId], onDelete: Restrict)
   licence MedicineCatalogueEvidence @relation("CatalogueLicence", fields: [licenceId], references: [id], onDelete: Restrict)
   clinical MedicineCatalogueEvidence @relation("CatalogueClinical", fields: [clinicalId], references: [id], onDelete: Restrict)

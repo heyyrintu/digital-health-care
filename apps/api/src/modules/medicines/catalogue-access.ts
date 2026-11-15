@@ -22,6 +22,7 @@ export async function assertCatalogueMedicines(tx: Tx, items: Line[]) {
   const ids = [...new Set(items.flatMap((i) => (i.medicineId ? [i.medicineId] : [])))];
   if (!ids.length) return;
   await tx.$executeRaw`SELECT pg_advisory_xact_lock_shared(hashtextextended('clinical-medicine-catalogue',0))`;
+  await tx.$queryRaw`SELECT id FROM medicines WHERE id=ANY(${ids}::uuid[]) ORDER BY id FOR SHARE`;
   const medicines = await tx.medicine.findMany({ where: { id: { in: ids }, active: true } });
   if (medicines.length !== ids.length)
     throw new AppError(400, 'VALIDATION_FAILED', 'A medicine is not in the list.', {

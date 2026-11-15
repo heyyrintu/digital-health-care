@@ -176,8 +176,8 @@ use smaller staged snapshots when those limits are exceeded. Downloads are limit
 ten per minute per client address. Downloads available before and after a structural
 review are still marked `synthetic_sandbox_only` and cannot confer clinical approval.
 
-There is no completed-worksheet importer, clinical sign-off endpoint or prescribing
-publication path in this increment. Completing a downloaded worksheet cannot change
+There is no completed-worksheet importer; this worksheet cannot create clinical sign-off
+or feed the separate gated full-import prescribing publication path. Completing a downloaded worksheet cannot change
 any medicine, prescription or immutable staged snapshot. Real data and real publication
 remain deferred pending licensing and a named clinical reviewer.
 

@@ -138,6 +138,11 @@ export const ImportPageQuery = z.object({
 });
 export const ImportReviewStatus = z.enum(['all', 'untouched', 'draft', 'review_recorded']);
 export type ImportReviewStatus = z.infer<typeof ImportReviewStatus>;
+export const ImportReleaseQuery = z.object({ cursor: z.uuid().optional() });
+export const ImportBrandQuery = ImportPageQuery.pick({ cursor: true });
+export const ImportHistoryQuery = z.object({
+  before: z.coerce.number().int().positive().optional(),
+});
 export const ImportGenericQuery = ImportPageQuery.extend({
   status: ImportReviewStatus.default('all'),
 });

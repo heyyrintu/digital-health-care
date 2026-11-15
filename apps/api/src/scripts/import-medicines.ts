@@ -3,7 +3,7 @@ import { parseArgs } from 'node:util';
 import { resolve, join } from 'node:path';
 import { createDb } from '@dhc/db';
 import { ImportManifest } from '@dhc/contracts';
-import { readBounded } from '../modules/medicine-staging/directory';
+import { readBounded, readBoundedBytes } from '../modules/medicine-staging/directory';
 import {
   FILES,
   MAX_FILE_BYTES,
@@ -18,6 +18,7 @@ try {
   const { values } = parseArgs({
     options: {
       input: { type: 'string' },
+      archive: { type: 'string' },
       'operator-email': { type: 'string' },
       'package-sha256': { type: 'string' },
       'acknowledge-pending-licence': { type: 'boolean' },
@@ -28,11 +29,12 @@ try {
   });
   if (values.help)
     process.stdout.write(
-      'Private medicine import: --input <seven files + License.txt + manifest.json> --operator-email <existing platform operator> --package-sha256 <archive SHA-256> --acknowledge-pending-licence. Requires explicit DATABASE_URL (owner). Never activates prescribing.\n',
+      'Private medicine import: --input <seven files + License.txt + manifest.json> --archive <original package file> --operator-email <existing platform operator> --package-sha256 <archive SHA-256> --acknowledge-pending-licence. Requires explicit DATABASE_URL (owner). Never activates prescribing.\n',
     );
   else {
     if (
       !values.input ||
+      !values.archive ||
       !values['operator-email'] ||
       !values['package-sha256'] ||
       !values['acknowledge-pending-licence'] ||
@@ -40,8 +42,11 @@ try {
     )
       throw new Error('Supply all import options and an explicit owner DATABASE_URL. Use --help.');
     const input = resolve(values.input);
+    const archiveHash = digest(await readBoundedBytes(resolve(values.archive), 64 * 1024 * 1024));
+    if (archiveHash !== values['package-sha256'])
+      throw new Error('Original package checksum does not match --package-sha256.');
     const manifest = ImportManifest.parse(
-      JSON.parse(await readBounded(join(input, 'manifest.json'), 16384)),
+      JSON.parse((await readBounded(join(input, 'manifest.json'), 16384)).replace(/^\uFEFF/, '')),
     );
     const licenceText = await readBounded(join(input, 'License.txt'), 128 * 1024);
     if (!licenceText.trim()) throw new Error('The source package licence must be retained.');
@@ -61,7 +66,7 @@ try {
       if (!operator) throw new Error('Create the owning platform operator first.');
       const result = await importMedicineRelease(db, parsed, {
         operatorId: operator.id,
-        packageSha256: values['package-sha256'],
+        packageSha256: archiveHash,
         licenceTextSha256: digest(licenceText),
         audit: {
           id: randomUUID(),

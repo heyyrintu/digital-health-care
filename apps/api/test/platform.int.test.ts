@@ -1526,20 +1526,39 @@ describe('in the database (dhc_platform)', () => {
 
   it('has no privilege beyond platform tables, audience-isolated security challenges and inserting audit entries', async () => {
     const tables = await h.owner.$queryRaw<
-      { table: string; any: boolean; read: boolean; insert: boolean }[]
+      { table: string; any: boolean; read: boolean; insert: boolean; mutate: boolean }[]
     >`
       SELECT c.relname AS table,
              has_table_privilege('dhc_platform', c.oid, 'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') AS any,
              has_table_privilege('dhc_platform', c.oid, 'SELECT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') AS read,
-             has_table_privilege('dhc_platform', c.oid, 'INSERT') AS insert
+             has_table_privilege('dhc_platform', c.oid, 'INSERT') AS insert,
+             has_table_privilege('dhc_platform', c.oid, 'UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER') AS mutate
       FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace AND n.nspname = 'public'
       WHERE c.relkind IN ('r', 'p', 'v', 'm', 'f') AND c.relname NOT LIKE 'platform\\_%'
       ORDER BY 1`;
     expect(tables.length).toBeGreaterThan(40);
+    const medicineTables = [
+      'medicine_catalogue_evidence',
+      'medicine_catalogue_publication_events',
+      'medicine_catalogue_publications',
+      'medicine_import_brands',
+      'medicine_import_generics',
+      'medicine_import_mappings',
+      'medicine_import_releases',
+      'medicine_import_source_rows',
+    ];
+    for (const name of medicineTables) {
+      expect(tables.find((t) => t.table === name)).toMatchObject({
+        read: true,
+        mutate: false,
+        insert: name === 'medicine_import_mappings',
+      });
+    }
     const granted = tables.filter(
       (t) =>
-        !['mfa_otp_challenges', 'account_security_challenges'].includes(t.table) &&
-        (t.table === 'audit_logs' ? t.read : t.any),
+        !['mfa_otp_challenges', 'account_security_challenges', ...medicineTables].includes(
+          t.table,
+        ) && (t.table === 'audit_logs' ? t.read : t.any),
     );
     expect(tables.find((t) => t.table === 'mfa_otp_challenges')?.any).toBe(true);
     expect(tables.find((t) => t.table === 'account_security_challenges')?.any).toBe(true);
@@ -1586,6 +1605,9 @@ describe('in the database (dhc_platform)', () => {
       'platform_mask_identifier',
       'platform_organisation_slug_taken',
       'platform_organisation_summaries',
+      'platform_reference_molecule_ids',
+      'platform_reference_molecules',
+      'platform_reference_version',
       'platform_usage',
     ]);
     for (const f of functions) {
@@ -1624,6 +1646,8 @@ describe('in the database (dhc_platform)', () => {
     expect(tables.map((f) => f.name)).toEqual([
       'platform_doctor_profiles',
       'platform_organisation_summaries',
+      'platform_reference_molecule_ids',
+      'platform_reference_molecules',
       'platform_usage',
     ]);
     expect(tables.flatMap((f) => f.columns).filter((c) => CLINICAL.test(c))).toEqual([]);
@@ -1633,6 +1657,7 @@ describe('in the database (dhc_platform)', () => {
       platform_latest_migration: 'text (b)',
       platform_mask_identifier: 'text (b)',
       platform_organisation_slug_taken: 'boolean (b)',
+      platform_reference_version: 'text (b)',
     });
   });
 
