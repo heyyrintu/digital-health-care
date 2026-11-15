@@ -135,3 +135,23 @@ It is not the hosted database. No source records have been committed to GitHub, 
 an image or activated for prescribing. Importing into a later deployment requires running
 the same owner command against its intended database; never replace the production database
 with the private local staging cluster.
+
+
+## Work through the review queue
+
+In **Platform → Imported medicines and mappings**, open a release and choose a
+**Review status** before pressing **Search**:
+
+- **Not started**: no saved mapping exists.
+- **Draft mapping**: an operator has saved work, but no clinician review is recorded.
+- **Clinician review recorded**: the operator has recorded the named clinician's review;
+  this does not grant prescribing approval.
+- **All mappings**: the complete generic queue.
+
+The filter combines with generic name, brand name or source-code search. **Load more**
+uses the last submitted search and status, even if the form has since been edited;
+press **Search** to apply new values. Filters run before pagination.
+
+These screens read the database connected to that deployment. A private local import
+will not appear on the hosted site until the reviewed application and source import are
+installed there. The queue does not activate medicines or change pending licence status.

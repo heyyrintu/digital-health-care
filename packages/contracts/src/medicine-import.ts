@@ -136,6 +136,11 @@ export const ImportPageQuery = z.object({
     .optional(),
   q: z.string().trim().max(100).optional(),
 });
+export const ImportReviewStatus = z.enum(['all', 'untouched', 'draft', 'review_recorded']);
+export type ImportReviewStatus = z.infer<typeof ImportReviewStatus>;
+export const ImportGenericQuery = ImportPageQuery.extend({
+  status: ImportReviewStatus.default('all'),
+});
 export const ImportMappingHistory = z.object({
   data: z.array(
     z.object({

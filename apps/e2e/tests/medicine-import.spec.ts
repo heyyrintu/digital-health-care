@@ -45,12 +45,20 @@ test('reviews a full source import and preserves clinician mapping revisions wit
     page.getByText('Licence approval pending — prescribing activation is blocked.'),
   ).toBeVisible();
   await page.getByRole('button', { name: 'Open release', exact: true }).first().click();
+  await page.getByRole('combobox', { name: 'Review status', exact: true }).selectOption('draft');
+  await page.getByRole('button', { name: 'Search', exact: true }).click();
+  await expect(page.getByText('No matching generics.', { exact: true })).toBeVisible();
+  await page
+    .getByRole('combobox', { name: 'Review status', exact: true })
+    .selectOption('untouched');
+  await page.getByRole('button', { name: 'Search', exact: true }).click();
   await page.getByRole('button', { name: 'Edit mapping', exact: true }).first().click();
   await expect(page.getByLabel('Strength value', { exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: 'Save', exact: true }).click();
   await expect(page.getByRole('status')).toHaveText(
     'Mapping saved. Publication requires separate owner approval.',
   );
+  await expect(page.getByRole('button', { name: 'Edit mapping', exact: true })).toHaveCount(1);
   await page.getByLabel('Reviewed formulation', { exact: true }).fill('Synthetic tablet');
   await page.getByRole('combobox', { name: 'Reviewed route', exact: true }).selectOption('oral');
   await page

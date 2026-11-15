@@ -9,6 +9,7 @@ import {
   ImportReleaseList,
   MedicineRoute,
   type ImportGeneric,
+  type ImportReviewStatus,
   type ImportReleaseSummary,
 } from '@dhc/contracts';
 import { Button, Input, PageHeader, Surface } from '@dhc/ui-web';
@@ -28,6 +29,8 @@ function Imports() {
   const [rows, setRows] = useState<ImportGeneric[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [q, setQ] = useState('');
+  const [status, setStatus] = useState<ImportReviewStatus>('all');
+  const [applied, setApplied] = useState({ q: '', status: 'all' as ImportReviewStatus });
   const [selected, setSelected] = useState<ImportGeneric | null>(null);
   const [mapping, setMapping] = useState<ClinicalMapping | null>(null);
   const [brands, setBrands] = useState<ImportBrandList['data']>([]);
@@ -96,11 +99,16 @@ function Imports() {
       setBusy(false);
     }
   };
-  const listGenerics = async (r: ImportReleaseSummary, after?: string, search = q) => {
+  const listGenerics = async (
+    r: ImportReleaseSummary,
+    after?: string,
+    filters = after ? applied : { q, status },
+  ) => {
     const result = await api.request('GET', `/platform/medicine-imports/${r.id}/generics`, {
       schema: ImportGenericList,
-      query: { ...(after ? { cursor: after } : {}), ...(search ? { q: search } : {}) },
+      query: { ...(after ? { cursor: after } : {}), q: filters.q, status: filters.status },
     });
+    setApplied(filters);
     setRelease(r);
     setRows((old) => (after ? [...old, ...result.data] : result.data));
     setCursor(result.nextCursor);
@@ -159,7 +167,14 @@ function Imports() {
       schema: ImportGenericList.shape.data.element,
       body: { revision: selected.revision, mapping: value.data },
     });
-    setRows((old) => old.map((r) => (r.sourceId === result.sourceId ? result : r)));
+    setRows((old) =>
+      old.flatMap((r) => {
+        if (r.sourceId !== result.sourceId) return [r];
+        return applied.status === 'all' || applied.status === result.mapping?.decision
+          ? [result]
+          : [];
+      }),
+    );
     await select(result);
     setSaved(true);
   };
@@ -189,7 +204,8 @@ function Imports() {
               onClick={() =>
                 void run(() => {
                   setQ('');
-                  return listGenerics(r, undefined, '');
+                  setStatus('all');
+                  return listGenerics(r, undefined, { q: '', status: 'all' });
                 })
               }
             >
@@ -211,7 +227,7 @@ function Imports() {
             {release.datasetKey} / {release.sourceVersion}
           </h2>
           <form
-            className="flex gap-3"
+            className="flex flex-wrap items-end gap-3"
             onSubmit={(e) => {
               e.preventDefault();
               void run(() => listGenerics(release));
@@ -226,6 +242,20 @@ function Imports() {
                 onChange={(e) => setQ(e.target.value)}
               />
             </label>
+            <label>
+              {t('medicineImport.reviewFilter')}
+              <select
+                className="block rounded border p-2"
+                value={status}
+                disabled={busy}
+                onChange={(e) => setStatus(e.target.value as ImportReviewStatus)}
+              >
+                <option value="all">{t('medicineImport.allMappings')}</option>
+                <option value="untouched">{t('medicineImport.untouched')}</option>
+                <option value="draft">{t('medicineImport.draft')}</option>
+                <option value="review_recorded">{t('medicineImport.recorded')}</option>
+              </select>
+            </label>
             <Button disabled={busy} type="submit">
               {t('common.search')}
             </Button>
@@ -236,7 +266,9 @@ function Imports() {
                 {r.name} · {r.sourceId} ·{' '}
                 {r.mapping?.decision === 'review_recorded'
                   ? t('medicineImport.recorded')
-                  : t('medicineImport.draft')}{' '}
+                  : r.mapping
+                    ? t('medicineImport.draft')
+                    : t('medicineImport.untouched')}{' '}
                 · {r.revision}
               </span>
               <Button disabled={busy} onClick={() => void run(() => select(r))}>

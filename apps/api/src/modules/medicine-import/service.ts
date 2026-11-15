@@ -4,8 +4,9 @@ import {
   ImportReleaseSummary,
   SaveClinicalMapping,
   DrugMoleculeList,
+  type ImportReviewStatus,
 } from '@dhc/contracts';
-import { withPlatform, type Db, type Tx } from '@dhc/db';
+import { Prisma, withPlatform, type Db, type Tx } from '@dhc/db';
 import type { FastifyRequest } from 'fastify';
 import { AppError } from '../../errors';
 import { writeAudit } from '../audit/write';
@@ -95,12 +96,18 @@ export class MedicineImportService {
     releaseId: string,
     cursor?: string,
     q?: string,
+    status: ImportReviewStatus = 'all',
   ) {
     return withPlatform(this.db, async (tx) => {
       if (!(await tx.medicineImportRelease.count({ where: { id: releaseId } }))) throw notFound();
       const rows = await tx.medicineImportGeneric.findMany({
         where: {
           releaseId,
+          ...(status === 'untouched'
+            ? { mapping: { equals: Prisma.DbNull } }
+            : status === 'all'
+              ? {}
+              : { mapping: { path: ['decision'], equals: status } }),
           ...(cursor ? { sourceId: { gt: cursor } } : {}),
           ...(q
             ? {

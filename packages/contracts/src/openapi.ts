@@ -14,6 +14,7 @@ import {
   ImportGeneric,
   ImportMappingHistory,
   ImportPageQuery,
+  ImportGenericQuery,
   SaveClinicalMapping,
 } from './medicine-import';
 import {
@@ -472,7 +473,7 @@ const operations: Operation[] = [
     summary: 'Search a private source release for clinical mapping',
     platform: true,
     pathParams: ['id'],
-    query: ImportPageQuery,
+    query: ImportGenericQuery,
     response: ImportGenericList,
   },
   {

@@ -17,6 +17,7 @@ import {
   ImportMappingHistory,
   DrugMoleculeQuery,
   ImportPageQuery,
+  ImportGenericQuery,
 } from '@dhc/contracts';
 import { registerAccountSecurity } from '../account-security/routes';
 import {
@@ -167,7 +168,7 @@ export const platformRoutes: FastifyPluginAsync<PlatformRoutesOptions> = async (
   app.get('/medicine-imports/:id/generics', operator, async (request, reply) => {
     reply.header('cache-control', 'no-store');
     const id = z.object({ id: z.uuid() }).parse(request.params).id;
-    const query = ImportPageQuery.parse(request.query);
+    const query = ImportGenericQuery.parse(request.query);
     return ImportGenericList.parse(
       await imports.generics(
         request,
@@ -175,6 +176,7 @@ export const platformRoutes: FastifyPluginAsync<PlatformRoutesOptions> = async (
         id,
         query.cursor,
         query.q,
+        query.status,
       ),
     );
   });

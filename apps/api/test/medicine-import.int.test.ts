@@ -155,9 +155,22 @@ it('lists private releases, searches exact source codes and returns source brand
 it('saves source-validated mappings with revision conflicts and an immutable history, without fabricating missing strengths', async () => {
   const { releaseId } = await importRelease();
   const path = `medicine-imports/${releaseId}/generics/990000000000000201`;
+  const filtered = async (status: string) => {
+    const response = await call('GET', `medicine-imports/${releaseId}/generics?status=${status}`);
+    expect(response.statusCode, response.body).toBe(200);
+    return response.json().data.map((r: { sourceId: string }) => r.sourceId);
+  };
+  expect(await filtered('untouched')).toHaveLength(2);
+  expect(await filtered('draft')).toEqual([]);
+  expect(await filtered('review_recorded')).toEqual([]);
+  expect(
+    (await call('GET', `medicine-imports/${releaseId}/generics?status=approved`)).statusCode,
+  ).toBe(400);
   const first = await call('PUT', path + '/mapping', { revision: 0, mapping: draft() });
   expect(first.statusCode, first.body).toBe(200);
   expect(first.json().mapping.ingredients[0].value).toBeNull();
+  expect(await filtered('untouched')).toHaveLength(1);
+  expect(await filtered('draft')).toEqual(['990000000000000201']);
   const clinical = draft();
   clinical.form = 'Synthetic tablet';
   clinical.route = 'oral';
@@ -181,6 +194,8 @@ it('saves source-validated mappings with revision conflicts and an immutable his
   expect(
     (await call('PUT', path + '/mapping', { revision: 1, mapping: clinical })).statusCode,
   ).toBe(409);
+  expect(await filtered('draft')).toEqual([]);
+  expect(await filtered('review_recorded')).toEqual(['990000000000000201']);
   const history = await call('GET', path + '/history');
   expect(history.json().data.map((r: { revision: number }) => r.revision)).toEqual([2, 1]);
   expect(history.json().data[0].mapping).toEqual(clinical);
@@ -261,7 +276,7 @@ it('imports unreferenced generics and paginates source-code search without skipp
   const extended = { ...files };
   const seed = extended['GenericMaster.txt'].split('\n')[1]!.replace(/\r$/, '').split('\t');
   extended['GenericMaster.txt'] +=
-    Array.from({ length: 35 }, (_, i) => {
+    Array.from({ length: 40 }, (_, i) => {
       const row = [...seed];
       row[0] = String(990000000000001000n + BigInt(i));
       row[1] = `Synthetic standalone ${i}`;
@@ -271,14 +286,25 @@ it('imports unreferenced generics and paginates source-code search without skipp
     includeSourceRows: true,
   });
   const { releaseId } = await importMedicineRelease(h.owner, full, options());
-  expect(await h.owner.medicineImportGeneric.count()).toBe(37);
-  const first = (await call('GET', `medicine-imports/${releaseId}/generics?q=standalone`)).json();
+  expect(await h.owner.medicineImportGeneric.count()).toBe(42);
+  // Draft rows sort first, so filtering after LIMIT would skip untouched records.
+  for (let i = 0; i < 5; i++) {
+    const code = String(990000000000001000n + BigInt(i));
+    const saved = await call('PUT', `medicine-imports/${releaseId}/generics/${code}/mapping`, {
+      revision: 0,
+      mapping: draft(),
+    });
+    expect(saved.statusCode, saved.body).toBe(200);
+  }
+  const first = (
+    await call('GET', `medicine-imports/${releaseId}/generics?status=untouched&q=standalone`)
+  ).json();
   expect(first.data).toHaveLength(25);
   expect(first.nextCursor).not.toBeNull();
   const second = (
     await call(
       'GET',
-      `medicine-imports/${releaseId}/generics?q=standalone&cursor=${first.nextCursor}`,
+      `medicine-imports/${releaseId}/generics?status=untouched&q=standalone&cursor=${first.nextCursor}`,
     )
   ).json();
   expect(second.data).toHaveLength(10);
