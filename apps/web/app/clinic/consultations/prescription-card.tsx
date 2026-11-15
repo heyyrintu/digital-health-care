@@ -36,6 +36,7 @@ function lineFromMedicine(m: Medicine): PrescriptionItem {
   return {
     id: crypto.randomUUID(),
     medicineId: m.id,
+    ...(m.catalogueRevision != null ? { catalogueRevision: m.catalogueRevision } : {}),
     name: m.name,
     composition: m.composition,
     form: m.form,
@@ -574,6 +575,11 @@ export function PrescriptionCard({
                     <span>
                       <strong>{m.name}</strong>{' '}
                       <span className="text-muted-foreground">{m.composition}</span>
+                      {m.catalogueRevision != null ? (
+                        <span className="block text-sm text-muted-foreground">
+                          {m.form} · {t(`rx.route.${m.defaultRoute}`)}
+                        </span>
+                      ) : null}
                     </span>
                   </Button>
                 </li>

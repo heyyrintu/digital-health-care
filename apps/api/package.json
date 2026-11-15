@@ -13,6 +13,8 @@
     "test": "vitest run",
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "medicines:stage": "tsx src/scripts/stage-medicines.ts",
+    "medicines:import": "tsx src/scripts/import-medicines.ts",
+    "medicines:catalogue": "tsx src/scripts/manage-medicine-catalogue.ts",
     "seed": "tsx --env-file-if-exists=../../.env src/scripts/seed.ts",
     "support:reset-authenticator": "tsx --env-file-if-exists=../../.env src/scripts/support-reset-authenticator.ts",
     "support:verify-doctor": "tsx --env-file-if-exists=../../.env src/scripts/support-verify-doctor.ts",

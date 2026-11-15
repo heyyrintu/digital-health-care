@@ -84,6 +84,7 @@ export class SyncService {
       });
       const data: SyncMedicine[] = page.map((m) => ({
         id: m.id,
+        ...(m.catalogueRevision !== null ? { catalogueRevision: m.catalogueRevision } : {}),
         name: m.name,
         genericName: m.genericName,
         composition: m.composition,

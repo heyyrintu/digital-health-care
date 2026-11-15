@@ -1,4 +1,71 @@
 export const en = {
+  'rx.catalogueRoute':
+    'This route belongs to the reviewed catalogue entry. Select another entry to use a different route.',
+  'medicineImport.licenceRecorded':
+    'Licence evidence recorded. Publication still requires exact clinician review and independent safety approval.',
+  'medicineImport.clinicalTarget': 'Clinical ingredient record',
+  'medicineImport.targetSearch': 'Search clinical ingredient records',
+  'medicineImport.findTarget': 'Find clinical ingredient',
+  'medicineImport.useTarget': 'Use {name}',
+  'medicineImport.targetHint':
+    'Choose an exact reference record after clinician review. Matching text does not prove equivalence or approved safety data.',
+  'medicineImport.registrationHint':
+    'Use the registration number from the verified doctor profile. Its medical council is checked when review evidence is recorded.',
+
+  'medicineImport.percentHint':
+    'For percentages, record the concentration basis and its source in the reason field. Do not infer a dose conversion.',
+  'medicineImport.title': 'Imported medicines and mappings',
+  'medicineImport.scope':
+    'Private source releases and clinician-entered mappings. These records are separate from prescribing.',
+  'medicineImport.pending': 'Licence approval pending — prescribing activation is blocked.',
+  'medicineImport.limit':
+    'Source names are shown as proposals. Strengths, routes, regulatory evidence and clinical review must be supplied explicitly. Recording a review does not verify the clinician’s credentials or approve prescribing.',
+  'medicineImport.releases': 'Imported releases',
+  'medicineImport.empty': 'No full release has been imported yet.',
+  'medicineImport.brands': 'Brands',
+  'medicineImport.generics': 'Generics',
+  'medicineImport.issues': 'source issues',
+  'medicineImport.open': 'Open release',
+  'medicineImport.more': 'Load more',
+  'medicineImport.reviewFilter': 'Review status',
+  'medicineImport.allMappings': 'All mappings',
+  'medicineImport.untouched': 'Not started',
+  'medicineImport.search': 'Find a generic, brand or source code',
+  'medicineImport.map': 'Edit mapping',
+  'medicineImport.draft': 'Draft mapping',
+  'medicineImport.recorded': 'Clinician review recorded',
+  'medicineImport.unmapped': 'Unmapped',
+  'medicineImport.mapped': 'Enter numeric strength',
+  'medicineImport.notApplicable': 'Numeric strength not applicable',
+  'medicineImport.noResults': 'No matching generics.',
+  'medicineImport.sourceForm': 'Source formulation',
+  'medicineImport.sourceRoutes': 'Source routes',
+  'medicineImport.form': 'Reviewed formulation',
+  'medicineImport.route': 'Reviewed route',
+  'medicineImport.ingredient': 'Ingredient name for clinical mapping',
+  'medicineImport.strengthState': 'Strength mapping',
+  'medicineImport.value': 'Strength value',
+  'medicineImport.unit': 'Strength unit',
+  'medicineImport.per': 'Denominator',
+  'medicineImport.perUnit': 'Per dose unit',
+  'medicineImport.perMl': 'Per mL',
+  'medicineImport.reason': 'Reason or supporting evidence',
+  'medicineImport.evidence': 'Regulatory evidence and source references',
+  'medicineImport.notes': 'Clinical review notes and evidence',
+  'medicineImport.reviewer': 'Reviewing clinician’s name',
+  'medicineImport.registration': 'Clinician registration number',
+  'medicineImport.attest':
+    'I confirm that the named clinician supplied this review and its evidence. This does not activate prescribing.',
+  'medicineImport.decision': 'Review record',
+  'medicineImport.saved': 'Mapping saved. Publication requires separate owner approval.',
+  'medicineImport.invalid':
+    'Check every mapping field. Recording review requires completed ingredients, strength decisions, form, route, evidence, review notes, clinician name, registration and clinician attestation.',
+  'medicineImport.history': 'Mapping history',
+
+  'medicineReview.worksheet': 'Download clinician worksheet (CSV)',
+  'medicineReview.worksheetHint':
+    'One row per ingredient, with blank mapping and reviewer fields. Source IDs have a leading apostrophe to preserve every digit in spreadsheets. This worksheet cannot publish medicines or establish clinical approval.',
+
   'medicineReview.notComparable':
     'The active snapshot belongs to another dataset; release differences cannot be compared.',
   'medicineReview.details': 'Source details',

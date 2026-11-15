@@ -1,4 +1,5 @@
 import { assertOnlineReady, assertOnlineAmendmentEvidence } from '../online-visits/service';
+import { assertCatalogueMedicines } from '../medicines/catalogue-access';
 import {
   ConsultationNotes,
   type AmendPrescriptionBody,
@@ -180,6 +181,7 @@ export class SigningService {
         );
       }
       // The doctor signs only the tests their screen showed them.
+      await assertCatalogueMedicines(tx, existing.items);
       assertTestsReviewed(tests, body.testIds);
       const profile = await findProfile(tx, actor);
       const gaps = signingGaps(profile, true);

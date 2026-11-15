@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { Client } from 'pg';
 import { afterAll, beforeEach, expect, it } from 'vitest';
 import { withPlatform, withTenant, withAuth } from '@dhc/db';
 import { MedicineReviewBundle } from '@dhc/contracts';
@@ -199,4 +200,248 @@ it('paginates immutable snapshots without skipping ties and makes a rejected sna
   expect((await review(id, 1, 'rejected')).statusCode).toBe(200);
   expect((await publish(id, 2)).statusCode).toBe(409);
   expect((await call('GET', 'medicine-stages?state=rejected')).json().data).toHaveLength(1);
+});
+
+it('exports an audited, private, synthetic worksheet without changing the snapshot or clinical data', async () => {
+  const stage = await upload();
+  const medicines = await h.owner.medicine.count();
+  const response = await call('GET', `medicine-stages/${stage.id}/worksheet`);
+  expect(response.statusCode, response.body).toBe(200);
+  expect(response.headers['content-type']).toContain('text/csv');
+  expect(response.headers['cache-control']).toBe('no-store');
+  expect(response.headers['content-disposition']).toBe(
+    `attachment; filename="medicine-review-${stage.id}.csv"`,
+  );
+  expect(response.body).toContain('synthetic_sandbox_only');
+  expect(response.body).toContain("'990000000000000701");
+  expect(response.body).not.toContain('990000000000000703');
+  expect(await h.owner.medicine.count()).toBe(medicines);
+  expect(await h.owner.prescription.count()).toBe(0);
+  expect(
+    (await h.owner.platformMedicineStage.findUniqueOrThrow({ where: { id: stage.id } })).revision,
+  ).toBe(1);
+  const audit = await h.owner.auditLog.findFirstOrThrow({
+    where: { action: 'platform.medicine.worksheet.exported' },
+  });
+  expect(audit.metadata).toEqual({ stageId: stage.id });
+  const unauth = await h.app.inject({
+    method: 'GET',
+    url: `/v1/platform/medicine-stages/${stage.id}/worksheet`,
+  });
+  expect(unauth.statusCode).toBe(401);
+  const clinics = await seedTwoClinics(h);
+  const staff = await staffLogin(h, clinics.a.org.slug, clinics.a.admin);
+  expect(
+    (await call('GET', `medicine-stages/${stage.id}/worksheet`, undefined, staff)).statusCode,
+  ).toBe(401);
+  expect((await call('GET', 'medicine-stages/invalid/worksheet')).statusCode).toBe(400);
+  expect(
+    (await call('GET', 'medicine-stages/00000000-0000-4000-8000-000000000001/worksheet'))
+      .statusCode,
+  ).toBe(404);
+});
+
+it('indexes all seven source kinds and exact brand links without importing quarantined or clinical records', async () => {
+  const medicines = await h.owner.medicine.count();
+  const stage = await upload();
+  const identities = await h.owner.platformMedicineIdentity.findMany();
+  expect(identities).toHaveLength(12);
+  expect(new Set(identities.map((i) => i.kind))).toEqual(
+    new Set(['brand', 'product', 'supplier', 'generic', 'ingredient', 'form', 'route']),
+  );
+  expect(identities.every((i) => /^\d{18}$/.test(i.sourceId))).toBe(true);
+  expect(identities.some((i) => i.sourceId === '990000000000000703')).toBe(false);
+  expect(await h.owner.platformMedicineEntity.count()).toBe(12);
+  expect(await h.owner.platformMedicineLink.count()).toBe(14);
+  const brand = identities.find((i) => i.kind === 'brand' && i.sourceId.endsWith('702'))!;
+  const links = await h.owner.platformMedicineLink.findMany({
+    where: { stageId: stage.id, fromId: brand.id },
+    include: { to: { include: { identity: true } } },
+  });
+  expect(links).toHaveLength(8);
+  expect(
+    links
+      .filter((l) => l.to.identity.kind === 'ingredient')
+      .map((l) => l.to.name)
+      .sort(),
+  ).toEqual(['Synthetic substance Alpha', 'Synthetic substance Beta']);
+  expect(await h.owner.medicine.count()).toBe(medicines);
+  expect(await h.owner.prescription.count()).toBe(0);
+});
+
+it('retains stable identities across release renames, isolates datasets and leaves old release names intact', async () => {
+  const first = await upload();
+  const identity = await h.owner.platformMedicineIdentity.findFirstOrThrow({
+    where: { kind: 'brand', sourceId: '990000000000000701' },
+  });
+  const next = bundle('fixture-2');
+  next.catalogue.records[0]!.name = 'Synthetic renamed brand';
+  const response = await call('POST', 'medicine-stages', next);
+  expect(response.statusCode, response.body).toBe(201);
+  const second = response.json();
+  const entities = await h.owner.platformMedicineEntity.findMany({
+    where: { identityId: identity.id },
+  });
+  expect(entities).toHaveLength(2);
+  expect(entities.find((e) => e.stageId === first.id)?.name).toBe('Synthetic brand One');
+  expect(entities.find((e) => e.stageId === second.id)?.name).toBe('Synthetic renamed brand');
+  expect(await h.owner.platformMedicineIdentity.count()).toBe(12);
+  expect((await call('POST', 'medicine-stages', next)).statusCode).toBe(200);
+  expect(await h.owner.platformMedicineEntity.count()).toBe(24);
+  const separate = stageCatalogue({ ...manifest, datasetKey: 'another-synthetic-source' }, files);
+  expect((await call('POST', 'medicine-stages', separate)).statusCode).toBe(201);
+  expect(await h.owner.platformMedicineIdentity.count()).toBe(24);
+  expect(
+    await h.owner.platformMedicineIdentity.count({
+      where: { kind: 'brand', sourceId: identity.sourceId },
+    }),
+  ).toBe(2);
+  expect(
+    (await h.owner.platformMedicineStage.findUniqueOrThrow({ where: { id: first.id } })).revision,
+  ).toBe(1);
+});
+
+it('allows platform read access only and rejects direct index writes and private helper execution', async () => {
+  const stage = await upload();
+  expect(await withPlatform(h.owner, (tx) => tx.platformMedicineEntity.count())).toBe(12);
+  for (const table of [
+    'platform_medicine_identities',
+    'platform_medicine_entities',
+    'platform_medicine_links',
+  ]) {
+    await expect(
+      withPlatform(h.owner, (tx) => tx.$executeRawUnsafe(`DELETE FROM ${table}`)),
+    ).rejects.toThrow(/permission denied/);
+  }
+  await expect(
+    withPlatform(
+      h.owner,
+      (tx) => tx.$executeRaw`SELECT index_platform_medicine_stage(${stage.id}::uuid)`,
+    ),
+  ).rejects.toThrow(/permission denied/);
+  const clinics = await seedTwoClinics(h);
+  await expect(
+    withTenant(h.owner, clinics.a.org.id, (tx) => tx.platformMedicineIdentity.count()),
+  ).rejects.toThrow(/permission denied/);
+  await expect(withAuth(h.owner, (tx) => tx.platformMedicineEntity.count())).rejects.toThrow(
+    /permission denied/,
+  );
+});
+
+it('rolls back the complete snapshot and index on invalid source identifiers', async () => {
+  const malformed = bundle();
+  malformed.catalogue.records[0]!.ingredients[0]!.sourceId = 'not-an-id';
+  await expect(
+    h.owner.platformMedicineStage.create({
+      data: {
+        datasetKey: manifest.datasetKey,
+        sourceVersion: manifest.version,
+        fingerprint: malformed.catalogue.fingerprint,
+        bundleHash: 'a'.repeat(64),
+        bundle: malformed,
+        candidateCount: 2,
+        issueCount: 1,
+        createdBy: op.operatorId,
+      },
+    }),
+  ).rejects.toThrow(/check constraint/);
+  expect(await h.owner.platformMedicineStage.count()).toBe(0);
+  expect(await h.owner.platformMedicineIdentity.count()).toBe(0);
+  expect(await h.owner.platformMedicineEntity.count()).toBe(0);
+  expect(await h.owner.platformMedicineLink.count()).toBe(0);
+});
+
+it('backfills existing reviewed releases without changing their bytes, decisions or active selection', async () => {
+  const stage = await upload();
+  await review(stage.id);
+  await publish(stage.id, 2);
+  const other = await upload('fixture-second');
+  await review(other.id);
+  await publish(other.id, 2, stage.id);
+  const original = await h.owner.platformMedicineStage.findUniqueOrThrow({
+    where: { id: stage.id },
+  });
+  const client = new Client({ connectionString: process.env.TEST_DATABASE_URL });
+  await client.connect();
+  try {
+    await client.query('BEGIN');
+    // Recreate only this migration within a transaction, simulating a database
+    // that already contains pre-index snapshots. Roll back all DDL afterward.
+    await client.query(`DROP TRIGGER platform_medicine_stage_index ON platform_medicine_stages;
+      DROP FUNCTION index_new_platform_medicine_stage();
+      DROP FUNCTION index_platform_medicine_stage(uuid);
+      DROP TABLE platform_medicine_links,platform_medicine_entities,platform_medicine_identities;`);
+    await client.query(
+      readFileSync(
+        new URL(
+          '../../../packages/db/prisma/migrations/20261113090000_medicine_catalogue_index/migration.sql',
+          import.meta.url,
+        ),
+        'utf8',
+      ),
+    );
+    expect(
+      (await client.query('SELECT count(*)::int AS n FROM platform_medicine_entities')).rows[0].n,
+    ).toBe(24);
+    expect(
+      (await client.query('SELECT count(*)::int AS n FROM platform_medicine_links')).rows[0].n,
+    ).toBe(28);
+    const restored = (
+      await client.query(
+        'SELECT bundle,revision,state,review_note FROM platform_medicine_stages WHERE id=$1',
+        [stage.id],
+      )
+    ).rows[0];
+    expect(restored).toEqual({
+      bundle: original.bundle,
+      revision: original.revision,
+      state: original.state,
+      review_note: original.reviewNote,
+    });
+    expect(
+      (await client.query('SELECT stage_id FROM platform_medicine_sandbox')).rows[0].stage_id,
+    ).toBe(other.id);
+  } finally {
+    await client.query('ROLLBACK');
+    await client.end();
+  }
+});
+
+it('indexes the maximum accepted snapshot with shared references without duplicating those identities', async () => {
+  const input = bundle();
+  const template = input.catalogue.records[0]!;
+  input.catalogue.records = Array.from({ length: 500 }, (_, i) => ({
+    ...template,
+    sourceId: String(990000000000001000n + BigInt(i)),
+    name: `Synthetic test brand ${i}`,
+  }));
+  input.report.candidateBrands = 500;
+  input.report.tables['BrandMaster.txt'].inputRows = 501;
+  input.report.tables['BrandMaster.txt'].indexedRows = 500;
+  const response = await call('POST', 'medicine-stages', input);
+  expect(response.statusCode, response.body).toBe(201);
+  expect(await h.owner.platformMedicineIdentity.count()).toBe(506);
+  expect(await h.owner.platformMedicineEntity.count()).toBe(506);
+  expect(await h.owner.platformMedicineLink.count()).toBe(3000);
+});
+
+it('indexes concurrent releases consistently and distinguishes the same code in different entity kinds', async () => {
+  const first = bundle('parallel-1');
+  const second = bundle('parallel-2');
+  for (const input of [first, second]) {
+    input.catalogue.records[0]!.product.sourceId = input.catalogue.records[0]!.sourceId;
+  }
+  const results = await Promise.all([
+    call('POST', 'medicine-stages', first),
+    call('POST', 'medicine-stages', second),
+  ]);
+  for (const response of results) expect(response.statusCode, response.body).toBe(201);
+  expect(await h.owner.platformMedicineIdentity.count()).toBe(12);
+  expect(await h.owner.platformMedicineEntity.count()).toBe(24);
+  expect(await h.owner.platformMedicineLink.count()).toBe(28);
+  const reusedCode = await h.owner.platformMedicineIdentity.findMany({
+    where: { sourceId: first.catalogue.records[0]!.sourceId },
+  });
+  expect(reusedCode.map((i) => i.kind).sort()).toEqual(['brand', 'product']);
+  expect(new Set(reusedCode.map((i) => i.id)).size).toBe(2);
 });

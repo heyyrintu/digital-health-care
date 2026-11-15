@@ -172,7 +172,35 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-report
+          name: playwright-main-report
+          path: |
+            apps/e2e/playwright-report
+            apps/e2e/test-results
+          retention-days: 7
+
+      - name: Create isolated catalogue browser database
+        run: |
+          pnpm --filter @dhc/api exec node --input-type=module -e '
+            import pg from "pg";
+            const client = new pg.Client({connectionString:process.env.CATALOGUE_ADMIN_URL});
+            await client.connect();
+            try { await client.query("CREATE DATABASE dhc_catalogue_e2e"); }
+            finally { await client.end(); }
+          '
+        env:
+          CATALOGUE_ADMIN_URL: postgresql://dhc:dhc@postgres:5432/dhc_e2e
+
+      - name: Catalogue cutover and prescribing browser test
+        id: catalogue-test
+        run: pnpm --filter @dhc/e2e test:catalogue
+        env:
+          E2E_DATABASE_URL: postgresql://dhc:dhc@postgres:5432/dhc_catalogue_e2e
+
+      - name: Upload catalogue report
+        if: failure() && steps.catalogue-test.outcome == 'failure'
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-catalogue-report
           path: |
             apps/e2e/playwright-report
             apps/e2e/test-results

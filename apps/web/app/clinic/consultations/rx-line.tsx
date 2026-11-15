@@ -212,6 +212,7 @@ export function RxLine({
           </Label>
           <NativeSelect
             id={id('route')}
+            disabled={item.catalogueRevision != null}
             value={item.route ?? ''}
             onChange={(e) => set({ route: (e.target.value || null) as MedicineRoute | null })}
           >
@@ -222,6 +223,9 @@ export function RxLine({
               </option>
             ))}
           </NativeSelect>
+          {item.catalogueRevision != null ? (
+            <p className="text-xs text-muted-foreground">{t('rx.catalogueRoute')}</p>
+          ) : null}
         </div>
         <div className={cell}>
           <Label htmlFor={id('quantity')} className={fieldLabel}>

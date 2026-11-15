@@ -26,6 +26,7 @@ export type PrescriptionRow = Prisma.PrescriptionGetPayload<{ include: { items: 
 export const itemOut = (row: ItemRow) => ({
   id: row.id,
   medicineId: row.medicineId,
+  ...(row.catalogueRevision !== null ? { catalogueRevision: row.catalogueRevision } : {}),
   name: row.name,
   composition: row.composition,
   form: row.form,

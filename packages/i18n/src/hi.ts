@@ -2,6 +2,73 @@ import type { MessageKey } from './en';
 
 /** Hindi strings. Needs review by a native speaker before release. */
 export const hi: Record<MessageKey, string> = {
+  'rx.catalogueRoute':
+    'यह मार्ग समीक्षित कैटलॉग रिकॉर्ड का है। दूसरा मार्ग चुनने के लिए उचित दूसरा रिकॉर्ड चुनें।',
+  'medicineImport.licenceRecorded':
+    'लाइसेंस का प्रमाण दर्ज है। प्रकाशन के लिए सही चिकित्सकीय समीक्षा और स्वतंत्र सुरक्षा स्वीकृति अभी भी आवश्यक हैं।',
+  'medicineImport.clinicalTarget': 'चिकित्सकीय घटक रिकॉर्ड',
+  'medicineImport.targetSearch': 'चिकित्सकीय घटक रिकॉर्ड खोजें',
+  'medicineImport.findTarget': 'चिकित्सकीय घटक खोजें',
+  'medicineImport.useTarget': '{name} चुनें',
+  'medicineImport.targetHint':
+    'चिकित्सक की समीक्षा के बाद सही संदर्भ रिकॉर्ड चुनें। नाम का मिलना समानता या सुरक्षा डेटा की स्वीकृति का प्रमाण नहीं है।',
+  'medicineImport.registrationHint':
+    'सत्यापित डॉक्टर प्रोफ़ाइल का पंजीकरण नंबर भरें। समीक्षा प्रमाण दर्ज करते समय चिकित्सा परिषद जाँची जाती है।',
+
+  'medicineImport.percentHint':
+    'प्रतिशत के लिए सांद्रता का आधार और स्रोत कारण वाले फ़ील्ड में दर्ज करें। खुराक का रूपांतरण अनुमान से न करें।',
+  'medicineImport.title': 'आयातित दवाएँ और मैपिंग',
+  'medicineImport.scope':
+    'निजी स्रोत रिलीज़ और चिकित्सक द्वारा दी गई मैपिंग। ये रिकॉर्ड प्रिस्क्राइबिंग से अलग हैं।',
+  'medicineImport.pending': 'लाइसेंस की स्वीकृति लंबित है — प्रिस्क्राइबिंग सक्रिय नहीं है।',
+  'medicineImport.limit':
+    'स्रोत नाम केवल प्रस्ताव हैं। शक्ति, मार्ग, नियामक प्रमाण और चिकित्सकीय समीक्षा स्पष्ट रूप से भरें। समीक्षा दर्ज करना चिकित्सक के प्रमाणपत्र या प्रिस्क्राइबिंग की स्वीकृति नहीं है।',
+  'medicineImport.releases': 'आयातित रिलीज़',
+  'medicineImport.empty': 'अभी कोई पूर्ण रिलीज़ आयात नहीं हुई है।',
+  'medicineImport.brands': 'ब्रांड',
+  'medicineImport.generics': 'जेनेरिक',
+  'medicineImport.issues': 'स्रोत समस्याएँ',
+  'medicineImport.open': 'रिलीज़ खोलें',
+  'medicineImport.more': 'और लोड करें',
+  'medicineImport.reviewFilter': 'समीक्षा की स्थिति',
+  'medicineImport.allMappings': 'सभी मैपिंग',
+  'medicineImport.untouched': 'शुरू नहीं हुई',
+  'medicineImport.search': 'जेनेरिक, ब्रांड या स्रोत कोड खोजें',
+  'medicineImport.map': 'मैपिंग संपादित करें',
+  'medicineImport.draft': 'मैपिंग का मसौदा',
+  'medicineImport.recorded': 'चिकित्सक की समीक्षा दर्ज',
+  'medicineImport.unmapped': 'मैपिंग नहीं हुई',
+  'medicineImport.mapped': 'संख्यात्मक शक्ति भरें',
+  'medicineImport.notApplicable': 'संख्यात्मक शक्ति लागू नहीं',
+  'medicineImport.noResults': 'कोई जेनेरिक नहीं मिला।',
+  'medicineImport.sourceForm': 'स्रोत औषधि रूप',
+  'medicineImport.sourceRoutes': 'स्रोत मार्ग',
+  'medicineImport.form': 'समीक्षित औषधि रूप',
+  'medicineImport.route': 'समीक्षित मार्ग',
+  'medicineImport.ingredient': 'चिकित्सकीय मैपिंग के लिए घटक का नाम',
+  'medicineImport.strengthState': 'शक्ति की मैपिंग',
+  'medicineImport.value': 'शक्ति का मान',
+  'medicineImport.unit': 'शक्ति की इकाई',
+  'medicineImport.per': 'आधार मात्रा',
+  'medicineImport.perUnit': 'प्रति खुराक इकाई',
+  'medicineImport.perMl': 'प्रति mL',
+  'medicineImport.reason': 'कारण या सहायक प्रमाण',
+  'medicineImport.evidence': 'नियामक प्रमाण और स्रोत संदर्भ',
+  'medicineImport.notes': 'चिकित्सकीय समीक्षा के नोट्स और प्रमाण',
+  'medicineImport.reviewer': 'समीक्षा करने वाले चिकित्सक का नाम',
+  'medicineImport.registration': 'चिकित्सक का पंजीकरण नंबर',
+  'medicineImport.attest':
+    'मैं पुष्टि करता/करती हूँ कि नामित चिकित्सक ने यह समीक्षा और प्रमाण दिए हैं। इससे प्रिस्क्राइबिंग सक्रिय नहीं होती।',
+  'medicineImport.decision': 'समीक्षा रिकॉर्ड',
+  'medicineImport.saved': 'मैपिंग सहेजी गई। प्रकाशन के लिए मालिक की अलग स्वीकृति आवश्यक है।',
+  'medicineImport.invalid':
+    'सभी मैपिंग फ़ील्ड जाँचें। समीक्षा दर्ज करने के लिए घटक, शक्ति निर्णय, रूप, मार्ग, प्रमाण, समीक्षा टिप्पणियाँ, चिकित्सक का नाम, पंजीकरण और पुष्टि आवश्यक हैं।',
+  'medicineImport.history': 'मैपिंग का इतिहास',
+
+  'medicineReview.worksheet': 'चिकित्सक समीक्षा वर्कशीट डाउनलोड करें (CSV)',
+  'medicineReview.worksheetHint':
+    'प्रत्येक घटक के लिए एक पंक्ति है; मैपिंग और समीक्षक के फ़ील्ड खाली हैं। स्प्रेडशीट में सभी अंक सुरक्षित रखने के लिए स्रोत ID के आगे एक एपोस्ट्रॉफ़ है। इस वर्कशीट से दवाएँ प्रकाशित या चिकित्सकीय रूप से स्वीकृत नहीं होतीं।',
+
   'medicineReview.notComparable':
     'सक्रिय स्नैपशॉट दूसरे डेटासेट का है; रिलीज़ के बदलावों की तुलना नहीं की जा सकती।',
   'medicineReview.details': 'स्रोत विवरण',

@@ -145,3 +145,70 @@ Expansion bounds: linked generic and candidate JSON each have a conservative 64 
 budget, counted before retaining each expanded record. Every artifact also has a
 128 MiB conservative estimate checked before serialization, in addition to the final
 256 MiB output-byte cap. Oversized expansions fail instead of exhausting memory.
+
+
+## Clinician review worksheet (synthetic only)
+
+Select a staged snapshot and choose **Download clinician worksheet (CSV)**. The
+platform-only download is audited, uses the existing console token and network
+allowlist, and is sent with `Cache-Control: no-store`. No clinic or patient identity
+can use this endpoint.
+
+The UTF-8 CSV has one row per ingredient in an accepted candidate. Quarantined brands
+are excluded and remain in the quarantine report. Each row retains the snapshot UUID,
+dataset/version/fingerprint, original brand/generic/product/supplier links, ingredient,
+form and routes, source regulatory status and `not_assessed` clinical safety marker.
+
+A clinician can complete the blank review fields for ingredient coding system/code,
+ingredient name, strength value/unit/basis, form, routes, regulatory evidence, reviewer,
+review date, decision and notes. Values such as “5 mg” in a generic name are never
+parsed into these fields. The snapshot's structural review state is separate from
+these blank clinical review fields.
+
+Source IDs and release identity fields have a leading apostrophe to prevent spreadsheet
+programs from rounding long identifiers or changing release values. The prefix is a
+text marker for this worksheet; remove only that single marker when copying an identity
+back to the original source. Spreadsheet formulas in source-controlled text are
+neutralized, and delimiters, quotes and newlines are quoted as CSV fields.
+
+Exports stop at 10,000 ingredient rows or 8 MiB of encoded CSV, whichever comes first;
+use smaller staged snapshots when those limits are exceeded. Downloads are limited to
+ten per minute per client address. Downloads available before and after a structural
+review are still marked `synthetic_sandbox_only` and cannot confer clinical approval.
+
+There is no completed-worksheet importer; this worksheet cannot create clinical sign-off
+or feed the separate gated full-import prescribing publication path. Completing a downloaded worksheet cannot change
+any medicine, prescription or immutable staged snapshot. Real data and real publication
+remain deferred pending licensing and a named clinical reviewer.
+
+## Relational source index
+
+Migration `20261113090000_medicine_catalogue_index` adds:
+
+| Table | Stores |
+| --- | --- |
+| `platform_medicine_identities` | Stable UUID for each dataset + entity kind + original text source ID |
+| `platform_medicine_entities` | The name of that identity in a particular immutable snapshot |
+| `platform_medicine_links` | Each accepted brand's original product, supplier, generic, ingredient, form and route links within that snapshot |
+
+The upload transaction automatically builds all three tables. A failed index operation
+rolls back the upload. A replayed upload does not duplicate identities or release rows.
+Both endpoints of a link have composite foreign keys into the same snapshot. Old release
+names remain available after a rename, and identical source IDs in different datasets or
+entity kinds remain distinct. Original bundles retain regulatory status, source dates,
+review requirements, file hashes and quarantine reports.
+
+Existing snapshots are backfilled during migration. No fixture is auto-loaded into a fresh
+production database. The migration does not change clinical `medicines`, ingredients,
+prescriptions, review decisions or sandbox selection. It grants no new clinical access.
+
+Platform operators have read access only to the index. Its private, security-definer
+trigger writes as the migration owner; its helper functions cannot be invoked directly by
+the platform, clinic or authentication roles. This follows the repository's existing
+migration-owner deployment model; run migrations with the owner connection.
+
+The current source is still synthetic-only. Licence application submission does not set
+an approval flag. When the approval letter is available, verify the licence holder, affiliate
+reference, permitted territories and applicable package terms before building the real-data
+publication path. Clinical mapping/sign-off and a bounded full-release import remain separate
+work; the source index supplies their durable identifiers and release history.

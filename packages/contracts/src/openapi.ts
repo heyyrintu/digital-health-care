@@ -8,6 +8,18 @@ import {
   MedicineSandboxView,
 } from './medicine-staging';
 import {
+  ImportReleaseList,
+  ImportGenericList,
+  ImportBrandList,
+  ImportGeneric,
+  ImportMappingHistory,
+  ImportReleaseQuery,
+  ImportBrandQuery,
+  ImportHistoryQuery,
+  ImportGenericQuery,
+  SaveClinicalMapping,
+} from './medicine-import';
+import {
   OnlineIntake,
   OnlineCall,
   OnlineVerify,
@@ -438,6 +450,75 @@ interface Operation {
 
 /** Every endpoint, in one list. Field detail always comes from the Zod schemas. */
 const operations: Operation[] = [
+  {
+    method: 'get',
+    path: '/platform/medicine-molecules',
+    operationId: 'searchCatalogueClinicalMolecules',
+    summary: 'Read-only canonical reference ingredient identities; no safety approval implied',
+    platform: true,
+    query: DrugMoleculeQuery,
+    response: DrugMoleculeList,
+  },
+  {
+    method: 'get',
+    path: '/platform/medicine-imports',
+    operationId: 'listImportedMedicineReleases',
+    summary:
+      'Private full source releases; publication requires separate evidence and owner approval',
+    platform: true,
+    query: ImportReleaseQuery,
+    response: ImportReleaseList,
+  },
+  {
+    method: 'get',
+    path: '/platform/medicine-imports/{id}/generics',
+    operationId: 'listImportedMedicineGenerics',
+    summary: 'Search a private source release for clinical mapping',
+    platform: true,
+    pathParams: ['id'],
+    query: ImportGenericQuery,
+    response: ImportGenericList,
+  },
+  {
+    method: 'get',
+    path: '/platform/medicine-imports/{id}/generics/{sourceId}/brands',
+    operationId: 'listImportedGenericBrands',
+    summary: 'Source brands linked to an imported generic',
+    platform: true,
+    pathParams: ['id', { name: 'sourceId', schema: { type: 'string', pattern: '^[0-9]{1,18}$' } }],
+    query: ImportBrandQuery,
+    response: ImportBrandList,
+  },
+  {
+    method: 'get',
+    path: '/platform/medicine-imports/{id}/generics/{sourceId}/history',
+    operationId: 'importedMedicineMappingHistory',
+    summary: 'Immutable clinician mapping revisions; no prescribing approval',
+    platform: true,
+    pathParams: ['id', { name: 'sourceId', schema: { type: 'string', pattern: '^[0-9]{1,18}$' } }],
+    query: ImportHistoryQuery,
+    response: ImportMappingHistory,
+  },
+  {
+    method: 'put',
+    path: '/platform/medicine-imports/{id}/generics/{sourceId}/mapping',
+    operationId: 'saveImportedMedicineMapping',
+    summary: 'Record a source-validated clinician mapping revision; does not activate prescribing',
+    platform: true,
+    pathParams: ['id', { name: 'sourceId', schema: { type: 'string', pattern: '^[0-9]{1,18}$' } }],
+    body: SaveClinicalMapping,
+    response: ImportGeneric,
+  },
+  {
+    method: 'get',
+    path: '/platform/medicine-stages/{id}/worksheet',
+    operationId: 'downloadMedicineReviewWorksheet',
+    summary:
+      'Synthetic-only clinician review worksheet; blank mapping fields, no clinical approval (8 MiB / 10,000 rows maximum)',
+    platform: true,
+    pathParams: ['id'],
+    csv: true,
+  },
   {
     method: 'get',
     path: '/platform/medicine-stages',
@@ -3361,7 +3442,9 @@ export function buildOpenApiDocument(options: { version: string; serverUrl?: str
       responses: {
         [String(status)]: op.csv
           ? {
-              description: 'Private reconciliation CSV (integer INR paise)',
+              description: op.path.endsWith('/worksheet')
+                ? 'Synthetic clinician review worksheet CSV'
+                : 'Private reconciliation CSV (integer INR paise)',
               content: { 'text/csv': { schema: { type: 'string', format: 'binary' } } },
             }
           : op.zip
